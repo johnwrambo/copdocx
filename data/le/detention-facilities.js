@@ -1,0 +1,292 @@
+// js/data/detention-facilities.js
+// ICE Detention Facilities in Texas + key federal/state + map locations
+// Sources: ICE public data, VisaVerge directory (2025-2026), Deportation Data Project, Houston Chronicle tracker, official facility pages.
+// Note: Facility status and populations change; verify via ICE ODLS or field office for operational use.
+// Online Detainee Locator: https://locator.ice.gov/odls (requires A-number or name + DOB + country of birth)
+
+var ICE_DETENTION_TX = [
+  {
+    "code": "PORT_ISABEL_SPC",
+    "label": "Port Isabel Service Processing Center",
+    "city": "Los Fresnos",
+    "county": "Cameron",
+    "type": "SPC",
+    "aor": "HLG",
+    "operator": "ICE",
+    "address": "27991 Buena Vista Blvd",
+    "state": "TX",
+    "zip": "78566",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=27991+Buena+Vista+Blvd+Los+Fresnos+TX+78566",
+    "notes": "Major South Texas facility under Harlingen Field Office.",
+    "active": true
+  },
+  {
+    "code": "EL_PASO_SPC",
+    "label": "El Paso Service Processing Center",
+    "city": "El Paso",
+    "county": "El Paso",
+    "type": "SPC",
+    "aor": "ELP",
+    "operator": "ICE",
+    "address": "El Paso SPC (verify current with ELP FO)",
+    "state": "TX",
+    "zip": "79925",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=El+Paso+Service+Processing+Center+El+Paso+TX",
+    "notes": "Primary El Paso AOR facility.",
+    "active": true
+  },
+  {
+    "code": "CAMP_EAST_MONTANA",
+    "label": "Camp East Montana (ERO El Paso)",
+    "city": "El Paso",
+    "county": "El Paso",
+    "type": "CDF",
+    "aor": "ELP",
+    "operator": "Contract",
+    "address": "Fort Bliss / East Montana area",
+    "state": "TX",
+    "zip": "79916",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=Camp+East+Montana+Fort+Bliss+El+Paso+TX",
+    "notes": "Large soft-sided / contract facility on Fort Bliss grounds; high capacity.",
+    "active": true
+  },
+  {
+    "code": "DILLEY_IPC",
+    "label": "Dilley Immigration Processing Center (South Texas Family Residential Center)",
+    "city": "Dilley",
+    "county": "Frio",
+    "type": "FAMILY",
+    "aor": "SNA",
+    "operator": "CoreCivic / Contract",
+    "address": "300 El Rancho Way",
+    "state": "TX",
+    "zip": "78017",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=300+El+Rancho+Way+Dilley+TX+78017",
+    "notes": "Family residential center under San Antonio AOR.",
+    "active": true
+  },
+  {
+    "code": "KARNES_COUNTY",
+    "label": "Karnes County Immigration Processing / Civil Detention",
+    "city": "Karnes City",
+    "county": "Karnes",
+    "type": "DIGSA / Family related",
+    "aor": "SNA",
+    "operator": "GEO / Contract",
+    "address": "409 FM 1144",
+    "state": "TX",
+    "zip": "78118",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=409+FM+1144+Karnes+City+TX+78118",
+    "notes": "San Antonio AOR; has held families and single adults at various times.",
+    "active": true
+  },
+  {
+    "code": "SOUTH_TEXAS_ICE_PC",
+    "label": "South Texas ICE Processing Center (Pearsall)",
+    "city": "Pearsall",
+    "county": "Frio",
+    "type": "DIGSA / CDF",
+    "aor": "SNA",
+    "operator": "GEO Group",
+    "address": "566 Veterans Drive",
+    "state": "TX",
+    "zip": "78061",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=566+Veterans+Drive+Pearsall+TX+78061",
+    "notes": "Large dedicated facility under San Antonio Field Office.",
+    "active": true
+  },
+  {
+    "code": "MONTGOMERY_PC",
+    "label": "Montgomery Processing Center",
+    "city": "Conroe",
+    "county": "Montgomery",
+    "type": "DIGSA",
+    "aor": "HOU",
+    "operator": "GEO Group",
+    "address": "806 Hilbig Road",
+    "state": "TX",
+    "zip": "77301",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=806+Hilbig+Road+Conroe+TX+77301",
+    "notes": "Major Houston AOR facility; high average daily population.",
+    "active": true
+  },
+  {
+    "code": "JOE_CORLEY_PC",
+    "label": "Joe Corley Processing Center",
+    "city": "Conroe",
+    "county": "Montgomery",
+    "type": "DIGSA / CDF",
+    "aor": "HOU",
+    "operator": "GEO Group",
+    "address": "Conroe area (related to Montgomery Processing Center)",
+    "state": "TX",
+    "zip": "77301",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=Joe+Corley+Processing+Center+Conroe+TX",
+    "notes": "Adjacent/related to Montgomery Processing Center, Houston AOR.",
+    "active": true
+  },
+  {
+    "code": "HOUSTON_CDF",
+    "label": "Houston Contract Detention Facility",
+    "city": "Houston",
+    "county": "Harris",
+    "type": "CDF",
+    "aor": "HOU",
+    "operator": "Contract",
+    "address": "Houston metro (verify current with HOU FO)",
+    "state": "TX",
+    "zip": "77060",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=Houston+Contract+Detention+Facility+Houston+TX",
+    "notes": "Houston metro contract facility.",
+    "active": true
+  },
+  {
+    "code": "IAH_POLK",
+    "label": "IAH Secure Adult Detention Facility (Polk County / Livingston area)",
+    "city": "Livingston area",
+    "county": "Polk",
+    "type": "DIGSA",
+    "aor": "HOU",
+    "operator": "Contract",
+    "address": "Livingston / Polk County area",
+    "state": "TX",
+    "zip": "77351",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=IAH+Secure+Adult+Detention+Facility+Livingston+TX",
+    "notes": "Houston AOR; near Bush Intercontinental Airport corridor.",
+    "active": true
+  },
+  {
+    "code": "PRAIRIELAND_DC",
+    "label": "Prairieland Detention Center",
+    "city": "Alvarado area",
+    "county": "Johnson",
+    "type": "DIGSA",
+    "aor": "DAL",
+    "operator": "Contract",
+    "address": "Alvarado / Johnson County area",
+    "state": "TX",
+    "zip": "76009",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=Prairieland+Detention+Center+Alvarado+TX",
+    "notes": "Dallas AOR facility.",
+    "active": true
+  },
+  {
+    "code": "BLUEBONNET_DF",
+    "label": "Bluebonnet Detention Facility",
+    "city": "Anson",
+    "county": "Jones",
+    "type": "DIGSA",
+    "aor": "DAL",
+    "operator": "MTC",
+    "address": "Anson, TX",
+    "state": "TX",
+    "zip": "79501",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=Bluebonnet+Detention+Facility+Anson+TX",
+    "notes": "Dallas AOR dedicated IGSA.",
+    "active": true
+  },
+  {
+    "code": "EDEN_DC",
+    "label": "Eden Detention Center",
+    "city": "Eden",
+    "county": "Concho",
+    "type": "USMS IGA / DIGSA",
+    "aor": "DAL",
+    "operator": "CoreCivic",
+    "address": "Eden, TX",
+    "state": "TX",
+    "zip": "76837",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=Eden+Detention+Center+Eden+TX",
+    "notes": "Dallas AOR; also used by USMS.",
+    "active": true
+  },
+  {
+    "code": "EL_VALLE_DF",
+    "label": "El Valle Detention Facility",
+    "city": "Raymondville",
+    "county": "Willacy",
+    "type": "DIGSA",
+    "aor": "HLG",
+    "operator": "Contract",
+    "address": "Raymondville, TX",
+    "state": "TX",
+    "zip": "78580",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=El+Valle+Detention+Facility+Raymondville+TX",
+    "notes": "Harlingen AOR.",
+    "active": true
+  },
+  {
+    "code": "COASTAL_BEND_DF",
+    "label": "Coastal Bend Detention Facility",
+    "city": "Robstown",
+    "county": "Nueces",
+    "type": "USMS IGA",
+    "aor": "HLG",
+    "operator": "Contract",
+    "address": "Robstown, TX",
+    "state": "TX",
+    "zip": "78380",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=Coastal+Bend+Detention+Facility+Robstown+TX",
+    "notes": "Harlingen / South Texas AOR.",
+    "active": true
+  },
+  {
+    "code": "EAST_HIDALGO_DC",
+    "label": "East Hidalgo Detention Center",
+    "city": "La Villa",
+    "county": "Hidalgo",
+    "type": "USMS IGA",
+    "aor": "HLG",
+    "operator": "Contract",
+    "address": "La Villa, TX",
+    "state": "TX",
+    "zip": "78562",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=East+Hidalgo+Detention+Center+La+Villa+TX",
+    "notes": "Harlingen AOR.",
+    "active": true
+  },
+  {
+    "code": "T_DON_HUTTO",
+    "label": "T. Don Hutto Residential Center",
+    "city": "Taylor",
+    "county": "Williamson",
+    "type": "DIGSA / Residential",
+    "aor": "SNA",
+    "operator": "CoreCivic",
+    "address": "1001 Welch Street",
+    "state": "TX",
+    "zip": "76574",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=T.+Don+Hutto+Residential+Center+Taylor+TX",
+    "notes": "San Antonio / Central Texas AOR; historically family/residential use.",
+    "active": true
+  },
+  {
+    "code": "LAREDO_PROCESSING",
+    "label": "Laredo Processing / Webb County related facilities",
+    "city": "Laredo",
+    "county": "Webb",
+    "type": "Various / Hold / Contract",
+    "aor": "HLG / SNA",
+    "operator": "Various",
+    "address": "Laredo, TX area",
+    "state": "TX",
+    "zip": "78040",
+    "map_url": "https://www.google.com/maps/search/?api=1&query=Laredo+Processing+Center+Laredo+TX",
+    "notes": "Multiple facilities and hold rooms in Laredo area supporting South Texas operations.",
+    "active": true
+  }
+];
+
+var FEDERAL_DETENTION_LOOKUP = {
+  "bop_inmate_locator": "https://www.bop.gov/inmateloc/",
+  "ice_odls": "https://locator.ice.gov/odls",
+  "notes": "ICE Online Detainee Locator System (ODLS) requires A-number or full name + date of birth + country of birth. BOP locator for federal sentenced inmates."
+};
+
+function iceDetentionByAOR(aor) {
+  return ICE_DETENTION_TX.filter((f) => f.aor === aor);
+}
+
+function detentionLabels() {
+  return ICE_DETENTION_TX.map((f) => f.label);
+}

@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lead Entry</title>
+    <style>
+      /*
+        CONTROL PANEL
+        -------------
+        How to use this file:
+        - Change a value, save, refresh the browser. That is the whole loop.
+        - Lines starting with property: value; are LIVE.
+        - Lines inside /* ... * / are OFF. Delete the wrapping comment
+          markers to turn that option on. (Or add /* * / around a live
+          line to turn it off.)
+        - Colors are hex: #rrggbb. Example: #000000 black, #ffffff white.
+        - Sizes here use rem (1rem ≈ 16px in the browser default).
+          0.5rem ≈ 8px, 1rem ≈ 16px, 1.5rem ≈ 24px.
+      */
+
+      /* ============================================================
+         RESET / BOX MODEL
+         Controls: every element, plus ::before and ::after
+                   (empty extra boxes you can attach to an element).
+         Why it exists: by default, width: 100% does NOT include
+         padding and border, so inputs overflow their cards.
+         border-box makes width include padding + border.
+         ============================================================ */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box; /* width/height include padding and border */
+        /* box-sizing: content-box;  old default: padding sits OUTSIDE width — usually worse for forms */
+      }
+
+      /* ============================================================
+         PAGE BACKGROUND + DEFAULT TYPE
+         Controls: the whole document behind the form (the <body>).
+         Children inherit font, color, and line-height from here
+         unless a more specific rule overrides them.
+         ============================================================ */
+      body {
+        margin: 0; /* strip the browser's default ~8px page margin */
+        /* margin: 16px;  puts a gutter around the whole page instead of relying on .page padding */
+        font-family: system-ui, sans-serif; /* OS UI font, then generic sans-serif fallback */
+        /* font-family: Georgia, "Times New Roman", serif;  document / report look */
+        /* font-family: "Segoe UI", Tahoma, sans-serif;  force a Windows-like sans */
+        /* font-family: Consolas, "Courier New", monospace;  typewriter / data-entry look */
+        line-height: 1.4; /* space between wrapped lines. 1 = tight, 1.6 = airy */
+        /* line-height: 1.2;  denser, more like a printed form */
+        color: #1f2430; /* default text color for the page */
+        /* color: #111111;  near-black, higher contrast */
+        background: #f3f4f7; /* page color behind the white fieldset cards */
+        /* background: #ffffff;  no gray canvas, cards blend into the page */
+        /* background: #1b1f2a;  dark canvas — also change color / card backgrounds if you use this */
+      }
+
+      /* ============================================================
+         PAGE SHELL
+         Controls: the centered column that holds the header + form
+                   (the <div class="page"> wrapper).
+         This is the "don't stretch across an ultrawide monitor" knob.
+         ============================================================ */
+      .page {
+        max-width: 880px; /* form stops growing at this width. try 720px or 1100px */
+        /* max-width: none;  full window width */
+        /* min-height: 100vh;  column at least as tall as the browser window */
+        margin: 0 auto; /* 0 top/bottom, auto left/right = horizontal center */
+        /* margin: 2rem auto;  extra space above and below the whole page */
+        padding: 1.5rem 1.25rem 3rem; /* inner space: top | left/right | bottom */
+        /* padding: 2rem;  equal padding on all four sides */
+        /* background: #ffffff;  make the column a solid sheet instead of seeing body gray through it */
+        /* box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);  floating paper look */
+        /* border-radius: 12px;  round the page sheet (pairs well with a white background) */
+      }
+
+      /* ============================================================
+         PAGE HEADER ROW
+         Controls: the top bar with "Lead Entry" on the left and
+                   date/country on the right (<header class="page-header">).
+         display: flex puts those children on one row.
+         ============================================================ */
+      .page-header {
+        display: flex; /* children sit in a row instead of stacking */
+        /* display: block;  title on its own line, meta falls under it */
+        flex-wrap: wrap; /* if the window is too narrow, date/country drop under the title */
+        /* flex-wrap: nowrap;  force one line; may overflow on small screens */
+        justify-content: space-between; /* first child left, last child right */
+        /* justify-content: flex-start;  pack both toward the left */
+        /* justify-content: center;  pack both toward the center */
+        align-items: baseline; /* line up the title text with the date text, not the boxes */
+        /* align-items: center;  vertical-center the two clusters */
+        /* align-items: flex-end;  line up on the bottom edge */
+        gap: 0.75rem 1.5rem; /* space when they wrap: row-gap | column-gap */
+        margin-bottom: 1.25rem; /* space between the header and the first fieldset */
+        /* padding-bottom: 0.75rem;  inner space under the header content */
+        /* border-bottom: 1px solid #d5d8e0;  a rule under the header */
+        /* position: sticky; top: 0; background: #f3f4f7; z-index: 10;  header stays on screen while you scroll */
+      }
+
+      /* ============================================================
+         PAGE TITLE
+         Controls: the "Lead Entry" heading only
+                   (<h1> inside .page-header).
+         ============================================================ */
+      .page-header h1 {
+        margin: 0; /* kill the browser's default heading margin */
+        font-size: 1.5rem; /* title size. 1rem is body size, 2rem is twice that */
+        /* font-size: 1.25rem;  quieter title */
+        /* font-weight: 400;  un-bold the title (default h1 is bold) */
+        /* font-weight: 800;  heavier title */
+        /* letter-spacing: 0.04em;  slightly spaced-out letters */
+        /* text-transform: uppercase;  LEAD ENTRY */
+        /* color: #1b3a8c;  branded title color */
+      }
+
+      /* ============================================================
+         DATE + COUNTRY CLUSTER
+         Controls: the right-side wrapper around the two <p> tags
+                   (<div class="page-meta">).
+         ============================================================ */
+      .page-meta {
+        display: flex; /* Date and Country sit side by side */
+        /* display: block;  Date stacked above Country */
+        flex-wrap: wrap; /* they can wrap onto two lines if needed */
+        gap: 0.25rem 1.5rem; /* vertical | horizontal space between Date and Country */
+        margin: 0; /* no extra outer margin on the cluster */
+        color: #4b5568; /* muted gray so they read as metadata, not as the title */
+        /* color: #1f2430;  same color as body text */
+        font-size: 0.95rem; /* slightly smaller than body text */
+        /* font-size: 0.8rem;  fine print */
+        /* font-variant-numeric: tabular-nums;  date digits line up if the value changes width */
+      }
+
+      /* ============================================================
+         DATE / COUNTRY LINES
+         Controls: each paragraph inside the meta cluster
+                   (#currentDate and #countryHeading).
+         JS writes text into these, so don't put extra words in the
+         HTML if you want the script to own the full string.
+         ============================================================ */
+      .page-meta p {
+        margin: 0; /* paragraphs otherwise have a gap under them */
+        /* font-weight: 600;  make Date/Country a bit stronger */
+        /* background: #e8eaf0; padding: 0.2rem 0.5rem; border-radius: 4px;  pill/badge look */
+      }
+
+      /* ============================================================
+         SECTION CARDS
+         Controls: every form section (Officer, Lead Information,
+                   Address, Criminal Profile, Immigration Profile).
+         A fieldset is the box; legend is the title sitting on the border.
+         ============================================================ */
+      fieldset {
+        margin: 0 0 1.25rem; /* top | left/right | bottom. the 1.25rem is the gap BETWEEN cards */
+        /* margin: 0 0 2rem;  more air between sections */
+        padding: 1rem 1.15rem 1.15rem; /* inner space: top | left/right | bottom */
+        /* padding: 1.5rem;  roomier card interior */
+        border: 1px solid #d5d8e0; /* the visible outline. 1px thin, #d5d8e0 light gray */
+        /* border: 2px solid #1f2430;  heavier, higher-contrast outline */
+        /* border: none;  no outline — then use background/shadow to separate cards */
+        border-radius: 8px; /* corner roundness. 0 = sharp corners */
+        /* border-radius: 0;  squared, more "government form" */
+        /* border-radius: 16px;  softer cards */
+        background: #fff; /* card fill. white pops off the gray page */
+        /* background: #fafbfc;  off-white */
+        /* box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);  subtle lift */
+        /* box-shadow: none;  flat */
+      }
+
+      /* ============================================================
+         NESTED SECTION CARDS
+         Controls: fieldsets INSIDE fieldsets only
+                   (Office Location, Convictions, Warrants and Wants).
+         More specific than "fieldset", so these win for inner cards.
+         ============================================================ */
+      fieldset fieldset {
+        margin-top: 1rem; /* space above the inner card, under the parent fields */
+        margin-bottom: 0; /* no extra gap under the last nested card */
+        /* margin-left: 0.5rem;  indent nested cards */
+        background: #f8f9fb; /* slightly gray so nested cards look inset */
+        /* background: #eef1f6;  stronger inset contrast */
+        /* background: #ffffff;  same as parent — nesting is then only a border */
+        /* border-style: dashed;  dashed outline to mark "subsection" */
+      }
+
+      /* ============================================================
+         SECTION TITLES
+         Controls: every <legend> (Officer, Address, Convictions, …).
+         Legend text sits on top of the fieldset border by default.
+         ============================================================ */
+      legend {
+        padding: 0 0.35rem; /* small left/right gap so the border doesn't run into the letters */
+        font-weight: 650; /* 400 regular, 600 semibold, 700 bold, 650 in between */
+        /* font-size: 0.85rem;  smaller section titles */
+        /* font-size: 1.1rem;  larger section titles */
+        /* letter-spacing: 0.06em;  spaced-out small caps feel */
+        /* text-transform: uppercase;  OFFICER */
+        /* color: #1b3a8c;  colored section titles */
+        /* background: #fff;  if the border cuts through the text, fill behind it */
+      }
+
+      /* ============================================================
+         FIELD GRID
+         Controls: each group of fields (<div class="row">).
+         On small screens this is ONE column. A media query below
+         turns it into TWO columns from 640px up.
+         1fr = "one equal share of leftover space".
+         ============================================================ */
+      .row {
+        display: grid; /* children snap to a grid instead of flowing inline */
+        /* display: flex;  alternative layout model; grid is better for form columns */
+        grid-template-columns: 1fr; /* one column. each .field stacks */
+        /* grid-template-columns: 1fr 1fr 1fr;  three columns even on mobile — usually too tight */
+        gap: 0.9rem 1rem; /* space between cells: row-gap | column-gap */
+        /* gap: 0.5rem;  tighter packing */
+        /* gap: 1.5rem;  roomier packing */
+        margin-top: 0.9rem; /* space above this row (between rows, and under a legend) */
+        /* align-items: end;  line up inputs along the bottom if labels wrap to different heights */
+      }
+
+      /* ============================================================
+         FIRST ROW IN A SECTION
+         Controls: only the first .row inside its parent.
+         Tightens the gap under the legend so the first fields
+         don't sit too far from the section title.
+         ============================================================ */
+      .row:first-of-type {
+        margin-top: 0.35rem; /* smaller top gap for the first row only */
+        /* margin-top: 0;  flush against the legend */
+      }
+
+      /* ============================================================
+         SINGLE FIELD (LABEL + CONTROL)
+         Controls: one labeled input/select/textarea
+                   (<div class="field">).
+         flex-direction: column = label on top, control under it.
+         ============================================================ */
+      .field {
+        display: flex; /* label and input become a vertical stack */
+        flex-direction: column; /* top-to-bottom. row would put the label beside the input */
+        /* flex-direction: row; align-items: center; gap: 0.75rem;  label to the LEFT of the input */
+        gap: 0.3rem; /* space between the label and the input */
+        /* gap: 0.15rem;  label almost touching the input */
+        min-width: 0; /* allow the field to shrink in a grid cell instead of overflowing */
+        /* max-width: 20rem;  cap a single field so short inputs don't stretch (state, zip) */
+      }
+
+      /* ============================================================
+         FULL-WIDTH FIELD
+         Controls: fields that should use the WHOLE row even when
+                   the grid has two columns (officer name, street,
+                   street 2, rap sheet).
+         Add class "field-span-2" next to "field" in the HTML.
+         ============================================================ */
+      .field-span-2 {
+        grid-column: 1 / -1; /* start at first column, end at last column = full width */
+        /* grid-column: 1 / 2;  only the left column */
+        /* grid-column: 2 / 3;  only the right column */
+      }
+
+      /* ============================================================
+         CHECKBOX ROW
+         Controls: Criminal? and Final Order
+                   (<div class="field checkbox-field">).
+         This OVERRIDES .field's column stack so the box sits
+         beside the label instead of under it.
+         When two classes fight, the rule that comes later in this
+         file wins if it is at least as specific.
+         ============================================================ */
+      .checkbox-field {
+        display: flex; /* needed again because we also change direction */
+        flex-direction: row; /* checkbox | label on one line */
+        /* flex-direction: row-reverse;  label first, checkbox after */
+        align-items: center; /* vertically center the box with the label text */
+        /* align-items: flex-start;  box lines up with the top of a wrapping label */
+        gap: 0.5rem; /* space between the box and the words */
+        /* gap: 0.75rem;  more click-space between box and label */
+      }
+
+      /* ============================================================
+         ALL LABELS
+         Controls: every <label> on the page (field captions and
+                   checkbox captions).
+         ============================================================ */
+      label {
+        font-size: 0.9rem; /* a bit smaller than body text */
+        /* font-size: 0.8rem;  compact captions */
+        /* font-size: 1rem;  same size as inputs */
+        font-weight: 600; /* semibold so labels read as captions, not as values */
+        /* font-weight: 400;  regular weight */
+        /* color: #4b5568;  muted labels */
+        /* text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.75rem;  tiny uppercase captions */
+        /* cursor: pointer;  hand cursor — useful on checkboxes because clicking the label toggles them */
+      }
+
+      /* ============================================================
+         TEXT BOXES, DROPDOWNS, AND THE RAP SHEET
+         Controls: every <input>, <select>, and <textarea>
+                   EXCEPT the checkbox override in the next block.
+         ============================================================ */
+      input,
+      select,
+      textarea {
+        width: 100%; /* fill the field column */
+        /* width: auto;  shrink to content — usually looks uneven in a form */
+        /* max-width: 24rem;  stop long text inputs from getting huge */
+        padding: 0.45rem 0.55rem; /* inner space: top/bottom | left/right. bigger = taller controls */
+        /* padding: 0.7rem 0.75rem;  larger click/tap target */
+        border: 1px solid #c5c9d4; /* outline of the control */
+        /* border: 2px solid #9aa1b2;  heavier field outline */
+        /* border: none; border-bottom: 1px solid #c5c9d4; border-radius: 0;  underline-only inputs */
+        border-radius: 6px; /* rounded field corners. 0 = square */
+        /* border-radius: 0;  squared, printed-form look */
+        font: inherit; /* use the body font/size instead of the browser's default form font */
+        /* font-size: 1rem;  16px-ish — also reduces unwanted iOS zoom on focus */
+        background: #fff; /* field fill */
+        /* background: #f8f9fb;  tinted fields */
+        /* color: #1f2430;  typed-text color (already inherited from body) */
+      }
+
+      /* ============================================================
+         RAP SHEET / MULTI-LINE TEXT
+         Controls: <textarea> only (Rap Sheet).
+         These add on top of the input/select/textarea rules above.
+         ============================================================ */
+      textarea {
+        min-height: 6rem; /* starting height. user can still drag it taller */
+        /* min-height: 10rem;  taller default rap sheet */
+        /* height: 8rem;  fixed height; ignore if you want resize to be the only height control */
+        resize: vertical; /* user may drag the bottom edge only */
+        /* resize: none;  lock the size — no drag handle */
+        /* resize: both;  user may drag width and height */
+        /* font-family: Consolas, "Courier New", monospace;  fixed-width, easier to scan codes */
+      }
+
+      /* ============================================================
+         CHECKBOX SIZE / ALIGNMENT
+         Controls: the actual square for Criminal? and Final Order.
+         The general "input { width: 100% }" rule would stretch a
+         checkbox across the row; this puts it back to a real box.
+         ============================================================ */
+      .checkbox-field input {
+        width: auto; /* don't stretch; use the browser's checkbox size */
+        margin: 0; /* some browsers add leftover margin around checkboxes */
+        /* width: 1.15rem; height: 1.15rem;  larger click target (may look odd in some browsers) */
+        /* accent-color: #3b5bdb;  color of the check / fill when checked */
+        /* transform: scale(1.2);  enlarge without fighting native checkbox metrics */
+      }
+
+      /* ============================================================
+         FOCUS RING
+         Controls: the highlight when you tab or click into a field.
+         :focus is the "this control is active" state.
+         Don't remove the outline unless you replace it — keyboard
+         users need to see where they are.
+         ============================================================ */
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: 2px solid #3b5bdb; /* the ring. change color or thickness here */
+        /* outline: 3px solid #e03131;  thicker red ring */
+        outline-offset: 1px; /* gap between the control edge and the ring */
+        /* outline-offset: 0;  ring sits on the border */
+        border-color: #3b5bdb; /* also recolor the field border while focused */
+        /* box-shadow: 0 0 0 3px rgba(59, 91, 219, 0.25);  softer glow instead of / in addition to outline */
+      }
+
+      /* ============================================================
+         OPTIONAL: HOVER ON FIELDS
+         Controls: mouse-over look. Off by default.
+         Uncomment the block to enable.
+         ============================================================ */
+      /*
+      input:hover,
+      select:hover,
+      textarea:hover {
+        border-color: #9aa3b5;  slightly darker border on hover
+      }
+      */
+
+      /* ============================================================
+         OPTIONAL: DISABLED LOOK
+         Controls: fields with the HTML disabled attribute.
+         You are not using disabled yet. Uncomment when you need it.
+         ============================================================ */
+      /*
+      input:disabled,
+      select:disabled,
+      textarea:disabled {
+        background: #eef0f4;  gray fill
+        color: #6b7280;       muted text
+        cursor: not-allowed;  blocked-pointer cursor
+      }
+      */
+
+      /* ============================================================
+         DESKTOP / TABLET BREAKPOINT
+         Controls: layout from 640px window width and up.
+         Below 640px the mobile rules above stay in effect
+         (one-column rows).
+         Change 640px to 768px if you want the two-column grid
+         to kick in later.
+         ============================================================ */
+      @media (min-width: 640px) {
+        /* Two equal columns for a normal .row (Last/First, FBI/NCIC, etc.) */
+        .row {
+          grid-template-columns: 1fr 1fr; /* left column | right column, equal width */
+          /* grid-template-columns: 1fr 2fr;  skinny left, wide right */
+          /* grid-template-columns: 1fr 1fr 1fr;  three equal columns on desktop */
+        }
+
+        /* City / State / Zip only. Class "row-3" is on that one HTML row.
+           2fr 1fr 1fr = city gets twice the width of state or zip. */
+        .row-3 {
+          grid-template-columns: 2fr 1fr 1fr; /* city | state | zip */
+          /* grid-template-columns: 1fr 1fr 1fr;  three equal columns */
+          /* grid-template-columns: 3fr 1fr 1.2fr;  even wider city, slightly wider zip */
+        }
+      }
+
+      /* ============================================================
+         OPTIONAL: PRINT
+         Controls: how the page looks when you print / Save as PDF.
+         Off by default. Uncomment the whole block to use it.
+         ============================================================ */
+      /*
+      @media print {
+        body {
+          background: #ffffff;  no gray ink
+          color: #000000;       black text
+        }
+        .page {
+          max-width: none;      use the full page
+          padding: 0;
+        }
+        fieldset {
+          box-shadow: none;
+          break-inside: avoid;  try not to split a section across pages
+        }
+      }
+      */
+     .app-version {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      border: 1px solid #93c5fd;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-size: 0.86rem;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+        .header-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    </style>
+  </head>
+  <body>
+   
+      <div class="header-title-row">
+       
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="1.0.2"
+        >
+          Version 0.0.1
+        </span>
+      </div>
+
+    <div class="page">
+      <header class="page-header">
+        <h1>Lead Entry</h1>
+        <div class="page-meta">
+          <p id="currentDate">Date:</p>
+          <p id="countryHeading">Country:</p>
+        </div>
+      </header>
+
+      <form id="leadForm">
+        <fieldset>
+          <legend>Lead Source</legend>
+            <div class="row">
+              <label for="leadSource">Lead Source</label>
+              <select id="leadSource">
+                <option value="">Select an Option</option>
+                <option value="tag">Plate Check</option>
+                <option value="otherLe">Other Law Enforcement Agency</option>
+                <option value="elite">Elite</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+               <div class="row">
+              <label for="checkLocation">Plate Check Location</label>
+              <input id="checkLocation">
+              <label for="refAgency">Reffering Agency</label>
+              <input id="refAgency">   
+            </div>
+            <div class="field checkbox-field">
+              <label for="probationCheck">Probation</label>
+              <input type="checkbox" id="probationCheck">    
+            </div>
+            <div class="row">
+              <label for="leadInfo">Background Information</label>
+              <textarea id="leadInfo"></textarea>
+            </div>
+         
+
+
+        </fieldset>
+          
+
+        <fieldset>
+          <legend>Lead Information</legend>
+          <div class="row">
+            <div class="field">
+              <label for="lastName">Last Name</label>
+              <input type="text" id="lastName" name="lastName" />
+            </div>
+            <div class="field">
+              <label for="firstName">First Name</label>
+              <input type="text" id="firstName" name="firstName" />
+            </div>
+            <div class="field">
+              <label for="dateOfBirth">Date of Birth</label>
+              <input type="date" id="dateOfBirth" name="dateOfBirth" />
+            </div>
+            <div class="field">
+              <label for="citizenship">Country of Citizenship</label>
+              <select id="citizenship" name="citizenship" required></select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Address</legend>
+          <div class="row">
+            <div class="field">
+              <label for="addressAssociation">Address Association</label>
+              <select id="addressAssociation" name="addressAssociation">
+                <option value="">Select an Option</option>
+                <option value="residence">Residence</option>
+                <option value="vehicle">Vehicle Location</option>
+                <option value="work">Work</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field field-span-2">
+              <label for="street">Street</label>
+              <input type="text" id="street" name="street" />
+            </div>
+            <div class="field field-span-2">
+              <label for="street2">Street 2</label>
+              <input type="text" id="street2" name="street2" />
+            </div>
+          </div>
+
+          <div class="row row-3">
+            <div class="field">
+              <label for="city">City</label>
+              <input type="text" id="city" name="city" />
+            </div>
+            <div class="field">
+              <label for="state">State</label>
+              <input type="text" id="state" name="state" />
+            </div>
+            <div class="field">
+              <label for="zip">Zip Code</label>
+              <input type="text" id="zip" name="zip" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Criminal Profile</legend>
+          <div class="row">
+            <div class="field checkbox-field">
+              <input type="checkbox" id="isCriminal" name="isCriminal" />
+              <label for="isCriminal">Criminal?</label>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label for="fbiNumber">FBI Number</label>
+              <input type="text" id="fbiNumber" name="fbiNumber" />
+            </div>
+            <div class="field">
+              <label for="ncicNumber">NCIC</label>
+              <input type="text" id="ncicNumber" name="ncicNumber" />
+            </div>
+            <div class="field field-span-2">
+              <label for="rapSheet">Rap Sheet</label>
+              <textarea id="rapSheet" name="rapSheet" rows="4"></textarea>
+            </div>
+          </div>
+
+          <fieldset>
+            <legend>Convictions</legend>
+            <div class="row">
+              <div class="field">
+                <label for="crime">Crime</label>
+                <input type="text" id="crime" name="crime" />
+              </div>
+              <div class="field">
+                <label for="convictionDate">Conviction Date</label>
+                <input type="date" id="convictionDate" name="convictionDate" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Warrants and Wants</legend>
+            <div class="row">
+              <div class="field">
+                <label for="warrant">Warrant</label>
+                <input type="text" id="warrant" name="warrant" />
+              </div>
+              <div class="field">
+                <label for="warrantIssuer">Issued by</label>
+                <input type="text" id="warrantIssuer" name="warrantIssuer" />
+              </div>
+            </div>
+          </fieldset>
+        </fieldset>
+
+        <fieldset>
+          <legend>Immigration Profile</legend>
+          <div class="row">
+            <div class="field">
+              <label for="alienNumber">Alien Number</label>
+              <input type="text" id="alienNumber" name="alienNumber" />
+            </div>
+            <div class="field">
+              <label for="finNumber">FIN</label>
+              <input type="text" id="finNumber" name="finNumber" />
+            </div>
+            <div class="field">
+              <label for="immigrationDisposition">Immigration Disposition</label>
+              <select
+                id="immigrationDisposition"
+                name="immigrationDisposition"
+              ></select>
+            </div>
+            <div class="field">
+              <label for="immigrationStatus">Immigration Status</label>
+              <select id="immigrationStatus" name="immigrationStatus"></select>
+            </div>
+            <div class="field checkbox-field">
+              <input type="checkbox" id="finalOrder" name="finalOrder" />
+              <label for="finalOrder">Final Order</label>
+            </div>
+            <div class="field">
+              <label for="finalOrderDate">Final Order Date</label>
+              <input type="date" id="finalOrderDate" name="finalOrderDate" />
+            </div>
+          </div>
+        </fieldset>
+      </form>
+    </div>
+
+    <script src="functions/date.js"></script>
+    <script src="data/countries.js"></script>
+    <script src="data/immigration.js"></script>
+  
+  </body>
+</html>
