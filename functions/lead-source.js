@@ -21,10 +21,25 @@ function updateLeadSourceFields() {
       probation.checked = false;
     }
   }
+
+  if (typeof refreshAddressAssociationOptions === "function") {
+    refreshAddressAssociationOptions();
+  }
 }
 
 var leadSourceSelect = document.getElementById("leadSource");
 if (leadSourceSelect) {
   leadSourceSelect.addEventListener("change", updateLeadSourceFields);
   updateLeadSourceFields();
+}
+
+var addPlateCheckLocationButton = document.getElementById(
+  "addPlateCheckLocation"
+);
+if (addPlateCheckLocationButton) {
+  addPlateCheckLocationButton.addEventListener("click", function () {
+    if (typeof addPlateCheckAddress === "function") {
+      addPlateCheckAddress();
+    }
+  });
 }

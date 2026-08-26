@@ -24,6 +24,15 @@
     maxUnparsedSections: 250
   };
   var fallbackIdCounter = 0;
+  var NON_ALPHANUMERIC_COMPARISON_PATTERN = null;
+  try {
+    NON_ALPHANUMERIC_COMPARISON_PATTERN = new RegExp(
+      "[^\\p{L}\\p{N}]+",
+      "gu"
+    );
+  } catch (unicodePatternError) {
+    NON_ALPHANUMERIC_COMPARISON_PATTERN = null;
+  }
 
   var FIELD_DEFINITIONS = [
     { key: "primaryName", aliases: ["PRIMARY NAME", "SUBJECT NAME", "NAME", "NAM"] },
@@ -1163,7 +1172,9 @@
         : null,
       linkBasis: state.lastDisposition
         ? "nearest_preceding_disposition_needs_review"
-        : null
+        : null,
+      linkReviewStatus: state.lastDisposition ? "pending" : "not_applicable",
+      linkVerified: false
     };
     cycle.sentences.push(sentence);
     if (state.currentCourt) {
@@ -1182,7 +1193,7 @@
     return sentence;
   }
 
-  function addSubjectFact(state, key, rawValue, line) {
+  function addSubjectFact(state, key, rawValue, line, sourceLabel) {
     var subject = state.result.subjectCandidate;
     var parts;
     var fact;
@@ -1211,9 +1222,18 @@
     if (key === "dateOfBirth") {
       parts = splitRepeatedValues(rawValue, true);
       for (i = 0; i < parts.length; i += 1) {
-        subject.datesOfBirth.push(
-          makeDateFact(state, "subjectCandidate.dateOfBirth", parts[i], line, 0.98)
+        fact = makeDateFact(
+          state,
+          "subjectCandidate.dateOfBirth",
+          parts[i],
+          line,
+          0.98
         );
+        fact.dateType =
+          normalizeLabel(sourceLabel).indexOf("ALTERNATE") !== -1
+            ? "alternate"
+            : "reported_primary";
+        subject.datesOfBirth.push(fact);
       }
       return true;
     }
@@ -1307,7 +1327,7 @@
     var cycle;
     var court;
 
-    if (addSubjectFact(state, key, value, line)) {
+    if (addSubjectFact(state, key, value, line, field.label)) {
       return true;
     }
 
@@ -2183,7 +2203,7 @@
       addWarning(
         state,
         "unsupported_xml",
-        "XML was detected, but version 0.1.0 supports pasted text only. No XML fields were imported.",
+        "XML was detected, but version 0.2.0 supports pasted text only. No XML fields were imported.",
         "error",
         null
       );
@@ -2329,6 +2349,22 @@
     return facts;
   }
 
+  function reviewableSentenceLinks(rapSheetImport) {
+    var links = [];
+    (rapSheetImport && rapSheetImport.cycles || []).forEach(function (cycle) {
+      (cycle.sentences || []).forEach(function (sentence) {
+        if (
+          sentence.dispositionId &&
+          sentence.detail &&
+          sentence.detail.reviewStatus !== "rejected"
+        ) {
+          links.push(sentence);
+        }
+      });
+    });
+    return links;
+  }
+
   var MERGE_CARD_CONFIGS = {
     alias: {
       listId: "aliasList",
@@ -2399,6 +2435,22 @@
     (fieldNames || []).forEach(function (fieldName) {
       values[fieldName] = controlValue(cardField(card, fieldName));
     });
+    if (card && typeof card.getAttribute === "function") {
+      values.__rapImportId = normalizedValue(
+        card.getAttribute("data-rap-import-id")
+      );
+      values.__rapCycleId = normalizedValue(
+        card.getAttribute("data-rap-cycle-id")
+      );
+      values.__rapChargeId = normalizedValue(
+        card.getAttribute("data-rap-charge-id")
+      );
+      values.__rapDispositionId = normalizedValue(
+        card.getAttribute("data-rap-disposition-id")
+      );
+    }
+    values.__fromSnapshot = true;
+    values.__matchedDuringPlan = false;
     return values;
   }
 
@@ -2445,10 +2497,16 @@
     if (typeof text.normalize === "function") {
       text = text.normalize("NFKD");
     }
-    return text
+    text = text
       .replace(/[\u0300-\u036f]/g, "")
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, "");
+      .toUpperCase();
+    if (NON_ALPHANUMERIC_COMPARISON_PATTERN) {
+      return text.replace(NON_ALPHANUMERIC_COMPARISON_PATTERN, "");
+    }
+    var basicSeparators = " \t\r\n.,'\"/\\():;_-";
+    return text.split("").filter(function (character) {
+      return basicSeparators.indexOf(character) === -1;
+    }).join("");
   }
 
   function sameValue(left, right) {
@@ -2579,6 +2637,54 @@
     });
   }
 
+  function matchHistoryRecord(records, incoming, fieldNames, provenance) {
+    var incomingKey = mergeRecordKey(incoming, fieldNames);
+    var sourceMatch = (records || []).filter(function (record) {
+      if (!provenance || !provenance.importId) {
+        return false;
+      }
+      if (record.__rapImportId !== provenance.importId) {
+        return false;
+      }
+      if (
+        provenance.dispositionId &&
+        record.__rapDispositionId !== provenance.dispositionId
+      ) {
+        return false;
+      }
+      if (
+        provenance.chargeId &&
+        record.__rapChargeId !== provenance.chargeId
+      ) {
+        return false;
+      }
+      return !provenance.cycleId || record.__rapCycleId === provenance.cycleId;
+    })[0];
+    if (sourceMatch) {
+      sourceMatch.__matchedDuringPlan = true;
+      return {
+        kind:
+          mergeRecordKey(sourceMatch, fieldNames) === incomingKey
+            ? "duplicate"
+            : "source_conflict",
+        record: sourceMatch
+      };
+    }
+
+    var valueMatch = (records || []).filter(function (record) {
+      return (
+        record.__fromSnapshot &&
+        !record.__matchedDuringPlan &&
+        mergeRecordKey(record, fieldNames) === incomingKey
+      );
+    })[0];
+    if (valueMatch) {
+      valueMatch.__matchedDuringPlan = true;
+      return { kind: "duplicate", record: valueMatch };
+    }
+    return null;
+  }
+
   function factReference(fact, target, reason) {
     return {
       factId: fact && fact.factId ? fact.factId : null,
@@ -2612,8 +2718,8 @@
   }
 
   function sentenceTextForDisposition(cycle, dispositionId) {
-    if (!cycle || (cycle.dispositions || []).length !== 1) {
-      return { value: "", facts: [] };
+    if (!cycle) {
+      return { value: "", facts: [], unlinkedFacts: [], lossyFacts: [] };
     }
     var labels = {
       reportedSentence: "",
@@ -2623,6 +2729,8 @@
     };
     var pieces = [];
     var facts = [];
+    var unlinkedFacts = [];
+    var lossyFacts = [];
     (cycle.sentences || []).forEach(function (sentence) {
       if (sentence.dispositionId !== dispositionId) {
         return;
@@ -2631,10 +2739,22 @@
       if (!value) {
         return;
       }
+      if (sentence.linkReviewStatus !== "accepted") {
+        unlinkedFacts.push(sentence.detail);
+        return;
+      }
       pieces.push((labels[sentence.type] || "") + value);
       facts.push(sentence.detail);
+      if (sentence.type !== "reportedSentence") {
+        lossyFacts.push(sentence.detail);
+      }
     });
-    return { value: pieces.join("; "), facts: facts };
+    return {
+      value: pieces.join("; "),
+      facts: facts,
+      unlinkedFacts: unlinkedFacts,
+      lossyFacts: lossyFacts
+    };
   }
 
   function buildRapSheetMergePlan(rapSheetImport, snapshot, options) {
@@ -2650,6 +2770,7 @@
       arrests: [],
       convictions: [],
       setCriminal: false,
+      matchedExistingConviction: false,
       skipped: [],
       conflicts: [],
       unmapped: [],
@@ -2795,13 +2916,35 @@
     }
 
     var virtualDob = normalizedValue(snapshot.dateOfBirth);
-    (subject.datesOfBirth || []).forEach(function (fact) {
+    var dateOfBirthFacts = (subject.datesOfBirth || []).slice();
+    dateOfBirthFacts = dateOfBirthFacts.filter(function (fact) {
+      return fact.dateType !== "alternate";
+    }).concat(dateOfBirthFacts.filter(function (fact) {
+      return fact.dateType === "alternate";
+    }));
+    dateOfBirthFacts.forEach(function (fact) {
       var dateValue = acceptedDateValue(fact);
       if (!acceptedFactValue(fact)) {
         return;
       }
       if (!dateValue) {
         conflict(fact, "dateOfBirth", "accepted_date_is_not_unambiguous");
+        return;
+      }
+      if (fact.dateType === "alternate") {
+        if (virtualDob && sameValue(virtualDob, dateValue)) {
+          skip(
+            fact,
+            "dateOfBirth",
+            "alternate_dob_matches_primary_value"
+          );
+        } else {
+          conflict(
+            fact,
+            "dateOfBirth",
+            "alternate_date_of_birth_field_missing"
+          );
+        }
         return;
       }
       virtualDob = planScalar(
@@ -2909,16 +3052,32 @@
     ];
     var virtualArrests = (snapshot.arrests || []).filter(function (record) {
       return mergeRecordHasData(record, arrestKeyFields);
-    }).slice();
+    }).map(function (record) {
+      var copy = Object.assign({}, record);
+      copy.__fromSnapshot = true;
+      copy.__matchedDuringPlan = false;
+      return copy;
+    });
 
     (rapSheetImport.cycles || []).forEach(function (cycle) {
+      var rawArrestDate = acceptedFactValue(cycle.arrest && cycle.arrest.date);
+      var normalizedArrestDate = acceptedDateValue(
+        cycle.arrest && cycle.arrest.date
+      );
+      if (rawArrestDate && !normalizedArrestDate) {
+        conflict(
+          cycle.arrest.date,
+          "arrestDate",
+          "accepted_date_is_not_unambiguous"
+        );
+      }
       var common = {
-        arrestDate: acceptedDateValue(cycle.arrest && cycle.arrest.date),
+        arrestDate: normalizedArrestDate,
         arrestAgency: acceptedFactValue(cycle.arrest && cycle.arrest.agency),
         arrestLocation: acceptedFactValue(cycle.arrest && cycle.arrest.location)
       };
       var commonFacts = [
-        cycle.arrest && cycle.arrest.date,
+        normalizedArrestDate ? cycle.arrest && cycle.arrest.date : null,
         cycle.arrest && cycle.arrest.agency,
         cycle.arrest && cycle.arrest.location
       ].filter(function (fact) {
@@ -2947,7 +3106,8 @@
             arrestLocation: common.arrestLocation
           },
           facts: commonFacts.concat(facts),
-          exactClassFact: exactClass ? charge.classification : null
+          exactClassFact: exactClass ? charge.classification : null,
+          sourceChargeId: charge.chargeId
         });
       });
       if (!chargeRecords.length && mergeRecordHasData(common, ["arrestDate", "arrestAgency", "arrestLocation"])) {
@@ -2961,28 +3121,61 @@
             arrestLocation: common.arrestLocation
           },
           facts: commonFacts,
-          exactClassFact: null
+          exactClassFact: null,
+          sourceChargeId: null
         });
       }
 
       chargeRecords.forEach(function (entry) {
-        var key = mergeRecordKey(entry.values, arrestKeyFields);
+        var provenance = {
+          importId: rapSheetImport.id,
+          cycleId: cycle.cycleId,
+          chargeId: entry.sourceChargeId
+        };
+        var existingMatch = matchHistoryRecord(
+          virtualArrests,
+          entry.values,
+          arrestKeyFields,
+          provenance
+        );
         entry.facts.forEach(consume);
-        if (virtualArrests.some(function (existing) {
-          return mergeRecordKey(existing, arrestKeyFields) === key;
-        })) {
+        if (existingMatch) {
           entry.facts.forEach(function (fact) {
-            plan.skipped.push(
-              factReference(fact, "arrestList", "equivalent_arrest_already_present")
-            );
+            if (existingMatch.kind === "source_conflict") {
+              plan.conflicts.push(
+                factReference(
+                  fact,
+                  "arrestList",
+                  "previously_applied_arrest_differs"
+                )
+              );
+            } else {
+              plan.skipped.push(
+                factReference(
+                  fact,
+                  "arrestList",
+                  "equivalent_arrest_already_present"
+                )
+              );
+            }
           });
           return;
         }
-        virtualArrests.push(entry.values);
+        virtualArrests.push(
+          Object.assign({}, entry.values, {
+            __rapImportId: rapSheetImport.id,
+            __rapCycleId: cycle.cycleId,
+            __rapChargeId: entry.sourceChargeId || "",
+            __fromSnapshot: false,
+            __matchedDuringPlan: true
+          })
+        );
         plan.arrests.push({
           values: entry.values,
           sourceFactIds: entry.facts.map(function (fact) { return fact.factId; }),
-          sourceCycleId: cycle.cycleId
+          sourceImportId: rapSheetImport.id,
+          sourceCycleId: cycle.cycleId,
+          sourceChargeId: entry.sourceChargeId
         });
         if (entry.exactClassFact) {
           plan.lossyMappings.push(
@@ -3009,12 +3202,19 @@
     ];
     var virtualConvictions = (snapshot.convictions || []).filter(function (record) {
       return mergeRecordHasData(record, convictionKeyFields);
-    }).slice();
+    }).map(function (record) {
+      var copy = Object.assign({}, record);
+      copy.__fromSnapshot = true;
+      copy.__matchedDuringPlan = false;
+      return copy;
+    });
 
     (rapSheetImport.cycles || []).forEach(function (cycle) {
       var explicitDispositions = (cycle.dispositions || []).filter(function (disposition) {
         var raw = acceptedFactValue(disposition.rawDisposition);
-        return raw && classifyDisposition(raw).status === "explicit_conviction";
+        return raw &&
+          currentDispositionClassification(disposition).status ===
+            "explicit_conviction";
       });
 
       (cycle.dispositions || []).forEach(function (disposition) {
@@ -3022,7 +3222,7 @@
         if (!rawDisposition) {
           return;
         }
-        var classification = classifyDisposition(rawDisposition);
+        var classification = currentDispositionClassification(disposition);
         if (classification.status !== "explicit_conviction") {
           unmapped(disposition.rawDisposition, "non_conviction_case_destination_missing");
           if (disposition.outcome && disposition.outcome.reviewStatus === "accepted") {
@@ -3034,11 +3234,31 @@
           return;
         }
 
+        var charge = findChargeById(cycle, disposition.chargeId);
+        if (!charge) {
+          unmapped(
+            disposition.rawDisposition,
+            "ambiguous_or_missing_conviction_charge_link"
+          );
+          if (disposition.outcome && disposition.outcome.reviewStatus === "accepted") {
+            unmapped(
+              disposition.outcome,
+              "ambiguous_or_missing_conviction_charge_link"
+            );
+          }
+          if (disposition.date && disposition.date.reviewStatus === "accepted") {
+            unmapped(
+              disposition.date,
+              "ambiguous_or_missing_conviction_charge_link"
+            );
+          }
+          return;
+        }
+
         var facts = [disposition.rawDisposition];
         if (disposition.outcome && disposition.outcome.reviewStatus === "accepted") {
           facts.push(disposition.outcome);
         }
-        var charge = findChargeById(cycle, disposition.chargeId);
         var crime = acceptedFactValue(charge && charge.description);
         var statute = acceptedFactValue(charge && charge.statute);
         var exactClass = acceptedFactValue(charge && charge.classification);
@@ -3053,8 +3273,15 @@
           .filter(function (fact) { return acceptedFactValue(fact); })
           .forEach(function (fact) { facts.push(fact); });
 
+        var rawDispositionDate = acceptedFactValue(disposition.date);
         var dispositionDate = acceptedDateValue(disposition.date);
-        if (acceptedFactValue(disposition.date)) {
+        if (rawDispositionDate && !dispositionDate) {
+          conflict(
+            disposition.date,
+            "dispositionDate",
+            "accepted_date_is_not_unambiguous"
+          );
+        } else if (rawDispositionDate) {
           facts.push(disposition.date);
         }
         var convictionDate = "";
@@ -3063,42 +3290,101 @@
           acceptedFactValue(cycle.convictionDate)
         ) {
           convictionDate = acceptedDateValue(cycle.convictionDate);
-          facts.push(cycle.convictionDate);
+          if (convictionDate) {
+            facts.push(cycle.convictionDate);
+          } else {
+            conflict(
+              cycle.convictionDate,
+              "convictionDate",
+              "accepted_date_is_not_unambiguous"
+            );
+          }
         } else {
           convictionDate = dispositionDate;
         }
 
         var sentence = sentenceTextForDisposition(cycle, disposition.dispositionId);
         sentence.facts.forEach(function (fact) { facts.push(fact); });
+        sentence.unlinkedFacts.forEach(function (fact) {
+          unmapped(fact, "sentence_relationship_not_accepted");
+        });
+        sentence.lossyFacts.forEach(function (fact) {
+          plan.lossyMappings.push(
+            factReference(
+              fact,
+              "sentence",
+              "structured_sentence_component_flattened"
+            )
+          );
+        });
 
         var record = {
           crime: crime,
           convictionStatute: statute,
           convictionClass: exactClass ? coarseOffenseClass(exactClass) : "",
-          disposition: rawDisposition,
+          disposition:
+            disposition.outcome &&
+            disposition.outcome.reviewStatus === "accepted" &&
+            disposition.outcome.correctedValue != null
+              ? acceptedFactValue(disposition.outcome)
+              : rawDisposition,
           convictionDate: convictionDate,
           dispositionDate: dispositionDate,
           court: court,
           docketNumber: docket,
           sentence: sentence.value
         };
-        var key = mergeRecordKey(record, convictionKeyFields);
+        var provenance = {
+          importId: rapSheetImport.id,
+          cycleId: cycle.cycleId,
+          dispositionId: disposition.dispositionId
+        };
+        var existingMatch = matchHistoryRecord(
+          virtualConvictions,
+          record,
+          convictionKeyFields,
+          provenance
+        );
         facts.forEach(consume);
-        if (virtualConvictions.some(function (existing) {
-          return mergeRecordKey(existing, convictionKeyFields) === key;
-        })) {
+        if (existingMatch) {
           facts.forEach(function (fact) {
-            plan.skipped.push(
-              factReference(fact, "convictionList", "equivalent_conviction_already_present")
-            );
+            if (existingMatch.kind === "source_conflict") {
+              plan.conflicts.push(
+                factReference(
+                  fact,
+                  "convictionList",
+                  "previously_applied_conviction_differs"
+                )
+              );
+            } else {
+              plan.skipped.push(
+                factReference(
+                  fact,
+                  "convictionList",
+                  "equivalent_conviction_already_present"
+                )
+              );
+            }
           });
-          plan.setCriminal = true;
+          if (existingMatch.kind === "duplicate") {
+            plan.setCriminal = true;
+            plan.matchedExistingConviction = true;
+          }
           return;
         }
-        virtualConvictions.push(record);
+        virtualConvictions.push(
+          Object.assign({}, record, {
+            __rapImportId: rapSheetImport.id,
+            __rapCycleId: cycle.cycleId,
+            __rapDispositionId: disposition.dispositionId,
+            __fromSnapshot: false,
+            __matchedDuringPlan: true
+          })
+        );
         plan.convictions.push({
           values: record,
           sourceFactIds: facts.map(function (fact) { return fact.factId; }),
+          sourceImportId: rapSheetImport.id,
           sourceCycleId: cycle.cycleId,
           sourceDispositionId: disposition.dispositionId
         });
@@ -3149,7 +3435,16 @@
   }
 
   function writeControlValue(control, value, report, target) {
-    if (!control || !normalizedValue(value)) {
+    if (!normalizedValue(value)) {
+      return false;
+    }
+    if (!control) {
+      report.conflicts.push({
+        factId: null,
+        field: null,
+        target: target,
+        reason: "target_control_unavailable"
+      });
       return false;
     }
     var current = controlValue(control);
@@ -3239,8 +3534,14 @@
       }
     });
     if (typeof card.setAttribute === "function") {
+      if (operation.sourceImportId) {
+        card.setAttribute("data-rap-import-id", operation.sourceImportId);
+      }
       if (operation.sourceCycleId) {
         card.setAttribute("data-rap-cycle-id", operation.sourceCycleId);
+      }
+      if (operation.sourceChargeId) {
+        card.setAttribute("data-rap-charge-id", operation.sourceChargeId);
       }
       if (operation.sourceDispositionId) {
         card.setAttribute(
@@ -3337,7 +3638,10 @@
       });
     });
 
-    if (plan.setCriminal) {
+    if (
+      plan.setCriminal &&
+      (plan.matchedExistingConviction || report.cardsApplied.conviction > 0)
+    ) {
       var criminal = doc.getElementById("isCriminal");
       if (criminal) {
         if (!criminal.checked) {
@@ -3388,6 +3692,81 @@
       pieces.push("line " + fact.sourceLine.start);
     }
     return pieces.length ? pieces.join(", ") : "source location unavailable";
+  }
+
+  function reviewControlsHaveUnsavedChanges(container, rapSheetImport) {
+    if (!container || !rapSheetImport) {
+      return false;
+    }
+    var facts = allFacts(rapSheetImport);
+    var factMap = {};
+    facts.forEach(function (fact) {
+      factMap[fact.factId] = fact;
+    });
+    var valueInputs = container.querySelectorAll("[data-rap-value-for]");
+    var statusInputs = container.querySelectorAll("[data-rap-status-for]");
+    var i;
+    for (i = 0; i < valueInputs.length; i += 1) {
+      var valueId = valueInputs[i].getAttribute("data-rap-value-for");
+      if (
+        factMap[valueId] &&
+        normalizedValue(valueInputs[i].value) !==
+          normalizedValue(
+            factMap[valueId].correctedValue == null
+              ? factMap[valueId].value
+              : factMap[valueId].correctedValue
+          )
+      ) {
+        return true;
+      }
+    }
+    for (i = 0; i < statusInputs.length; i += 1) {
+      var statusId = statusInputs[i].getAttribute("data-rap-status-for");
+      if (
+        factMap[statusId] &&
+        statusInputs[i].value !== factMap[statusId].reviewStatus
+      ) {
+        return true;
+      }
+    }
+    var unparsedMap = {};
+    (rapSheetImport.unparsedSections || []).forEach(function (section) {
+      unparsedMap[section.sectionId] = section;
+    });
+    var unparsedInputs = container.querySelectorAll(
+      "[data-rap-unparsed-status-for]"
+    );
+    for (i = 0; i < unparsedInputs.length; i += 1) {
+      var sectionId = unparsedInputs[i].getAttribute(
+        "data-rap-unparsed-status-for"
+      );
+      if (
+        unparsedMap[sectionId] &&
+        unparsedInputs[i].value !== unparsedMap[sectionId].reviewStatus
+      ) {
+        return true;
+      }
+    }
+    var sentenceLinkMap = {};
+    reviewableSentenceLinks(rapSheetImport).forEach(function (sentence) {
+      sentenceLinkMap[sentence.sentenceId] = sentence;
+    });
+    var sentenceLinkInputs = container.querySelectorAll(
+      "[data-rap-sentence-link-for]"
+    );
+    for (i = 0; i < sentenceLinkInputs.length; i += 1) {
+      var sentenceId = sentenceLinkInputs[i].getAttribute(
+        "data-rap-sentence-link-for"
+      );
+      if (
+        sentenceLinkMap[sentenceId] &&
+        sentenceLinkInputs[i].value !==
+          sentenceLinkMap[sentenceId].linkReviewStatus
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   function renderFactEditor(doc, parent, labelText, fact) {
@@ -3500,7 +3879,13 @@
       );
     });
     subject.datesOfBirth.forEach(function (fact, index) {
-      renderFactEditor(doc, identity, "Date of birth " + (index + 1), fact);
+      renderFactEditor(
+        doc,
+        identity,
+        (fact.dateType === "alternate" ? "Alternate date of birth " : "Date of birth ") +
+          (index + 1),
+        fact
+      );
     });
     renderFactEditor(doc, identity, "FBI number", subject.identifiers.fbiNumber);
     subject.identifiers.additionalFbiNumbers.forEach(function (fact, index) {
@@ -3598,7 +3983,54 @@
 
       renderFactEditor(doc, body, "Reported conviction date", cycle.convictionDate);
       cycle.sentences.forEach(function (sentence, index) {
-        renderFactEditor(doc, body, "Sentence " + (index + 1) + " (" + sentence.type + ")", sentence.detail);
+        var sentenceGroup = doc.createElement("section");
+        sentenceGroup.className = "rap-review-group";
+        renderFactEditor(
+          doc,
+          sentenceGroup,
+          "Sentence " + (index + 1) + " (" + sentence.type + ")",
+          sentence.detail
+        );
+        if (
+          sentence.dispositionId &&
+          sentence.detail &&
+          sentence.detail.reviewStatus !== "rejected"
+        ) {
+          var linkLabel = appendTextElement(
+            doc,
+            sentenceGroup,
+            "label",
+            "rap-unparsed-decision-label",
+            "Link this sentence to the preceding disposition"
+          );
+          var linkSelect = doc.createElement("select");
+          linkSelect.id = "rap-sentence-link-" + sentence.sentenceId;
+          linkSelect.setAttribute(
+            "data-rap-sentence-link-for",
+            sentence.sentenceId
+          );
+          linkLabel.htmlFor = linkSelect.id;
+          [
+            { value: "pending", label: "Needs relationship review" },
+            { value: "accepted", label: "Confirm disposition link" },
+            { value: "rejected", label: "Do not link to disposition" }
+          ].forEach(function (choice) {
+            var option = doc.createElement("option");
+            option.value = choice.value;
+            option.textContent = choice.label;
+            option.selected = sentence.linkReviewStatus === choice.value;
+            linkSelect.appendChild(option);
+          });
+          sentenceGroup.appendChild(linkSelect);
+          appendTextElement(
+            doc,
+            sentenceGroup,
+            "p",
+            "rap-link-note",
+            "Proposed relationship basis: " + sentence.linkBasis
+          );
+        }
+        body.appendChild(sentenceGroup);
       });
       cycle.supervision.forEach(function (entry, index) {
         renderFactEditor(doc, body, "Supervision " + (index + 1) + " (" + entry.type + ")", entry.detail);
@@ -3756,6 +4188,7 @@
     var currentImport = null;
     var parsedSourceText = null;
     var statusBeforeSourceEdit = null;
+    var lastMergeReport = null;
 
     function setStatus(message, kind) {
       if (!statusElement) {
@@ -3774,7 +4207,12 @@
         currentImport.reviewStatus = "stale";
         currentImport.summary = generateRapSheetSummary(currentImport);
         if (reviewElement) {
-          renderRapSheetReview(reviewElement, currentImport, saveReview);
+          renderRapSheetReview(
+            reviewElement,
+            currentImport,
+            saveReview,
+            applyCurrentImport
+          );
         }
         setStatus(
           "The source text changed after parsing. Reparse it before saving review decisions.",
@@ -3812,6 +4250,14 @@
       var unparsedStateBefore = {};
       currentImport.unparsedSections.forEach(function (section) {
         unparsedStateBefore[section.sectionId] = section.reviewStatus;
+      });
+      var sentenceLinks = reviewableSentenceLinks(currentImport);
+      var sentenceLinkStateBefore = {};
+      sentenceLinks.forEach(function (sentence) {
+        sentenceLinkStateBefore[sentence.sentenceId] = {
+          reviewStatus: sentence.linkReviewStatus,
+          verified: sentence.linkVerified
+        };
       });
 
       var valueInputs = container.querySelectorAll("[data-rap-value-for]");
@@ -3859,6 +4305,37 @@
         }
       }
 
+      var sentenceLinkMap = {};
+      sentenceLinks.forEach(function (sentence) {
+        sentenceLinkMap[sentence.sentenceId] = sentence;
+      });
+      var sentenceLinkInputs = container.querySelectorAll(
+        "[data-rap-sentence-link-for]"
+      );
+      for (i = 0; i < sentenceLinkInputs.length; i += 1) {
+        var sentenceId = sentenceLinkInputs[i].getAttribute(
+          "data-rap-sentence-link-for"
+        );
+        if (sentenceLinkMap[sentenceId]) {
+          sentenceLinkMap[sentenceId].linkReviewStatus =
+            sentenceLinkInputs[i].value;
+          sentenceLinkMap[sentenceId].linkVerified =
+            sentenceLinkInputs[i].value === "accepted";
+        }
+      }
+
+      currentImport.cycles.forEach(function (cycle) {
+        (cycle.sentences || []).forEach(function (sentence) {
+          if (
+            sentence.detail &&
+            sentence.detail.reviewStatus === "rejected"
+          ) {
+            sentence.linkReviewStatus = "not_applicable";
+            sentence.linkVerified = false;
+          }
+        });
+      });
+
       currentImport.cycles.forEach(function (cycle) {
         cycle.dispositions.forEach(function (disposition) {
           if (
@@ -3888,7 +4365,10 @@
       var pendingUnparsed = currentImport.unparsedSections.filter(function (section) {
         return section.reviewStatus === "pending";
       }).length;
-      var pending = pendingFacts + pendingUnparsed;
+      var pendingSentenceLinks = sentenceLinks.filter(function (sentence) {
+        return sentence.linkReviewStatus === "pending";
+      }).length;
+      var pending = pendingFacts + pendingUnparsed + pendingSentenceLinks;
       var factChanges = facts.filter(function (fact) {
         var before = factStateBefore[fact.factId];
         var afterValue = normalizedValue(
@@ -3930,6 +4410,25 @@
           toReviewStatus: section.reviewStatus
         };
       });
+      var sentenceLinkChanges = sentenceLinks.filter(function (sentence) {
+        var before = sentenceLinkStateBefore[sentence.sentenceId];
+        return !!(
+          before &&
+          (before.reviewStatus !== sentence.linkReviewStatus ||
+            before.verified !== sentence.linkVerified)
+        );
+      }).map(function (sentence) {
+        var before = sentenceLinkStateBefore[sentence.sentenceId];
+        return {
+          sentenceId: sentence.sentenceId,
+          dispositionId: sentence.dispositionId,
+          linkBasis: sentence.linkBasis,
+          fromReviewStatus: before.reviewStatus,
+          toReviewStatus: sentence.linkReviewStatus,
+          fromVerified: before.verified,
+          toVerified: sentence.linkVerified
+        };
+      });
       currentImport.reviewStatus = pending ? "in_review" : "reviewed";
       currentImport.summary = generateRapSheetSummary(currentImport);
       currentImport.auditTrail.push({
@@ -3943,6 +4442,7 @@
         },
         factChanges: factChanges,
         unparsedSectionChanges: unparsedSectionChanges,
+        sentenceLinkChanges: sentenceLinkChanges,
         acceptedFactCount: facts.filter(function (fact) {
           return fact.reviewStatus === "accepted";
         }).length,
@@ -3956,22 +4456,134 @@
         rejectedUnparsedSectionCount: currentImport.unparsedSections.filter(function (section) {
           return section.reviewStatus === "rejected";
         }).length,
-        pendingUnparsedSectionCount: pendingUnparsed
+        pendingUnparsedSectionCount: pendingUnparsed,
+        acceptedSentenceLinkCount: sentenceLinks.filter(function (sentence) {
+          return sentence.linkReviewStatus === "accepted";
+        }).length,
+        rejectedSentenceLinkCount: sentenceLinks.filter(function (sentence) {
+          return sentence.linkReviewStatus === "rejected";
+        }).length,
+        pendingSentenceLinkCount: pendingSentenceLinks
       });
 
-      renderRapSheetReview(reviewElement, currentImport, saveReview);
+      renderRapSheetReview(
+        reviewElement,
+        currentImport,
+        saveReview,
+        applyCurrentImport
+      );
       setStatus(
         pending
           ? "Review saved locally in memory; " + pending + " item(s) still need review."
-          : "Review complete in memory. No lead fields were changed.",
+          : "Review complete. Accepted facts are ready to apply to the existing lead fields.",
         pending ? "warning" : "success"
       );
       dispatchImportEvent(textarea, "copdoc:rapsheet-reviewed", {
         importId: currentImport.id,
         reviewStatus: currentImport.reviewStatus,
         pendingFactCount: pendingFacts,
-        pendingUnparsedSectionCount: pendingUnparsed
+        pendingUnparsedSectionCount: pendingUnparsed,
+        pendingSentenceLinkCount: pendingSentenceLinks
       });
+    }
+
+    function applyCurrentImport() {
+      if (!currentImport) {
+        setStatus("Parse and review a RAP sheet before applying it.", "error");
+        return null;
+      }
+      if (parsedSourceText !== String(textarea.value || "")) {
+        currentImport.reviewStatus = "stale";
+        currentImport.summary = generateRapSheetSummary(currentImport);
+        if (reviewElement) {
+          renderRapSheetReview(
+            reviewElement,
+            currentImport,
+            saveReview,
+            applyCurrentImport
+          );
+        }
+        setStatus(
+          "The source text changed after parsing. Reparse it before applying facts.",
+          "warning"
+        );
+        return null;
+      }
+      if (
+        reviewElement &&
+        reviewControlsHaveUnsavedChanges(reviewElement, currentImport)
+      ) {
+        setStatus(
+          "The review contains unsaved changes. Save the review decisions before applying facts.",
+          "warning"
+        );
+        return null;
+      }
+      if (currentImport.reviewStatus !== "reviewed") {
+        setStatus(
+          "Resolve every parsed fact and unparsed section before applying the import.",
+          "warning"
+        );
+        return null;
+      }
+
+      var merge = mergeRapSheetImportIntoForm(currentImport, {
+        document: doc,
+        cardsApi: options.cardsApi,
+        createCard: options.createCard,
+        parseName: options.parseName
+      });
+      lastMergeReport = merge.report;
+      var appliedCount = lastMergeReport.applied.length;
+      var conflictCount = lastMergeReport.conflicts.length;
+      var unmappedCount = lastMergeReport.unmapped.length;
+      var skippedCount = lastMergeReport.skipped.length;
+
+      currentImport.auditTrail.push({
+        eventId: nextId({ idFactory: options.idFactory || createDefaultId }, "audit"),
+        action: "accepted_facts_applied_to_lead",
+        at: resolveImportedAt({ now: options.now }),
+        reviewer: {
+          id: options.reviewerId || null,
+          displayName: options.reviewerName || null,
+          attributionAvailable: !!(options.reviewerId || options.reviewerName)
+        },
+        appliedTargetCount: appliedCount,
+        skippedFactCount: skippedCount,
+        conflictingFactCount: conflictCount,
+        unmappedFactCount: unmappedCount,
+        lossyMappingCount: lastMergeReport.lossyMappings.length,
+        cardsApplied: lastMergeReport.cardsApplied,
+        criminalFlagSet: lastMergeReport.criminalFlagSet,
+        conflicts: lastMergeReport.conflicts,
+        unmapped: lastMergeReport.unmapped
+      });
+
+      var message =
+        "Applied " +
+        appliedCount +
+        " existing-field value(s); skipped " +
+        skippedCount +
+        " duplicate(s).";
+      if (conflictCount || unmappedCount) {
+        message +=
+          " Preserved " +
+          conflictCount +
+          " conflicting value(s); " +
+          unmappedCount +
+          " accepted fact(s) have no compatible field yet.";
+      }
+      setStatus(message, conflictCount || unmappedCount ? "warning" : "success");
+      dispatchImportEvent(textarea, "copdoc:rapsheet-applied", {
+        importId: currentImport.id,
+        appliedTargetCount: appliedCount,
+        skippedFactCount: skippedCount,
+        conflictingFactCount: conflictCount,
+        unmappedFactCount: unmappedCount,
+        cardsApplied: lastMergeReport.cardsApplied,
+        criminalFlagSet: lastMergeReport.criminalFlagSet
+      });
+      return lastMergeReport;
     }
 
     function parseCurrentText() {
@@ -3986,12 +4598,18 @@
           limits: options.limits,
           sourceKind: "pasted-text"
         });
+        lastMergeReport = null;
         if (importIdElement) {
           importIdElement.value = currentImport.id;
         }
         if (reviewElement) {
           reviewElement.hidden = false;
-          renderRapSheetReview(reviewElement, currentImport, saveReview);
+          renderRapSheetReview(
+            reviewElement,
+            currentImport,
+            saveReview,
+            applyCurrentImport
+          );
         }
         if (discardButton) {
           discardButton.hidden = false;
@@ -4027,6 +4645,7 @@
       currentImport = null;
       parsedSourceText = null;
       statusBeforeSourceEdit = null;
+      lastMergeReport = null;
       if (reviewElement) {
         clearElement(reviewElement);
         reviewElement.hidden = true;
@@ -4060,7 +4679,12 @@
         currentImport.reviewStatus = "stale";
         currentImport.summary = generateRapSheetSummary(currentImport);
         if (reviewElement) {
-          renderRapSheetReview(reviewElement, currentImport, saveReview);
+          renderRapSheetReview(
+            reviewElement,
+            currentImport,
+            saveReview,
+            applyCurrentImport
+          );
         }
         setStatus(
           "The source text changed after parsing. Reparse before relying on this review.",
@@ -4071,7 +4695,12 @@
         statusBeforeSourceEdit = null;
         currentImport.summary = generateRapSheetSummary(currentImport);
         if (reviewElement) {
-          renderRapSheetReview(reviewElement, currentImport, saveReview);
+          renderRapSheetReview(
+            reviewElement,
+            currentImport,
+            saveReview,
+            applyCurrentImport
+          );
         }
         setStatus(
           "The source text matches the parsed import again. Review may continue.",
@@ -4082,9 +4711,13 @@
 
     return {
       parse: parseCurrentText,
+      apply: applyCurrentImport,
       discard: discardCurrentImport,
       getImport: function () {
         return currentImport;
+      },
+      getLastMergeReport: function () {
+        return lastMergeReport;
       }
     };
   }
@@ -4097,6 +4730,10 @@
     parseRapSheetPages: parseRapSheetPages,
     classifyDisposition: classifyDisposition,
     generateRapSheetSummary: generateRapSheetSummary,
+    snapshotRapSheetMergeTargets: snapshotRapSheetMergeTargets,
+    buildRapSheetMergePlan: buildRapSheetMergePlan,
+    applyRapSheetMergePlan: applyRapSheetMergePlan,
+    mergeRapSheetImportIntoForm: mergeRapSheetImportIntoForm,
     attachRapSheetImport: attachRapSheetImport,
     renderRapSheetReview: renderRapSheetReview
   };
@@ -4107,6 +4744,7 @@
   root.parseRapSheetText = parseRapSheetText;
   root.parseRapSheetPages = parseRapSheetPages;
   root.generateRapSheetSummary = generateRapSheetSummary;
+  root.mergeRapSheetImportIntoForm = mergeRapSheetImportIntoForm;
   root.attachRapSheetImport = attachRapSheetImport;
 
   if (typeof module !== "undefined" && module.exports) {

@@ -92,8 +92,23 @@ function getVehicleAssociationChoices() {
   return choices;
 }
 
+function getLeadSourceAssociationChoices() {
+  var source = document.getElementById("leadSource");
+  if (source && source.value === "tag") {
+    return [
+      {
+        value: "plate-check-location",
+        label: "Plate check location"
+      }
+    ];
+  }
+  return [];
+}
+
 function refreshAddressAssociationOptions() {
-  var vehicleChoices = getVehicleAssociationChoices();
+  var extraChoices = getLeadSourceAssociationChoices().concat(
+    getVehicleAssociationChoices()
+  );
   document
     .querySelectorAll('[data-field="addressAssociation"]')
     .forEach(function (select) {
@@ -108,7 +123,7 @@ function refreshAddressAssociationOptions() {
       placeholder.textContent = "Select an Option";
       select.appendChild(placeholder);
 
-      ADDRESS_ASSOCIATION_STATIC.concat(vehicleChoices).forEach(function (item) {
+      ADDRESS_ASSOCIATION_STATIC.concat(extraChoices).forEach(function (item) {
         var option = document.createElement("option");
         option.value = item.value;
         option.textContent = item.label;
@@ -257,6 +272,53 @@ function addRepeatableCard(options) {
   return card;
 }
 
+function addPlateCheckAddress() {
+  var list = document.getElementById("addressList");
+  var card = null;
+  if (list) {
+    var existing = list.querySelectorAll(":scope > fieldset");
+    var i;
+    for (i = 0; i < existing.length; i++) {
+      var assoc = existing[i].querySelector('[data-field="addressAssociation"]');
+      var street = existing[i].querySelector('[data-field="street"]');
+      var unused =
+        assoc &&
+        !assoc.value &&
+        street &&
+        !String(street.value || "").trim();
+      if (unused) {
+        card = existing[i];
+        break;
+      }
+    }
+  }
+  if (!card && typeof repeatableCardAdders.address === "function") {
+    card = repeatableCardAdders.address();
+  }
+  refreshAddressAssociationOptions();
+  if (!card) {
+    return null;
+  }
+  var select = card.querySelector('[data-field="addressAssociation"]');
+  if (select) {
+    select.value = "plate-check-location";
+  }
+  card.classList.remove("is-collapsed");
+  var toggle = card.querySelector(":scope > legend .card-toggle");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("title", "Collapse card");
+  }
+  if (typeof card.scrollIntoView === "function") {
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  var streetInput = card.querySelector('[data-field="street"]');
+  if (streetInput) {
+    streetInput.focus();
+  }
+  return card;
+}
+
 function initRepeatable(options) {
   var list = document.getElementById(options.listId);
   var template = document.getElementById(options.templateId);
@@ -298,6 +360,50 @@ function bindAliasCard(card) {
   }
 }
 
+function getPersonRelationshipChoices() {
+  var matrix =
+    (typeof COPDoc !== "undefined" &&
+      COPDoc.models &&
+      COPDoc.models.ASSOCIATION_MATRIX) ||
+    [];
+  var seen = {};
+  var choices = [];
+
+  function addChoice(value, label) {
+    if (!value || seen[value]) {
+      return;
+    }
+    seen[value] = true;
+    choices.push({ value: value, label: label });
+  }
+
+  matrix.forEach(function (row) {
+    if (!row || row.active === false) {
+      return;
+    }
+    if (row.fromEntityTypeCode !== "PERSON" || row.toEntityTypeCode !== "PERSON") {
+      return;
+    }
+    addChoice(row.code, row.label);
+    if (row.inverseTypeCode && row.inverseTypeCode !== row.code) {
+      addChoice(row.inverseTypeCode, row.inverseLabel || row.inverseTypeCode);
+    }
+  });
+
+  return choices;
+}
+
+function bindRelationshipCard(card) {
+  var typeSelect = card.querySelector('[data-field="relationshipType"]');
+  if (typeof fillSelect === "function") {
+    fillSelect(
+      typeSelect,
+      getPersonRelationshipChoices(),
+      "Select a Relationship"
+    );
+  }
+}
+
 enhanceAllFieldsets(document);
 
 initRepeatable({
@@ -307,6 +413,17 @@ initRepeatable({
   title: "Alias",
   prefix: "alias",
   bind: bindAliasCard,
+  seed: false,
+  allowEmpty: true
+});
+
+initRepeatable({
+  listId: "relationshipList",
+  templateId: "relationshipCardTemplate",
+  addButtonId: "addRelationshipButton",
+  title: "Relationship",
+  prefix: "relationship",
+  bind: bindRelationshipCard,
   seed: false,
   allowEmpty: true
 });
@@ -398,9 +515,47 @@ function bindWarrantCard(card) {
   bindCardAgencySearch(card, "warrantIssuer", "warrantIssuerCode");
 }
 
+function catalogItems(name) {
+  var catalogs = window.COPDoc && window.COPDoc.catalogs;
+  var list = catalogs && catalogs[name];
+  return (list || []).filter(function (item) {
+    return item && item.active !== false;
+  });
+}
+
+function bindEncounterCard(card) {
+  if (typeof fillSelect === "function") {
+    fillSelect(
+      card.querySelector('[data-field="encounterRole"]'),
+      catalogItems("POLICE_ENCOUNTER_ROLES"),
+      "Select a Role"
+    );
+    fillSelect(
+      card.querySelector('[data-field="encounterType"]'),
+      catalogItems("POLICE_ENCOUNTER_TYPES"),
+      "Select a Type"
+    );
+    fillSelect(
+      card.querySelector('[data-field="encounterDisposition"]'),
+      catalogItems("POLICE_ENCOUNTER_DISPOSITIONS"),
+      "Select a Disposition"
+    );
+  }
+  bindCardAgencySearch(card, "encounterAgency", "encounterAgencyCode");
+}
+
 function bindArrestCard(card) {
   bindCardAgencySearch(card, "arrestAgency", "arrestAgencyCode");
 }
+
+initRepeatable({
+  listId: "encounterList",
+  templateId: "encounterCardTemplate",
+  addButtonId: "addEncounterButton",
+  title: "Police Encounter",
+  prefix: "encounter",
+  bind: bindEncounterCard
+});
 
 initRepeatable({
   listId: "arrestList",
@@ -439,6 +594,9 @@ window.COPDoc.cards.addAlias = function addAliasCard() {
 };
 window.COPDoc.cards.addDocument = function addDocumentCard() {
   return window.COPDoc.cards.add("document");
+};
+window.COPDoc.cards.addEncounter = function addEncounterCard() {
+  return window.COPDoc.cards.add("encounter");
 };
 window.COPDoc.cards.addArrest = function addArrestCard() {
   return window.COPDoc.cards.add("arrest");

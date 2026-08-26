@@ -355,7 +355,8 @@
       }
 
       .rap-sheet-actions button,
-      .rap-review-save {
+      .rap-review-save,
+      .rap-review-apply {
         width: auto;
         padding: 0.48rem 0.72rem;
         border: 1px solid #697386;
@@ -368,12 +369,14 @@
       }
 
       .rap-sheet-actions button:hover,
-      .rap-review-save:hover {
+      .rap-review-save:hover,
+      .rap-review-apply:hover {
         background: #263d80;
       }
 
       .rap-sheet-actions button:focus,
-      .rap-review-save:focus {
+      .rap-review-save:focus,
+      .rap-review-apply:focus {
         outline: 2px solid #3b5bdb;
         outline-offset: 2px;
       }
@@ -844,9 +847,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.1.0"
+          data-version="0.2.0"
         >
-          Version 0.1.0
+          Version 0.2.0
         </span>
       </div>
 
@@ -875,9 +878,16 @@
             </div>
           </div>
           <div class="row" data-source="tag" hidden>
-            <div class="field field-span-2">
-              <label for="checkLocation">Plate Check Location</label>
-              <input type="text" id="checkLocation" name="checkLocation" />
+            <div class="field">
+              <span class="field-caption">Plate check location</span>
+              <button
+                type="button"
+                id="addPlateCheckLocation"
+                class="add-card-btn"
+              >
+                <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+                Add location
+              </button>
             </div>
           </div>
           <div class="row" data-source="otherLe" hidden>
@@ -1005,6 +1015,14 @@
           </button>
         </div>
 
+        <div id="relationshipList" class="card-list"></div>
+        <div class="card-list-actions">
+          <button type="button" id="addRelationshipButton" class="add-card-btn">
+            <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+            Add relationship
+          </button>
+        </div>
+
         <div id="vehicleList" class="card-list"></div>
         <div class="card-list-actions">
           <button type="button" id="addVehicleButton" class="add-card-btn">
@@ -1062,8 +1080,9 @@
                 aria-describedby="rapSheetHelp rapSheetImportStatus"
               ></textarea>
               <p id="rapSheetHelp" class="rap-sheet-help">
-                Paste text output, then parse it locally for review. Parsed facts
-                remain separate from the lead record and are never merged automatically.
+                Paste text output and review it locally. After every item is
+                resolved, accepted facts can be applied to compatible existing
+                fields without overwriting different nonblank values.
               </p>
               <div class="rap-sheet-actions">
                 <button type="button" id="rapSheetParseButton">
@@ -1088,6 +1107,14 @@
                 hidden
               ></section>
             </div>
+          </div>
+
+          <div id="encounterList" class="card-list"></div>
+          <div class="card-list-actions">
+            <button type="button" id="addEncounterButton" class="add-card-btn">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add encounter
+            </button>
           </div>
 
           <div id="arrestList" class="card-list"></div>
@@ -1186,6 +1213,33 @@
               autocomplete="off"
               title="Paste a full name to fill first, middle, and last"
             />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="relationshipCardTemplate">
+      <fieldset data-card="relationship">
+        <legend>Relationship</legend>
+        <div class="row">
+          <div class="field">
+            <label for="relatedPersonId">Person</label>
+            <select
+              id="relatedPersonId"
+              name="relatedPersonId"
+              data-field="relatedPersonId"
+              disabled
+            >
+              <option value="">Select a person (after data model)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="relationshipType">Relationship to</label>
+            <select
+              id="relationshipType"
+              name="relationshipType"
+              data-field="relationshipType"
+            ></select>
           </div>
         </div>
       </fieldset>
@@ -1349,6 +1403,100 @@
               name="documentExpiration"
               data-field="documentExpiration"
             />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="encounterCardTemplate">
+      <fieldset data-card="encounter">
+        <legend>Police Encounter</legend>
+        <div class="row">
+          <div class="field">
+            <label for="encounterDate">Encounter Date</label>
+            <input
+              type="date"
+              id="encounterDate"
+              name="encounterDate"
+              data-field="encounterDate"
+            />
+          </div>
+          <div class="field">
+            <label for="encounterRole">Role</label>
+            <select
+              id="encounterRole"
+              name="encounterRole"
+              data-field="encounterRole"
+            ></select>
+          </div>
+          <div class="field">
+            <label for="encounterType">Type</label>
+            <select
+              id="encounterType"
+              name="encounterType"
+              data-field="encounterType"
+            ></select>
+          </div>
+          <div class="field">
+            <label for="encounterDisposition">Disposition</label>
+            <select
+              id="encounterDisposition"
+              name="encounterDisposition"
+              data-field="encounterDisposition"
+            ></select>
+          </div>
+          <div class="field search-field field-span-2">
+            <label for="encounterAgency">Law Enforcement Agency</label>
+            <input
+              type="text"
+              id="encounterAgency"
+              name="encounterAgency"
+              data-field="encounterAgency"
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="encounterAgencyResults"
+            />
+            <input
+              type="hidden"
+              id="encounterAgencyCode"
+              name="encounterAgencyCode"
+              data-field="encounterAgencyCode"
+            />
+            <ul
+              id="encounterAgencyResults"
+              class="search-results"
+              role="listbox"
+              hidden
+            ></ul>
+          </div>
+          <div class="field">
+            <label for="encounterReportNumber">Incident / Report Number</label>
+            <input
+              type="text"
+              id="encounterReportNumber"
+              name="encounterReportNumber"
+              data-field="encounterReportNumber"
+            />
+          </div>
+          <div class="field">
+            <label for="encounterLocation">Location</label>
+            <input
+              type="text"
+              id="encounterLocation"
+              name="encounterLocation"
+              data-field="encounterLocation"
+            />
+          </div>
+          <div class="field field-span-2">
+            <label for="encounterNarrative">Encounter Narrative</label>
+            <textarea
+              id="encounterNarrative"
+              name="encounterNarrative"
+              data-field="encounterNarrative"
+              rows="5"
+            ></textarea>
           </div>
         </div>
       </fieldset>
@@ -1584,6 +1732,8 @@
     <script src="data/identity-document-types.js"></script>
     <script src="functions/address.js"></script>
     <script src="data/vehicle-association-reasons.js"></script>
+    <script src="data/association-matrix.js"></script>
+    <script src="data/encounter-catalogs.js"></script>
     <script src="functions/vehicles.js"></script>
     <script src="data/le/federal-le-agencies.js"></script>
     <script src="data/le/texas-state-le.js"></script>

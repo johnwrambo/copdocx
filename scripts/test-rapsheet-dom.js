@@ -97,9 +97,14 @@ function matchesSelector(element, selector) {
     var className = selector.slice(1);
     return String(element.className || "").split(/\s+/).indexOf(className) !== -1;
   }
-  var attributeMatch = selector.match(/^\[([^\]]+)\]$/);
+  var attributeMatch = selector.match(
+    /^\[([^=\]]+)(?:="([^"]*)")?\]$/
+  );
   if (attributeMatch) {
-    return element.getAttribute(attributeMatch[1]) != null;
+    var attributeValue = element.getAttribute(attributeMatch[1]);
+    return attributeMatch[2] == null
+      ? attributeValue != null
+      : attributeValue === attributeMatch[2];
   }
   return element.tagName.toLowerCase() === selector.toLowerCase();
 }
@@ -174,10 +179,76 @@ var reviewElement = addElement(doc, "section", "rapSheetReview");
 var importIdElement = addElement(doc, "input", "rapSheetImportId");
 
 var criminalCheckbox = addElement(doc, "input", "isCriminal");
+var firstNameInput = addElement(doc, "input", "firstName");
+var middleNameInput = addElement(doc, "input", "middleName");
+var lastNameInput = addElement(doc, "input", "lastName");
+var dobInput = addElement(doc, "input", "dateOfBirth");
+var sexMaleInput = addElement(doc, "input", "sexMale");
+var sexFemaleInput = addElement(doc, "input", "sexFemale");
 var fbiInput = addElement(doc, "input", "fbiNumber");
+var stateIdInput = addElement(doc, "input", "stateId");
 var ncicInput = addElement(doc, "input", "ncicNumber");
 var crimeInput = addElement(doc, "input", "crime");
 var convictionDateInput = addElement(doc, "input", "convictionDate");
+
+var aliasList = addElement(doc, "div", "aliasList");
+var documentList = addElement(doc, "div", "documentList");
+var arrestList = addElement(doc, "div", "arrestList");
+var convictionList = addElement(doc, "div", "convictionList");
+
+var cardFields = {
+  alias: ["firstName", "middleName", "lastName"],
+  document: [
+    "documentType",
+    "documentNumber",
+    "issuingState",
+    "issuingCountry",
+    "documentIssueDate",
+    "documentExpiration"
+  ],
+  arrest: [
+    "arrestDate",
+    "arrestCharge",
+    "arrestStatute",
+    "arrestClass",
+    "arrestAgency",
+    "arrestAgencyCode",
+    "arrestLocation"
+  ],
+  conviction: [
+    "crime",
+    "convictionStatute",
+    "convictionClass",
+    "disposition",
+    "convictionDate",
+    "dispositionDate",
+    "court",
+    "docketNumber",
+    "sentence"
+  ]
+};
+
+var cardLists = {
+  alias: aliasList,
+  document: documentList,
+  arrest: arrestList,
+  conviction: convictionList
+};
+
+function createCard(type) {
+  var card = doc.createElement("fieldset");
+  cardFields[type].forEach(function (fieldName) {
+    var control = doc.createElement("input");
+    control.setAttribute("data-field", fieldName);
+    card.appendChild(control);
+  });
+  cardLists[type].appendChild(card);
+  return card;
+}
+
+createCard("document");
+createCard("arrest");
+createCard("conviction");
 
 criminalCheckbox.checked = false;
 fbiInput.value = "KEEP-FBI";
@@ -194,6 +265,7 @@ var controller = rapSheet.attachRapSheetImport(textarea, {
   importIdElement: importIdElement,
   now: "2026-08-25T12:00:00Z",
   reviewerId: "test-reviewer",
+  createCard: createCard,
   idFactory: function (prefix) {
     idCounter += 1;
     return prefix + "-dom-" + idCounter;
@@ -202,10 +274,12 @@ var controller = rapSheet.attachRapSheetImport(textarea, {
 
 textarea.value = [
   "TEXAS CRIMINAL HISTORY",
-  "NAM/<img src=x onerror=global.__rapDomExecuted=true>",
+  "NAM/DOE, JANE FBI/123",
   "ARREST CYCLE 1",
   "ARREST CHARGE: THEFT",
   "DISPOSITION: CONVICTED 01/02/2020",
+  "SENTENCE: 12 MONTHS",
+  "<img src=x onerror=global.__rapDomExecuted=true>",
   "<script>global.__rapDomExecuted=true</script>"
 ].join("\n");
 global.__rapDomExecuted = false;
@@ -220,16 +294,25 @@ assert.match(reviewElement.textContent, /<script>global\.__rapDomExecuted/);
 assert.equal(reviewElement.querySelectorAll("script").length, 0);
 assert.equal(reviewElement.querySelectorAll("img").length, 0);
 assert.equal(criminalCheckbox.checked, false);
+assert.equal(firstNameInput.value, "");
+assert.equal(lastNameInput.value, "");
 assert.equal(fbiInput.value, "KEEP-FBI");
 assert.equal(ncicInput.value, "KEEP-NCIC");
 assert.equal(crimeInput.value, "KEEP-CRIME");
 assert.equal(convictionDateInput.value, "1999-01-01");
 
 var dispositionDate = parsed.cycles[0].dispositions[0].date;
+var rejectedFbiFact = parsed.subjectCandidate.identifiers.fbiNumber;
 reviewElement.querySelectorAll("[data-rap-status-for]").forEach(function (select) {
   select.value = "accepted";
+  if (select.getAttribute("data-rap-status-for") === rejectedFbiFact.factId) {
+    select.value = "rejected";
+  }
 });
 reviewElement.querySelectorAll("[data-rap-unparsed-status-for]").forEach(function (select) {
+  select.value = "accepted";
+});
+reviewElement.querySelectorAll("[data-rap-sentence-link-for]").forEach(function (select) {
   select.value = "accepted";
 });
 reviewElement.querySelectorAll("[data-rap-value-for]").forEach(function (input) {
@@ -243,10 +326,54 @@ assert.equal(parsed.reviewStatus, "reviewed");
 assert.equal(dispositionDate.correctedValue, "02/03/2025");
 assert.equal(dispositionDate.normalizedValue, "2025-02-03");
 assert.equal(dispositionDate.originalNormalizedValue, "2020-01-02");
+assert.equal(rejectedFbiFact.reviewStatus, "rejected");
 assert.equal(parsed.summary.mostRecentConviction, "2025-02-03");
 assert.equal(parsed.auditTrail[1].reviewer.id, "test-reviewer");
 assert.ok(parsed.auditTrail[1].factChanges.length > 0);
 assert.ok(parsed.auditTrail[1].unparsedSectionChanges.length > 0);
+assert.equal(parsed.auditTrail[1].sentenceLinkChanges.length, 1);
+assert.equal(criminalCheckbox.checked, false);
+assert.equal(firstNameInput.value, "");
+assert.ok(reviewElement.querySelector(".rap-review-apply"));
+
+var primaryNameFact = parsed.subjectCandidate.names[0];
+var primaryNameEditor = reviewElement
+  .querySelectorAll("[data-rap-value-for]")
+  .filter(function (input) {
+    return input.getAttribute("data-rap-value-for") === primaryNameFact.factId;
+  })[0];
+primaryNameEditor.value = "SMITH, UNSAVED";
+reviewElement.querySelector(".rap-review-apply").dispatch("click");
+assert.equal(firstNameInput.value, "");
+assert.equal(controller.getLastMergeReport(), null);
+assert.match(statusElement.textContent, /unsaved changes/i);
+primaryNameEditor.value = primaryNameFact.value;
+
+reviewElement.querySelector(".rap-review-apply").dispatch("click");
+assert.equal(firstNameInput.value, "JANE");
+assert.equal(middleNameInput.value, "");
+assert.equal(lastNameInput.value, "DOE");
+assert.equal(criminalCheckbox.checked, true);
+assert.equal(fbiInput.value, "KEEP-FBI");
+assert.equal(stateIdInput.value, "");
+assert.equal(ncicInput.value, "KEEP-NCIC");
+assert.equal(crimeInput.value, "KEEP-CRIME");
+assert.equal(convictionDateInput.value, "1999-01-01");
+assert.equal(convictionList.children.length, 1);
+assert.equal(
+  convictionList.children[0].querySelector('[data-field="crime"]').value,
+  "THEFT"
+);
+assert.equal(
+  convictionList.children[0].querySelector('[data-field="convictionDate"]').value,
+  "2025-02-03"
+);
+assert.equal(
+  convictionList.children[0].querySelector('[data-field="sentence"]').value,
+  "12 MONTHS"
+);
+assert.ok(controller.getLastMergeReport());
+assert.equal(parsed.auditTrail[2].action, "accepted_facts_applied_to_lead");
 
 var originalSource = textarea.value;
 textarea.value += "\nNEW SOURCE LINE";
@@ -265,6 +392,32 @@ assert.equal(controller.getImport(), null);
 assert.equal(textarea.value, originalSource);
 assert.equal(reviewElement.hidden, true);
 
+textarea.value = [
+  "ARREST CYCLE 1",
+  "ARREST CHARGE: THEFT",
+  "DISPOSITION: CONVICTED",
+  "SENTENCE: 12 MONTHS"
+].join("\n");
+parseButton.dispatch("click");
+var rejectedSentenceImport = controller.getImport();
+var rejectedSentence = rejectedSentenceImport.cycles[0].sentences[0];
+reviewElement.querySelectorAll("[data-rap-status-for]").forEach(function (select) {
+  select.value =
+    select.getAttribute("data-rap-status-for") === rejectedSentence.detail.factId
+      ? "rejected"
+      : "accepted";
+});
+reviewElement.querySelector(".rap-review-save").dispatch("click");
+assert.equal(rejectedSentenceImport.reviewStatus, "reviewed");
+assert.equal(rejectedSentence.linkReviewStatus, "not_applicable");
+assert.equal(rejectedSentence.linkVerified, false);
+assert.equal(
+  reviewElement.querySelectorAll("[data-rap-sentence-link-for]").length,
+  0
+);
+assert.ok(reviewElement.querySelector(".rap-review-apply"));
+discardButton.dispatch("click");
+
 textarea.value = "COMPLETELY UNKNOWN BLOCK";
 parseButton.dispatch("click");
 var unparsedOnly = controller.getImport();
@@ -275,7 +428,7 @@ assert.equal(
   0
 );
 
-assert.equal(criminalCheckbox.checked, false);
+assert.equal(criminalCheckbox.checked, true);
 assert.equal(fbiInput.value, "KEEP-FBI");
 assert.equal(ncicInput.value, "KEEP-NCIC");
 assert.equal(crimeInput.value, "KEEP-CRIME");

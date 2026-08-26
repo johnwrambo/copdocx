@@ -118,6 +118,46 @@ window.COPDoc.catalogs = window.COPDoc.catalogs || {};
     ["COLLATERAL", "Collateral"],
   ]);
 
+  /**
+   * Police encounter on Criminal Profile — this person's role in
+   * the local-LE contact. Distinct from ENCOUNTER_ROLES
+   * (TARGET / COLLATERAL), which is ICE operation participation.
+   */
+  window.COPDoc.catalogs.POLICE_ENCOUNTER_ROLES = entries([
+    ["ARRESTEE", "Arrestee"],
+    ["SUSPECT", "Suspect"],
+    ["VICTIM", "Victim"],
+    ["WITNESS", "Witness"],
+    ["COMPLAINANT", "Complainant"],
+    ["OTHER", "Other"],
+  ]);
+
+  /** How the police contact happened. Local-LE flavored; not ICE eventType. */
+  window.COPDoc.catalogs.POLICE_ENCOUNTER_TYPES = entries([
+    ["VEHICLE_STOP", "Vehicle stop"],
+    ["CALL_FOR_SERVICE", "Call for service"],
+    ["FIELD_INTERVIEW", "Field interview"],
+    ["CONSENSUAL", "Consensual encounter / knock and talk"],
+    ["WARRANT_SERVICE", "Warrant service"],
+    ["INVESTIGATION", "Investigation / interview"],
+    ["TRAFFIC_CRASH", "Traffic crash"],
+    ["BOOKING", "Jail / booking"],
+    ["OTHER", "Other"],
+  ]);
+
+  /** What happened to this person at that contact. */
+  window.COPDoc.catalogs.POLICE_ENCOUNTER_DISPOSITIONS = entries([
+    ["ARRESTED", "Arrested"],
+    ["CITED", "Cited / summons"],
+    ["DETAINED_RELEASED", "Detained then released"],
+    ["RELEASED", "Released / no action"],
+    ["TRANSFERRED", "Transferred to other agency"],
+    ["REPORT_TAKEN", "Report taken"],
+    ["PENDING", "Pending investigation"],
+    ["UNFOUNDED", "Unfounded"],
+    ["OTHER", "Other"],
+  ]);
+
   window.COPDoc.catalogs.ENCOUNTER_STATUSES = entries([
     ["DRAFT", "Draft"],
     ["ACTIVE", "Active"],
