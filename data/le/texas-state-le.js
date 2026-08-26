@@ -7,6 +7,7 @@ var TEXAS_STATE_LE = [
     "code": "TX_DPS",
     "label": "Texas Department of Public Safety",
     "type": "state_primary",
+    "aliases": ["DPS", "Texas DPS"],
     "components": ["Texas Highway Patrol", "Texas Rangers", "Criminal Investigations Division", "Intelligence & Counterterrorism", "Driver License", "Regulatory Services"],
     "description": "Primary statewide law enforcement agency. Includes Highway Patrol and the Texas Rangers.",
     "website": "https://www.dps.texas.gov/",

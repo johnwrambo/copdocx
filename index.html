@@ -193,12 +193,11 @@
       legend {
         padding: 0 0.35rem; /* small left/right gap so the border doesn't run into the letters */
         font-weight: 650; /* 400 regular, 600 semibold, 700 bold, 650 in between */
-        /* font-size: 0.85rem;  smaller section titles */
-        /* font-size: 1.1rem;  larger section titles */
-        /* letter-spacing: 0.06em;  spaced-out small caps feel */
-        /* text-transform: uppercase;  OFFICER */
-        /* color: #1b3a8c;  colored section titles */
-        /* background: #fff;  if the border cuts through the text, fill behind it */
+        background: #fff; /* cover the fieldset border so the title sits on it */
+      }
+
+      fieldset fieldset > legend {
+        background: #f8f9fb; /* match nested card fill */
       }
 
       /* ============================================================
@@ -208,6 +207,10 @@
          turns it into TWO columns from 640px up.
          1fr = "one equal share of leftover space".
          ============================================================ */
+      [hidden] {
+        display: none !important; /* beat .row { display: grid } so source panels can hide */
+      }
+
       .row {
         display: grid; /* children snap to a grid instead of flowing inline */
         /* display: flex;  alternative layout model; grid is better for form columns */
@@ -335,6 +338,168 @@
         /* font-family: Consolas, "Courier New", monospace;  fixed-width, easier to scan codes */
       }
 
+      /* RAP-sheet import stays local and separate until a user reviews it. */
+      .rap-sheet-help,
+      .rap-import-status,
+      .rap-link-note {
+        margin: 0;
+        color: #4b5568;
+        font-size: 0.82rem;
+      }
+
+      .rap-sheet-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.55rem 0.75rem;
+      }
+
+      .rap-sheet-actions button,
+      .rap-review-save {
+        width: auto;
+        padding: 0.48rem 0.72rem;
+        border: 1px solid #697386;
+        border-radius: 6px;
+        color: #fff;
+        background: #334e9e;
+        font: inherit;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .rap-sheet-actions button:hover,
+      .rap-review-save:hover {
+        background: #263d80;
+      }
+
+      .rap-sheet-actions button:focus,
+      .rap-review-save:focus {
+        outline: 2px solid #3b5bdb;
+        outline-offset: 2px;
+      }
+
+      #rapSheetDiscardButton {
+        color: #394150;
+        background: #fff;
+      }
+
+      #rapSheetDiscardButton:hover {
+        background: #eef0f4;
+      }
+
+      .rap-import-status-success {
+        color: #216e39;
+      }
+
+      .rap-import-status-warning {
+        color: #825500;
+      }
+
+      .rap-import-status-error {
+        color: #b42318;
+      }
+
+      .rap-sheet-review {
+        margin-top: 0.45rem;
+        padding: 0.9rem;
+        border: 1px solid #c5c9d4;
+        border-radius: 8px;
+        background: #f8f9fb;
+      }
+
+      .rap-sheet-review h3,
+      .rap-sheet-review h4,
+      .rap-sheet-review h5 {
+        margin: 0 0 0.55rem;
+      }
+
+      .rap-review-notice {
+        margin: 0 0 0.8rem;
+        color: #6a4200;
+        font-size: 0.88rem;
+      }
+
+      .rap-summary,
+      .rap-source-block {
+        overflow-x: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.78rem;
+      }
+
+      .rap-summary {
+        margin: 0 0 0.85rem;
+        padding: 0.7rem;
+        border: 1px solid #d5d8e0;
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      .rap-review-section,
+      .rap-cycle,
+      .rap-review-group {
+        margin: 0.75rem 0;
+        padding: 0.7rem;
+        border: 1px solid #d5d8e0;
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      .rap-cycle > summary {
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .rap-cycle-body {
+        padding-top: 0.65rem;
+      }
+
+      .rap-fact-row {
+        display: grid;
+        grid-template-columns: minmax(8rem, 0.8fr) minmax(10rem, 1.6fr) minmax(8rem, 0.65fr);
+        gap: 0.35rem 0.55rem;
+        align-items: center;
+        margin-top: 0.55rem;
+      }
+
+      .rap-fact-source {
+        grid-column: 2 / -1;
+        color: #616979;
+        overflow-wrap: anywhere;
+      }
+
+      .rap-warning-error {
+        color: #b42318;
+      }
+
+      .rap-source-block {
+        max-height: 14rem;
+        margin: 0.5rem 0 0;
+        padding: 0.55rem;
+        border: 1px solid #e0e2e8;
+        background: #f8f9fb;
+      }
+
+      .rap-unparsed-block + .rap-unparsed-block {
+        margin-top: 0.8rem;
+      }
+
+      .rap-unparsed-decision-label {
+        display: block;
+        margin: 0.35rem 0 0.25rem;
+      }
+
+      @media (max-width: 639px) {
+        .rap-fact-row {
+          grid-template-columns: 1fr;
+        }
+
+        .rap-fact-source {
+          grid-column: 1;
+        }
+      }
+
       /* ============================================================
          CHECKBOX SIZE / ALIGNMENT
          Controls: the actual square for Criminal? and Final Order.
@@ -460,6 +625,216 @@
       gap: 16px;
       margin-bottom: 8px;
     }
+
+      /* Search combobox used by Referring Agency (reusable on any text field) */
+      .search-field {
+        position: relative;
+      }
+
+      .search-results {
+        position: absolute;
+        z-index: 30;
+        top: 100%;
+        left: 0;
+        right: 0;
+        margin: 0.2rem 0 0;
+        padding: 0.25rem 0;
+        list-style: none;
+        max-height: 16rem;
+        overflow: auto;
+        background: #fff;
+        border: 1px solid #c5c9d4;
+        border-radius: 6px;
+        box-shadow: 0 8px 20px rgba(31, 36, 48, 0.12);
+      }
+
+      .search-results[hidden] {
+        display: none;
+      }
+
+      .search-results li {
+        padding: 0.4rem 0.65rem;
+        cursor: pointer;
+      }
+
+      .search-results li:hover,
+      .search-results li[aria-selected="true"] {
+        background: #eef2ff;
+      }
+
+      .search-results .search-meta {
+        display: block;
+        margin-top: 0.1rem;
+        font-size: 0.75rem;
+        font-weight: 400;
+        color: #6b7280;
+      }
+
+      .search-results .search-empty {
+        cursor: default;
+        color: #6b7280;
+      }
+
+      input.is-invalid,
+      select.is-invalid {
+        border-color: #c92a2a;
+      }
+
+      .field-status {
+        margin: 0.45rem 0 0;
+        font-size: 0.85rem;
+        color: #c92a2a;
+      }
+
+      .field-status.is-ok {
+        color: #2b8a3e;
+      }
+
+      .action-button {
+        align-self: end;
+        padding: 0.45rem 0.9rem;
+        border: 1px solid #3b5bdb;
+        border-radius: 6px;
+        background: #3b5bdb;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .action-button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+
+      .card-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .card-list-actions {
+        margin: 0 0 1.25rem;
+      }
+
+      .card-list-actions[hidden] {
+        display: none;
+      }
+
+      .add-card-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.2rem 0;
+        border: none;
+        background: none;
+        font: inherit;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #3b5bdb;
+        cursor: pointer;
+      }
+
+      .add-card-btn:hover {
+        color: #1b3a8c;
+      }
+
+      .add-card-btn .card-icon-btn {
+        pointer-events: none;
+      }
+
+      fieldset > legend {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        max-width: calc(100% - 1rem);
+      }
+
+      .card-toggle {
+        border: none;
+        background: none;
+        padding: 0;
+        font: inherit;
+        font-weight: 650;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      .card-toggle::before {
+        content: "▾ ";
+      }
+
+      fieldset.is-collapsed > legend .card-toggle::before {
+        content: "▸ ";
+      }
+
+      fieldset.is-collapsed > :not(legend) {
+        display: none;
+      }
+
+      .card-icon-btn {
+        width: 1.35rem;
+        height: 1.35rem;
+        padding: 0;
+        border: 1px solid #c5c9d4;
+        border-radius: 4px;
+        background: #fff;
+        color: #1f2430;
+        font: inherit;
+        font-size: 0.95rem;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .card-icon-btn:hover {
+        background: #eef2ff;
+        border-color: #3b5bdb;
+      }
+
+      .card-add {
+        font-weight: 700;
+      }
+
+      .card-remove {
+        color: #9b1c1c;
+      }
+
+      .field-caption {
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+
+      .radio-row {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        min-height: 2.1rem;
+      }
+
+      .radio-field {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .radio-field input {
+        width: auto;
+        margin: 0;
+      }
+
+      .age-display {
+        margin-left: 0.4rem;
+        font-weight: 500;
+        color: #4b5568;
+      }
+
+      .age-minor {
+        margin-left: 0.35rem;
+        color: #c92a2a;
+        font-weight: 700;
+      }
     </style>
   </head>
   <body>
@@ -469,9 +844,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.0.1"
+          data-version="0.1.0"
         >
-          Version 0.0.1
+          Version 0.1.0
         </span>
       </div>
 
@@ -487,9 +862,10 @@
       <form id="leadForm">
         <fieldset>
           <legend>Lead Source</legend>
-            <div class="row">
+          <div class="row">
+            <div class="field field-span-2">
               <label for="leadSource">Lead Source</label>
-              <select id="leadSource">
+              <select id="leadSource" name="leadSource">
                 <option value="">Select an Option</option>
                 <option value="tag">Plate Check</option>
                 <option value="otherLe">Other Law Enforcement Agency</option>
@@ -497,88 +873,161 @@
                 <option value="other">Other</option>
               </select>
             </div>
-               <div class="row">
+          </div>
+          <div class="row" data-source="tag" hidden>
+            <div class="field field-span-2">
               <label for="checkLocation">Plate Check Location</label>
-              <input id="checkLocation">
-              <label for="refAgency">Reffering Agency</label>
-              <input id="refAgency">   
+              <input type="text" id="checkLocation" name="checkLocation" />
             </div>
+          </div>
+          <div class="row" data-source="otherLe" hidden>
+            <div class="field search-field">
+              <label for="refAgency">Referring Agency</label>
+              <input
+                type="text"
+                id="refAgency"
+                name="refAgency"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="refAgencyResults"
+              />
+              <input type="hidden" id="refAgencyCode" name="refAgencyCode" />
+              <ul id="refAgencyResults" class="search-results" role="listbox" hidden></ul>
+            </div>
+          </div>
+          <div class="row" data-source="otherLe" hidden>
             <div class="field checkbox-field">
+              <input type="checkbox" id="probationCheck" name="probationCheck" />
               <label for="probationCheck">Probation</label>
-              <input type="checkbox" id="probationCheck">    
             </div>
-            <div class="row">
+          </div>
+          <div class="row" data-source="tag elite other otherLe" hidden>
+            <div class="field field-span-2">
               <label for="leadInfo">Background Information</label>
-              <textarea id="leadInfo"></textarea>
+              <textarea id="leadInfo" name="leadInfo" rows="4"></textarea>
             </div>
-         
-
-
+          </div>
         </fieldset>
           
 
-        <fieldset>
+        <fieldset data-card="lead" data-name-card>
           <legend>Lead Information</legend>
           <div class="row">
             <div class="field">
               <label for="lastName">Last Name</label>
-              <input type="text" id="lastName" name="lastName" />
+              <input
+                type="text"
+                id="lastName"
+                name="lastName"
+                data-field="lastName"
+                autocomplete="off"
+                title="Paste a full name to fill first, middle, and last"
+              />
             </div>
             <div class="field">
               <label for="firstName">First Name</label>
-              <input type="text" id="firstName" name="firstName" />
+              <input
+                type="text"
+                id="firstName"
+                name="firstName"
+                data-field="firstName"
+                autocomplete="off"
+                title="Paste a full name to fill first, middle, and last"
+              />
             </div>
             <div class="field">
-              <label for="dateOfBirth">Date of Birth</label>
-              <input type="date" id="dateOfBirth" name="dateOfBirth" />
+              <label for="middleName">Middle Name</label>
+              <input
+                type="text"
+                id="middleName"
+                name="middleName"
+                data-field="middleName"
+                autocomplete="off"
+                title="Paste a full name to fill first, middle, and last"
+              />
+            </div>
+            <div class="field">
+              <span class="field-caption">Sex</span>
+              <div class="radio-row">
+                <label class="radio-field" for="sexMale">
+                  <input
+                    type="radio"
+                    id="sexMale"
+                    name="sex"
+                    data-field="sex"
+                    value="male"
+                  />
+                  Male
+                </label>
+                <label class="radio-field" for="sexFemale">
+                  <input
+                    type="radio"
+                    id="sexFemale"
+                    name="sex"
+                    data-field="sex"
+                    value="female"
+                  />
+                  Female
+                </label>
+              </div>
+            </div>
+            <div class="field">
+              <label for="dateOfBirth">
+                Date of Birth
+                <span class="age-display" data-field="ageDisplay"></span>
+              </label>
+              <input
+                type="date"
+                id="dateOfBirth"
+                name="dateOfBirth"
+                data-field="dateOfBirth"
+              />
             </div>
             <div class="field">
               <label for="citizenship">Country of Citizenship</label>
-              <select id="citizenship" name="citizenship" required></select>
+              <select
+                id="citizenship"
+                name="citizenship"
+                data-field="citizenship"
+                required
+              ></select>
             </div>
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>Address</legend>
-          <div class="row">
-            <div class="field">
-              <label for="addressAssociation">Address Association</label>
-              <select id="addressAssociation" name="addressAssociation">
-                <option value="">Select an Option</option>
-                <option value="residence">Residence</option>
-                <option value="vehicle">Vehicle Location</option>
-                <option value="work">Work</option>
-              </select>
-            </div>
-          </div>
+        <div id="aliasList" class="card-list"></div>
+        <div class="card-list-actions">
+          <button type="button" id="addAliasButton" class="add-card-btn">
+            <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+            Add alias
+          </button>
+        </div>
 
-          <div class="row">
-            <div class="field field-span-2">
-              <label for="street">Street</label>
-              <input type="text" id="street" name="street" />
-            </div>
-            <div class="field field-span-2">
-              <label for="street2">Street 2</label>
-              <input type="text" id="street2" name="street2" />
-            </div>
-          </div>
+        <div id="vehicleList" class="card-list"></div>
+        <div class="card-list-actions">
+          <button type="button" id="addVehicleButton" class="add-card-btn">
+            <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+            Add vehicle
+          </button>
+        </div>
 
-          <div class="row row-3">
-            <div class="field">
-              <label for="city">City</label>
-              <input type="text" id="city" name="city" />
-            </div>
-            <div class="field">
-              <label for="state">State</label>
-              <input type="text" id="state" name="state" />
-            </div>
-            <div class="field">
-              <label for="zip">Zip Code</label>
-              <input type="text" id="zip" name="zip" />
-            </div>
-          </div>
-        </fieldset>
+        <div id="addressList" class="card-list"></div>
+        <div class="card-list-actions">
+          <button type="button" id="addAddressButton" class="add-card-btn">
+            <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+            Add address
+          </button>
+        </div>
+
+        <div id="documentList" class="card-list"></div>
+        <div class="card-list-actions">
+          <button type="button" id="addDocumentButton" class="add-card-btn">
+            <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+            Add document
+          </button>
+        </div>
 
         <fieldset>
           <legend>Criminal Profile</legend>
@@ -598,39 +1047,72 @@
               <label for="ncicNumber">NCIC</label>
               <input type="text" id="ncicNumber" name="ncicNumber" />
             </div>
+            <div class="field">
+              <label for="stateId">SID</label>
+              <input type="text" id="stateId" name="stateId" />
+            </div>
             <div class="field field-span-2">
               <label for="rapSheet">Rap Sheet</label>
-              <textarea id="rapSheet" name="rapSheet" rows="4"></textarea>
+              <textarea
+                id="rapSheet"
+                name="rapSheet"
+                rows="8"
+                autocomplete="off"
+                spellcheck="false"
+                aria-describedby="rapSheetHelp rapSheetImportStatus"
+              ></textarea>
+              <p id="rapSheetHelp" class="rap-sheet-help">
+                Paste text output, then parse it locally for review. Parsed facts
+                remain separate from the lead record and are never merged automatically.
+              </p>
+              <div class="rap-sheet-actions">
+                <button type="button" id="rapSheetParseButton">
+                  Parse RAP sheet for review
+                </button>
+                <button type="button" id="rapSheetDiscardButton" hidden>
+                  Discard parsed import
+                </button>
+                <span
+                  id="rapSheetImportStatus"
+                  class="rap-import-status"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                ></span>
+              </div>
+              <input type="hidden" id="rapSheetImportId" />
+              <section
+                id="rapSheetReview"
+                class="rap-sheet-review"
+                aria-label="RAP sheet import review"
+                hidden
+              ></section>
             </div>
           </div>
 
-          <fieldset>
-            <legend>Convictions</legend>
-            <div class="row">
-              <div class="field">
-                <label for="crime">Crime</label>
-                <input type="text" id="crime" name="crime" />
-              </div>
-              <div class="field">
-                <label for="convictionDate">Conviction Date</label>
-                <input type="date" id="convictionDate" name="convictionDate" />
-              </div>
-            </div>
-          </fieldset>
+          <div id="arrestList" class="card-list"></div>
+          <div class="card-list-actions">
+            <button type="button" id="addArrestButton" class="add-card-btn">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add arrest
+            </button>
+          </div>
 
-          <fieldset>
-            <legend>Warrants and Wants</legend>
-            <div class="row">
-              <div class="field">
-                <label for="warrant">Warrant</label>
-                <input type="text" id="warrant" name="warrant" />
-              </div>
-              <div class="field">
-                <label for="warrantIssuer">Issued by</label>
-                <input type="text" id="warrantIssuer" name="warrantIssuer" />
-              </div>
-            </div>
-          </fieldset>
+          <div id="convictionList" class="card-list"></div>
+          <div class="card-list-actions">
+            <button type="button" id="addConvictionButton" class="add-card-btn">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add conviction
+            </button>
+          </div>
+
+          <div id="warrantList" class="card-list"></div>
+          <div class="card-list-actions">
+            <button type="button" id="addWarrantButton" class="add-card-btn">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add warrant
+            </button>
+          </div>
         </fieldset>
 
         <fieldset>
@@ -668,9 +1150,453 @@
       </form>
     </div>
 
+    <template id="aliasCardTemplate">
+      <fieldset data-card="alias" data-name-card>
+        <legend>Alias</legend>
+        <div class="row">
+          <div class="field">
+            <label for="lastName">Last Name</label>
+            <input
+              type="text"
+              id="lastName"
+              name="lastName"
+              data-field="lastName"
+              autocomplete="off"
+              title="Paste a full name to fill first, middle, and last"
+            />
+          </div>
+          <div class="field">
+            <label for="firstName">First Name</label>
+            <input
+              type="text"
+              id="firstName"
+              name="firstName"
+              data-field="firstName"
+              autocomplete="off"
+              title="Paste a full name to fill first, middle, and last"
+            />
+          </div>
+          <div class="field">
+            <label for="middleName">Middle Name</label>
+            <input
+              type="text"
+              id="middleName"
+              name="middleName"
+              data-field="middleName"
+              autocomplete="off"
+              title="Paste a full name to fill first, middle, and last"
+            />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="vehicleCardTemplate">
+      <fieldset data-card="vehicle">
+        <legend>Vehicle</legend>
+        <div class="row">
+          <div class="field">
+            <label for="vehicleAssociation">Association</label>
+            <select id="vehicleAssociation" name="vehicleAssociation" data-field="vehicleAssociation">
+              <option value="">Select an Option</option>
+              <option value="REGISTERED_OWNER_OF">Registered owner of</option>
+              <option value="KNOWN_OPERATOR_OF">Known operator of</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="vehicleAssociationReason">Association Reason</label>
+            <select
+              id="vehicleAssociationReason"
+              name="vehicleAssociationReason"
+              data-field="vehicleAssociationReason"
+            ></select>
+          </div>
+          <div class="field">
+            <label for="licensePlate">Plate</label>
+            <input type="text" id="licensePlate" name="licensePlate" data-field="licensePlate" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="plateState">Plate State</label>
+            <select id="plateState" name="plateState" data-field="plateState"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleYear">Year</label>
+            <select id="vehicleYear" name="vehicleYear" data-field="vehicleYear"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleMake">Make</label>
+            <select id="vehicleMake" name="vehicleMake" data-field="vehicleMake"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleModel">Model</label>
+            <select id="vehicleModel" name="vehicleModel" data-field="vehicleModel"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleColor">Color</label>
+            <select id="vehicleColor" name="vehicleColor" data-field="vehicleColor"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleBodyStyle">Body Style</label>
+            <select id="vehicleBodyStyle" name="vehicleBodyStyle" data-field="vehicleBodyStyle"></select>
+          </div>
+          <div class="field">
+            <label for="vin">VIN</label>
+            <input type="text" id="vin" name="vin" data-field="vin" autocomplete="off" />
+          </div>
+          <div class="field field-span-2">
+            <label for="registeredOwner">Registered Owner</label>
+            <input type="text" id="registeredOwner" name="registeredOwner" data-field="registeredOwner" />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="addressCardTemplate">
+      <fieldset data-card="address">
+        <legend>Address</legend>
+        <div class="row">
+          <div class="field">
+            <label for="addressAssociation">Address Association</label>
+            <select id="addressAssociation" name="addressAssociation" data-field="addressAssociation">
+              <option value="">Select an Option</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label for="street">Street</label>
+            <input type="text" id="street" name="street" data-field="street" />
+          </div>
+          <div class="field field-span-2">
+            <label for="street2">Street 2</label>
+            <input type="text" id="street2" name="street2" data-field="street2" />
+          </div>
+        </div>
+        <div class="row row-3">
+          <div class="field">
+            <label for="city">City</label>
+            <input type="text" id="city" name="city" data-field="city" />
+          </div>
+          <div class="field">
+            <label for="state">State</label>
+            <input type="text" id="state" name="state" data-field="state" />
+          </div>
+          <div class="field">
+            <label for="zip">Zip Code</label>
+            <input type="text" id="zip" name="zip" data-field="zip" inputmode="numeric" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="latitude">Latitude</label>
+            <input type="text" id="latitude" name="latitude" data-field="latitude" />
+          </div>
+          <div class="field">
+            <label for="longitude">Longitude</label>
+            <input type="text" id="longitude" name="longitude" data-field="longitude" />
+          </div>
+          <div class="field">
+            <label for="mapAddressButton">Map</label>
+            <button type="button" id="mapAddressButton" class="action-button" data-field="mapAddressButton">
+              Map it
+            </button>
+          </div>
+        </div>
+        <p class="field-status" data-field="addressStatus" hidden></p>
+      </fieldset>
+    </template>
+
+    <template id="documentCardTemplate">
+      <fieldset data-card="document">
+        <legend>Document</legend>
+        <div class="row">
+          <div class="field">
+            <label for="documentType">Document Type</label>
+            <select id="documentType" name="documentType" data-field="documentType"></select>
+          </div>
+          <div class="field">
+            <label for="documentNumber">Document Number</label>
+            <input
+              type="text"
+              id="documentNumber"
+              name="documentNumber"
+              data-field="documentNumber"
+              autocomplete="off"
+            />
+          </div>
+          <div class="field">
+            <label for="issuingState">Issuing State</label>
+            <select id="issuingState" name="issuingState" data-field="issuingState"></select>
+          </div>
+          <div class="field">
+            <label for="issuingCountry">Issuing Country</label>
+            <select id="issuingCountry" name="issuingCountry" data-field="issuingCountry"></select>
+          </div>
+          <div class="field">
+            <label for="documentIssueDate">Issue Date</label>
+            <input
+              type="date"
+              id="documentIssueDate"
+              name="documentIssueDate"
+              data-field="documentIssueDate"
+            />
+          </div>
+          <div class="field">
+            <label for="documentExpiration">Expiration Date</label>
+            <input
+              type="date"
+              id="documentExpiration"
+              name="documentExpiration"
+              data-field="documentExpiration"
+            />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="arrestCardTemplate">
+      <fieldset data-card="arrest">
+        <legend>Arrest</legend>
+        <div class="row">
+          <div class="field">
+            <label for="arrestDate">Arrest Date</label>
+            <input type="date" id="arrestDate" name="arrestDate" data-field="arrestDate" />
+          </div>
+          <div class="field">
+            <label for="arrestCharge">Arrest Charge</label>
+            <input
+              type="text"
+              id="arrestCharge"
+              name="arrestCharge"
+              data-field="arrestCharge"
+            />
+          </div>
+          <div class="field">
+            <label for="arrestStatute">Statute</label>
+            <input
+              type="text"
+              id="arrestStatute"
+              name="arrestStatute"
+              data-field="arrestStatute"
+            />
+          </div>
+          <div class="field">
+            <label for="arrestClass">Class</label>
+            <select id="arrestClass" name="arrestClass" data-field="arrestClass">
+              <option value="">Select an Option</option>
+              <option value="felony">Felony</option>
+              <option value="misdemeanor">Misdemeanor</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </div>
+          <div class="field search-field">
+            <label for="arrestAgency">Arresting Agency</label>
+            <input
+              type="text"
+              id="arrestAgency"
+              name="arrestAgency"
+              data-field="arrestAgency"
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="arrestAgencyResults"
+            />
+            <input
+              type="hidden"
+              id="arrestAgencyCode"
+              name="arrestAgencyCode"
+              data-field="arrestAgencyCode"
+            />
+            <ul
+              id="arrestAgencyResults"
+              class="search-results"
+              role="listbox"
+              hidden
+            ></ul>
+          </div>
+          <div class="field">
+            <label for="arrestLocation">Arrest Location</label>
+            <input
+              type="text"
+              id="arrestLocation"
+              name="arrestLocation"
+              data-field="arrestLocation"
+            />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="convictionCardTemplate">
+      <fieldset data-card="conviction">
+        <legend>Conviction</legend>
+        <div class="row">
+          <div class="field">
+            <label for="crime">Offense</label>
+            <input type="text" id="crime" name="crime" data-field="crime" />
+          </div>
+          <div class="field">
+            <label for="convictionStatute">Statute</label>
+            <input
+              type="text"
+              id="convictionStatute"
+              name="convictionStatute"
+              data-field="convictionStatute"
+            />
+          </div>
+          <div class="field">
+            <label for="convictionClass">Class</label>
+            <select
+              id="convictionClass"
+              name="convictionClass"
+              data-field="convictionClass"
+            >
+              <option value="">Select an Option</option>
+              <option value="felony">Felony</option>
+              <option value="misdemeanor">Misdemeanor</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="disposition">Disposition</label>
+            <input
+              type="text"
+              id="disposition"
+              name="disposition"
+              data-field="disposition"
+            />
+          </div>
+          <div class="field">
+            <label for="convictionDate">Conviction Date</label>
+            <input
+              type="date"
+              id="convictionDate"
+              name="convictionDate"
+              data-field="convictionDate"
+            />
+          </div>
+          <div class="field">
+            <label for="dispositionDate">Disposition Date</label>
+            <input
+              type="date"
+              id="dispositionDate"
+              name="dispositionDate"
+              data-field="dispositionDate"
+            />
+          </div>
+          <div class="field">
+            <label for="court">Court</label>
+            <input type="text" id="court" name="court" data-field="court" />
+          </div>
+          <div class="field">
+            <label for="docketNumber">Docket / Cause</label>
+            <input
+              type="text"
+              id="docketNumber"
+              name="docketNumber"
+              data-field="docketNumber"
+            />
+          </div>
+          <div class="field field-span-2">
+            <label for="sentence">Sentence</label>
+            <input type="text" id="sentence" name="sentence" data-field="sentence" />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="warrantCardTemplate">
+      <fieldset data-card="warrant">
+        <legend>Warrant</legend>
+        <div class="row">
+          <div class="field">
+            <label for="charge">Charge/Offense</label>
+            <input type="text" id="charge" name="charge" data-field="charge" />
+          </div>
+          <div class="field">
+            <label for="warrantNumber">Warrant Number</label>
+            <input
+              type="text"
+              id="warrantNumber"
+              name="warrantNumber"
+              data-field="warrantNumber"
+            />
+          </div>
+          <div class="field">
+            <label for="warrantDate">Issue Date</label>
+            <input
+              type="date"
+              id="warrantDate"
+              name="warrantDate"
+              data-field="warrantDate"
+            />
+          </div>
+          <div class="field">
+            <label for="warrantStatus">Status</label>
+            <select id="warrantStatus" name="warrantStatus" data-field="warrantStatus">
+              <option value="">Select an Option</option>
+              <option value="active">Active</option>
+              <option value="served">Served</option>
+              <option value="recalled">Recalled</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </div>
+          <div class="field search-field field-span-2">
+            <label for="warrantIssuer">Issued by</label>
+            <input
+              type="text"
+              id="warrantIssuer"
+              name="warrantIssuer"
+              data-field="warrantIssuer"
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="warrantIssuerResults"
+            />
+            <input
+              type="hidden"
+              id="warrantIssuerCode"
+              name="warrantIssuerCode"
+              data-field="warrantIssuerCode"
+            />
+            <ul
+              id="warrantIssuerResults"
+              class="search-results"
+              role="listbox"
+              hidden
+            ></ul>
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
     <script src="functions/date.js"></script>
+    <script src="functions/lead-source.js"></script>
+    <script src="functions/age.js"></script>
+    <script src="functions/names.js"></script>
+    <script src="functions/rapsheet.js"></script>
     <script src="data/countries.js"></script>
     <script src="data/immigration.js"></script>
+    <script src="data/vehicles.js"></script>
+    <script src="data/us-places.js"></script>
+    <script src="data/identity-document-types.js"></script>
+    <script src="functions/address.js"></script>
+    <script src="data/vehicle-association-reasons.js"></script>
+    <script src="functions/vehicles.js"></script>
+    <script src="data/le/federal-le-agencies.js"></script>
+    <script src="data/le/texas-state-le.js"></script>
+    <script src="data/le/texas-sheriffs.js"></script>
+    <script src="data/le/texas-municipal-pd.js"></script>
+    <script src="data/le/texas-other-local-le.js"></script>
+    <script src="data/le/texas-federal-offices.js"></script>
+    <script src="data/le/texas-jails.js"></script>
+    <script src="data/le/le-lookups.js"></script>
+    <script src="data/le/ice-ero-offices-geo.js"></script>
+    <script src="data/le/le-catalog.js"></script>
+    <script src="functions/le-search.js"></script>
+    <script src="functions/cards.js"></script>
   
   </body>
 </html>

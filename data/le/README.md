@@ -1,79 +1,66 @@
-# Law Enforcement & Detention Data Library (Federal + Texas Focus)
+# Law Enforcement Data Library (Federal + Texas)
 
-Practical, COPDoc-compatible data libraries for federal and Texas law enforcement agencies, jails, detention facilities, public inmate/booking lookup resources, **and map locations**.
+Agencies, offices, jails, detention, and public lookup tools used by Referring Agency search and related forms.
 
-## Scope & Limitations
+## What belongs where
 
-**What is included (high-value, usable core):**
-- Core Federal LE agencies (DHS components including ICE ERO/HSI & CBP, DOJ components including FBI/DEA/ATF/USMS/BOP, plus key others)
-- Texas State LE agencies (DPS/Rangers/Highway Patrol, TDCJ, TPWD Game Wardens, TABC, OAG, TCOLE, etc.)
-- Major Texas city Police Departments (Houston, Dallas, San Antonio, Austin, Fort Worth, El Paso, and others)
-- Texas county jails with public booking/inmate search links for high-volume counties
-- ICE detention facilities in Texas (~18 key dedicated / contract facilities) linked to ERO AORs **with addresses and map links**
-- ICE ERO Field Offices in Texas **with full street addresses, approximate coordinates, and Google Maps URLs**
-- Statewide and system-level booking lookup tools (TDCJ, VINELink, ICE ODLS, BOP)
+| File | Kind | Contents |
+| --- | --- | --- |
+| `federal-le-agencies.js` | agency | Parent federal agencies (DHS, ICE, CBP, FBI, …) |
+| `texas-state-le.js` | agency | Statewide Texas agencies (DPS, TDCJ, TPWD, TABC, …) |
+| `texas-sheriffs.js` | agency | All **254** Texas county sheriffs |
+| `texas-municipal-pd.js` | agency | Large-city and border municipal PDs (~110, not all 1,200+) |
+| `texas-other-local-le.js` | agency | Major ISD, campus, airport, and transit police |
+| `texas-federal-offices.js` | office | Texas USBP sectors, FBI FOs, HSI SACs |
+| `ice-ero-offices-geo.js` | office | Five Texas ERO field offices (address + map) |
+| `texas-jails.js` | facility | County jails with booking URLs, linked via `sheriffCode` |
+| `detention-facilities.js` | facility | ICE/contract detention in Texas |
+| `le-lookups.js` | tool | TDCJ / VINELink / ODLS / BOP locators |
+| `le-catalog.js` | index | Builds `LAW_ENFORCEMENT_AGENCIES` for search |
 
-**Map / Location Data:**
-- Priority facilities and offices include `address`, `city`, `state`, `zip`, and `map_url` (Google Maps search link).
-- Approximate `lat` / `lng` provided for the five Texas ERO Field Offices.
-- For other entries, use the provided `map_url` or geocode the address on demand.
-- Full station-level geodata for every CBP Border Patrol station, every municipal PD precinct, and every small jail is not feasible in a single offline library. Expand using official directories + geocoding.
+Referring Agency search loads **agencies + offices** only. Jails and detention are facilities; inmate locators are tools.
 
-**What is intentionally limited:**
-- Full list of ~1,200+ municipal police departments in Texas is not enumerated.
-- All 254 county sheriffs are represented via the official directory pattern; detailed booking_url and address fields are populated for major counties. Expand as needed using https://txsheriffs.org/directory/
-- Facility populations, contracts, and exact operational status change frequently — always verify with current ICE ODLS, field office, or sheriff for operational decisions.
+## Agency record shape
 
-## Files
+```js
+{
+  code: "TX_SO_HARRIS",
+  label: "Harris County Sheriff's Office",
+  level: "federal | state | county | municipal | isd | campus | airport | transit",
+  type: "sheriff | police | agency | component | sector | field_office | …",
+  parent: "ICE",
+  state: "TX",
+  county: "Harris",
+  city: "Houston",
+  aliases: ["HCSO", "Harris SO"],
+  active: true
+}
+```
 
-| File | Contents |
-|------|----------|
-| `federal-le-agencies.js` | Core federal agencies (DHS, DOJ, others) with codes, parents, websites |
-| `texas-state-le.js` | Texas state agencies including DPS components and TDCJ |
-| `texas-jails.js` | Major county jails + statewide booking lookup tools + major city PDs |
-| `detention-facilities.js` | ICE detention facilities in Texas with addresses + map_url + ODLS / BOP locator links |
-| `ice-ero-offices-geo.js` | ICE ERO Field Offices in Texas with full addresses, approximate lat/lng, and Google Maps links |
+## Coverage (honest)
 
-## Key Public Lookup Links
+**Included**
+- Core federal parent agencies
+- Texas state LE
+- Every Texas sheriff (254)
+- Municipal PDs for large metros + border cities
+- Selected ISD / campus / airport / transit agencies
+- USBP sectors and FBI/HSI offices in Texas
+- ERO field offices with maps
+- High-volume county jails (booking URLs where known)
 
-- **ICE Detainee Locator (ODLS)**: https://locator.ice.gov/odls  
-  (A-number **or** Name + DOB + Country of Birth)
-- **TDCJ Inmate Search** (state prisons): https://inmate.tdcj.texas.gov/InmateSearch/
-- **VINELink Texas** (many county jails + notifications): https://www.vinelink.com/
-- **BOP Federal Inmate Locator**: https://www.bop.gov/inmateloc/
-- **Texas Sheriff Directory (all 254 counties)**: https://txsheriffs.org/directory/
-- **Dallas County Jail Lookup**: https://www.dallascounty.org/jaillookup/search.jsp
-- **Harris County Inmate Info**: https://www.harriscountytx.gov/Residents/Law-Justice-Records/Inmate-Information
-- **Tarrant County Inmate Search**: https://inmatesearch.tarrantcounty.com
-- **Bexar County Justice Portal**: https://portal-txbexar.tylertech.cloud/Portal/
+**Still not a full TCOLE roster**
+- Remaining ~1,000+ small municipal PDs
+- Constable precincts
+- Most ISD and campus departments
+- ERO sub-offices / CAP teams
 
-## ICE ERO Texas Field Offices (Map-ready)
+Sheriff directory for verification: https://txsheriffs.org/directory/
 
-| Code | Office | Address |
-|------|--------|---------|
-| DAL | Dallas | 8101 N. Stemmons Freeway, Dallas, TX 75247 |
-| HOU | Houston | 126 Northpoint Drive, Houston, TX 77060 |
-| SNA | San Antonio | 1777 NE Loop 410, Floor 15, San Antonio, TX 78217 |
-| ELP | El Paso | 11541 Montana Avenue, Suite E, El Paso, TX 79936 |
-| HLG | Harlingen | 1717 Zoy Street, Harlingen, TX 78552 |
+## Load order
 
-See `ice-ero-offices-geo.js` for coordinates and map_url fields.
-
-## Usage Notes for COPDoc / Field Operations
-
-- Link detention facilities to ERO FIELD_OFFICES via the `aor` field.
-- Use `map_url` for quick navigation or embedding in reports / I-213 support tools.
-- Use `booking_url` + `search_notes` when documenting subject location or preparing detainers.
-- For subjects in pure county custody (no ICE hold), use the county jail portal or VINELink.
-- For ICE custody, prefer ODLS first, then contact the relevant ERO field office.
+Federal → state → sheriffs → municipal PDs → other local → federal offices → jails → lookups → ERO geo → `le-catalog.js` → `functions/le-search.js`
 
 ## Sources
 
-- ICE public detention data and Online Detainee Locator System
-- Texas Department of Criminal Justice
-- Sheriffs' Association of Texas
-- Texas DPS / TCOLE
-- Official county sheriff websites and ICE field office pages
-- Public directories (VisaVerge ICE facility lists, Houston Chronicle tracker, etc.) as of 2025–2026
-
-**Disclaimer**: Public reference data only. Not an official government product. Verify all operational details and coordinates against current official sources before use in the field.
+Public directories only (ICE, TDCJ, TCOLE, Sheriffs’ Association of Texas, city sites). Not an official government product. Verify operational details before field use.

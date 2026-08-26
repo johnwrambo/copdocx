@@ -282,7 +282,18 @@
         ? global.federalAgencyLabels()
         : labelsFrom(global.FEDERAL_LE_AGENCIES);
       catalogs.federalLeAgenciesFull = global.FEDERAL_LE_AGENCIES;
+    }
+    if (global.LAW_ENFORCEMENT_AGENCIES) {
+      catalogs.lawEnforcementAgenciesFull = global.LAW_ENFORCEMENT_AGENCIES;
+      catalogs.lawEnforcementAgencies = labelsFrom(global.LAW_ENFORCEMENT_AGENCIES);
+    } else if (catalogs.federalLeAgencies) {
       catalogs.lawEnforcementAgencies = catalogs.federalLeAgencies;
+    }
+    if (global.TEXAS_SHERIFFS) {
+      catalogs.texasSheriffs = global.TEXAS_SHERIFFS;
+    }
+    if (global.TEXAS_MUNICIPAL_PDS) {
+      catalogs.texasMunicipalPds = global.TEXAS_MUNICIPAL_PDS;
     }
 
     // --- Identity document types (civil DL / state ID card) ---
