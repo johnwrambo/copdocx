@@ -12,10 +12,18 @@ function csvEscape(value) {
 
 function downloadCurrentLeadCsv() {
   var model = window.COPDoc && COPDoc.model;
-  if (!model || typeof model.collectLead !== "function") {
+  if (!model || !model.store) {
     return;
   }
-  var snapshot = model.collectLead();
+  var card = document.querySelector('[data-card="lead"]');
+  var leadId = card && card.dataset.leadId;
+  var snapshot = leadId ? model.store.getLead(leadId) : null;
+  if (!snapshot || (model.isCommitted && !model.isCommitted(snapshot))) {
+    if (window.COPDoc && typeof COPDoc.setAppBarStatus === "function") {
+      COPDoc.setAppBarStatus("Commit the lead before exporting.");
+    }
+    return;
+  }
   var person = model.subjectOf(snapshot) || {};
   var name = person.name || {};
   var immigration = person.immigration || {};

@@ -13,9 +13,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.5.3"
+          data-version="0.6.0"
         >
-          Version 0.5.3
+          Version 0.6.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -27,6 +27,11 @@
       <fieldset class="card-static">
         <legend>Roster</legend>
         <p class="section-note">All officers. Open View for the current snapshot, or Add officer to create one.</p>
+        <div class="record-filter-chips" role="group" aria-label="Filter officers">
+          <button type="button" data-record-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-record-filter="draft" aria-pressed="false">Drafts</button>
+          <button type="button" data-record-filter="committed" aria-pressed="false">Committed</button>
+        </div>
         <div id="officersEmpty" class="records-empty">No officers yet.</div>
         <div id="officersTableWrap" class="records-table-wrap" hidden>
           <table class="records-table">
@@ -49,6 +54,8 @@
     <script src="functions/app-bar.js"></script>
     <script src="functions/date.js"></script>
     <script src="functions/cards.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/autosave.js"></script>
     <script src="functions/admin.js"></script>
   </body>
 </html>

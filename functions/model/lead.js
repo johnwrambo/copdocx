@@ -24,44 +24,9 @@
   model.STORE_SCHEMA = "copdocx.store.v1";
   model.CASE_ROLES = ["LEAD", "TARGET", "DETAINEE"];
 
-  function nowIso() {
-    return new Date().toISOString();
-  }
-
-  function newId(prefix) {
-    return (
-      String(prefix || "id") +
-      "_" +
-      Date.now().toString(36) +
-      "_" +
-      Math.random().toString(36).slice(2, 8)
-    );
-  }
-
-  /**
-   * Copy extra onto base. Nested plain objects merge; arrays replace.
-   * createPerson({ name: { lastName: "DOE" } }) keeps first/middle "".
-   */
-  function assign(base, extra) {
-    extra = extra || {};
-    Object.keys(extra).forEach(function (key) {
-      var value = extra[key];
-      var current = base[key];
-      if (
-        value &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        current &&
-        typeof current === "object" &&
-        !Array.isArray(current)
-      ) {
-        assign(current, value);
-      } else if (value !== undefined) {
-        base[key] = value;
-      }
-    });
-    return base;
-  }
+  var nowIso = model.nowIso;
+  var newId = model.newId;
+  var assign = model.assign;
 
   function createSource(extra) {
     return assign(
@@ -97,7 +62,9 @@
         meta: {
           createdAt: created,
           updatedAt: created,
-          markedComplete: false
+          markedComplete: false,
+          status: "draft",
+          committedAt: ""
         }
       },
       extra
@@ -121,9 +88,6 @@
     return people[0] || null;
   }
 
-  model.nowIso = nowIso;
-  model.newId = newId;
-  model.assign = assign;
   model.createSource = createSource;
   model.createLead = createLead;
   model.createLeadSnapshot = createLead;

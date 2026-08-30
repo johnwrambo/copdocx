@@ -29,6 +29,7 @@ function load(rel) {
   );
 }
 
+load("functions/model/util.js");
 load("functions/model/lead.js");
 load("functions/model/person.js");
 load("functions/model/location.js");
@@ -56,6 +57,7 @@ check("person owns locations", Array.isArray(blank.person.locations));
 check("empty vehicles", blank.vehicles.length === 0);
 check("empty links", blank.links.length === 0);
 check("not marked complete", blank.meta.markedComplete === false);
+check("new lead is draft", blank.meta.status === "draft");
 
 var vehicle = model.createVehicle({
   licensePlate: "ABC123",
@@ -123,6 +125,49 @@ check(
 check(
   "label format",
   model.formatPersonLabel(otherLead.person) === "PEREZ, ANA"
+);
+
+var committed = model.store.getLead(blank.leadId);
+check(
+  "explicit saveLead commits",
+  committed.meta.status === "committed" && !!committed.meta.committedAt
+);
+
+var draftSnap = model.createLeadSnapshot();
+draftSnap.person.name.lastName = "DRAFT";
+model.store.saveLead(draftSnap, { mode: "draft" });
+check(
+  "draft save does not remember people",
+  !model.store.getPerson(draftSnap.subjectPersonId)
+);
+check(
+  "draft status",
+  model.store.getLead(draftSnap.leadId).meta.status === "draft"
+);
+
+var keepAt = committed.meta.committedAt;
+model.store.saveLead(
+  {
+    leadId: committed.leadId,
+    person: committed.person,
+    meta: { createdAt: "old", updatedAt: "old", markedComplete: false }
+  },
+  { mode: "draft" }
+);
+var demoted = model.store.getLead(committed.leadId);
+check(
+  "draft of committed keeps committedAt",
+  demoted.meta.status === "draft" && demoted.meta.committedAt === keepAt
+);
+
+var migrated = model.ensureRecordMeta({
+  id: "veh-1",
+  plate: "ABC",
+  status: "available"
+});
+check(
+  "fleet status is not meta",
+  migrated.meta.status === "committed" && migrated.status === "available"
 );
 
 if (fail) {

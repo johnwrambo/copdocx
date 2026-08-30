@@ -90,8 +90,11 @@
   var editingOfficerId = "";
   var editingVehicleId = "";
   var suppressOfficerAutoSave = false;
-  var lastOfficerSignature = "";
   var officerAutoSaveBound = false;
+  var officerAuto = null;
+  var suppressVehicleAutoSave = false;
+  var vehicleAuto = null;
+  var recordFilter = "all";
 
   function adminPage() {
     return document.body.getAttribute("data-admin-page") || "dashboard";
@@ -176,6 +179,46 @@
     );
   }
 
+  function rowCommitted(row) {
+    if (window.COPDoc && COPDoc.model && typeof COPDoc.model.isCommitted === "function") {
+      return COPDoc.model.isCommitted(row);
+    }
+    return !row || !row.meta || row.meta.status !== "draft";
+  }
+
+  function rowMeta(existing, mode) {
+    if (window.COPDoc && COPDoc.model && typeof COPDoc.model.stampMeta === "function") {
+      return COPDoc.model.stampMeta(existing, mode);
+    }
+    var now = new Date().toISOString();
+    var prev = (existing && existing.meta) || {};
+    return {
+      createdAt: prev.createdAt || now,
+      updatedAt: now,
+      markedComplete: false,
+      status: mode === "commit" ? "committed" : "draft",
+      committedAt: mode === "commit" ? now : prev.committedAt || ""
+    };
+  }
+
+  function migrateAdminList(list) {
+    var dirty = false;
+    (list || []).forEach(function (row) {
+      if (row.meta && row.meta.status) {
+        return;
+      }
+      dirty = true;
+      if (window.COPDoc && COPDoc.model && COPDoc.model.ensureRecordMeta) {
+        COPDoc.model.ensureRecordMeta(row);
+      } else {
+        row.meta = row.meta || {};
+        row.meta.status = "committed";
+        row.meta.committedAt = row.meta.updatedAt || new Date().toISOString();
+      }
+    });
+    return dirty;
+  }
+
   function loadState() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
@@ -186,6 +229,11 @@
       state.officers = parsed.officers || [];
       state.vehicles = parsed.vehicles || [];
       state.shifts = parsed.shifts || [];
+      var dirty =
+        migrateAdminList(state.officers) || migrateAdminList(state.vehicles);
+      if (dirty) {
+        saveState();
+      }
     } catch (error) {
       state = { officers: [], vehicles: [], shifts: [] };
     }
@@ -511,10 +559,10 @@
       return;
     }
     var officers = state.officers.filter(function (row) {
-      return row.duty === "available";
+      return rowCommitted(row) && row.duty === "available";
     }).length;
     var vehicles = state.vehicles.filter(function (row) {
-      return row.status === "available";
+      return rowCommitted(row) && row.status === "available";
     }).length;
     var arrests = countBookInArrests();
     byId("statOfficers").textContent = String(officers);
@@ -551,11 +599,16 @@
     }
     fillSelect(
       byId("shiftOfficer"),
-      state.officers,
+      state.officers.filter(rowCommitted),
       "Select an officer",
       officerName
     );
-    fillSelect(byId("shiftVehicle"), state.vehicles, "None", vehicleLabel);
+    fillSelect(
+      byId("shiftVehicle"),
+      state.vehicles.filter(rowCommitted),
+      "None",
+      vehicleLabel
+    );
   }
 
   function editButton(kind, id) {
@@ -601,36 +654,88 @@
     return btn;
   }
 
+  function sortRecords(rows) {
+    return rows.slice().sort(function (a, b) {
+      var da = rowCommitted(a) ? 1 : 0;
+      var db = rowCommitted(b) ? 1 : 0;
+      if (da !== db) {
+        return da - db;
+      }
+      var ua = (a.meta && a.meta.updatedAt) || "";
+      var ub = (b.meta && b.meta.updatedAt) || "";
+      return String(ub).localeCompare(String(ua));
+    });
+  }
+
+  function filteredRecords(kind) {
+    var rows = state[kind] || [];
+    if (recordFilter === "draft") {
+      rows = rows.filter(function (row) {
+        return !rowCommitted(row);
+      });
+    } else if (recordFilter === "committed") {
+      rows = rows.filter(rowCommitted);
+    }
+    return sortRecords(rows);
+  }
+
   function paintTable(kind, bodyId, emptyId, wrapId, columns) {
     var body = byId(bodyId);
     var empty = byId(emptyId);
     var wrap = byId(wrapId);
-    var rows = state[kind];
+    if (!body) {
+      return;
+    }
+    var all = state[kind] || [];
+    var rows = filteredRecords(kind);
     body.replaceChildren();
     empty.hidden = rows.length > 0;
     wrap.hidden = rows.length === 0;
+    if (empty) {
+      if (!all.length) {
+        empty.textContent =
+          kind === "officers" ? "No officers yet." : "No vehicles yet.";
+      } else if (!rows.length) {
+        empty.textContent = "No matching records.";
+      }
+    }
     rows.forEach(function (row) {
       var tr = document.createElement("tr");
-      columns.forEach(function (col) {
+      columns.forEach(function (col, index) {
         var td = document.createElement("td");
         td.textContent = col(row);
+        if (index === 0 && !rowCommitted(row)) {
+          var badge = document.createElement("span");
+          badge.className = "record-status record-status-draft";
+          badge.textContent = "Draft";
+          td.appendChild(document.createTextNode(" "));
+          td.appendChild(badge);
+        }
         tr.appendChild(td);
       });
       var actions = document.createElement("td");
       var rowActions = document.createElement("div");
       rowActions.className = "record-actions";
+      var link = document.createElement("a");
+      link.className = "action-button-secondary compact";
       if (kind === "officers") {
-        var view = document.createElement("a");
-        view.href = "officer.html?id=" + encodeURIComponent(row.id);
-        view.className = "action-button-secondary compact";
-        view.textContent = "View";
-        rowActions.appendChild(view);
+        if (rowCommitted(row)) {
+          link.href = "officer.html?id=" + encodeURIComponent(row.id);
+          link.textContent = "View";
+        } else {
+          link.href = "officer-form.html?id=" + encodeURIComponent(row.id);
+          link.textContent = "Edit";
+        }
+        rowActions.appendChild(link);
       } else if (kind === "vehicles") {
-        var viewVeh = document.createElement("a");
-        viewVeh.href = "vehicle.html?id=" + encodeURIComponent(row.id);
-        viewVeh.className = "action-button-secondary compact";
-        viewVeh.textContent = "View";
-        rowActions.appendChild(viewVeh);
+        if (rowCommitted(row)) {
+          link.href = "vehicle.html?id=" + encodeURIComponent(row.id);
+          link.textContent = "View";
+        } else {
+          link.href = "vehicle-form.html?id=" + encodeURIComponent(row.id);
+          link.textContent = "Edit";
+        }
+        rowActions.appendChild(link);
       }
       rowActions.appendChild(removeButton(kind, row.id));
       actions.appendChild(rowActions);
@@ -663,36 +768,38 @@
   }
 
   function paintDashboard() {
-    var available = state.officers.filter(function (row) {
+    var officers = state.officers.filter(rowCommitted);
+    var available = officers.filter(function (row) {
       return row.duty === "available";
     });
     paintPreview(
       "officerPreview",
       "officerDashNote",
-      state.officers,
+      officers,
       officerName,
       function (row) {
         return DUTY_LABELS[row.duty] || row.duty;
       },
       "No officers on the roster.",
-      state.officers.length +
+      officers.length +
         " on roster · " +
         available.length +
         " available"
     );
-    var openVehicles = state.vehicles.filter(function (row) {
+    var vehicles = state.vehicles.filter(rowCommitted);
+    var openVehicles = vehicles.filter(function (row) {
       return row.status === "available";
     });
     paintPreview(
       "vehiclePreview",
       "vehicleDashNote",
-      state.vehicles,
+      vehicles,
       vehicleLabel,
       function (row) {
         return VEHICLE_STATUS[row.status] || row.status;
       },
       "No vehicles on the lot.",
-      state.vehicles.length +
+      vehicles.length +
         " on the lot · " +
         openVehicles.length +
         " available"
@@ -1165,7 +1272,19 @@
   }
 
   function rememberOfficerSignature() {
-    lastOfficerSignature = officerFormSignature();
+    if (officerAuto) {
+      officerAuto.remember();
+    }
+  }
+
+  function vehicleFormSignature() {
+    return officerFormSignature();
+  }
+
+  function rememberVehicleSignature() {
+    if (vehicleAuto) {
+      vehicleAuto.remember();
+    }
   }
 
   function isOfficerAutoSaveField(el) {
@@ -1182,38 +1301,50 @@
     return el.matches("input, select, textarea");
   }
 
-  function requestOfficerAutoSave() {
-    if (suppressOfficerAutoSave || adminPage() !== "officer-form") {
-      return;
-    }
-    window.setTimeout(function () {
-      if (suppressOfficerAutoSave) {
-        return;
-      }
-      if (officerFormSignature() === lastOfficerSignature) {
-        return;
-      }
-      addOfficer({ quiet: true });
-    }, 0);
+  function isVehicleAutoSaveField(el) {
+    return isOfficerAutoSaveField(el);
   }
 
   function bindOfficerAutoSave() {
     if (officerAutoSaveBound || adminPage() !== "officer-form") {
       return;
     }
+    if (!window.COPDoc || !COPDoc.model || !COPDoc.model.autosave) {
+      return;
+    }
     officerAutoSaveBound = true;
-    document.addEventListener(
-      "focusout",
-      function (event) {
-        if (isOfficerAutoSaveField(event.target)) {
-          requestOfficerAutoSave();
-        }
+    officerAuto = COPDoc.model.autosave.bind({
+      key: "officer",
+      suppressed: function () {
+        return suppressOfficerAutoSave;
       },
-      true
-    );
-    document.addEventListener("change", function (event) {
-      if (isOfficerAutoSaveField(event.target)) {
-        requestOfficerAutoSave();
+      isField: isOfficerAutoSaveField,
+      signature: officerFormSignature,
+      saveDraft: function () {
+        addOfficer({ quiet: true });
+      }
+    });
+  }
+
+  function bindVehicleAutoSave() {
+    if (adminPage() !== "vehicle-form") {
+      return;
+    }
+    if (!window.COPDoc || !COPDoc.model || !COPDoc.model.autosave) {
+      return;
+    }
+    if (vehicleAuto) {
+      return;
+    }
+    vehicleAuto = COPDoc.model.autosave.bind({
+      key: "vehicle",
+      suppressed: function () {
+        return suppressVehicleAutoSave;
+      },
+      isField: isVehicleAutoSaveField,
+      signature: vehicleFormSignature,
+      saveDraft: function () {
+        addVehicle({ quiet: true });
       }
     });
   }
@@ -1295,7 +1426,8 @@
       qualifications: checkedValues("officerQual"),
       qualOther: val("officerQualOther"),
       equipment: checkedValues("officerEquip"),
-      equipNotes: val("officerEquipNotes")
+      equipNotes: val("officerEquipNotes"),
+      meta: rowMeta(existing, quiet ? "draft" : "commit")
     });
     if (updating) {
       state.officers = state.officers.map(function (row) {
@@ -1321,7 +1453,7 @@
           "officer-form.html?id=" + encodeURIComponent(record.id)
         );
       }
-      setStatus("Auto-saved.", true);
+      setStatus("Draft saved.", true);
       return;
     }
     window.location.href = "officer.html?id=" + encodeURIComponent(record.id);
@@ -1364,7 +1496,8 @@
       barcode: val("vehicleBarcode"),
       driverNumber: val("vehicleDriverNumber"),
       assignedOfficerIds: assignedIdsFromInput(),
-      equipment: checkedValues("vehicleEquip")
+      equipment: checkedValues("vehicleEquip"),
+      meta: rowMeta(existing, quiet ? "draft" : "commit")
     });
     delete record.registeredOwner;
     delete record.registeredOwnerName;
@@ -1392,7 +1525,8 @@
           "vehicle-form.html?id=" + encodeURIComponent(record.id)
         );
       }
-      setStatus("Saved.", true);
+      rememberVehicleSignature();
+      setStatus("Draft saved.", true);
       return;
     }
     window.location.href = "vehicle.html?id=" + encodeURIComponent(record.id);
@@ -1419,6 +1553,7 @@
     var query = val("assignOfficerSearch").toLowerCase();
     var selected = assignedIdsFromInput();
     var officers = state.officers
+      .filter(rowCommitted)
       .filter(function (officer) {
         return !query || officerSearchHay(officer).indexOf(query) !== -1;
       })
@@ -1585,16 +1720,20 @@
     if (byId("addShiftButton")) {
       byId("addShiftButton").addEventListener("click", addShift);
     }
-    if (byId("adminSaveButton")) {
-      byId("adminSaveButton").addEventListener("click", function () {
-        if (adminPage() === "vehicle-form") {
-          addVehicle({ quiet: true });
-          return;
-        }
-        saveState();
-        setStatus("Admin roster saved.", true);
+    bindOfficerAutoSave();
+    bindVehicleAutoSave();
+    document.querySelectorAll("[data-record-filter]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        recordFilter = btn.getAttribute("data-record-filter") || "all";
+        document.querySelectorAll("[data-record-filter]").forEach(function (other) {
+          other.setAttribute(
+            "aria-pressed",
+            other === btn ? "true" : "false"
+          );
+        });
+        paint();
       });
-    }
+    });
     if (adminPage() === "officer-form" && queryParam("id")) {
       suppressOfficerAutoSave = true;
       if (findOfficer(queryParam("id"))) {
@@ -1611,13 +1750,17 @@
       rememberOfficerSignature();
     }
     if (adminPage() === "vehicle-form" && queryParam("id")) {
+      suppressVehicleAutoSave = true;
       if (findVehicle(queryParam("id"))) {
         fillVehicleForm(queryParam("id"));
       } else {
         setStatus("Vehicle not found.");
       }
+      rememberVehicleSignature();
+      suppressVehicleAutoSave = false;
+    } else if (adminPage() === "vehicle-form") {
+      rememberVehicleSignature();
     }
-    bindOfficerAutoSave();
     paint();
   }
 

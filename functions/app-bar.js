@@ -231,7 +231,7 @@
     if (page === "vehicle-form") {
       return {
         tab: "admin",
-        file: [{ id: "adminSaveButton", label: "Save" }].concat(ROSTER_FILE),
+        file: ROSTER_FILE,
         actions: [
           { label: "Save", primary: true, chromeAction: "save" },
           {

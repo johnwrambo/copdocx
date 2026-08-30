@@ -65,6 +65,11 @@
       state = disk;
       state.people = state.people || {};
       state.leads = state.leads || {};
+      Object.keys(state.leads).forEach(function (id) {
+        if (typeof model.ensureRecordMeta === "function") {
+          model.ensureRecordMeta(state.leads[id]);
+        }
+      });
     }
     return state;
   }
@@ -82,31 +87,41 @@
   }
 
   /**
-   * Save a snapshot as-is. No completeness check. Empty leads are fine.
-   * Returns { ok, leadId, error }.
+   * Save a snapshot. opts.mode: "draft" | "commit" (default commit).
+   * Collect's meta does not win — previous committedAt is preserved on draft.
+   * rememberPeople only on commit.
    */
-  function saveLead(snapshot) {
+  function saveLead(snapshot, opts) {
     if (!snapshot || !snapshot.leadId) {
       return { ok: false, leadId: "", error: "Snapshot is missing a leadId." };
     }
-    snapshot.schema = snapshot.schema || model.SCHEMA;
-    snapshot.meta = snapshot.meta || {};
-    snapshot.meta.updatedAt = model.nowIso();
-    if (!snapshot.meta.createdAt) {
-      snapshot.meta.createdAt = snapshot.meta.updatedAt;
+    var mode = (opts && opts.mode) || "commit";
+    var previous = state.leads[snapshot.leadId]
+      ? clone(state.leads[snapshot.leadId])
+      : null;
+    var record = previous ? Object.assign({}, previous, snapshot) : snapshot;
+    record.schema = snapshot.schema || model.SCHEMA;
+    record.leadId = snapshot.leadId;
+    if (typeof model.stampMeta === "function") {
+      record.meta = model.stampMeta(previous, mode);
+    } else {
+      record.meta = snapshot.meta || {};
+      record.meta.updatedAt = model.nowIso();
     }
-    snapshot.meta.markedComplete = false;
-    state.leads[snapshot.leadId] = clone(snapshot);
-    state.currentLeadId = snapshot.leadId;
-    rememberPeople(snapshot);
+    record.meta.markedComplete = false;
+    state.leads[record.leadId] = clone(record);
+    state.currentLeadId = record.leadId;
+    if (mode === "commit") {
+      rememberPeople(record);
+    }
     if (!writeDisk()) {
       return {
         ok: false,
-        leadId: snapshot.leadId,
+        leadId: record.leadId,
         error: "Could not write localStorage (quota or private mode)."
       };
     }
-    return { ok: true, leadId: snapshot.leadId, error: "" };
+    return { ok: true, leadId: record.leadId, error: "" };
   }
 
   function getLead(leadId) {
@@ -124,6 +139,7 @@
           leadId: id,
           label: name,
           updatedAt: (snap.meta && snap.meta.updatedAt) || "",
+          metaStatus: model.metaStatus ? model.metaStatus(snap) : "committed",
           subjectPersonId: snap.subjectPersonId
         };
       })

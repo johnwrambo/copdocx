@@ -54,8 +54,28 @@
   }
 
   var suppressAutoSave = false;
-  var lastLeadSignature = "";
-  var autoSaveBound = false;
+  var leadAuto = null;
+
+  function queryLeadId() {
+    if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.queryId === "function") {
+      return COPDoc.chrome.queryId();
+    }
+    try {
+      return new URLSearchParams(window.location.search).get("id") || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function replaceLeadUrl(leadId) {
+    if (!window.history || !window.history.replaceState) {
+      return;
+    }
+    var next = leadId
+      ? "lead.html?id=" + encodeURIComponent(leadId)
+      : "lead.html";
+    window.history.replaceState({}, "", next);
+  }
 
   function setStatus(message, isOk) {
     if (window.COPDoc && typeof COPDoc.setAppBarStatus === "function") {
@@ -212,7 +232,9 @@
   }
 
   function rememberLeadSignature() {
-    lastLeadSignature = leadFormSignature();
+    if (leadAuto) {
+      leadAuto.remember();
+    }
   }
 
   function isLeadAutoSaveField(el) {
@@ -238,21 +260,24 @@
   function saveCurrentLead(options) {
     var quiet = Boolean(options && options.quiet);
     var snapshot = model.collectLead();
-    var result = model.store.saveLead(snapshot);
+    var result = model.store.saveLead(snapshot, {
+      mode: quiet ? "draft" : "commit"
+    });
     refreshSavedLeadSelect();
     fillPersonSelects();
     if (!result.ok) {
       setStatus(result.error || "Save failed.");
       return null;
     }
+    replaceLeadUrl(result.leadId);
     rememberLeadSignature();
     var name = model.formatPersonLabel(model.subjectOf(snapshot));
     if (quiet) {
-      setStatus("Auto-saved.", true);
+      setStatus("Draft saved.", true);
     } else {
       setStatus(
-        "Saved incomplete lead" +
-          (name ? " — " + name : " (no name yet)") +
+        "Committed lead" +
+          (name ? " — " + name : " — no name yet") +
           ".",
         true
       );
@@ -260,38 +285,19 @@
     return snapshot;
   }
 
-  function requestLeadAutoSave() {
-    if (suppressAutoSave) {
-      return;
-    }
-    window.setTimeout(function () {
-      if (suppressAutoSave) {
-        return;
-      }
-      if (leadFormSignature() === lastLeadSignature) {
-        return;
-      }
-      saveCurrentLead({ quiet: true });
-    }, 0);
-  }
-
   function bindLeadAutoSave() {
-    if (autoSaveBound) {
+    if (!model.autosave || typeof model.autosave.bind !== "function") {
       return;
     }
-    autoSaveBound = true;
-    document.addEventListener(
-      "focusout",
-      function (event) {
-        if (isLeadAutoSaveField(event.target)) {
-          requestLeadAutoSave();
-        }
+    leadAuto = model.autosave.bind({
+      key: "lead",
+      suppressed: function () {
+        return suppressAutoSave;
       },
-      true
-    );
-    document.addEventListener("change", function (event) {
-      if (isLeadAutoSaveField(event.target)) {
-        requestLeadAutoSave();
+      isField: isLeadAutoSaveField,
+      signature: leadFormSignature,
+      saveDraft: function () {
+        saveCurrentLead({ quiet: true });
       }
     });
   }
@@ -311,6 +317,7 @@
     suppressAutoSave = true;
     model.hydrateLead(snapshot);
     model.store.setCurrentLeadId(leadId);
+    replaceLeadUrl(leadId);
     fillPersonSelects();
     refreshSavedLeadSelect();
     rememberLeadSignature();
@@ -320,6 +327,10 @@
 
   function newLead() {
     suppressAutoSave = true;
+    if (model.store) {
+      model.store.setCurrentLeadId("");
+    }
+    replaceLeadUrl("");
     var form = byId("leadForm");
     if (form && typeof form.reset === "function") {
       form.reset();
@@ -369,8 +380,30 @@
     setStatus("New blank lead. Nothing is required — save any time.", true);
   }
 
+  function storedCommittedLead() {
+    var card = subjectCard();
+    var leadId = card && card.dataset.leadId;
+    if (!leadId || !model.store) {
+      return null;
+    }
+    var snapshot = model.store.getLead(leadId);
+    if (!snapshot) {
+      return null;
+    }
+    if (typeof model.isCommitted === "function") {
+      return model.isCommitted(snapshot) ? snapshot : null;
+    }
+    return snapshot.meta && snapshot.meta.status === "committed"
+      ? snapshot
+      : null;
+  }
+
   function downloadCurrentLead() {
-    var snapshot = model.collectLead();
+    var snapshot = storedCommittedLead();
+    if (!snapshot) {
+      setStatus("Commit the lead before exporting.");
+      return;
+    }
     var blob = new Blob([JSON.stringify(snapshot, null, 2)], {
       type: "application/json"
     });
@@ -391,9 +424,22 @@
   }
 
   function bindUi() {
-    subjectId();
     if (model.store) {
       model.store.loadFromDisk();
+    }
+    var qid = queryLeadId();
+    if (qid && model.store) {
+      var existing = model.store.getLead(qid);
+      if (existing) {
+        suppressAutoSave = true;
+        model.hydrateLead(existing);
+        model.store.setCurrentLeadId(qid);
+      } else {
+        setStatus("Lead not found.");
+        subjectId();
+      }
+    } else {
+      subjectId();
     }
 
     var saveBtn = document.querySelector(
@@ -422,8 +468,9 @@
 
     fillPersonSelects();
     refreshSavedLeadSelect();
-    rememberLeadSignature();
     bindLeadAutoSave();
+    rememberLeadSignature();
+    suppressAutoSave = false;
   }
 
   model.fillPersonSelects = fillPersonSelects;
