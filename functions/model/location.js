@@ -42,6 +42,8 @@
         longitude: "",
         // residence | work | registration | known-parking | plate-check | ""
         association: "",
+        // Only for registration: yes | no | "". Not a "verified" flag.
+        parksHere: "",
         // "1" Primary, "2" Secondary, "3" Tertiary, then "4"…  Empty = not a target.
         targetPriority: ""
       },

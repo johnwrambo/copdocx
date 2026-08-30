@@ -10,6 +10,14 @@ function enhanceFieldset(fieldset) {
   if (!fieldset || fieldset.dataset.collapseReady === "true") {
     return;
   }
+  // Book-in (and any glued-open card): no toggle, no collapse.
+  if (
+    fieldset.classList.contains("card-static") ||
+    fieldset.getAttribute("data-collapse") === "off"
+  ) {
+    fieldset.dataset.collapseReady = "true";
+    return;
+  }
   fieldset.dataset.collapseReady = "true";
   fieldset.classList.add("card");
 
@@ -222,6 +230,15 @@ function bindAddressTargetPriority(card) {
   });
 }
 
+function syncParksHere(card) {
+  var assoc = card.querySelector('[data-field="locationAssociation"]');
+  var wrap = card.querySelector('[data-show-association="registration"]');
+  if (!wrap) {
+    return;
+  }
+  wrap.hidden = !(assoc && assoc.value === "registration");
+}
+
 function bindAddressCardFull(card) {
   fillLocationAssociationSelect(
     card.querySelector('[data-field="locationAssociation"]')
@@ -231,6 +248,33 @@ function bindAddressCardFull(card) {
   }
   bindAddressTargetPriority(card);
   refreshAddressTargetPriorityOptions();
+  syncParksHere(card);
+  var assoc = card.querySelector('[data-field="locationAssociation"]');
+  if (assoc && assoc.dataset.parksBound !== "true") {
+    assoc.dataset.parksBound = "true";
+    assoc.addEventListener("change", function () {
+      syncParksHere(card);
+    });
+  }
+  ["licensePlate", "plateState", "street", "city", "lastName", "firstName"].forEach(
+    function (name) {
+      var el = card.querySelector('[data-field="' + name + '"]');
+      if (!el || el.dataset.summaryBound === "true") {
+        return;
+      }
+      el.dataset.summaryBound = "true";
+      el.addEventListener("input", function () {
+        var list = card.closest(".card-list");
+        var title =
+          card.getAttribute("data-card") === "vehicle"
+            ? "Vehicle"
+            : card.getAttribute("data-card") === "location"
+              ? "Location"
+              : "Card";
+        updateCardTitles(list, title, true);
+      });
+    }
+  );
 }
 
 function bindNestedList(parentCard, options) {
@@ -267,6 +311,19 @@ function bindVehicleCardFull(card) {
   if (typeof bindVehicleCard === "function") {
     bindVehicleCard(card);
   }
+  ["licensePlate", "plateState"].forEach(function (name) {
+    var el = card.querySelector('[data-field="' + name + '"]');
+    if (!el || el.dataset.summaryBound === "true") {
+      return;
+    }
+    el.dataset.summaryBound = "true";
+    el.addEventListener("input", function () {
+      updateCardTitles(card.closest(".card-list"), "Vehicle", true);
+    });
+    el.addEventListener("change", function () {
+      updateCardTitles(card.closest(".card-list"), "Vehicle", true);
+    });
+  });
   bindNestedList(card, {
     kind: "location",
     templateId: "locationCardTemplate",
@@ -322,6 +379,29 @@ function syncEmptyAddButton(list) {
   actions.hidden = count > 0;
 }
 
+function cardSummary(card) {
+  function val(name) {
+    var el = card.querySelector('[data-field="' + name + '"]');
+    return el ? String(el.value || "").trim() : "";
+  }
+  var kind = card.getAttribute("data-card");
+  if (kind === "vehicle") {
+    return [val("plateState"), val("licensePlate")].filter(Boolean).join(" ");
+  }
+  if (kind === "location") {
+    var bits = [val("street"), val("city")].filter(Boolean);
+    var assoc = val("locationAssociation");
+    if (assoc) {
+      bits.push("(" + assoc + ")");
+    }
+    return bits.join(" ");
+  }
+  if (kind === "lead" || kind === "alias") {
+    return [val("lastName"), val("firstName")].filter(Boolean).join(", ");
+  }
+  return "";
+}
+
 function updateCardTitles(list, title, allowEmpty) {
   var cards = list.querySelectorAll(":scope > fieldset");
   cards.forEach(function (card, index) {
@@ -335,7 +415,13 @@ function updateCardTitles(list, title, allowEmpty) {
           extra = " — " + label;
         }
       }
-      toggle.textContent = title + " " + (index + 1) + extra;
+      var summary = cardSummary(card);
+      toggle.textContent =
+        title +
+        " " +
+        (index + 1) +
+        extra +
+        (summary ? " — " + summary : "");
     }
     var remove = card.querySelector(":scope > legend .card-remove");
     if (remove) {

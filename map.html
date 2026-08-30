@@ -4,15 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Maps and Planning</title>
-<link rel="stylesheet" href="style/style.css" />  
-</head>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
   <body>
-    <fieldset>
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.5.2"
+        >
+          Version 0.5.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow">
+        <details class="app-bar-menu" id="fileMenu">
+          <summary>File</summary>
+          <div class="app-bar-menu-list">
+            <button type="button" data-not-built="Save PDF">Save PDF</button>
+            <button type="button" data-not-built="Export KMZ (iTAK)">Export KMZ (iTAK)</button>
+            <button type="button" data-not-built="Export JSON">Export JSON</button>
+            <button type="button" data-not-built="Export CSV">Export CSV</button>
+          </div>
+        </details>
+        <nav class="app-bar-nav" aria-label="Pages">
+          <a href="lead.html">Lead</a>
+          <a href="bookin.html">Book-in</a>
+          <a href="map.html" aria-current="page">Map</a>
+          <a href="admin.html">Admin</a>
+        </nav>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+    <div class="page">
+      <fieldset>
         <legend>Map</legend>
-        <div class="map">
-        </div>>
-    </fieldset>
-
-
+        <div class="map"></div>
+      </fieldset>
+    </div>
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
   </body>
 </html>

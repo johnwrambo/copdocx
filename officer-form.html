@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Officer</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-admin-page="officer-form">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.5.2"
+        >
+          Version 0.5.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow">
+        <details class="app-bar-menu" id="fileMenu">
+          <summary>File</summary>
+          <div class="app-bar-menu-list">
+            <button type="button" id="adminSaveButton">Save</button>
+          </div>
+        </details>
+        <nav class="app-bar-nav" aria-label="Pages">
+          <a href="lead.html">Lead</a>
+          <a href="bookin.html">Book-in</a>
+          <a href="map.html">Map</a>
+          <a href="admin.html" aria-current="page">Admin</a>
+        </nav>
+        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
+          <a href="admin.html">Dashboard</a>
+          <a href="officers.html" aria-current="page">Officers</a>
+          <a href="vehicles.html">Vehicles</a>
+          <a href="schedule.html">Schedule</a>
+          <a href="officers.html" class="action-button-secondary">Cancel</a>
+        </nav>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <fieldset class="card-static" data-name-card>
+        <legend id="officerFormLegend">Add officer</legend>
+        <input type="hidden" id="officerMiddleName" data-field="middleName" />
+        <div class="row row-4">
+          <div class="field">
+            <label for="officerLastName">Last name</label>
+            <input
+              type="text"
+              id="officerLastName"
+              data-field="lastName"
+              autocomplete="off"
+              title="Paste a full name to fill first and last"
+            />
+          </div>
+          <div class="field">
+            <label for="officerFirstName">First name</label>
+            <input
+              type="text"
+              id="officerFirstName"
+              data-field="firstName"
+              autocomplete="off"
+              title="Paste a full name to fill first and last"
+            />
+          </div>
+          <div class="field">
+            <label for="officerBadge">Badge number</label>
+            <input type="text" id="officerBadge" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="officerCallSign">Call sign</label>
+            <input
+              type="text"
+              id="officerCallSign"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+            />
+          </div>
+        </div>
+        <div class="row row-4">
+          <div class="field">
+            <label for="officerDuty">Duty status</label>
+            <select id="officerDuty">
+              <option value="available">Available (field)</option>
+              <option value="in-field">In field</option>
+              <option value="admin">Admin / office</option>
+              <option value="leave">Leave</option>
+              <option value="off">Off duty</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="officerRole">Role</label>
+            <select id="officerRole">
+              <option value="">Select a role</option>
+              <option value="tac-med">Tac-Med</option>
+              <option value="tl">TL (Team Leader)</option>
+              <option value="atl">ATL (Assistant Team Leader)</option>
+              <option value="language">Language (interpreter)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="officerTeam">Team</label>
+            <input type="text" id="officerTeam" value="DAL - 3 / Street" />
+          </div>
+          <div class="field">
+            <label for="officerEod">EOD</label>
+            <input type="date" id="officerEod" />
+            <p class="field-caption">Entrance on duty</p>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="officerPhoneGov">Gov phone</label>
+            <input type="tel" id="officerPhoneGov" autocomplete="off" inputmode="tel" />
+            <p class="field-status" hidden></p>
+          </div>
+          <div class="field">
+            <label for="officerPhonePrivate">Private phone</label>
+            <input type="tel" id="officerPhonePrivate" autocomplete="off" inputmode="tel" />
+            <p class="field-status" hidden></p>
+          </div>
+          <div class="field">
+            <label class="field-label-spacer" for="addOfficerButton">Save</label>
+            <button type="button" id="addOfficerButton" class="action-button">
+              Add officer
+            </button>
+          </div>
+        </div>
+
+        <div data-location-owner="person">
+        <fieldset class="card-static" id="officerAddressCard" data-card="location">
+          <legend>Location</legend>
+          <div class="row">
+            <div class="field">
+              <label for="locationAssociation">Association</label>
+              <select id="locationAssociation" name="locationAssociation" data-field="locationAssociation">
+                <option value="">Select an Option</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="targetPriority">Target Address</label>
+              <select id="targetPriority" name="targetPriority" data-field="targetPriority">
+                <option value="">Not a target address</option>
+                <option value="1">Primary target</option>
+                <option value="2">Secondary</option>
+                <option value="3">Tertiary</option>
+              </select>
+            </div>
+            <div class="field" data-show-association="registration" hidden>
+              <label for="parksHere">Known to park here?</label>
+              <select id="parksHere" name="parksHere" data-field="parksHere">
+                <option value="">Unknown</option>
+                <option value="yes">Yes</option>
+                <option value="no">No — add known parking</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field field-span-2">
+              <label for="street">Street</label>
+              <input type="text" id="street" name="street" data-field="street" />
+            </div>
+            <div class="field field-span-2">
+              <label for="street2">Street 2</label>
+              <input type="text" id="street2" name="street2" data-field="street2" />
+            </div>
+          </div>
+          <div class="row row-3">
+            <div class="field">
+              <label for="city">City</label>
+              <input type="text" id="city" name="city" data-field="city" />
+            </div>
+            <div class="field">
+              <label for="state">State</label>
+              <input type="text" id="state" name="state" data-field="state" />
+            </div>
+            <div class="field">
+              <label for="zip">Zip Code</label>
+              <input type="text" id="zip" name="zip" data-field="zip" inputmode="numeric" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="latLong">Lat / Long</label>
+              <input
+                type="text"
+                id="latLong"
+                name="latLong"
+                data-field="latLong"
+                autocomplete="off"
+                inputmode="decimal"
+                placeholder="32.744582, -97.816176"
+                title="Paste latitude, longitude"
+              />
+              <input type="hidden" id="latitude" name="latitude" data-field="latitude" />
+              <input type="hidden" id="longitude" name="longitude" data-field="longitude" />
+            </div>
+            <div class="field">
+              <label for="resolveAddressButton" class="field-label-spacer">Resolve address</label>
+              <button
+                type="button"
+                id="resolveAddressButton"
+                class="action-button"
+                data-field="resolveAddressButton"
+              >
+                Resolve address
+              </button>
+            </div>
+            <div class="field">
+              <label for="mapAddressButton" class="field-label-spacer">Map it</label>
+              <button type="button" id="mapAddressButton" class="action-button" data-field="mapAddressButton">
+                Map it
+              </button>
+            </div>
+          </div>
+          <p class="field-status" data-field="addressStatus" hidden></p>
+        </fieldset>
+        </div>
+
+        <div class="row">
+          <div class="field field-span-2">
+            <span class="field-caption">Qualifications</span>
+            <div class="check-grid">
+              <label><input type="checkbox" name="officerQual" value="firearms" /> Firearms</label>
+              <label><input type="checkbox" name="officerQual" value="if" /> Intermediate force</label>
+              <label><input type="checkbox" name="officerQual" value="ero-basic" /> ERO basic</label>
+              <label><input type="checkbox" name="officerQual" value="1801" /> 1801</label>
+              <label><input type="checkbox" name="officerQual" value="spanish" /> Spanish</label>
+              <label><input type="checkbox" name="officerQual" value="cdl" /> CDL</label>
+            </div>
+            <label for="officerQualOther">Other qualifications</label>
+            <input type="text" id="officerQualOther" autocomplete="off" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <span class="field-caption">Equipment issued</span>
+            <div class="check-grid">
+              <label><input type="checkbox" name="officerEquip" value="creds" /> Credentials</label>
+              <label><input type="checkbox" name="officerEquip" value="firearm" /> Firearm</label>
+              <label><input type="checkbox" name="officerEquip" value="radio" /> Radio</label>
+              <label><input type="checkbox" name="officerEquip" value="armor" /> Body armor</label>
+              <label><input type="checkbox" name="officerEquip" value="gov-phone" /> Gov phone (device)</label>
+              <label><input type="checkbox" name="officerEquip" value="laptop" /> Laptop</label>
+              <label><input type="checkbox" name="officerEquip" value="oc" /> OC spray</label>
+              <label><input type="checkbox" name="officerEquip" value="baton" /> Baton</label>
+            </div>
+            <label for="officerEquipNotes">Serials / other issued</label>
+            <textarea id="officerEquipNotes" rows="2"></textarea>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/names.js"></script>
+    <script src="functions/address.js"></script>
+    <script src="functions/phone.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/admin.js"></script>
+  </body>
+</html>

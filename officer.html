@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Officer</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-admin-page="officer-view">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.5.2"
+        >
+          Version 0.5.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow">
+        <details class="app-bar-menu" id="fileMenu">
+          <summary>File</summary>
+          <div class="app-bar-menu-list">
+            <button type="button" id="adminSaveButton">Save</button>
+          </div>
+        </details>
+        <nav class="app-bar-nav" aria-label="Pages">
+          <a href="lead.html">Lead</a>
+          <a href="bookin.html">Book-in</a>
+          <a href="map.html">Map</a>
+          <a href="admin.html" aria-current="page">Admin</a>
+        </nav>
+        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
+          <a href="admin.html">Dashboard</a>
+          <a href="officers.html" aria-current="page">Officers</a>
+          <a href="vehicles.html">Vehicles</a>
+          <a href="schedule.html">Schedule</a>
+          <a id="officerEditLink" href="officer-form.html" class="action-button">Edit</a>
+        </nav>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <fieldset class="card-static">
+        <legend id="officerViewTitle">Officer</legend>
+        <p class="section-note">Current snapshot. Edit to change the record.</p>
+        <div id="officerMissing" class="records-empty" hidden>Officer not found.</div>
+        <div id="officerSnapshot">
+          <div class="snapshot-grid">
+            <div class="snapshot-item">
+              <p class="snapshot-label">Name</p>
+              <p id="viewName" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">Badge</p>
+              <p id="viewBadge" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">Call sign</p>
+              <p id="viewCallSign" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">Team</p>
+              <p id="viewTeam" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">Duty</p>
+              <p id="viewDuty" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">Role</p>
+              <p id="viewRole" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">EOD</p>
+              <p id="viewEod" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">Gov phone</p>
+              <p id="viewPhoneGov" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">Private phone</p>
+              <p id="viewPhonePrivate" class="snapshot-value">—</p>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Location</legend>
+        <div class="snapshot-grid">
+          <div class="snapshot-item">
+            <p class="snapshot-label">Association</p>
+            <p id="viewAddrKind" class="snapshot-value">—</p>
+          </div>
+          <div class="snapshot-item">
+            <p class="snapshot-label">Target</p>
+            <p id="viewTarget" class="snapshot-value">—</p>
+          </div>
+          <div class="snapshot-item snapshot-span">
+            <p class="snapshot-label">Address</p>
+            <p id="viewAddress" class="snapshot-value">—</p>
+          </div>
+          <div class="snapshot-item">
+            <p class="snapshot-label">Lat / Long</p>
+            <p id="viewLatLong" class="snapshot-value">—</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Qualifications</legend>
+        <p id="viewQuals" class="snapshot-value">—</p>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Equipment issued</legend>
+        <p id="viewEquip" class="snapshot-value">—</p>
+        <p id="viewEquipNotes" class="field-caption"></p>
+      </fieldset>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/admin.js"></script>
+  </body>
+</html>

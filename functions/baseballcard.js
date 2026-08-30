@@ -125,21 +125,7 @@ function formatState(value) {
     return titleCase(raw);
 }
 
-// A000 000 000 — A plus up to 9 digits in groups of three.
-function formatAlienNumber(value) {
-    const digits = String(value || "").replace(/\D/g, "").slice(0, 9);
-    if (!digits) {
-        return "";
-    }
-    const groups = [digits.slice(0, 3)];
-    if (digits.length > 3) {
-        groups.push(digits.slice(3, 6));
-    }
-    if (digits.length > 6) {
-        groups.push(digits.slice(6, 9));
-    }
-    return "A" + groups.join(" ");
-}
+// formatAlienNumber lives in functions/alien-number.js (shared with book-in).
 
 function val(el) {
     return el && el.value != null ? String(el.value) : "";

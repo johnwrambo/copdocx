@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-admin-page="dashboard">
+    <!--
+      Admin dashboard: counts + read-only snapshots.
+      Add/edit lives on officers.html, vehicles.html, schedule.html.
+    -->
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.5.2"
+        >
+          Version 0.5.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow">
+        <details class="app-bar-menu" id="fileMenu">
+          <summary>File</summary>
+          <div class="app-bar-menu-list">
+            <button type="button" id="adminSaveButton">Save</button>
+            <button type="button" data-not-built="Export JSON">Export JSON</button>
+          </div>
+        </details>
+        <nav class="app-bar-nav" aria-label="Pages">
+          <a href="lead.html">Lead</a>
+          <a href="bookin.html">Book-in</a>
+          <a href="map.html">Map</a>
+          <a href="admin.html" aria-current="page">Admin</a>
+        </nav>
+        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
+          <a href="admin.html" aria-current="page">Dashboard</a>
+          <a href="officers.html">Officers</a>
+          <a href="vehicles.html">Vehicles</a>
+          <a href="schedule.html">Schedule</a>
+        </nav>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <p class="section-note">
+        Duty desk snapshot. Open a card to add or edit.
+      </p>
+
+      <div class="stat-row">
+        <article class="stat-card">
+          <p class="stat-label">Officers available</p>
+          <p id="statOfficers" class="stat-value">0</p>
+          <p class="stat-hint">Duty status: available for field</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Vehicles available</p>
+          <p id="statVehicles" class="stat-value">0</p>
+          <p class="stat-hint">Status: available</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Arrests this week</p>
+          <p id="statArrestsWeek" class="stat-value">0</p>
+          <p class="stat-hint">Book-in records, Sun–Sat</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Arrests this FY</p>
+          <p id="statArrestsFy" class="stat-value">0</p>
+          <p class="stat-hint">Fiscal year starts 1 October</p>
+        </article>
+      </div>
+
+      <fieldset class="card-static">
+        <legend>Officers</legend>
+        <div class="dash-card-head">
+          <p class="section-note" id="officerDashNote">No officers on the roster.</p>
+          <a href="officers.html" class="action-button">Open officers</a>
+        </div>
+        <ul id="officerPreview" class="dash-preview"></ul>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Vehicles</legend>
+        <div class="dash-card-head">
+          <p class="section-note" id="vehicleDashNote">No vehicles on the lot.</p>
+          <a href="vehicles.html" class="action-button">Open vehicles</a>
+        </div>
+        <ul id="vehiclePreview" class="dash-preview"></ul>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Schedule</legend>
+        <div class="dash-card-head">
+          <p class="section-note" id="scheduleWeekLabel">This week</p>
+          <a href="schedule.html" class="action-button">Open schedule</a>
+        </div>
+        <div class="week-grid-wrap">
+          <div id="weekGrid" class="week-grid"></div>
+        </div>
+      </fieldset>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/admin.js"></script>
+  </body>
+</html>

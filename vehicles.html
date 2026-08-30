@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vehicles</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-admin-page="vehicles">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.5.2"
+        >
+          Version 0.5.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow">
+        <details class="app-bar-menu" id="fileMenu">
+          <summary>File</summary>
+          <div class="app-bar-menu-list">
+            <button type="button" id="adminSaveButton">Save</button>
+          </div>
+        </details>
+        <nav class="app-bar-nav" aria-label="Pages">
+          <a href="lead.html">Lead</a>
+          <a href="bookin.html">Book-in</a>
+          <a href="map.html">Map</a>
+          <a href="admin.html" aria-current="page">Admin</a>
+        </nav>
+        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
+          <a href="admin.html">Dashboard</a>
+          <a href="officers.html">Officers</a>
+          <a href="vehicles.html" aria-current="page">Vehicles</a>
+          <a href="schedule.html">Schedule</a>
+          <a href="vehicle-form.html" class="action-button">Add vehicle</a>
+        </nav>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <fieldset class="card-static">
+        <legend>Lot</legend>
+        <p class="section-note">All units. Open View for the current snapshot, or Add vehicle to create one.</p>
+        <div id="vehiclesEmpty" class="records-empty">No vehicles yet.</div>
+        <div id="vehiclesTableWrap" class="records-table-wrap" hidden>
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Plate</th>
+                <th>Assigned</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="vehiclesBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/admin.js"></script>
+  </body>
+</html>

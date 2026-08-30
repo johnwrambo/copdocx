@@ -53,6 +53,10 @@
     });
   }
 
+  var suppressAutoSave = false;
+  var lastLeadSignature = "";
+  var autoSaveBound = false;
+
   function setStatus(message, isOk) {
     var el = byId("leadSaveStatus");
     if (!el) {
@@ -174,7 +178,65 @@
     }
   }
 
-  function saveCurrentLead() {
+  function leadFormSignature() {
+    var parts = [];
+    function walk(root) {
+      if (!root) {
+        return;
+      }
+      root.querySelectorAll("input, select, textarea").forEach(function (el) {
+        if (el.closest("template")) {
+          return;
+        }
+        if (el.dataset.recordIgnore === "true") {
+          return;
+        }
+        if (
+          el.matches(
+            'input[type="button"], input[type="submit"], input[type="file"], input[type="hidden"]'
+          )
+        ) {
+          return;
+        }
+        var type = (el.type || "").toLowerCase();
+        if (type === "checkbox" || type === "radio") {
+          parts.push(el.name + ":" + el.id + "=" + (el.checked ? "1" : "0"));
+        } else {
+          parts.push((el.id || el.name || "") + "=" + String(el.value || ""));
+        }
+      });
+    }
+    walk(byId("leadForm"));
+    walk(byId("followUpPanel"));
+    return parts.join("\n");
+  }
+
+  function rememberLeadSignature() {
+    lastLeadSignature = leadFormSignature();
+  }
+
+  function isLeadAutoSaveField(el) {
+    if (!el || !el.matches) {
+      return false;
+    }
+    if (el.closest("template")) {
+      return false;
+    }
+    if (el.dataset.recordIgnore === "true") {
+      return false;
+    }
+    if (
+      el.matches(
+        'input[type="button"], input[type="submit"], input[type="file"], button, summary'
+      )
+    ) {
+      return false;
+    }
+    return el.matches("input, select, textarea");
+  }
+
+  function saveCurrentLead(options) {
+    var quiet = Boolean(options && options.quiet);
     var snapshot = model.collectLead();
     var result = model.store.saveLead(snapshot);
     refreshSavedLeadSelect();
@@ -183,14 +245,55 @@
       setStatus(result.error || "Save failed.");
       return null;
     }
+    rememberLeadSignature();
     var name = model.formatPersonLabel(model.subjectOf(snapshot));
-    setStatus(
-      "Saved incomplete lead" +
-        (name ? " — " + name : " (no name yet)") +
-        ".",
+    if (quiet) {
+      setStatus("Auto-saved.", true);
+    } else {
+      setStatus(
+        "Saved incomplete lead" +
+          (name ? " — " + name : " (no name yet)") +
+          ".",
+        true
+      );
+    }
+    return snapshot;
+  }
+
+  function requestLeadAutoSave() {
+    if (suppressAutoSave) {
+      return;
+    }
+    window.setTimeout(function () {
+      if (suppressAutoSave) {
+        return;
+      }
+      if (leadFormSignature() === lastLeadSignature) {
+        return;
+      }
+      saveCurrentLead({ quiet: true });
+    }, 0);
+  }
+
+  function bindLeadAutoSave() {
+    if (autoSaveBound) {
+      return;
+    }
+    autoSaveBound = true;
+    document.addEventListener(
+      "focusout",
+      function (event) {
+        if (isLeadAutoSaveField(event.target)) {
+          requestLeadAutoSave();
+        }
+      },
       true
     );
-    return snapshot;
+    document.addEventListener("change", function (event) {
+      if (isLeadAutoSaveField(event.target)) {
+        requestLeadAutoSave();
+      }
+    });
   }
 
   function loadSelectedLead() {
@@ -205,14 +308,18 @@
       setStatus("That lead is no longer in the store.");
       return;
     }
+    suppressAutoSave = true;
     model.hydrateLead(snapshot);
     model.store.setCurrentLeadId(leadId);
     fillPersonSelects();
     refreshSavedLeadSelect();
+    rememberLeadSignature();
+    suppressAutoSave = false;
     setStatus("Opened saved lead.", true);
   }
 
   function newLead() {
+    suppressAutoSave = true;
     var form = byId("leadForm");
     if (form && typeof form.reset === "function") {
       form.reset();
@@ -251,6 +358,14 @@
       global.updateAgeDisplay();
     }
     fillPersonSelects();
+    if (typeof window.paintFollowUps === "function") {
+      window.paintFollowUps([]);
+    }
+    if (typeof window.applyLeadLane === "function") {
+      window.applyLeadLane();
+    }
+    rememberLeadSignature();
+    suppressAutoSave = false;
     setStatus("New blank lead. Nothing is required — save any time.", true);
   }
 
@@ -285,6 +400,10 @@
     if (saveBtn) {
       saveBtn.addEventListener("click", saveCurrentLead);
     }
+    var quickSaveBtn = byId("quickSaveLeadButton");
+    if (quickSaveBtn) {
+      quickSaveBtn.addEventListener("click", saveCurrentLead);
+    }
     var openBtn = byId("openLeadButton");
     if (openBtn) {
       openBtn.addEventListener("click", loadSelectedLead);
@@ -305,6 +424,8 @@
 
     fillPersonSelects();
     refreshSavedLeadSelect();
+    rememberLeadSignature();
+    bindLeadAutoSave();
   }
 
   model.fillPersonSelects = fillPersonSelects;

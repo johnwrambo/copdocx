@@ -144,6 +144,7 @@
       latitude: f.latitude || "",
       longitude: f.longitude || "",
       association: f.locationAssociation || f.addressAssociation || "",
+      parksHere: f.parksHere || "",
       targetPriority: f.targetPriority || ""
     });
   }
@@ -407,6 +408,7 @@
       caseRole: "LEAD",
       source: model.createSource({
         leadSource: textValue(byId("leadSource")),
+        caseNumber: textValue(byId("caseNumber")),
         refAgency: textValue(byId("refAgency")),
         refAgencyCode: textValue(byId("refAgencyCode")),
         probationCheck: checked(byId("probationCheck")),
@@ -415,6 +417,10 @@
       person: person,
       vehicles: vehicles,
       links: links,
+      followUps:
+        typeof window.followUpRecords === "function"
+          ? window.followUpRecords()
+          : [],
       meta: {
         createdAt: createdAt,
         updatedAt: model.nowIso(),

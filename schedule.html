@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Schedule</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-admin-page="schedule">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.5.2"
+        >
+          Version 0.5.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow">
+        <details class="app-bar-menu" id="fileMenu">
+          <summary>File</summary>
+          <div class="app-bar-menu-list">
+            <button type="button" id="adminSaveButton">Save</button>
+          </div>
+        </details>
+        <nav class="app-bar-nav" aria-label="Pages">
+          <a href="lead.html">Lead</a>
+          <a href="bookin.html">Book-in</a>
+          <a href="map.html">Map</a>
+          <a href="admin.html" aria-current="page">Admin</a>
+        </nav>
+        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
+          <a href="admin.html">Dashboard</a>
+          <a href="officers.html">Officers</a>
+          <a href="vehicles.html">Vehicles</a>
+          <a href="schedule.html" aria-current="page">Schedule</a>
+        </nav>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <fieldset class="card-static">
+        <legend>Add shift</legend>
+        <p class="section-note" id="scheduleWeekLabel">This week</p>
+        <div class="row row-4">
+          <div class="field">
+            <label for="shiftDate">Date</label>
+            <input type="date" id="shiftDate" />
+          </div>
+          <div class="field">
+            <label for="shiftOfficer">Officer</label>
+            <select id="shiftOfficer">
+              <option value="">Select an officer</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="shiftVehicle">Vehicle</label>
+            <select id="shiftVehicle">
+              <option value="">None</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="shiftAssignment">Assignment</label>
+            <select id="shiftAssignment">
+              <option value="field">Field</option>
+              <option value="transport">Transport</option>
+              <option value="office">Office</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="shiftStart">Start</label>
+            <input type="time" id="shiftStart" value="06:00" />
+          </div>
+          <div class="field">
+            <label for="shiftEnd">End</label>
+            <input type="time" id="shiftEnd" value="14:00" />
+          </div>
+          <div class="field">
+            <label class="field-label-spacer" for="addShiftButton">Add</label>
+            <button type="button" id="addShiftButton" class="action-button">
+              Add shift
+            </button>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>This week</legend>
+        <div class="week-grid-wrap">
+          <div id="weekGrid" class="week-grid"></div>
+        </div>
+        <div id="shiftsEmpty" class="records-empty">No shifts this week.</div>
+        <div id="shiftsTableWrap" class="records-table-wrap" hidden>
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Officer</th>
+                <th>Vehicle</th>
+                <th>Hours</th>
+                <th>Assignment</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="shiftsBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/admin.js"></script>
+  </body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vehicle</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-admin-page="vehicle-form">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.5.2"
+        >
+          Version 0.5.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow">
+        <details class="app-bar-menu" id="fileMenu">
+          <summary>File</summary>
+          <div class="app-bar-menu-list">
+            <button type="button" id="adminSaveButton">Save</button>
+          </div>
+        </details>
+        <nav class="app-bar-nav" aria-label="Pages">
+          <a href="lead.html">Lead</a>
+          <a href="bookin.html">Book-in</a>
+          <a href="map.html">Map</a>
+          <a href="admin.html" aria-current="page">Admin</a>
+        </nav>
+        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
+          <a href="admin.html">Dashboard</a>
+          <a href="officers.html">Officers</a>
+          <a href="vehicles.html" aria-current="page">Vehicles</a>
+          <a href="schedule.html">Schedule</a>
+          <a href="vehicles.html" class="action-button-secondary">Cancel</a>
+        </nav>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <fieldset class="card-static" id="vehicleCard" data-card="vehicle">
+        <legend id="vehicleFormLegend">Vehicle</legend>
+        <div class="row row-4">
+          <div class="field">
+            <label for="licensePlate">Plate</label>
+            <input type="text" id="licensePlate" name="licensePlate" data-field="licensePlate" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="plateState">Plate State</label>
+            <select id="plateState" name="plateState" data-field="plateState"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleYear">Year</label>
+            <select id="vehicleYear" name="vehicleYear" data-field="vehicleYear"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleColor">Color</label>
+            <select id="vehicleColor" name="vehicleColor" data-field="vehicleColor"></select>
+          </div>
+        </div>
+        <div class="row row-4">
+          <div class="field">
+            <label for="vehicleMake">Make</label>
+            <select id="vehicleMake" name="vehicleMake" data-field="vehicleMake"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleModel">Model</label>
+            <select id="vehicleModel" name="vehicleModel" data-field="vehicleModel"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleBodyStyle">Body Style</label>
+            <select id="vehicleBodyStyle" name="vehicleBodyStyle" data-field="vehicleBodyStyle"></select>
+          </div>
+          <div class="field">
+            <label for="vin">VIN</label>
+            <input type="text" id="vin" name="vin" data-field="vin" autocomplete="off" />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Agency details</legend>
+        <div class="row row-4">
+          <div class="field">
+            <label for="vehicleUnit">Unit</label>
+            <input type="text" id="vehicleUnit" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="vehicleStatus">Status</label>
+            <select id="vehicleStatus">
+              <option value="available">Available</option>
+              <option value="assigned">Assigned</option>
+              <option value="down">Down</option>
+              <option value="out">Out of service</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="vehicleBarcode">Barcode number</label>
+            <input type="text" id="vehicleBarcode" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="vehicleDriverNumber">Driver number</label>
+            <input type="text" id="vehicleDriverNumber" autocomplete="off" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <span class="field-caption">Assign to</span>
+            <p id="assignedOfficerLabel" class="snapshot-value">None</p>
+            <input type="hidden" id="assignedOfficerIds" value="" />
+            <button type="button" id="assignOfficerButton" class="action-button-secondary">
+              Assign to…
+            </button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <span class="field-caption">Equipment</span>
+            <div class="check-grid">
+              <label><input type="checkbox" name="vehicleEquip" value="caged" /> Caged</label>
+              <label><input type="checkbox" name="vehicleEquip" value="gun-box" /> Gun box</label>
+              <label><input type="checkbox" name="vehicleEquip" value="radio" /> Radio</label>
+              <label><input type="checkbox" name="vehicleEquip" value="emergency-lights" /> Emergency lights</label>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label class="field-label-spacer" for="addVehicleButton">Save</label>
+            <button type="button" id="addVehicleButton" class="action-button">
+              Add vehicle
+            </button>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <div id="assignOfficerDialog" class="dialog-backdrop" hidden>
+      <div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="assignOfficerTitle">
+        <h2 id="assignOfficerTitle">Assign to</h2>
+        <p>Select one or more officers from the roster.</p>
+        <div class="field">
+          <label for="assignOfficerSearch">Search</label>
+          <input type="search" id="assignOfficerSearch" autocomplete="off" />
+        </div>
+        <div class="dialog-scroll assign-officer-list" id="assignOfficerList"></div>
+        <div class="dialog-actions">
+          <button type="button" id="assignOfficerOk" class="action-button">Assign</button>
+          <button type="button" id="assignOfficerCancel" class="action-button-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="data/us-places.js"></script>
+    <script src="data/vehicles.js"></script>
+    <script src="functions/vehicles.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/admin.js"></script>
+  </body>
+</html>

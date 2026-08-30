@@ -157,6 +157,7 @@
 
     var source = snapshot.source || {};
     setById("leadSource", source.leadSource || "");
+    setById("caseNumber", source.caseNumber || "");
     setById("refAgency", source.refAgency || "");
     setById("refAgencyCode", source.refAgencyCode || "");
     setById("probationCheck", source.probationCheck);
@@ -300,6 +301,12 @@
       false
     );
 
+    if (typeof window.paintFollowUps === "function") {
+      window.paintFollowUps(snapshot.followUps || []);
+    }
+    if (typeof window.applyLeadLane === "function") {
+      window.applyLeadLane();
+    }
     if (typeof model.fillPersonSelects === "function") {
       model.fillPersonSelects();
     }

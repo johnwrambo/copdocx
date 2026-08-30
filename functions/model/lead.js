@@ -67,6 +67,7 @@
     return assign(
       {
         leadSource: "",
+        caseNumber: "",
         refAgency: "",
         refAgencyCode: "",
         probationCheck: false,
@@ -92,6 +93,7 @@
         person: person,
         vehicles: [],
         links: [],
+        followUps: [],
         meta: {
           createdAt: created,
           updatedAt: created,

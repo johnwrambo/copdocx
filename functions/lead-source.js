@@ -25,6 +25,9 @@ function updateLeadSourceFields() {
   if (typeof refreshAddressAssociationOptions === "function") {
     refreshAddressAssociationOptions();
   }
+  if (typeof applyLeadLane === "function") {
+    applyLeadLane();
+  }
 }
 
 var leadSourceSelect = document.getElementById("leadSource");

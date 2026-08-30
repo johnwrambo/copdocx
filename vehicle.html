@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vehicle</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-admin-page="vehicle-view">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.5.2"
+        >
+          Version 0.5.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow">
+        <details class="app-bar-menu" id="fileMenu">
+          <summary>File</summary>
+          <div class="app-bar-menu-list">
+            <button type="button" id="adminSaveButton">Save</button>
+          </div>
+        </details>
+        <nav class="app-bar-nav" aria-label="Pages">
+          <a href="lead.html">Lead</a>
+          <a href="bookin.html">Book-in</a>
+          <a href="map.html">Map</a>
+          <a href="admin.html" aria-current="page">Admin</a>
+        </nav>
+        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
+          <a href="admin.html">Dashboard</a>
+          <a href="officers.html">Officers</a>
+          <a href="vehicles.html" aria-current="page">Vehicles</a>
+          <a href="schedule.html">Schedule</a>
+          <a id="vehicleEditLink" href="vehicle-form.html" class="action-button">Edit</a>
+        </nav>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <fieldset class="card-static">
+        <legend id="vehicleViewTitle">Vehicle</legend>
+        <p class="section-note">Current snapshot. Edit to change the record.</p>
+        <div id="vehicleMissing" class="records-empty" hidden>Vehicle not found.</div>
+        <div id="vehicleSnapshot">
+          <div class="snapshot-grid">
+            <div class="snapshot-item">
+              <p class="snapshot-label">Plate</p>
+              <p id="viewPlate" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">Year / color</p>
+              <p id="viewYearColor" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item snapshot-span">
+              <p class="snapshot-label">Make / model / body</p>
+              <p id="viewMakeModel" class="snapshot-value">—</p>
+            </div>
+            <div class="snapshot-item">
+              <p class="snapshot-label">VIN</p>
+              <p id="viewVin" class="snapshot-value">—</p>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Agency details</legend>
+        <div class="snapshot-grid">
+          <div class="snapshot-item">
+            <p class="snapshot-label">Unit</p>
+            <p id="viewUnit" class="snapshot-value">—</p>
+          </div>
+          <div class="snapshot-item">
+            <p class="snapshot-label">Status</p>
+            <p id="viewStatus" class="snapshot-value">—</p>
+          </div>
+          <div class="snapshot-item">
+            <p class="snapshot-label">Barcode</p>
+            <p id="viewBarcode" class="snapshot-value">—</p>
+          </div>
+          <div class="snapshot-item">
+            <p class="snapshot-label">Driver number</p>
+            <p id="viewDriverNumber" class="snapshot-value">—</p>
+          </div>
+          <div class="snapshot-item snapshot-span">
+            <p class="snapshot-label">Assigned to</p>
+            <p id="viewAssigned" class="snapshot-value">—</p>
+          </div>
+          <div class="snapshot-item snapshot-span">
+            <p class="snapshot-label">Equipment</p>
+            <p id="viewVehicleEquip" class="snapshot-value">—</p>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/admin.js"></script>
+  </body>
+</html>
