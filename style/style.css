@@ -173,6 +173,14 @@
         margin-left: auto;
       }
 
+      @media (max-width: 639px) {
+        .app-bar-actions {
+          flex: 1 1 100%;
+          justify-content: flex-end;
+          margin-left: 0;
+        }
+      }
+
       .app-bar-menu {
         position: relative;
       }

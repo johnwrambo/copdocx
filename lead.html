@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="style/style.css" />
     
   </head>
-  <body>
+  <body data-page="lead-form">
     <header class="app-bar">
       <!--
         VERSIONING (keep data-version and the visible text the same)
@@ -18,8 +18,8 @@
         (or saved JSON) would notice. Do it in the same change as the
         work, then commit + tag vMAJOR.MINOR.PATCH to match GitHub.
 
-          PATCH  0.5.2 → 0.5.3  bugfix / polish only
-          MINOR  0.5.2 → 0.6.0  new capability (cards, fields, save shape)
+          PATCH  0.5.3 → 0.5.4  bugfix / polish only
+          MINOR  0.5.3 → 0.6.0  new capability (cards, fields, save shape)
           MAJOR  0.x.x → 1.0.0  first freeze; after that, breaking saves
 
         data-version is the machine value. The text inside the span is
@@ -35,43 +35,14 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.5.2"
+          data-version="0.5.3"
         >
-          Version 0.5.2
+          Version 0.5.3
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
-      <div class="app-bar-navrow">
-        <details class="app-bar-menu" id="fileMenu">
-          <summary>File</summary>
-          <div class="app-bar-menu-list">
-            <button type="button" id="newLeadButton">New</button>
-            <button type="button" id="saveLeadButton">Save</button>
-            <div class="app-bar-menu-open">
-              <select id="savedLeadSelect" aria-label="Saved leads"></select>
-              <button type="button" id="openLeadButton">Open</button>
-            </div>
-            <button type="button" id="downloadLeadButton">Download JSON</button>
-            <button type="button" id="downloadLeadCsvButton">Download CSV</button>
-          </div>
-        </details>
-        <nav class="app-bar-nav" aria-label="Pages">
-          <a href="lead.html" aria-current="page">Lead</a>
-          <a href="bookin.html">Book-in</a>
-          <a href="map.html">Map</a>
-          <a href="admin.html">Admin</a>
-        </nav>
-        <div class="app-bar-actions">
-          <button type="button" id="stubPersonButton" class="action-button-secondary">+ Person</button>
-          <button type="button" id="stubVehicleButton" class="action-button-secondary">+ Vehicle</button>
-          <button type="button" id="stubLocationButton" class="action-button-secondary">+ Location</button>
-          <button type="button" id="followUpsToggle" class="action-button-secondary">
-            Follow-ups <span id="followUpCount">(0)</span>
-          </button>
-          <button type="button" id="quickSaveLeadButton" class="action-button">Save</button>
-        </div>
-      </div>
-      <p id="leadSaveStatus" class="field-status app-bar-status" hidden></p>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
     </header>
     <div id="followUpPanel" class="follow-up-panel" hidden>
       <div id="followUpList" class="follow-up-list"></div>

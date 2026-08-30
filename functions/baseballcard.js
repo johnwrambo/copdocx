@@ -350,14 +350,18 @@ window.onGenerateBaseballCard = onGenerateBaseballCard;
 
 function bindGenerateButton() {
     var btn = document.getElementById("generatebaseballCard") || baseballbutton;
-    if (!btn || btn.dataset.baseballBound === "true") {
+    if (!btn || btn.dataset.baseballBound === "true" || btn.dataset.chromeCall === "true") {
         return;
     }
     btn.dataset.baseballBound = "true";
     btn.addEventListener("click", onGenerateBaseballCard);
 }
 
-bindGenerateButton();
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindGenerateButton);
+} else {
+    bindGenerateButton();
+}
 
 // Live rewrite belongs on baseballcard.html only. Lead Entry generates on click.
 if (baseballCardEditor) {

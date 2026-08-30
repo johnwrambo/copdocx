@@ -158,13 +158,12 @@
 
   function setStatus(message, ok) {
     if (window.COPDoc && typeof COPDoc.setAppBarStatus === "function") {
-      COPDoc.setAppBarStatus(message || "");
+      COPDoc.setAppBarStatus(message || "", { ok: Boolean(ok) });
     }
-    var el = byId("appBarStatus");
-    if (!el || !message) {
-      return;
-    }
-    el.classList.toggle("is-ok", Boolean(ok));
+  }
+
+  function chromePrimary() {
+    return byId("appBarPrimaryAction");
   }
 
   function newId(prefix) {
@@ -878,7 +877,7 @@
     var row = findOfficer(id);
     var missing = byId("officerMissing");
     var snap = byId("officerSnapshot");
-    var edit = byId("officerEditLink");
+    var edit = chromePrimary();
     if (!row) {
       if (missing) {
         missing.hidden = false;
@@ -959,7 +958,7 @@
     var row = findVehicle(id);
     var missing = byId("vehicleMissing");
     var snap = byId("vehicleSnapshot");
-    var edit = byId("vehicleEditLink");
+    var edit = chromePrimary();
     if (!row) {
       if (missing) {
         missing.hidden = false;
@@ -1047,7 +1046,6 @@
       setVal("officerPhoneGov", formatPhone(row.phoneGov));
       setVal("officerPhonePrivate", formatPhone(row.phonePrivate));
     }
-    byId("addOfficerButton").textContent = "Save officer";
     rememberOfficerSignature();
     byId("officerLastName").focus();
   }
@@ -1547,8 +1545,14 @@
     if (byId("shiftDate") && !byId("shiftDate").value) {
       byId("shiftDate").value = today;
     }
-    if (byId("addOfficerButton")) {
-      byId("addOfficerButton").addEventListener("click", addOfficer);
+    var chromeSave = document.querySelector(
+      '#appBarPrimaryAction[data-chrome-action="save"]'
+    );
+    if (chromeSave && adminPage() === "officer-form") {
+      chromeSave.addEventListener("click", addOfficer);
+    }
+    if (chromeSave && adminPage() === "vehicle-form") {
+      chromeSave.addEventListener("click", addVehicle);
     }
     if (byId("officerAddressCard") && typeof bindAddressCardFull === "function") {
       bindAddressCardFull(byId("officerAddressCard"));
@@ -1568,9 +1572,6 @@
           }
         }
       });
-    }
-    if (byId("addVehicleButton")) {
-      byId("addVehicleButton").addEventListener("click", addVehicle);
     }
     if (vehicleCardEl() && typeof bindVehicleCardFull === "function") {
       bindVehicleCardFull(vehicleCardEl());

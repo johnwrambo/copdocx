@@ -6,7 +6,7 @@
     <title>Admin</title>
     <link rel="stylesheet" href="style/style.css" />
   </head>
-  <body data-admin-page="dashboard">
+  <body data-page="dashboard" data-admin-page="dashboard">
     <!--
       Admin dashboard: counts + read-only snapshots.
       Add/edit lives on officers.html, vehicles.html, schedule.html.
@@ -17,33 +17,13 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.5.2"
+          data-version="0.5.3"
         >
-          Version 0.5.2
+          Version 0.5.3
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
-      <div class="app-bar-navrow">
-        <details class="app-bar-menu" id="fileMenu">
-          <summary>File</summary>
-          <div class="app-bar-menu-list">
-            <button type="button" id="adminSaveButton">Save</button>
-            <button type="button" data-not-built="Export JSON">Export JSON</button>
-          </div>
-        </details>
-        <nav class="app-bar-nav" aria-label="Pages">
-          <a href="lead.html">Lead</a>
-          <a href="bookin.html">Book-in</a>
-          <a href="map.html">Map</a>
-          <a href="admin.html" aria-current="page">Admin</a>
-        </nav>
-        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
-          <a href="admin.html" aria-current="page">Dashboard</a>
-          <a href="officers.html">Officers</a>
-          <a href="vehicles.html">Vehicles</a>
-          <a href="schedule.html">Schedule</a>
-        </nav>
-      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
       <p id="appBarStatus" class="app-bar-status" hidden></p>
     </header>
 

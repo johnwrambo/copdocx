@@ -6,40 +6,20 @@
     <title>Vehicle</title>
     <link rel="stylesheet" href="style/style.css" />
   </head>
-  <body data-admin-page="vehicle-form">
+  <body data-page="vehicle-form" data-admin-page="vehicle-form">
     <header class="app-bar">
       <div class="app-bar-info">
         <span class="app-bar-product">COPDoc</span>
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.5.2"
+          data-version="0.5.3"
         >
-          Version 0.5.2
+          Version 0.5.3
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
-      <div class="app-bar-navrow">
-        <details class="app-bar-menu" id="fileMenu">
-          <summary>File</summary>
-          <div class="app-bar-menu-list">
-            <button type="button" id="adminSaveButton">Save</button>
-          </div>
-        </details>
-        <nav class="app-bar-nav" aria-label="Pages">
-          <a href="lead.html">Lead</a>
-          <a href="bookin.html">Book-in</a>
-          <a href="map.html">Map</a>
-          <a href="admin.html" aria-current="page">Admin</a>
-        </nav>
-        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
-          <a href="admin.html">Dashboard</a>
-          <a href="officers.html">Officers</a>
-          <a href="vehicles.html" aria-current="page">Vehicles</a>
-          <a href="schedule.html">Schedule</a>
-          <a href="vehicles.html" class="action-button-secondary">Cancel</a>
-        </nav>
-      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
       <p id="appBarStatus" class="app-bar-status" hidden></p>
     </header>
 
@@ -128,14 +108,6 @@
               <label><input type="checkbox" name="vehicleEquip" value="radio" /> Radio</label>
               <label><input type="checkbox" name="vehicleEquip" value="emergency-lights" /> Emergency lights</label>
             </div>
-          </div>
-        </div>
-        <div class="row">
-          <div class="field">
-            <label class="field-label-spacer" for="addVehicleButton">Save</label>
-            <button type="button" id="addVehicleButton" class="action-button">
-              Add vehicle
-            </button>
           </div>
         </div>
       </fieldset>

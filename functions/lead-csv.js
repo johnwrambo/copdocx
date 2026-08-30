@@ -66,13 +66,8 @@ function downloadCurrentLeadCsv() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-  var status = document.getElementById("leadSaveStatus");
-  if (status) {
-    status.hidden = false;
-    status.textContent = "Downloaded CSV snapshot.";
-    status.classList.add("is-ok");
-  } else if (window.COPDoc && COPDoc.setAppBarStatus) {
-    COPDoc.setAppBarStatus("Downloaded CSV snapshot.");
+  if (window.COPDoc && typeof COPDoc.setAppBarStatus === "function") {
+    COPDoc.setAppBarStatus("Downloaded CSV snapshot.", { ok: true });
   }
 }
 

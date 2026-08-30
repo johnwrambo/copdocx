@@ -6,40 +6,20 @@
     <title>Officer</title>
     <link rel="stylesheet" href="style/style.css" />
   </head>
-  <body data-admin-page="officer-form">
+  <body data-page="officer-form" data-admin-page="officer-form">
     <header class="app-bar">
       <div class="app-bar-info">
         <span class="app-bar-product">COPDoc</span>
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.5.2"
+          data-version="0.5.3"
         >
-          Version 0.5.2
+          Version 0.5.3
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
-      <div class="app-bar-navrow">
-        <details class="app-bar-menu" id="fileMenu">
-          <summary>File</summary>
-          <div class="app-bar-menu-list">
-            <button type="button" id="adminSaveButton">Save</button>
-          </div>
-        </details>
-        <nav class="app-bar-nav" aria-label="Pages">
-          <a href="lead.html">Lead</a>
-          <a href="bookin.html">Book-in</a>
-          <a href="map.html">Map</a>
-          <a href="admin.html" aria-current="page">Admin</a>
-        </nav>
-        <nav class="app-bar-actions app-bar-nav" aria-label="Admin">
-          <a href="admin.html">Dashboard</a>
-          <a href="officers.html" aria-current="page">Officers</a>
-          <a href="vehicles.html">Vehicles</a>
-          <a href="schedule.html">Schedule</a>
-          <a href="officers.html" class="action-button-secondary">Cancel</a>
-        </nav>
-      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
       <p id="appBarStatus" class="app-bar-status" hidden></p>
     </header>
 
@@ -124,12 +104,6 @@
             <label for="officerPhonePrivate">Private phone</label>
             <input type="tel" id="officerPhonePrivate" autocomplete="off" inputmode="tel" />
             <p class="field-status" hidden></p>
-          </div>
-          <div class="field">
-            <label class="field-label-spacer" for="addOfficerButton">Save</label>
-            <button type="button" id="addOfficerButton" class="action-button">
-              Add officer
-            </button>
           </div>
         </div>
 

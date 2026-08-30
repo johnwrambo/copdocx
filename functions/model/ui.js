@@ -58,7 +58,11 @@
   var autoSaveBound = false;
 
   function setStatus(message, isOk) {
-    var el = byId("leadSaveStatus");
+    if (window.COPDoc && typeof COPDoc.setAppBarStatus === "function") {
+      COPDoc.setAppBarStatus(message || "", { ok: Boolean(isOk) });
+      return;
+    }
+    var el = byId("appBarStatus") || byId("leadSaveStatus");
     if (!el) {
       return;
     }
@@ -70,11 +74,7 @@
     }
     el.hidden = false;
     el.textContent = message;
-    if (isOk) {
-      el.classList.add("is-ok");
-    } else {
-      el.classList.remove("is-ok");
-    }
+    el.classList.toggle("is-ok", Boolean(isOk));
   }
 
   function fillSelectEl(select, items, placeholder) {
@@ -396,13 +396,11 @@
       model.store.loadFromDisk();
     }
 
-    var saveBtn = byId("saveLeadButton");
+    var saveBtn = document.querySelector(
+      '#appBarPrimaryAction[data-chrome-action="save"]'
+    );
     if (saveBtn) {
       saveBtn.addEventListener("click", saveCurrentLead);
-    }
-    var quickSaveBtn = byId("quickSaveLeadButton");
-    if (quickSaveBtn) {
-      quickSaveBtn.addEventListener("click", saveCurrentLead);
     }
     var openBtn = byId("openLeadButton");
     if (openBtn) {
