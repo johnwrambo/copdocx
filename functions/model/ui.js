@@ -72,8 +72,8 @@
       return;
     }
     var next = leadId
-      ? "lead.html?id=" + encodeURIComponent(leadId)
-      : "lead.html";
+      ? "lead-form.html?id=" + encodeURIComponent(leadId)
+      : "lead-form.html";
     window.history.replaceState({}, "", next);
   }
 
@@ -271,17 +271,11 @@
     }
     replaceLeadUrl(result.leadId);
     rememberLeadSignature();
-    var name = model.formatPersonLabel(model.subjectOf(snapshot));
     if (quiet) {
       setStatus("Draft saved.", true);
-    } else {
-      setStatus(
-        "Committed lead" +
-          (name ? " — " + name : " — no name yet") +
-          ".",
-        true
-      );
+      return snapshot;
     }
+    window.location.href = "lead.html?id=" + encodeURIComponent(result.leadId);
     return snapshot;
   }
 
@@ -377,6 +371,7 @@
     }
     rememberLeadSignature();
     suppressAutoSave = false;
+    updateCancelHref(null);
     setStatus("New blank lead. Nothing is required — save any time.", true);
   }
 
@@ -423,7 +418,22 @@
     setStatus("Downloaded JSON snapshot.", true);
   }
 
+  function updateCancelHref(snapshot) {
+    var a = byId("appBarCancel");
+    if (!a) {
+      return;
+    }
+    if (snapshot && snapshot.leadId && snapshot.meta && snapshot.meta.committedAt) {
+      a.href = "lead.html?id=" + encodeURIComponent(snapshot.leadId);
+    } else {
+      a.href = "leads.html";
+    }
+  }
+
   function bindUi() {
+    if (document.body.getAttribute("data-page") !== "lead-form") {
+      return;
+    }
     if (model.store) {
       model.store.loadFromDisk();
     }
@@ -434,12 +444,15 @@
         suppressAutoSave = true;
         model.hydrateLead(existing);
         model.store.setCurrentLeadId(qid);
+        updateCancelHref(existing);
       } else {
         setStatus("Lead not found.");
         subjectId();
+        updateCancelHref(null);
       }
     } else {
       subjectId();
+      updateCancelHref(null);
     }
 
     var saveBtn = document.querySelector(

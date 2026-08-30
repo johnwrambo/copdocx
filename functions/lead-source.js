@@ -3,6 +3,19 @@
  * Probation is LE referral only.
  */
 
+var SOURCE_LABELS = {
+  tag: "Plate Check",
+  otherLe: "Other Law Enforcement Agency",
+  elite: "Elite",
+  other: "Other",
+  discovered: "Discovered in case"
+};
+
+function sourceLabel(code) {
+  var key = String(code || "");
+  return SOURCE_LABELS[key] || key;
+}
+
 function updateLeadSourceFields() {
   var select = document.getElementById("leadSource");
   if (!select) {

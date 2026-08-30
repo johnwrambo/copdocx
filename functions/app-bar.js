@@ -70,22 +70,63 @@
 
   function configFor(page) {
     var id = queryId();
+    if (page === "leads") {
+      return {
+        tab: "leads",
+        file: [
+          { label: "Import JSON", notBuilt: "Import JSON" },
+          { id: "downloadLeadsJsonButton", label: "Export JSON" },
+          { id: "downloadLeadsCsvButton", label: "Download CSV" }
+        ],
+        actions: [
+          {
+            label: "Add lead",
+            href: "lead-form.html",
+            primary: true,
+            chromeAction: "add"
+          }
+        ]
+      };
+    }
+    if (page === "lead") {
+      var actions = [
+        {
+          label: "Edit",
+          href: recordIdHref("lead-form.html", id),
+          primary: true,
+          chromeAction: "edit"
+        }
+      ];
+      if (id) {
+        actions.push({
+          id: "bookInLeadButton",
+          label: "Book-in",
+          href: "bookin.html?leadId=" + encodeURIComponent(id)
+        });
+      }
+      return {
+        tab: "leads",
+        file: [
+          { id: "downloadLeadButton", label: "Download JSON" },
+          { id: "downloadLeadCsvButton", label: "Download CSV" }
+        ],
+        actions: actions
+      };
+    }
     if (page === "lead-form") {
       return {
         tab: "leads",
         file: [
-          { id: "newLeadButton", label: "New" },
-          {
-            id: "openLeadButton",
-            label: "Open",
-            selectId: "savedLeadSelect",
-            selectLabel: "Saved leads"
-          },
           { id: "downloadLeadButton", label: "Download JSON" },
           { id: "downloadLeadCsvButton", label: "Download CSV" }
         ],
         actions: [
           { label: "Save", primary: true, chromeAction: "save" },
+          {
+            id: "appBarCancel",
+            label: "Cancel",
+            href: id ? recordIdHref("lead.html", id) : "leads.html"
+          },
           { id: "stubPersonButton", label: "+ Person" },
           { id: "stubVehicleButton", label: "+ Vehicle" },
           { id: "stubLocationButton", label: "+ Location" },
@@ -136,6 +177,24 @@
           { label: "Export CSV", notBuilt: "Export CSV" }
         ],
         actions: []
+      };
+    }
+    if (page === "narrative") {
+      return {
+        tab: "narrative",
+        file: [
+          { id: "downloadNarrativeJsonButton", label: "Download JSON" },
+          { id: "downloadNarrativeTextButton", label: "Download text" }
+        ],
+        actions: [
+          {
+            label: "Update draft",
+            primary: true,
+            chromeAction: "save"
+          },
+          { id: "addSupplementButton", label: "Add supplement" },
+          { id: "inspectOutputButton", label: "Inspect output" }
+        ]
       };
     }
     if (page === "baseballcard") {
@@ -368,9 +427,10 @@
       return a;
     }
 
-    nav.appendChild(tabLink("lead.html", "Lead", tab === "leads" || isLeadPage(page)));
+    nav.appendChild(tabLink("leads.html", "Leads", tab === "leads" || isLeadPage(page)));
     nav.appendChild(tabLink("bookin.html", "Book-in", tab === "bookin"));
     nav.appendChild(tabLink("map.html", "Map", tab === "map"));
+    nav.appendChild(tabLink("narrative.html", "Narrative", tab === "narrative"));
 
     var admin = document.createElement("details");
     admin.className = "app-bar-menu";
