@@ -21,6 +21,7 @@
     if (ownerName == null && extra.registeredOwner) {
       ownerName = extra.registeredOwner.nameText || "";
     }
+    var now = model.nowIso ? model.nowIso() : new Date().toISOString();
     var built = model.assign(
       {
         vehicleId: model.newId("veh"),
@@ -34,7 +35,21 @@
         vehicleBodyStyle: "",
         vin: "",
         registeredOwnerName: "",
-        locations: []
+        locations: [],
+        governmentVehicle: false,
+        unit: "",
+        status: "",
+        barcode: "",
+        driverNumber: "",
+        assignedOfficerIds: [],
+        equipment: [],
+        meta: {
+          createdAt: now,
+          updatedAt: now,
+          markedComplete: false,
+          status: "draft",
+          committedAt: ""
+        }
       },
       extra
     );
@@ -42,8 +57,29 @@
       built.registeredOwnerName = String(ownerName);
     }
     delete built.registeredOwner;
+    if (!built.vehicleId) {
+      built.vehicleId = built.id || model.newId("veh");
+    }
+    if (!built.id) {
+      built.id = built.vehicleId;
+    }
+    if (!built.licensePlate && built.plate) {
+      built.licensePlate = built.plate;
+    }
+    if (!built.plate && built.licensePlate) {
+      built.plate = built.licensePlate;
+    }
+    if (built.governmentVehicle === true && !built.status) {
+      built.status = "available";
+    }
     if (!Array.isArray(built.locations)) {
       built.locations = [];
+    }
+    if (!Array.isArray(built.assignedOfficerIds)) {
+      built.assignedOfficerIds = [];
+    }
+    if (!Array.isArray(built.equipment)) {
+      built.equipment = [];
     }
     return built;
   }

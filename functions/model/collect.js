@@ -354,7 +354,8 @@
         vehicleColor: f.vehicleColor || "",
         vehicleBodyStyle: f.vehicleBodyStyle || "",
         vin: f.vin || "",
-        registeredOwnerName: f.registeredOwner || f.registeredOwnerName || ""
+        registeredOwnerName: f.registeredOwner || f.registeredOwnerName || "",
+        governmentVehicle: false
       });
       nestedLocs.forEach(function (locCard) {
         vehicle.locations.push(collectLocation(locCard));

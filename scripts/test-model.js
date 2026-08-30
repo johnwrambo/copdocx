@@ -34,6 +34,7 @@ load("functions/model/lead.js");
 load("functions/model/person.js");
 load("functions/model/location.js");
 load("functions/model/vehicle.js");
+load("functions/model/officer.js");
 load("functions/model/link.js");
 load("functions/model/store.js");
 
@@ -168,6 +169,37 @@ var migrated = model.ensureRecordMeta({
 check(
   "fleet status is not meta",
   migrated.meta.status === "committed" && migrated.status === "available"
+);
+
+var ofc = model.createOfficer({
+  lastName: "REYES",
+  firstName: "Maria",
+  address: {
+    street: "1 Main",
+    city: "Dallas",
+    state: "TX",
+    locationAssociation: "residence"
+  }
+});
+check("officer entity", ofc.entityType === "OFFICER" && !!ofc.officerId && ofc.id === ofc.officerId);
+check(
+  "officer dual-writes location",
+  ofc.locations[0] && ofc.locations[0].city === "Dallas"
+);
+check(
+  "officer label",
+  model.formatPersonLabel(ofc) === "REYES, Maria"
+);
+check("officer city helper", model.officerCity(ofc) === "Dallas");
+
+var caseVeh = model.createVehicle({ licensePlate: "XYZ999" });
+check("case vehicle is not gov", caseVeh.governmentVehicle === false && caseVeh.status === "");
+check("case vehicle aliases id", !!caseVeh.vehicleId && caseVeh.id === caseVeh.vehicleId);
+
+var govVeh = model.createVehicle({ governmentVehicle: true, unit: "U-1" });
+check(
+  "gov vehicle defaults fleet status",
+  govVeh.governmentVehicle === true && govVeh.status === "available"
 );
 
 if (fail) {

@@ -110,7 +110,7 @@
 
   function findOfficer(id) {
     return state.officers.filter(function (row) {
-      return row.id === id;
+      return row.id === id || row.officerId === id;
     })[0];
   }
 
@@ -201,19 +201,82 @@
     };
   }
 
-  function migrateAdminList(list) {
+  function migrateOfficerRow(row) {
+    var dirty = false;
+    if (window.COPDoc && COPDoc.model && COPDoc.model.syncOfficerPlaces) {
+      var before = JSON.stringify({
+        id: row.id,
+        officerId: row.officerId,
+        address: row.address,
+        locations: row.locations
+      });
+      COPDoc.model.syncOfficerPlaces(row);
+      if (
+        JSON.stringify({
+          id: row.id,
+          officerId: row.officerId,
+          address: row.address,
+          locations: row.locations
+        }) !== before
+      ) {
+        dirty = true;
+      }
+    } else {
+      if (row.id && !row.officerId) {
+        row.officerId = row.id;
+        dirty = true;
+      }
+      if (row.officerId && !row.id) {
+        row.id = row.officerId;
+        dirty = true;
+      }
+    }
+    return dirty;
+  }
+
+  function migrateVehicleRow(row) {
+    var dirty = false;
+    if (row.governmentVehicle !== true) {
+      row.governmentVehicle = true;
+      dirty = true;
+    }
+    if (row.id && !row.vehicleId) {
+      row.vehicleId = row.id;
+      dirty = true;
+    }
+    if (row.vehicleId && !row.id) {
+      row.id = row.vehicleId;
+      dirty = true;
+    }
+    if (row.plate && !row.licensePlate) {
+      row.licensePlate = row.plate;
+      dirty = true;
+    }
+    if (row.licensePlate && !row.plate) {
+      row.plate = row.licensePlate;
+      dirty = true;
+    }
+    return dirty;
+  }
+
+  function migrateAdminList(list, kind) {
     var dirty = false;
     (list || []).forEach(function (row) {
-      if (row.meta && row.meta.status) {
-        return;
+      if (!row.meta || !row.meta.status) {
+        dirty = true;
+        if (window.COPDoc && COPDoc.model && COPDoc.model.ensureRecordMeta) {
+          COPDoc.model.ensureRecordMeta(row);
+        } else {
+          row.meta = row.meta || {};
+          row.meta.status = "committed";
+          row.meta.committedAt = row.meta.updatedAt || new Date().toISOString();
+        }
       }
-      dirty = true;
-      if (window.COPDoc && COPDoc.model && COPDoc.model.ensureRecordMeta) {
-        COPDoc.model.ensureRecordMeta(row);
-      } else {
-        row.meta = row.meta || {};
-        row.meta.status = "committed";
-        row.meta.committedAt = row.meta.updatedAt || new Date().toISOString();
+      if (kind === "officers" && migrateOfficerRow(row)) {
+        dirty = true;
+      }
+      if (kind === "vehicles" && migrateVehicleRow(row)) {
+        dirty = true;
       }
     });
     return dirty;
@@ -230,7 +293,8 @@
       state.vehicles = parsed.vehicles || [];
       state.shifts = parsed.shifts || [];
       var dirty =
-        migrateAdminList(state.officers) || migrateAdminList(state.vehicles);
+        migrateAdminList(state.officers, "officers") ||
+        migrateAdminList(state.vehicles, "vehicles");
       if (dirty) {
         saveState();
       }
@@ -346,7 +410,7 @@
 
   function findVehicle(id) {
     return state.vehicles.filter(function (row) {
-      return row.id === id;
+      return row.id === id || row.vehicleId === id;
     })[0];
   }
 
@@ -634,6 +698,12 @@
     btn.textContent = "Remove";
     btn.addEventListener("click", function () {
       state[kind] = state[kind].filter(function (row) {
+        if (kind === "officers") {
+          return row.id !== id && row.officerId !== id;
+        }
+        if (kind === "vehicles") {
+          return row.id !== id && row.vehicleId !== id;
+        }
         return row.id !== id;
       });
       if (kind === "officers") {
@@ -859,9 +929,7 @@
         cell.appendChild(empty);
       } else {
         dayShifts.forEach(function (shift) {
-          var officer = state.officers.filter(function (row) {
-            return row.id === shift.officerId;
-          })[0];
+          var officer = findOfficer(shift.officerId);
           var block = document.createElement("div");
           block.className = "week-shift";
           block.textContent =
@@ -899,12 +967,8 @@
     empty.hidden = weekShifts.length > 0;
     wrap.hidden = weekShifts.length === 0;
     weekShifts.forEach(function (shift) {
-      var officer = state.officers.filter(function (row) {
-        return row.id === shift.officerId;
-      })[0];
-      var vehicle = state.vehicles.filter(function (row) {
-        return row.id === shift.vehicleId;
-      })[0];
+      var officer = findOfficer(shift.officerId);
+      var vehicle = findVehicle(shift.vehicleId);
       var tr = document.createElement("tr");
       [
         shift.date,
@@ -934,6 +998,9 @@
           return row.lastName || "—";
         },
         function (row) {
+          if (window.COPDoc && COPDoc.model && COPDoc.model.officerCity) {
+            return COPDoc.model.officerCity(row) || "—";
+          }
           return (row.address && row.address.city) || "—";
         },
         function (row) {
@@ -1024,7 +1091,10 @@
     }
     setViewText("viewPhoneGov", row.phoneGov);
     setViewText("viewPhonePrivate", row.phonePrivate);
-    var address = row.address || {};
+    var address =
+      window.COPDoc && COPDoc.model && COPDoc.model.officerAddress
+        ? COPDoc.model.officerAddress(row)
+        : row.address || {};
     setViewText(
       "viewAddrKind",
       ADDR_KIND_LABELS[address.locationAssociation] ||
@@ -1140,7 +1210,11 @@
     setVal("officerEod", row.eod);
     setVal("officerPhoneGov", row.phoneGov);
     setVal("officerPhonePrivate", row.phonePrivate);
-    fillOfficerAddress(row.address);
+    fillOfficerAddress(
+      window.COPDoc && COPDoc.model && COPDoc.model.officerAddress
+        ? COPDoc.model.officerAddress(row)
+        : row.address || {}
+    );
     setCheckedValues("officerQual", row.qualifications);
     setVal("officerQualOther", row.qualOther);
     setCheckedValues("officerEquip", row.equipment);
@@ -1406,11 +1480,17 @@
       }
     }
     var updating = Boolean(editingOfficerId);
-    var existing = state.officers.filter(function (row) {
-      return row.id === editingOfficerId;
-    })[0] || {};
-    var record = Object.assign({}, existing, {
-      id: editingOfficerId || newId("ofc"),
+    var existing = findOfficer(editingOfficerId) || {};
+    var nextId =
+      existing.id ||
+      existing.officerId ||
+      editingOfficerId ||
+      (window.COPDoc && COPDoc.model && COPDoc.model.newId
+        ? COPDoc.model.newId("ofc")
+        : newId("ofc"));
+    var payload = {
+      officerId: existing.officerId || nextId,
+      id: nextId,
       lastName: lastName,
       firstName: firstName,
       middleName: val("officerMiddleName"),
@@ -1428,10 +1508,19 @@
       equipment: checkedValues("officerEquip"),
       equipNotes: val("officerEquipNotes"),
       meta: rowMeta(existing, quiet ? "draft" : "commit")
-    });
+    };
+    var record =
+      window.COPDoc && COPDoc.model && COPDoc.model.createOfficer
+        ? COPDoc.model.createOfficer(Object.assign({}, existing, payload))
+        : Object.assign({}, existing, payload);
+    if (window.COPDoc && COPDoc.model && COPDoc.model.syncOfficerPlaces) {
+      COPDoc.model.syncOfficerPlaces(record);
+    }
     if (updating) {
       state.officers = state.officers.map(function (row) {
-        return row.id === editingOfficerId ? record : row;
+        return row.id === editingOfficerId || row.officerId === editingOfficerId
+          ? record
+          : row;
       });
     } else {
       state.officers.push(record);
@@ -1480,8 +1569,17 @@
       return;
     }
     var existing = findVehicle(editingVehicleId) || {};
-    var record = Object.assign({}, existing, {
-      id: editingVehicleId || newId("veh"),
+    var nextId =
+      existing.id ||
+      existing.vehicleId ||
+      editingVehicleId ||
+      (window.COPDoc && COPDoc.model && COPDoc.model.newId
+        ? COPDoc.model.newId("veh")
+        : newId("veh"));
+    var payload = {
+      governmentVehicle: true,
+      vehicleId: existing.vehicleId || nextId,
+      id: nextId,
       unit: unit,
       plate: plate,
       licensePlate: plate,
@@ -1498,13 +1596,22 @@
       assignedOfficerIds: assignedIdsFromInput(),
       equipment: checkedValues("vehicleEquip"),
       meta: rowMeta(existing, quiet ? "draft" : "commit")
-    });
+    };
+    var record =
+      window.COPDoc && COPDoc.model && COPDoc.model.createVehicle
+        ? COPDoc.model.createVehicle(Object.assign({}, existing, payload))
+        : Object.assign({}, existing, payload);
     delete record.registeredOwner;
     delete record.registeredOwnerName;
     delete record.locations;
+    record.governmentVehicle = true;
+    record.plate = plate;
+    record.licensePlate = plate;
     if (editingVehicleId) {
       state.vehicles = state.vehicles.map(function (row) {
-        return row.id === editingVehicleId ? record : row;
+        return row.id === editingVehicleId || row.vehicleId === editingVehicleId
+          ? record
+          : row;
       });
     } else {
       state.vehicles.push(record);
