@@ -346,7 +346,7 @@
       var vehicleId = entityId(card, "veh");
       var vehicle = model.createVehicle({
         vehicleId: vehicleId,
-        licensePlate: f.licensePlate || "",
+        licensePlate: String(f.licensePlate || "").toUpperCase(),
         plateState: f.plateState || "",
         vehicleYear: f.vehicleYear || "",
         vehicleMake: f.vehicleMake || "",

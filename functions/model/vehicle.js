@@ -63,6 +63,12 @@
     if (!built.id) {
       built.id = built.vehicleId;
     }
+    if (built.licensePlate) {
+      built.licensePlate = String(built.licensePlate).toUpperCase();
+    }
+    if (built.plate) {
+      built.plate = String(built.plate).toUpperCase();
+    }
     if (!built.licensePlate && built.plate) {
       built.licensePlate = built.plate;
     }

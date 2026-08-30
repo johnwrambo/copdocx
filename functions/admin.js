@@ -1238,6 +1238,9 @@
     }
     editingVehicleId = id;
     vSet("licensePlate", row.licensePlate || row.plate);
+    if (typeof formatLicensePlate === "function") {
+      formatLicensePlate(vField("licensePlate"));
+    }
     setVehicleSelect("plateState", row.plateState);
     setVehicleSelect("vehicleYear", row.vehicleYear);
     setVehicleSelect("vehicleColor", row.vehicleColor);
@@ -1551,7 +1554,11 @@
   function addVehicle(options) {
     var quiet = Boolean(options && options.quiet);
     var unit = val("vehicleUnit");
-    var plate = vVal("licensePlate");
+    var plate = vVal("licensePlate").toUpperCase();
+    if (typeof formatLicensePlate === "function") {
+      formatLicensePlate(vField("licensePlate"));
+      plate = vVal("licensePlate");
+    }
     var vin = vVal("vin");
     var make = vVal("vehicleMake");
     if (!unit && !plate && !vin && !make && !quiet) {

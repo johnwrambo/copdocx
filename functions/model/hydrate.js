@@ -242,6 +242,12 @@
         fillCard(card, {
           registeredOwner: vehicle.registeredOwnerName || ""
         });
+        var plate = card.querySelector('[data-field="licensePlate"]');
+        if (typeof formatLicensePlate === "function") {
+          formatLicensePlate(plate);
+        } else if (plate) {
+          plate.value = String(plate.value || "").toUpperCase();
+        }
         var make = card.querySelector('[data-field="vehicleMake"]');
         if (make) {
           make.dispatchEvent(new Event("change"));

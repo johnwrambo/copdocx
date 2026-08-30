@@ -31,6 +31,39 @@ function fillSelect(select, items, placeholderText, getValue, getLabel) {
   });
 }
 
+function formatLicensePlate(el) {
+  if (!el) {
+    return "";
+  }
+  var next = String(el.value || "").toUpperCase();
+  if (next !== el.value) {
+    var pos = el.selectionStart;
+    el.value = next;
+    if (typeof el.setSelectionRange === "function" && pos != null) {
+      try {
+        el.setSelectionRange(pos, pos);
+      } catch (error) {}
+    }
+  }
+  return el.value;
+}
+
+function bindLicensePlateField(el) {
+  if (!el || el.dataset.plateBound === "true") {
+    return;
+  }
+  el.dataset.plateBound = "true";
+  el.setAttribute("autocapitalize", "characters");
+  el.setAttribute("spellcheck", "false");
+  formatLicensePlate(el);
+  el.addEventListener("input", function () {
+    formatLicensePlate(el);
+  });
+  el.addEventListener("blur", function () {
+    formatLicensePlate(el);
+  });
+}
+
 function bindVehicleCard(card) {
   if (!card || card.dataset.vehicleBound) {
     return;
@@ -40,6 +73,8 @@ function bindVehicleCard(card) {
   function field(name) {
     return card.querySelector('[data-field="' + name + '"]');
   }
+
+  bindLicensePlateField(field("licensePlate"));
 
   const reasonSelect = field("vehicleAssociationReason");
   const plateStateSelect = field("plateState");
