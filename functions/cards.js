@@ -66,75 +66,221 @@ function uniqueCardIds(card, prefix, index) {
   });
 }
 
-var ADDRESS_ASSOCIATION_STATIC = [
-  { value: "residence", label: "Residence" },
-  { value: "work", label: "Work" }
-];
-
-function getVehicleAssociationChoices() {
-  var list = document.getElementById("vehicleList");
-  if (!list) {
-    return [];
-  }
-  var choices = [];
-  list.querySelectorAll(":scope > fieldset").forEach(function (card, index) {
-    var n = String(index + 1);
-    var key = card.dataset.cardKey || n;
-    choices.push({
-      value: "vehicle-registration-" + key,
-      label: "Vehicle " + n + " registration address"
-    });
-    choices.push({
-      value: "vehicle-location-" + key,
-      label: "Vehicle " + n + " known location"
-    });
-  });
-  return choices;
+function locationOwnerOf(select) {
+  var list = select && select.closest("[data-location-owner]");
+  return (list && list.getAttribute("data-location-owner")) || "person";
 }
 
-function getLeadSourceAssociationChoices() {
-  var source = document.getElementById("leadSource");
-  if (source && source.value === "tag") {
+function locationAssociationChoices(owner) {
+  if (
+    window.COPDoc &&
+    COPDoc.model &&
+    owner === "vehicle" &&
+    COPDoc.model.VEHICLE_LOCATION_ASSOCIATIONS
+  ) {
+    return COPDoc.model.VEHICLE_LOCATION_ASSOCIATIONS;
+  }
+  if (window.COPDoc && COPDoc.model && COPDoc.model.PERSON_LOCATION_ASSOCIATIONS) {
+    return COPDoc.model.PERSON_LOCATION_ASSOCIATIONS;
+  }
+  if (owner === "vehicle") {
     return [
-      {
-        value: "plate-check-location",
-        label: "Plate check location"
-      }
+      { value: "registration", label: "Registration address" },
+      { value: "known-parking", label: "Known parking location" },
+      { value: "plate-check", label: "Plate check location" }
     ];
   }
-  return [];
+  return [
+    { value: "residence", label: "Residence" },
+    { value: "work", label: "Work" }
+  ];
 }
 
-function refreshAddressAssociationOptions() {
-  var extraChoices = getLeadSourceAssociationChoices().concat(
-    getVehicleAssociationChoices()
-  );
+function fillLocationAssociationSelect(select) {
+  if (!select) {
+    return;
+  }
+  var current = select.value;
+  var choices = locationAssociationChoices(locationOwnerOf(select));
+  select.replaceChildren();
+  var placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Select an Option";
+  select.appendChild(placeholder);
+  choices.forEach(function (item) {
+    var option = document.createElement("option");
+    option.value = item.value;
+    option.textContent = item.label;
+    select.appendChild(option);
+  });
+  var stillThere = Array.prototype.some.call(select.options, function (option) {
+    return option.value === current;
+  });
+  select.value = stillThere ? current : "";
+}
+
+function refreshLocationAssociationOptions() {
   document
-    .querySelectorAll('[data-field="addressAssociation"]')
+    .querySelectorAll('[data-field="locationAssociation"]')
     .forEach(function (select) {
       if (select.closest("template")) {
         return;
       }
-      var current = select.value;
-      select.replaceChildren();
-
-      var placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = "Select an Option";
-      select.appendChild(placeholder);
-
-      ADDRESS_ASSOCIATION_STATIC.concat(extraChoices).forEach(function (item) {
-        var option = document.createElement("option");
-        option.value = item.value;
-        option.textContent = item.label;
-        select.appendChild(option);
-      });
-
-      var stillThere = Array.prototype.some.call(select.options, function (option) {
-        return option.value === current;
-      });
-      select.value = stillThere ? current : "";
+      fillLocationAssociationSelect(select);
     });
+  refreshAddressTargetPriorityOptions();
+}
+
+function refreshAddressAssociationOptions() {
+  refreshLocationAssociationOptions();
+}
+
+function addressTargetPriorityLabel(rank) {
+  var n = Number(rank);
+  if (!n) {
+    return "";
+  }
+  if (n === 1) {
+    return "Primary target";
+  }
+  if (n === 2) {
+    return "Secondary";
+  }
+  if (n === 3) {
+    return "Tertiary";
+  }
+  var tens = n % 100;
+  var ones = n % 10;
+  var suffix = "th";
+  if (tens < 11 || tens > 13) {
+    if (ones === 1) {
+      suffix = "st";
+    } else if (ones === 2) {
+      suffix = "nd";
+    } else if (ones === 3) {
+      suffix = "rd";
+    }
+  }
+  return n + suffix;
+}
+
+function refreshAddressTargetPriorityOptions() {
+  var cards = document.querySelectorAll('[data-card="location"]');
+  var maxRank = Math.max(3, cards.length);
+  cards.forEach(function (card) {
+    var select = card.querySelector('[data-field="targetPriority"]');
+    if (!select || select.closest("template")) {
+      return;
+    }
+    var current = select.value;
+    select.replaceChildren();
+    var placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Not a target address";
+    select.appendChild(placeholder);
+    var i;
+    for (i = 1; i <= maxRank; i++) {
+      var option = document.createElement("option");
+      option.value = String(i);
+      option.textContent = addressTargetPriorityLabel(i);
+      select.appendChild(option);
+    }
+    var stillThere = Array.prototype.some.call(select.options, function (option) {
+      return option.value === current;
+    });
+    select.value = stillThere ? current : "";
+  });
+}
+
+function uniqueAddressTargetPriority(sourceCard) {
+  var select = sourceCard.querySelector('[data-field="targetPriority"]');
+  var value = select ? select.value : "";
+  if (!value) {
+    return;
+  }
+  document.querySelectorAll('[data-card="location"]').forEach(function (card) {
+    if (card === sourceCard || card.closest("template")) {
+      return;
+    }
+    var other = card.querySelector('[data-field="targetPriority"]');
+    if (other && other.value === value) {
+      other.value = "";
+    }
+  });
+}
+
+function bindAddressTargetPriority(card) {
+  var select = card.querySelector('[data-field="targetPriority"]');
+  if (!select || select.dataset.priorityBound === "true") {
+    return;
+  }
+  select.dataset.priorityBound = "true";
+  select.addEventListener("change", function () {
+    uniqueAddressTargetPriority(card);
+    var list = card.closest(".card-list");
+    updateCardTitles(list, "Location", true);
+  });
+}
+
+function bindAddressCardFull(card) {
+  fillLocationAssociationSelect(
+    card.querySelector('[data-field="locationAssociation"]')
+  );
+  if (typeof bindAddressCard === "function") {
+    bindAddressCard(card);
+  }
+  bindAddressTargetPriority(card);
+  refreshAddressTargetPriorityOptions();
+}
+
+function bindNestedList(parentCard, options) {
+  var list = parentCard.querySelector(
+    '[data-nested-list="' + options.kind + '"]'
+  );
+  var addBtn = parentCard.querySelector(
+    '[data-add-nested="' + options.kind + '"]'
+  );
+  var template = document.getElementById(options.templateId);
+  if (!list || !template) {
+    return;
+  }
+  function add() {
+    return addRepeatableCard({
+      list: list,
+      template: template,
+      title: options.title,
+      prefix: options.prefix,
+      bind: options.bind,
+      add: add,
+      allowEmpty: true
+    });
+  }
+  parentCard._addNested = parentCard._addNested || {};
+  parentCard._addNested[options.kind] = add;
+  if (addBtn && addBtn.dataset.nestedBound !== "true") {
+    addBtn.dataset.nestedBound = "true";
+    addBtn.addEventListener("click", add);
+  }
+}
+
+function bindVehicleCardFull(card) {
+  if (typeof bindVehicleCard === "function") {
+    bindVehicleCard(card);
+  }
+  bindNestedList(card, {
+    kind: "location",
+    templateId: "locationCardTemplate",
+    title: "Location",
+    prefix: "location",
+    bind: bindAddressCardFull
+  });
+  bindNestedList(card, {
+    kind: "link",
+    templateId: "linkCardTemplate",
+    title: "Link",
+    prefix: "link",
+    bind: bindLinkCard
+  });
 }
 
 function cardHasData(card) {
@@ -181,7 +327,15 @@ function updateCardTitles(list, title, allowEmpty) {
   cards.forEach(function (card, index) {
     var toggle = card.querySelector(":scope > legend .card-toggle");
     if (toggle) {
-      toggle.textContent = title + " " + (index + 1);
+      var extra = "";
+      if (card.getAttribute("data-card") === "location") {
+        var priority = card.querySelector('[data-field="targetPriority"]');
+        var label = addressTargetPriorityLabel(priority && priority.value);
+        if (label) {
+          extra = " — " + label;
+        }
+      }
+      toggle.textContent = title + " " + (index + 1) + extra;
     }
     var remove = card.querySelector(":scope > legend .card-remove");
     if (remove) {
@@ -258,7 +412,7 @@ function addRepeatableCard(options) {
         }
         card.remove();
         updateCardTitles(list, title, allowEmpty);
-        refreshAddressAssociationOptions();
+        refreshLocationAssociationOptions();
       });
       legend.appendChild(remove);
     }
@@ -268,47 +422,53 @@ function addRepeatableCard(options) {
     bind(card);
   }
   updateCardTitles(list, title, allowEmpty);
-  refreshAddressAssociationOptions();
+  refreshLocationAssociationOptions();
   return card;
 }
 
 function addPlateCheckAddress() {
-  var list = document.getElementById("addressList");
+  var vehicleList = document.getElementById("vehicleList");
+  var vehicle =
+    vehicleList && vehicleList.querySelector(":scope > fieldset");
+  if (!vehicle && typeof repeatableCardAdders.vehicle === "function") {
+    vehicle = repeatableCardAdders.vehicle();
+  }
+  if (!vehicle || !vehicle._addNested || !vehicle._addNested.location) {
+    return null;
+  }
+  var existing = vehicle.querySelectorAll(
+    '[data-nested-list="location"] > fieldset'
+  );
   var card = null;
-  if (list) {
-    var existing = list.querySelectorAll(":scope > fieldset");
-    var i;
-    for (i = 0; i < existing.length; i++) {
-      var assoc = existing[i].querySelector('[data-field="addressAssociation"]');
-      var street = existing[i].querySelector('[data-field="street"]');
-      var unused =
-        assoc &&
-        !assoc.value &&
-        street &&
-        !String(street.value || "").trim();
-      if (unused) {
-        card = existing[i];
-        break;
-      }
+  var i;
+  for (i = 0; i < existing.length; i++) {
+    var assoc = existing[i].querySelector(
+      '[data-field="locationAssociation"]'
+    );
+    var street = existing[i].querySelector('[data-field="street"]');
+    if (
+      assoc &&
+      (assoc.value === "plate-check" || !assoc.value) &&
+      street &&
+      !String(street.value || "").trim()
+    ) {
+      card = existing[i];
+      break;
     }
   }
-  if (!card && typeof repeatableCardAdders.address === "function") {
-    card = repeatableCardAdders.address();
+  if (!card) {
+    card = vehicle._addNested.location();
   }
-  refreshAddressAssociationOptions();
   if (!card) {
     return null;
   }
-  var select = card.querySelector('[data-field="addressAssociation"]');
+  var select = card.querySelector('[data-field="locationAssociation"]');
   if (select) {
-    select.value = "plate-check-location";
+    fillLocationAssociationSelect(select);
+    select.value = "plate-check";
   }
   card.classList.remove("is-collapsed");
-  var toggle = card.querySelector(":scope > legend .card-toggle");
-  if (toggle) {
-    toggle.setAttribute("aria-expanded", "true");
-    toggle.setAttribute("title", "Collapse card");
-  }
+  vehicle.classList.remove("is-collapsed");
   if (typeof card.scrollIntoView === "function") {
     card.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -402,7 +562,150 @@ function bindRelationshipCard(card) {
       "Select a Relationship"
     );
   }
+  if (
+    window.COPDoc &&
+    COPDoc.model &&
+    typeof COPDoc.model.fillPersonSelects === "function"
+  ) {
+    COPDoc.model.fillPersonSelects();
+  }
 }
+
+function searchSubjects(query) {
+  var q = String(query || "").toLowerCase().trim();
+  var hits = [];
+  var model = window.COPDoc && COPDoc.model;
+  if (!model) {
+    return hits;
+  }
+  var sid = typeof model.subjectId === "function" ? model.subjectId() : "";
+  var leadCard = document.querySelector('[data-card="lead"]');
+  var leadName =
+    model.formatPersonLabel && model.readFields && leadCard
+      ? model.formatPersonLabel(model.readFields(leadCard))
+      : "";
+  if (sid) {
+    hits.push({
+      id: sid,
+      label: leadName ? "This lead — " + leadName : "This lead"
+    });
+  }
+  if (model.store && typeof model.store.allPeople === "function") {
+    model.store.allPeople().forEach(function (person) {
+      if (!person || person.personId === sid) {
+        return;
+      }
+      hits.push({
+        id: person.personId,
+        label: model.formatPersonLabel(person) || "Untitled person"
+      });
+    });
+  }
+  if (!q) {
+    return hits.slice(0, 12);
+  }
+  return hits
+    .filter(function (hit) {
+      return hit.label.toLowerCase().indexOf(q) !== -1;
+    })
+    .slice(0, 12);
+}
+
+function bindLinkCard(card) {
+  if (!card || card.dataset.linkBound === "true") {
+    return;
+  }
+  card.dataset.linkBound = "true";
+  var box = card.querySelector("[data-field='linkReasons']") ||
+    card.querySelector(".link-reasons");
+  var reasons =
+    (window.LINK_REASONS) ||
+    (window.COPDoc && COPDoc.data && COPDoc.data.linkReasons) ||
+    [];
+  if (box && !box.childElementCount) {
+    reasons.forEach(function (reason) {
+      var label = document.createElement("label");
+      var input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = reason.code;
+      input.setAttribute("data-field", "linkReason");
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(" " + reason.label));
+      box.appendChild(label);
+    });
+  }
+  var search = card.querySelector('[data-field="linkedPersonSearch"]');
+  var hidden = card.querySelector('[data-field="linkedPersonId"]');
+  var results = card.querySelector(".search-results");
+  if (!search || !results) {
+    return;
+  }
+  function hide() {
+    results.hidden = true;
+    results.replaceChildren();
+  }
+  function choose(hit) {
+    if (hidden) {
+      hidden.value = hit.id;
+    }
+    search.value = hit.label;
+    hide();
+  }
+  function render() {
+    var hits = searchSubjects(search.value);
+    results.replaceChildren();
+    if (!hits.length) {
+      hide();
+      return;
+    }
+    hits.forEach(function (hit) {
+      var li = document.createElement("li");
+      li.textContent = hit.label;
+      li.setAttribute("role", "option");
+      li.addEventListener("mousedown", function (event) {
+        event.preventDefault();
+        choose(hit);
+      });
+      results.appendChild(li);
+    });
+    results.hidden = false;
+  }
+  search.addEventListener("input", render);
+  search.addEventListener("focus", render);
+  search.addEventListener("blur", function () {
+    window.setTimeout(hide, 120);
+  });
+}
+
+function fillLinkCard(card, link) {
+  if (!card || !link) {
+    return;
+  }
+  bindLinkCard(card);
+  var hidden = card.querySelector('[data-field="linkedPersonId"]');
+  var search = card.querySelector('[data-field="linkedPersonSearch"]');
+  var toId = link.to && link.to.id;
+  if (hidden) {
+    hidden.value = toId || "";
+  }
+  if (search && toId) {
+    var hits = searchSubjects("");
+    var hit = hits.filter(function (row) {
+      return row.id === toId;
+    })[0];
+    search.value = hit ? hit.label : toId;
+  }
+  var reasons = link.reasons || [];
+  card.querySelectorAll('[data-field="linkReason"]').forEach(function (el) {
+    el.checked = reasons.indexOf(el.value) !== -1;
+  });
+  var notes = card.querySelector('[data-field="linkNotes"]');
+  if (notes) {
+    notes.value = link.notes || "";
+  }
+}
+
+window.fillLinkCard = fillLinkCard;
 
 enhanceAllFieldsets(document);
 
@@ -434,16 +737,16 @@ initRepeatable({
   addButtonId: "addVehicleButton",
   title: "Vehicle",
   prefix: "vehicle",
-  bind: typeof bindVehicleCard === "function" ? bindVehicleCard : null
+  bind: bindVehicleCardFull
 });
 
 initRepeatable({
-  listId: "addressList",
-  templateId: "addressCardTemplate",
-  addButtonId: "addAddressButton",
-  title: "Address",
-  prefix: "address",
-  bind: typeof bindAddressCard === "function" ? bindAddressCard : null
+  listId: "locationList",
+  templateId: "locationCardTemplate",
+  addButtonId: "addLocationButton",
+  title: "Location",
+  prefix: "location",
+  bind: bindAddressCardFull
 });
 
 function bindDocumentCard(card) {
@@ -604,3 +907,10 @@ window.COPDoc.cards.addArrest = function addArrestCard() {
 window.COPDoc.cards.addConviction = function addConvictionCard() {
   return window.COPDoc.cards.add("conviction");
 };
+window.COPDoc.cards.addWarrant = function addWarrantCard() {
+  return window.COPDoc.cards.add("warrant");
+};
+window.COPDoc.cards.addLocation = function addLocationCard() {
+  return window.COPDoc.cards.add("location");
+};
+window.COPDoc.cards.addAddress = window.COPDoc.cards.addLocation;

@@ -4,852 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lead Entry</title>
-    <style>
-      /*
-        CONTROL PANEL
-        -------------
-        How to use this file:
-        - Change a value, save, refresh the browser. That is the whole loop.
-        - Lines starting with property: value; are LIVE.
-        - Lines inside /* ... * / are OFF. Delete the wrapping comment
-          markers to turn that option on. (Or add /* * / around a live
-          line to turn it off.)
-        - Colors are hex: #rrggbb. Example: #000000 black, #ffffff white.
-        - Sizes here use rem (1rem ≈ 16px in the browser default).
-          0.5rem ≈ 8px, 1rem ≈ 16px, 1.5rem ≈ 24px.
-      */
-
-      /* ============================================================
-         RESET / BOX MODEL
-         Controls: every element, plus ::before and ::after
-                   (empty extra boxes you can attach to an element).
-         Why it exists: by default, width: 100% does NOT include
-         padding and border, so inputs overflow their cards.
-         border-box makes width include padding + border.
-         ============================================================ */
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box; /* width/height include padding and border */
-        /* box-sizing: content-box;  old default: padding sits OUTSIDE width — usually worse for forms */
-      }
-
-      /* ============================================================
-         PAGE BACKGROUND + DEFAULT TYPE
-         Controls: the whole document behind the form (the <body>).
-         Children inherit font, color, and line-height from here
-         unless a more specific rule overrides them.
-         ============================================================ */
-      body {
-        margin: 0; /* strip the browser's default ~8px page margin */
-        /* margin: 16px;  puts a gutter around the whole page instead of relying on .page padding */
-        font-family: system-ui, sans-serif; /* OS UI font, then generic sans-serif fallback */
-        /* font-family: Georgia, "Times New Roman", serif;  document / report look */
-        /* font-family: "Segoe UI", Tahoma, sans-serif;  force a Windows-like sans */
-        /* font-family: Consolas, "Courier New", monospace;  typewriter / data-entry look */
-        line-height: 1.4; /* space between wrapped lines. 1 = tight, 1.6 = airy */
-        /* line-height: 1.2;  denser, more like a printed form */
-        color: #1f2430; /* default text color for the page */
-        /* color: #111111;  near-black, higher contrast */
-        background: #f3f4f7; /* page color behind the white fieldset cards */
-        /* background: #ffffff;  no gray canvas, cards blend into the page */
-        /* background: #1b1f2a;  dark canvas — also change color / card backgrounds if you use this */
-      }
-
-      /* ============================================================
-         PAGE SHELL
-         Controls: the centered column that holds the header + form
-                   (the <div class="page"> wrapper).
-         This is the "don't stretch across an ultrawide monitor" knob.
-         ============================================================ */
-      .page {
-        max-width: 880px; /* form stops growing at this width. try 720px or 1100px */
-        /* max-width: none;  full window width */
-        /* min-height: 100vh;  column at least as tall as the browser window */
-        margin: 0 auto; /* 0 top/bottom, auto left/right = horizontal center */
-        /* margin: 2rem auto;  extra space above and below the whole page */
-        padding: 1.5rem 1.25rem 3rem; /* inner space: top | left/right | bottom */
-        /* padding: 2rem;  equal padding on all four sides */
-        /* background: #ffffff;  make the column a solid sheet instead of seeing body gray through it */
-        /* box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);  floating paper look */
-        /* border-radius: 12px;  round the page sheet (pairs well with a white background) */
-      }
-
-      /* ============================================================
-         PAGE HEADER ROW
-         Controls: the top bar with "Lead Entry" on the left and
-                   date/country on the right (<header class="page-header">).
-         display: flex puts those children on one row.
-         ============================================================ */
-      .page-header {
-        display: flex; /* children sit in a row instead of stacking */
-        /* display: block;  title on its own line, meta falls under it */
-        flex-wrap: wrap; /* if the window is too narrow, date/country drop under the title */
-        /* flex-wrap: nowrap;  force one line; may overflow on small screens */
-        justify-content: space-between; /* first child left, last child right */
-        /* justify-content: flex-start;  pack both toward the left */
-        /* justify-content: center;  pack both toward the center */
-        align-items: baseline; /* line up the title text with the date text, not the boxes */
-        /* align-items: center;  vertical-center the two clusters */
-        /* align-items: flex-end;  line up on the bottom edge */
-        gap: 0.75rem 1.5rem; /* space when they wrap: row-gap | column-gap */
-        margin-bottom: 1.25rem; /* space between the header and the first fieldset */
-        /* padding-bottom: 0.75rem;  inner space under the header content */
-        /* border-bottom: 1px solid #d5d8e0;  a rule under the header */
-        /* position: sticky; top: 0; background: #f3f4f7; z-index: 10;  header stays on screen while you scroll */
-      }
-
-      /* ============================================================
-         PAGE TITLE
-         Controls: the "Lead Entry" heading only
-                   (<h1> inside .page-header).
-         ============================================================ */
-      .page-header h1 {
-        margin: 0; /* kill the browser's default heading margin */
-        font-size: 1.5rem; /* title size. 1rem is body size, 2rem is twice that */
-        /* font-size: 1.25rem;  quieter title */
-        /* font-weight: 400;  un-bold the title (default h1 is bold) */
-        /* font-weight: 800;  heavier title */
-        /* letter-spacing: 0.04em;  slightly spaced-out letters */
-        /* text-transform: uppercase;  LEAD ENTRY */
-        /* color: #1b3a8c;  branded title color */
-      }
-
-      /* ============================================================
-         DATE + COUNTRY CLUSTER
-         Controls: the right-side wrapper around the two <p> tags
-                   (<div class="page-meta">).
-         ============================================================ */
-      .page-meta {
-        display: flex; /* Date and Country sit side by side */
-        /* display: block;  Date stacked above Country */
-        flex-wrap: wrap; /* they can wrap onto two lines if needed */
-        gap: 0.25rem 1.5rem; /* vertical | horizontal space between Date and Country */
-        margin: 0; /* no extra outer margin on the cluster */
-        color: #4b5568; /* muted gray so they read as metadata, not as the title */
-        /* color: #1f2430;  same color as body text */
-        font-size: 0.95rem; /* slightly smaller than body text */
-        /* font-size: 0.8rem;  fine print */
-        /* font-variant-numeric: tabular-nums;  date digits line up if the value changes width */
-      }
-
-      /* ============================================================
-         DATE / COUNTRY LINES
-         Controls: each paragraph inside the meta cluster
-                   (#currentDate and #countryHeading).
-         JS writes text into these, so don't put extra words in the
-         HTML if you want the script to own the full string.
-         ============================================================ */
-      .page-meta p {
-        margin: 0; /* paragraphs otherwise have a gap under them */
-        /* font-weight: 600;  make Date/Country a bit stronger */
-        /* background: #e8eaf0; padding: 0.2rem 0.5rem; border-radius: 4px;  pill/badge look */
-      }
-
-      /* ============================================================
-         SECTION CARDS
-         Controls: every form section (Officer, Lead Information,
-                   Address, Criminal Profile, Immigration Profile).
-         A fieldset is the box; legend is the title sitting on the border.
-         ============================================================ */
-      fieldset {
-        margin: 0 0 1.25rem; /* top | left/right | bottom. the 1.25rem is the gap BETWEEN cards */
-        /* margin: 0 0 2rem;  more air between sections */
-        padding: 1rem 1.15rem 1.15rem; /* inner space: top | left/right | bottom */
-        /* padding: 1.5rem;  roomier card interior */
-        border: 1px solid #d5d8e0; /* the visible outline. 1px thin, #d5d8e0 light gray */
-        /* border: 2px solid #1f2430;  heavier, higher-contrast outline */
-        /* border: none;  no outline — then use background/shadow to separate cards */
-        border-radius: 8px; /* corner roundness. 0 = sharp corners */
-        /* border-radius: 0;  squared, more "government form" */
-        /* border-radius: 16px;  softer cards */
-        background: #fff; /* card fill. white pops off the gray page */
-        /* background: #fafbfc;  off-white */
-        /* box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);  subtle lift */
-        /* box-shadow: none;  flat */
-      }
-
-      /* ============================================================
-         NESTED SECTION CARDS
-         Controls: fieldsets INSIDE fieldsets only
-                   (Office Location, Convictions, Warrants and Wants).
-         More specific than "fieldset", so these win for inner cards.
-         ============================================================ */
-      fieldset fieldset {
-        margin-top: 1rem; /* space above the inner card, under the parent fields */
-        margin-bottom: 0; /* no extra gap under the last nested card */
-        /* margin-left: 0.5rem;  indent nested cards */
-        background: #f8f9fb; /* slightly gray so nested cards look inset */
-        /* background: #eef1f6;  stronger inset contrast */
-        /* background: #ffffff;  same as parent — nesting is then only a border */
-        /* border-style: dashed;  dashed outline to mark "subsection" */
-      }
-
-      /* ============================================================
-         SECTION TITLES
-         Controls: every <legend> (Officer, Address, Convictions, …).
-         Legend text sits on top of the fieldset border by default.
-         ============================================================ */
-      legend {
-        padding: 0 0.35rem; /* small left/right gap so the border doesn't run into the letters */
-        font-weight: 650; /* 400 regular, 600 semibold, 700 bold, 650 in between */
-        background: #fff; /* cover the fieldset border so the title sits on it */
-      }
-
-      fieldset fieldset > legend {
-        background: #f8f9fb; /* match nested card fill */
-      }
-
-      /* ============================================================
-         FIELD GRID
-         Controls: each group of fields (<div class="row">).
-         On small screens this is ONE column. A media query below
-         turns it into TWO columns from 640px up.
-         1fr = "one equal share of leftover space".
-         ============================================================ */
-      [hidden] {
-        display: none !important; /* beat .row { display: grid } so source panels can hide */
-      }
-
-      .row {
-        display: grid; /* children snap to a grid instead of flowing inline */
-        /* display: flex;  alternative layout model; grid is better for form columns */
-        grid-template-columns: 1fr; /* one column. each .field stacks */
-        /* grid-template-columns: 1fr 1fr 1fr;  three columns even on mobile — usually too tight */
-        gap: 0.9rem 1rem; /* space between cells: row-gap | column-gap */
-        /* gap: 0.5rem;  tighter packing */
-        /* gap: 1.5rem;  roomier packing */
-        margin-top: 0.9rem; /* space above this row (between rows, and under a legend) */
-        /* align-items: end;  line up inputs along the bottom if labels wrap to different heights */
-      }
-
-      /* ============================================================
-         FIRST ROW IN A SECTION
-         Controls: only the first .row inside its parent.
-         Tightens the gap under the legend so the first fields
-         don't sit too far from the section title.
-         ============================================================ */
-      .row:first-of-type {
-        margin-top: 0.35rem; /* smaller top gap for the first row only */
-        /* margin-top: 0;  flush against the legend */
-      }
-
-      /* ============================================================
-         SINGLE FIELD (LABEL + CONTROL)
-         Controls: one labeled input/select/textarea
-                   (<div class="field">).
-         flex-direction: column = label on top, control under it.
-         ============================================================ */
-      .field {
-        display: flex; /* label and input become a vertical stack */
-        flex-direction: column; /* top-to-bottom. row would put the label beside the input */
-        /* flex-direction: row; align-items: center; gap: 0.75rem;  label to the LEFT of the input */
-        gap: 0.3rem; /* space between the label and the input */
-        /* gap: 0.15rem;  label almost touching the input */
-        min-width: 0; /* allow the field to shrink in a grid cell instead of overflowing */
-        /* max-width: 20rem;  cap a single field so short inputs don't stretch (state, zip) */
-      }
-
-      /* ============================================================
-         FULL-WIDTH FIELD
-         Controls: fields that should use the WHOLE row even when
-                   the grid has two columns (officer name, street,
-                   street 2, rap sheet).
-         Add class "field-span-2" next to "field" in the HTML.
-         ============================================================ */
-      .field-span-2 {
-        grid-column: 1 / -1; /* start at first column, end at last column = full width */
-        /* grid-column: 1 / 2;  only the left column */
-        /* grid-column: 2 / 3;  only the right column */
-      }
-
-      /* ============================================================
-         CHECKBOX ROW
-         Controls: Criminal? and Final Order
-                   (<div class="field checkbox-field">).
-         This OVERRIDES .field's column stack so the box sits
-         beside the label instead of under it.
-         When two classes fight, the rule that comes later in this
-         file wins if it is at least as specific.
-         ============================================================ */
-      .checkbox-field {
-        display: flex; /* needed again because we also change direction */
-        flex-direction: row; /* checkbox | label on one line */
-        /* flex-direction: row-reverse;  label first, checkbox after */
-        align-items: center; /* vertically center the box with the label text */
-        /* align-items: flex-start;  box lines up with the top of a wrapping label */
-        gap: 0.5rem; /* space between the box and the words */
-        /* gap: 0.75rem;  more click-space between box and label */
-      }
-
-      /* ============================================================
-         ALL LABELS
-         Controls: every <label> on the page (field captions and
-                   checkbox captions).
-         ============================================================ */
-      label {
-        font-size: 0.9rem; /* a bit smaller than body text */
-        /* font-size: 0.8rem;  compact captions */
-        /* font-size: 1rem;  same size as inputs */
-        font-weight: 600; /* semibold so labels read as captions, not as values */
-        /* font-weight: 400;  regular weight */
-        /* color: #4b5568;  muted labels */
-        /* text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.75rem;  tiny uppercase captions */
-        /* cursor: pointer;  hand cursor — useful on checkboxes because clicking the label toggles them */
-      }
-
-      /* ============================================================
-         TEXT BOXES, DROPDOWNS, AND THE RAP SHEET
-         Controls: every <input>, <select>, and <textarea>
-                   EXCEPT the checkbox override in the next block.
-         ============================================================ */
-      input,
-      select,
-      textarea {
-        width: 100%; /* fill the field column */
-        /* width: auto;  shrink to content — usually looks uneven in a form */
-        /* max-width: 24rem;  stop long text inputs from getting huge */
-        padding: 0.45rem 0.55rem; /* inner space: top/bottom | left/right. bigger = taller controls */
-        /* padding: 0.7rem 0.75rem;  larger click/tap target */
-        border: 1px solid #c5c9d4; /* outline of the control */
-        /* border: 2px solid #9aa1b2;  heavier field outline */
-        /* border: none; border-bottom: 1px solid #c5c9d4; border-radius: 0;  underline-only inputs */
-        border-radius: 6px; /* rounded field corners. 0 = square */
-        /* border-radius: 0;  squared, printed-form look */
-        font: inherit; /* use the body font/size instead of the browser's default form font */
-        /* font-size: 1rem;  16px-ish — also reduces unwanted iOS zoom on focus */
-        background: #fff; /* field fill */
-        /* background: #f8f9fb;  tinted fields */
-        /* color: #1f2430;  typed-text color (already inherited from body) */
-      }
-
-      /* ============================================================
-         RAP SHEET / MULTI-LINE TEXT
-         Controls: <textarea> only (Rap Sheet).
-         These add on top of the input/select/textarea rules above.
-         ============================================================ */
-      textarea {
-        min-height: 6rem; /* starting height. user can still drag it taller */
-        /* min-height: 10rem;  taller default rap sheet */
-        /* height: 8rem;  fixed height; ignore if you want resize to be the only height control */
-        resize: vertical; /* user may drag the bottom edge only */
-        /* resize: none;  lock the size — no drag handle */
-        /* resize: both;  user may drag width and height */
-        /* font-family: Consolas, "Courier New", monospace;  fixed-width, easier to scan codes */
-      }
-
-      /* RAP-sheet import stays local and separate until a user reviews it. */
-      .rap-sheet-help,
-      .rap-import-status,
-      .rap-link-note {
-        margin: 0;
-        color: #4b5568;
-        font-size: 0.82rem;
-      }
-
-      .rap-sheet-actions {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.55rem 0.75rem;
-      }
-
-      .rap-sheet-actions button,
-      .rap-review-save,
-      .rap-review-apply {
-        width: auto;
-        padding: 0.48rem 0.72rem;
-        border: 1px solid #697386;
-        border-radius: 6px;
-        color: #fff;
-        background: #334e9e;
-        font: inherit;
-        font-weight: 650;
-        cursor: pointer;
-      }
-
-      .rap-sheet-actions button:hover,
-      .rap-review-save:hover,
-      .rap-review-apply:hover {
-        background: #263d80;
-      }
-
-      .rap-sheet-actions button:focus,
-      .rap-review-save:focus,
-      .rap-review-apply:focus {
-        outline: 2px solid #3b5bdb;
-        outline-offset: 2px;
-      }
-
-      #rapSheetDiscardButton {
-        color: #394150;
-        background: #fff;
-      }
-
-      #rapSheetDiscardButton:hover {
-        background: #eef0f4;
-      }
-
-      .rap-import-status-success {
-        color: #216e39;
-      }
-
-      .rap-import-status-warning {
-        color: #825500;
-      }
-
-      .rap-import-status-error {
-        color: #b42318;
-      }
-
-      .rap-sheet-review {
-        margin-top: 0.45rem;
-        padding: 0.9rem;
-        border: 1px solid #c5c9d4;
-        border-radius: 8px;
-        background: #f8f9fb;
-      }
-
-      .rap-sheet-review h3,
-      .rap-sheet-review h4,
-      .rap-sheet-review h5 {
-        margin: 0 0 0.55rem;
-      }
-
-      .rap-review-notice {
-        margin: 0 0 0.8rem;
-        color: #6a4200;
-        font-size: 0.88rem;
-      }
-
-      .rap-summary,
-      .rap-source-block {
-        overflow-x: auto;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        font-family: Consolas, "Courier New", monospace;
-        font-size: 0.78rem;
-      }
-
-      .rap-summary {
-        margin: 0 0 0.85rem;
-        padding: 0.7rem;
-        border: 1px solid #d5d8e0;
-        border-radius: 6px;
-        background: #fff;
-      }
-
-      .rap-review-section,
-      .rap-cycle,
-      .rap-review-group {
-        margin: 0.75rem 0;
-        padding: 0.7rem;
-        border: 1px solid #d5d8e0;
-        border-radius: 6px;
-        background: #fff;
-      }
-
-      .rap-cycle > summary {
-        cursor: pointer;
-        font-weight: 700;
-      }
-
-      .rap-cycle-body {
-        padding-top: 0.65rem;
-      }
-
-      .rap-fact-row {
-        display: grid;
-        grid-template-columns: minmax(8rem, 0.8fr) minmax(10rem, 1.6fr) minmax(8rem, 0.65fr);
-        gap: 0.35rem 0.55rem;
-        align-items: center;
-        margin-top: 0.55rem;
-      }
-
-      .rap-fact-source {
-        grid-column: 2 / -1;
-        color: #616979;
-        overflow-wrap: anywhere;
-      }
-
-      .rap-warning-error {
-        color: #b42318;
-      }
-
-      .rap-source-block {
-        max-height: 14rem;
-        margin: 0.5rem 0 0;
-        padding: 0.55rem;
-        border: 1px solid #e0e2e8;
-        background: #f8f9fb;
-      }
-
-      .rap-unparsed-block + .rap-unparsed-block {
-        margin-top: 0.8rem;
-      }
-
-      .rap-unparsed-decision-label {
-        display: block;
-        margin: 0.35rem 0 0.25rem;
-      }
-
-      @media (max-width: 639px) {
-        .rap-fact-row {
-          grid-template-columns: 1fr;
-        }
-
-        .rap-fact-source {
-          grid-column: 1;
-        }
-      }
-
-      /* ============================================================
-         CHECKBOX SIZE / ALIGNMENT
-         Controls: the actual square for Criminal? and Final Order.
-         The general "input { width: 100% }" rule would stretch a
-         checkbox across the row; this puts it back to a real box.
-         ============================================================ */
-      .checkbox-field input {
-        width: auto; /* don't stretch; use the browser's checkbox size */
-        margin: 0; /* some browsers add leftover margin around checkboxes */
-        /* width: 1.15rem; height: 1.15rem;  larger click target (may look odd in some browsers) */
-        /* accent-color: #3b5bdb;  color of the check / fill when checked */
-        /* transform: scale(1.2);  enlarge without fighting native checkbox metrics */
-      }
-
-      /* ============================================================
-         FOCUS RING
-         Controls: the highlight when you tab or click into a field.
-         :focus is the "this control is active" state.
-         Don't remove the outline unless you replace it — keyboard
-         users need to see where they are.
-         ============================================================ */
-      input:focus,
-      select:focus,
-      textarea:focus {
-        outline: 2px solid #3b5bdb; /* the ring. change color or thickness here */
-        /* outline: 3px solid #e03131;  thicker red ring */
-        outline-offset: 1px; /* gap between the control edge and the ring */
-        /* outline-offset: 0;  ring sits on the border */
-        border-color: #3b5bdb; /* also recolor the field border while focused */
-        /* box-shadow: 0 0 0 3px rgba(59, 91, 219, 0.25);  softer glow instead of / in addition to outline */
-      }
-
-      /* ============================================================
-         OPTIONAL: HOVER ON FIELDS
-         Controls: mouse-over look. Off by default.
-         Uncomment the block to enable.
-         ============================================================ */
-      /*
-      input:hover,
-      select:hover,
-      textarea:hover {
-        border-color: #9aa3b5;  slightly darker border on hover
-      }
-      */
-
-      /* ============================================================
-         OPTIONAL: DISABLED LOOK
-         Controls: fields with the HTML disabled attribute.
-         You are not using disabled yet. Uncomment when you need it.
-         ============================================================ */
-      /*
-      input:disabled,
-      select:disabled,
-      textarea:disabled {
-        background: #eef0f4;  gray fill
-        color: #6b7280;       muted text
-        cursor: not-allowed;  blocked-pointer cursor
-      }
-      */
-
-      /* ============================================================
-         DESKTOP / TABLET BREAKPOINT
-         Controls: layout from 640px window width and up.
-         Below 640px the mobile rules above stay in effect
-         (one-column rows).
-         Change 640px to 768px if you want the two-column grid
-         to kick in later.
-         ============================================================ */
-      @media (min-width: 640px) {
-        /* Two equal columns for a normal .row (Last/First, FBI/NCIC, etc.) */
-        .row {
-          grid-template-columns: 1fr 1fr; /* left column | right column, equal width */
-          /* grid-template-columns: 1fr 2fr;  skinny left, wide right */
-          /* grid-template-columns: 1fr 1fr 1fr;  three equal columns on desktop */
-        }
-
-        /* City / State / Zip only. Class "row-3" is on that one HTML row.
-           2fr 1fr 1fr = city gets twice the width of state or zip. */
-        .row-3 {
-          grid-template-columns: 2fr 1fr 1fr; /* city | state | zip */
-          /* grid-template-columns: 1fr 1fr 1fr;  three equal columns */
-          /* grid-template-columns: 3fr 1fr 1.2fr;  even wider city, slightly wider zip */
-        }
-      }
-
-      /* ============================================================
-         OPTIONAL: PRINT
-         Controls: how the page looks when you print / Save as PDF.
-         Off by default. Uncomment the whole block to use it.
-         ============================================================ */
-      /*
-      @media print {
-        body {
-          background: #ffffff;  no gray ink
-          color: #000000;       black text
-        }
-        .page {
-          max-width: none;      use the full page
-          padding: 0;
-        }
-        fieldset {
-          box-shadow: none;
-          break-inside: avoid;  try not to split a section across pages
-        }
-      }
-      */
-     .app-version {
-      flex: 0 0 auto;
-      padding: 6px 10px;
-      border: 1px solid #93c5fd;
-      border-radius: 999px;
-      background: #eff6ff;
-      color: #1e3a8a;
-      font-size: 0.86rem;
-      font-weight: bold;
-      white-space: nowrap;
-    }
-
-        .header-title-row {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 8px;
-    }
-
-      /* Search combobox used by Referring Agency (reusable on any text field) */
-      .search-field {
-        position: relative;
-      }
-
-      .search-results {
-        position: absolute;
-        z-index: 30;
-        top: 100%;
-        left: 0;
-        right: 0;
-        margin: 0.2rem 0 0;
-        padding: 0.25rem 0;
-        list-style: none;
-        max-height: 16rem;
-        overflow: auto;
-        background: #fff;
-        border: 1px solid #c5c9d4;
-        border-radius: 6px;
-        box-shadow: 0 8px 20px rgba(31, 36, 48, 0.12);
-      }
-
-      .search-results[hidden] {
-        display: none;
-      }
-
-      .search-results li {
-        padding: 0.4rem 0.65rem;
-        cursor: pointer;
-      }
-
-      .search-results li:hover,
-      .search-results li[aria-selected="true"] {
-        background: #eef2ff;
-      }
-
-      .search-results .search-meta {
-        display: block;
-        margin-top: 0.1rem;
-        font-size: 0.75rem;
-        font-weight: 400;
-        color: #6b7280;
-      }
-
-      .search-results .search-empty {
-        cursor: default;
-        color: #6b7280;
-      }
-
-      input.is-invalid,
-      select.is-invalid {
-        border-color: #c92a2a;
-      }
-
-      .field-status {
-        margin: 0.45rem 0 0;
-        font-size: 0.85rem;
-        color: #c92a2a;
-      }
-
-      .field-status.is-ok {
-        color: #2b8a3e;
-      }
-
-      .action-button {
-        align-self: end;
-        padding: 0.45rem 0.9rem;
-        border: 1px solid #3b5bdb;
-        border-radius: 6px;
-        background: #3b5bdb;
-        color: #fff;
-        font: inherit;
-        font-weight: 600;
-        cursor: pointer;
-      }
-
-      .action-button:disabled {
-        opacity: 0.65;
-        cursor: wait;
-      }
-
-      .card-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-      }
-
-      .card-list-actions {
-        margin: 0 0 1.25rem;
-      }
-
-      .card-list-actions[hidden] {
-        display: none;
-      }
-
-      .add-card-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.2rem 0;
-        border: none;
-        background: none;
-        font: inherit;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: #3b5bdb;
-        cursor: pointer;
-      }
-
-      .add-card-btn:hover {
-        color: #1b3a8c;
-      }
-
-      .add-card-btn .card-icon-btn {
-        pointer-events: none;
-      }
-
-      fieldset > legend {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        max-width: calc(100% - 1rem);
-      }
-
-      .card-toggle {
-        border: none;
-        background: none;
-        padding: 0;
-        font: inherit;
-        font-weight: 650;
-        color: inherit;
-        cursor: pointer;
-      }
-
-      .card-toggle::before {
-        content: "▾ ";
-      }
-
-      fieldset.is-collapsed > legend .card-toggle::before {
-        content: "▸ ";
-      }
-
-      fieldset.is-collapsed > :not(legend) {
-        display: none;
-      }
-
-      .card-icon-btn {
-        width: 1.35rem;
-        height: 1.35rem;
-        padding: 0;
-        border: 1px solid #c5c9d4;
-        border-radius: 4px;
-        background: #fff;
-        color: #1f2430;
-        font: inherit;
-        font-size: 0.95rem;
-        line-height: 1;
-        cursor: pointer;
-      }
-
-      .card-icon-btn:hover {
-        background: #eef2ff;
-        border-color: #3b5bdb;
-      }
-
-      .card-add {
-        font-weight: 700;
-      }
-
-      .card-remove {
-        color: #9b1c1c;
-      }
-
-      .field-caption {
-        font-size: 0.9rem;
-        font-weight: 600;
-      }
-
-      .radio-row {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        min-height: 2.1rem;
-      }
-
-      .radio-field {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        font-weight: 600;
-        cursor: pointer;
-      }
-
-      .radio-field input {
-        width: auto;
-        margin: 0;
-      }
-
-      .age-display {
-        margin-left: 0.4rem;
-        font-weight: 500;
-        color: #4b5568;
-      }
-
-      .age-minor {
-        margin-left: 0.35rem;
-        color: #c92a2a;
-        font-weight: 700;
-      }
-    </style>
+    
+    <link rel="stylesheet" href="style/style.css" />
+    
   </head>
   <body>
    
       <div class="header-title-row">
-       
+        <!--
+          VERSIONING (keep data-version and the visible text the same)
+          We are on 0.x SemVer until the save shape is frozen (then 1.0.0).
+
+          Bump this stamp whenever the product changes in a way users
+          (or saved JSON) would notice. Do it in the same change as the
+          work, then commit + tag vMAJOR.MINOR.PATCH to match GitHub.
+
+            PATCH  0.3.0 → 0.3.1  bugfix / polish only
+            MINOR  0.3.0 → 0.4.0  new capability (cards, fields, save shape)
+            MAJOR  0.x.x → 1.0.0  first freeze; after that, breaking saves
+
+          data-version is the machine value. The text inside the span is
+          what the header shows. Update both. RAP parser version in
+          functions/rapsheet.js is separate — only bump that when the
+          parser itself changes.
+        -->
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.2.0"
+          data-version="0.3.0"
         >
-          Version 0.2.0
+          Version 0.3.0
         </span>
       </div>
 
@@ -862,7 +46,7 @@
         </div>
       </header>
 
-      <form id="leadForm">
+      <form id="leadForm" novalidate>
         <fieldset>
           <legend>Lead Source</legend>
           <div class="row">
@@ -986,7 +170,12 @@
             <div class="field">
               <label for="dateOfBirth">
                 Date of Birth
-                <span class="age-display" data-field="ageDisplay"></span>
+                <input type="hidden" id="age" name="age" data-field="age" />
+                <span
+                  id="ageDisplay"
+                  class="age-display"
+                  data-field="ageDisplay"
+                ></span>
               </label>
               <input
                 type="date"
@@ -996,12 +185,29 @@
               />
             </div>
             <div class="field">
+              <label for="ssn">Social Security Number</label>
+              <input
+                type="text"
+                id="ssn"
+                name="ssn"
+                data-field="ssn"
+                inputmode="numeric"
+                autocomplete="off"
+                maxlength="11"
+                title="123-45-6789"
+              />
+              <p id="ssnStatus" class="field-status" hidden></p>
+            </div>
+            <div class="field">
+              <label for="lexId">LexID</label>
+              <input type="text" id="lexId" name="lexId" />
+            </div>
+            <div class="field">
               <label for="citizenship">Country of Citizenship</label>
               <select
                 id="citizenship"
                 name="citizenship"
                 data-field="citizenship"
-                required
               ></select>
             </div>
           </div>
@@ -1031,11 +237,11 @@
           </button>
         </div>
 
-        <div id="addressList" class="card-list"></div>
+        <div id="locationList" class="card-list" data-location-owner="person"></div>
         <div class="card-list-actions">
-          <button type="button" id="addAddressButton" class="add-card-btn">
+          <button type="button" id="addLocationButton" class="add-card-btn">
             <span class="card-icon-btn card-add" aria-hidden="true">+</span>
-            Add address
+            Add location
           </button>
         </div>
 
@@ -1164,9 +370,13 @@
               <label for="immigrationStatus">Immigration Status</label>
               <select id="immigrationStatus" name="immigrationStatus"></select>
             </div>
-            <div class="field checkbox-field">
-              <input type="checkbox" id="finalOrder" name="finalOrder" />
-              <label for="finalOrder">Final Order</label>
+            <div>
+              <label for="firstDeportationDate">First Deportation Date</label>
+              <input id="firstDeportationDate" type="date">
+            </div>
+            <div>
+              <label for="lastDeportationDate">Last Deportation Date</label>
+              <input id="lastDeportationDate" type="date">
             </div>
             <div class="field">
               <label for="finalOrderDate">Final Order Date</label>
@@ -1174,6 +384,43 @@
             </div>
           </div>
         </fieldset>
+
+        <div class="form-actions">
+          <button type="button" id="saveLeadButton" class="action-button">
+            Save lead
+          </button>
+          <button type="button" id="downloadLeadButton" class="action-button action-button-secondary">
+            Download JSON
+          </button>
+          <button type="button" id="newLeadButton" class="action-button action-button-secondary">
+            New lead
+          </button>
+          <button
+            type="button"
+            id="generatebaseballCard"
+            class="action-button action-button-secondary"
+            onclick="onGenerateBaseballCard(event)"
+          >
+            Generate Baseball Card
+          </button>
+          <div class="field">
+            <label for="savedLeadSelect">Saved leads</label>
+            <select id="savedLeadSelect"></select>
+          </div>
+          <button type="button" id="openLeadButton" class="action-button action-button-secondary">
+            Open
+          </button>
+          <p id="leadSaveStatus" class="field-status" hidden></p>
+        </div>
+        <div id="baseballOutputPanel" class="baseball-output" hidden>
+          <label for="baseballCardOutput" class="baseball-output-label">
+            Baseball card
+          </label>
+          <textarea
+            id="baseballCardOutput"
+            class="baseball-card-output"
+          ></textarea>
+        </div>
       </form>
     </div>
 
@@ -1228,9 +475,8 @@
               id="relatedPersonId"
               name="relatedPersonId"
               data-field="relatedPersonId"
-              disabled
             >
-              <option value="">Select a person (after data model)</option>
+              <option value="">Select a person</option>
             </select>
           </div>
           <div class="field">
@@ -1249,22 +495,6 @@
       <fieldset data-card="vehicle">
         <legend>Vehicle</legend>
         <div class="row">
-          <div class="field">
-            <label for="vehicleAssociation">Association</label>
-            <select id="vehicleAssociation" name="vehicleAssociation" data-field="vehicleAssociation">
-              <option value="">Select an Option</option>
-              <option value="REGISTERED_OWNER_OF">Registered owner of</option>
-              <option value="KNOWN_OPERATOR_OF">Known operator of</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="vehicleAssociationReason">Association Reason</label>
-            <select
-              id="vehicleAssociationReason"
-              name="vehicleAssociationReason"
-              data-field="vehicleAssociationReason"
-            ></select>
-          </div>
           <div class="field">
             <label for="licensePlate">Plate</label>
             <input type="text" id="licensePlate" name="licensePlate" data-field="licensePlate" autocomplete="off" />
@@ -1297,22 +527,60 @@
             <label for="vin">VIN</label>
             <input type="text" id="vin" name="vin" data-field="vin" autocomplete="off" />
           </div>
-          <div class="field field-span-2">
+          <div class="field">
             <label for="registeredOwner">Registered Owner</label>
-            <input type="text" id="registeredOwner" name="registeredOwner" data-field="registeredOwner" />
+            <input
+              type="text"
+              id="registeredOwner"
+              name="registeredOwner"
+              data-field="registeredOwner"
+              placeholder="Name as it appears on the title"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+        <div class="nested-block">
+          <div class="card-list" data-nested-list="location" data-location-owner="vehicle"></div>
+          <div class="card-list-actions">
+            <button type="button" class="add-card-btn" data-add-nested="location">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add location
+            </button>
+          </div>
+        </div>
+        <div class="nested-block">
+          <div class="card-list" data-nested-list="link"></div>
+          <div class="card-list-actions">
+            <button type="button" class="add-card-btn" data-add-nested="link">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add link
+            </button>
           </div>
         </div>
       </fieldset>
     </template>
 
-    <template id="addressCardTemplate">
-      <fieldset data-card="address">
-        <legend>Address</legend>
+    <template id="locationCardTemplate">
+      <fieldset data-card="location">
+        <legend>Location</legend>
         <div class="row">
           <div class="field">
-            <label for="addressAssociation">Address Association</label>
-            <select id="addressAssociation" name="addressAssociation" data-field="addressAssociation">
+            <label for="locationAssociation">Association</label>
+            <select id="locationAssociation" name="locationAssociation" data-field="locationAssociation">
               <option value="">Select an Option</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="targetPriority">Target Address</label>
+            <select
+              id="targetPriority"
+              name="targetPriority"
+              data-field="targetPriority"
+            >
+              <option value="">Not a target address</option>
+              <option value="1">Primary target</option>
+              <option value="2">Secondary</option>
+              <option value="3">Tertiary</option>
             </select>
           </div>
         </div>
@@ -1342,21 +610,72 @@
         </div>
         <div class="row">
           <div class="field">
-            <label for="latitude">Latitude</label>
-            <input type="text" id="latitude" name="latitude" data-field="latitude" />
+            <label for="latLong">Lat / Long</label>
+            <input
+              type="text"
+              id="latLong"
+              name="latLong"
+              data-field="latLong"
+              autocomplete="off"
+              inputmode="decimal"
+              placeholder="32.744582, -97.816176"
+              title="Paste latitude, longitude"
+            />
+            <input type="hidden" id="latitude" name="latitude" data-field="latitude" />
+            <input type="hidden" id="longitude" name="longitude" data-field="longitude" />
           </div>
           <div class="field">
-            <label for="longitude">Longitude</label>
-            <input type="text" id="longitude" name="longitude" data-field="longitude" />
+            <label for="resolveAddressButton" class="field-label-spacer">Resolve address</label>
+            <button
+              type="button"
+              id="resolveAddressButton"
+              class="action-button"
+              data-field="resolveAddressButton"
+            >
+              Resolve address
+            </button>
           </div>
           <div class="field">
-            <label for="mapAddressButton">Map</label>
+            <label for="mapAddressButton" class="field-label-spacer">Map it</label>
             <button type="button" id="mapAddressButton" class="action-button" data-field="mapAddressButton">
               Map it
             </button>
           </div>
         </div>
         <p class="field-status" data-field="addressStatus" hidden></p>
+      </fieldset>
+    </template>
+
+    <template id="linkCardTemplate">
+      <fieldset data-card="link">
+        <legend>Link</legend>
+        <div class="row">
+          <div class="field field-span-2 search-field">
+            <label for="linkedPersonSearch">Linked subject</label>
+            <input
+              type="text"
+              id="linkedPersonSearch"
+              name="linkedPersonSearch"
+              data-field="linkedPersonSearch"
+              autocomplete="off"
+              placeholder="Search saved subjects"
+            />
+            <input type="hidden" id="linkedPersonId" name="linkedPersonId" data-field="linkedPersonId" />
+            <ul class="search-results" role="listbox" hidden></ul>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <span class="field-caption">Why they are linked (one or more)</span>
+            <div class="link-reasons" data-field="linkReasons"></div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label for="linkNotes">Notes</label>
+            <textarea id="linkNotes" name="linkNotes" data-field="linkNotes" rows="2"></textarea>
+          </div>
+        </div>
       </fieldset>
     </template>
 
@@ -1724,6 +1043,7 @@
     <script src="functions/lead-source.js"></script>
     <script src="functions/age.js"></script>
     <script src="functions/names.js"></script>
+    <script src="functions/ssn.js"></script>
     <script src="functions/rapsheet.js"></script>
     <script src="data/countries.js"></script>
     <script src="data/immigration.js"></script>
@@ -1746,7 +1066,27 @@
     <script src="data/le/ice-ero-offices-geo.js"></script>
     <script src="data/le/le-catalog.js"></script>
     <script src="functions/le-search.js"></script>
+    <script src="data/link-reasons.js"></script>
+    <script src="functions/model/lead.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/location.js"></script>
+    <script src="functions/model/vehicle.js"></script>
+    <script src="functions/model/link.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/model/collect.js"></script>
+    <script src="functions/model/hydrate.js"></script>
     <script src="functions/cards.js"></script>
+    <script src="functions/baseballcard.js"></script>
+    <script src="functions/model/ui.js"></script>
+    <script>
+      if (typeof onGenerateBaseballCard !== "function") {
+        window.onGenerateBaseballCard = function () {
+          window.alert(
+            "functions/baseballcard.js did not load. Save the file and hard-refresh (Ctrl+F5)."
+          );
+        };
+      }
+    </script>
   
   </body>
 </html>

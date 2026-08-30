@@ -196,6 +196,73 @@
     return formatStreetLine(value);
   }
 
+  function formatStreetLineLive(value) {
+    const raw = String(value || "");
+    const trailingSpace = /\s$/.test(raw);
+    const formatted = formatStreetLine(raw);
+    if (!formatted) {
+      return "";
+    }
+    return formatted + (trailingSpace ? " " : "");
+  }
+
+  function formatZipLive(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 9);
+    if (!digits) {
+      return "";
+    }
+    if (digits.length <= 5) {
+      return digits;
+    }
+    return digits.slice(0, 5) + "-" + digits.slice(5);
+  }
+
+  function rewriteLiveField(el, next) {
+    if (!el) {
+      return;
+    }
+    const before = String(el.value || "");
+    if (next === before) {
+      return;
+    }
+    const atEnd =
+      el.selectionStart === before.length && el.selectionEnd === before.length;
+    el.value = next;
+    if (atEnd && typeof el.setSelectionRange === "function") {
+      el.setSelectionRange(next.length, next.length);
+    }
+  }
+
+  function clearFieldInvalid(el) {
+    if (!el) {
+      return;
+    }
+    el.classList.remove("is-invalid");
+    el.removeAttribute("title");
+    el.removeAttribute("aria-invalid");
+  }
+
+  /** input: mask/title-case this field only. No error UI. */
+  function liveFormatAddressField(el, name) {
+    if (!el) {
+      return;
+    }
+    const raw = el.value;
+    if (name === "zip") {
+      rewriteLiveField(el, formatZipLive(raw));
+    } else if (name === "state") {
+      const named = normalizeState(String(raw || "").trim());
+      rewriteLiveField(el, named || formatStreetLineLive(raw));
+    } else if (name === "street2") {
+      const trailingSpace = /\s$/.test(raw);
+      const unit = normalizeUnit(raw) || formatStreetLine(raw);
+      rewriteLiveField(el, unit ? unit + (trailingSpace ? " " : "") : "");
+    } else if (name === "street" || name === "city") {
+      rewriteLiveField(el, formatStreetLineLive(raw));
+    }
+    clearFieldInvalid(el);
+  }
+
   function normalizeUnit(rawUnit) {
     if (!rawUnit) return "";
     let u = String(rawUnit).replace(/\s+/g, " ").trim();
@@ -536,11 +603,358 @@
     return String(Math.round(number * 1000000) / 1000000);
   }
 
+  function formatLatLongPair(lat, lng) {
+    const a = String(lat || "").trim();
+    const b = String(lng || "").trim();
+    if (!a || !b) {
+      return "";
+    }
+    return a + ", " + b;
+  }
+
+  /**
+   * Combined lat/long field. Empty is allowed.
+   * Complete pair → { valid, latitude, longitude, formatted }.
+   * Partial / junk → valid:false and a reason (show on blur).
+   */
+  function validateLatLong(value) {
+    const raw = String(value || "").trim();
+    const blank = {
+      digits: "",
+      latitude: "",
+      longitude: "",
+      formatted: "",
+      complete: false,
+      valid: true,
+      reason: ""
+    };
+    if (!raw) {
+      return blank;
+    }
+    const parsed = parseLatLong(raw);
+    if (parsed.latitude && parsed.longitude) {
+      if (Number(parsed.latitude) === 0 && Number(parsed.longitude) === 0) {
+        return {
+          latitude: parsed.latitude,
+          longitude: parsed.longitude,
+          formatted: formatLatLongPair(parsed.latitude, parsed.longitude),
+          complete: true,
+          valid: false,
+          reason: "0, 0 is not a real location"
+        };
+      }
+      return {
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
+        formatted: formatLatLongPair(parsed.latitude, parsed.longitude),
+        complete: true,
+        valid: true,
+        reason: ""
+      };
+    }
+    return {
+      latitude: "",
+      longitude: "",
+      formatted: raw,
+      complete: false,
+      valid: false,
+      reason:
+        parsed.error ||
+        "Enter both latitude and longitude (32.744582, -97.816176)"
+    };
+  }
+
   function googleMapsSearchUrl(query) {
     return (
       "https://www.google.com/maps/search/?api=1&query=" +
       encodeURIComponent(query)
     );
+  }
+
+  function pairLooksLikeCoords(latRaw, lngRaw) {
+    const lat = Number(latRaw);
+    const lng = Number(lngRaw);
+    if (!isFinite(lat) || !isFinite(lng)) {
+      return null;
+    }
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return null;
+    }
+    if (lat === 0 && lng === 0) {
+      return null;
+    }
+    return {
+      latitude: formatCoordinate(lat),
+      longitude: formatCoordinate(lng)
+    };
+  }
+
+  function keepCoordText(raw) {
+    const text = String(raw || "")
+      .trim()
+      .replace(/[\u2212\u2013\u2014]/g, "-");
+    if (!/^[+-]?\d+(?:\.\d+)?$/.test(text)) {
+      const number = Number(text);
+      return isFinite(number) ? String(number) : "";
+    }
+    return text;
+  }
+
+  function signedCoordText(raw, hemi) {
+    let text = keepCoordText(raw);
+    if (!text) {
+      return "";
+    }
+    const h = String(hemi || "").toUpperCase();
+    if (h === "S" || h === "W") {
+      return "-" + text.replace(/^[+-]/, "");
+    }
+    if (h === "N" || h === "E") {
+      return text.replace(/^[+-]/, "");
+    }
+    return text;
+  }
+
+  /**
+   * Parse a lat/long pair pasted into either coordinate field.
+   * "32.74458235328899, -97.81617603781437" fills both.
+   */
+  function parseLatLong(raw, opts) {
+    opts = opts || {};
+    const as = opts.as || "";
+    const empty = { latitude: "", longitude: "", value: "", error: "" };
+    const text = String(raw || "").trim();
+    if (!text) {
+      return empty;
+    }
+
+    let working = text
+      .replace(/[\u2212\u2013\u2014]/g, "-")
+      .replace(/[()[\]{}]/g, " ")
+      .replace(/[°º]/g, "")
+      .replace(/\b(lat(?:itude)?|lon(?:g(?:itude)?)?|lng|long)\.?\b[:\s=]*/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const nsew = working.match(
+      /^([+-]?\d+(?:\.\d+)?)\s*([NSns])?\s*[,;/\s]\s*([+-]?\d+(?:\.\d+)?)\s*([EWew])?$/
+    );
+    const single = working.match(/^([+-]?\d+(?:\.\d+)?)\s*([NSEWnsew])?$/);
+
+    if (nsew) {
+      let firstText = signedCoordText(nsew[1], nsew[2]);
+      let secondText = signedCoordText(nsew[3], nsew[4]);
+      let first = Number(firstText);
+      let second = Number(secondText);
+      if (Math.abs(first) > 90 && Math.abs(second) <= 90) {
+        const swappedText = firstText;
+        firstText = secondText;
+        secondText = swappedText;
+        first = Number(firstText);
+        second = Number(secondText);
+      }
+      if (!isFinite(first) || !isFinite(second)) {
+        return {
+          latitude: "",
+          longitude: "",
+          value: "",
+          error: "Not a valid latitude/longitude pair."
+        };
+      }
+      if (Math.abs(first) > 90) {
+        return {
+          latitude: "",
+          longitude: "",
+          value: "",
+          error: "Latitude must be between -90 and 90."
+        };
+      }
+      if (Math.abs(second) > 180) {
+        return {
+          latitude: "",
+          longitude: "",
+          value: "",
+          error: "Longitude must be between -180 and 180."
+        };
+      }
+      return {
+        latitude: firstText,
+        longitude: secondText,
+        value: "",
+        error: ""
+      };
+    }
+
+    if (single) {
+      const value = signedCoordText(single[1], single[2]);
+      const number = Number(value);
+      if (!isFinite(number)) {
+        return {
+          latitude: "",
+          longitude: "",
+          value: "",
+          error: "Not a valid coordinate."
+        };
+      }
+      if (as === "latitude" && Math.abs(number) > 90) {
+        return {
+          latitude: "",
+          longitude: "",
+          value: "",
+          error: "Latitude must be between -90 and 90."
+        };
+      }
+      if (as === "longitude" && Math.abs(number) > 180) {
+        return {
+          latitude: "",
+          longitude: "",
+          value: "",
+          error: "Longitude must be between -180 and 180."
+        };
+      }
+      return {
+        latitude: "",
+        longitude: "",
+        value: value,
+        error: ""
+      };
+    }
+
+    return {
+      latitude: "",
+      longitude: "",
+      value: "",
+      error: "Paste a pair like 32.744582, -97.816176"
+    };
+  }
+
+  /**
+   * Normalize a pasted Google / Apple / OSM / Waze / Bing map URL and
+   * pull lat/long out of the link when the pin is in the URL.
+   */
+  function parseMapLink(raw) {
+    const text = String(raw || "").trim();
+    const empty = { url: "", latitude: "", longitude: "", error: "" };
+    if (!text) {
+      return empty;
+    }
+
+    const found = text.match(/https?:\/\/[^\s<>"']+/i);
+    let candidate = found ? found[0] : text;
+    candidate = candidate.replace(/[.,);]+$/, "");
+
+    if (!/^https?:\/\//i.test(candidate)) {
+      if (/^(www\.|maps\.|goo\.gl\/|maps\.app\.goo\.gl\/)/i.test(candidate)) {
+        candidate = "https://" + candidate;
+      } else {
+        return {
+          url: "",
+          latitude: "",
+          longitude: "",
+          error: "Paste a map link (Google, Apple, OSM, or Waze)."
+        };
+      }
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(candidate);
+    } catch (e) {
+      return {
+        url: "",
+        latitude: "",
+        longitude: "",
+        error: "Not a valid map link."
+      };
+    }
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return {
+        url: "",
+        latitude: "",
+        longitude: "",
+        error: "Map link must be http(s)."
+      };
+    }
+
+    const href = parsed.href;
+    const params = parsed.searchParams;
+    let coords = null;
+
+    const bang = href.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    if (bang) {
+      coords = pairLooksLikeCoords(bang[1], bang[2]);
+    }
+
+    if (!coords) {
+      const at = href.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (at) {
+        coords = pairLooksLikeCoords(at[1], at[2]);
+      }
+    }
+
+    if (!coords) {
+      const osmHash = parsed.hash.match(
+        /#map=\d+\/(-?\d+\.\d+)\/(-?\d+\.\d+)/
+      );
+      if (osmHash) {
+        coords = pairLooksLikeCoords(osmHash[1], osmHash[2]);
+      }
+    }
+
+    function paramPair(latKey, lngKey) {
+      if (coords) {
+        return;
+      }
+      const lat = params.get(latKey);
+      const lng = params.get(lngKey);
+      if (lat && lng) {
+        coords = pairLooksLikeCoords(lat, lng);
+      }
+    }
+    paramPair("mlat", "mlon");
+    paramPair("mlat", "mlng");
+
+    if (!coords) {
+      const ll = params.get("ll") || params.get("sll") || params.get("center");
+      if (ll) {
+        const parts = String(ll).split(",");
+        if (parts.length >= 2) {
+          coords = pairLooksLikeCoords(parts[0], parts[1]);
+        }
+      }
+    }
+
+    if (!coords) {
+      const cp = params.get("cp");
+      if (cp && cp.indexOf("~") !== -1) {
+        const parts = cp.split("~");
+        coords = pairLooksLikeCoords(parts[0], parts[1]);
+      }
+    }
+
+    if (!coords) {
+      const q =
+        params.get("q") ||
+        params.get("query") ||
+        params.get("daddr") ||
+        params.get("destination");
+      if (q) {
+        const m = String(q).match(
+          /^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/
+        );
+        if (m) {
+          coords = pairLooksLikeCoords(m[1], m[2]);
+        }
+      }
+    }
+
+    return {
+      url: href,
+      latitude: coords ? coords.latitude : "",
+      longitude: coords ? coords.longitude : "",
+      error: ""
+    };
   }
 
   function openAddressInGoogleMaps(address) {
@@ -829,20 +1243,7 @@
       });
   }
 
-  // ===== Debounce + attach =====
-  function debounce(fn, wait) {
-    wait = wait || 200;
-    let timer;
-    return function () {
-      const args = arguments;
-      const ctx = this;
-      clearTimeout(timer);
-      timer = setTimeout(function () {
-        fn.apply(ctx, args);
-      }, wait);
-    };
-  }
-
+  // ===== Attach =====
   let attached = false;
   let listeners = [];
 
@@ -887,10 +1288,6 @@
       listeners.push({ el: street, type: "paste", fn: onPaste });
     }
 
-    const debouncedApply = debounce(function () {
-      applyAddressValidation();
-    }, 220);
-
     fieldIds.forEach(function (id) {
       const el = getEl(id);
       if (!el) return;
@@ -898,7 +1295,11 @@
         applyAddressValidation();
       };
       const onInput = function () {
-        debouncedApply();
+        liveFormatAddressField(el, id);
+        const status = getEl("addressStatus");
+        if (status && !status.classList.contains("is-ok")) {
+          setAddressStatus("");
+        }
       };
       el.addEventListener("blur", onBlur);
       el.addEventListener("input", onInput);
@@ -916,6 +1317,318 @@
     }
 
     return getController();
+  }
+
+  /**
+   * Bind one repeatable address card. Cards prefix their ids
+   * (address-0-1-street), so global getElementById("mapAddressButton")
+   * never finds the live button — that is why Map it was dead.
+   */
+  function bindAddressCard(card) {
+    if (!card || card.dataset.addressBound === "true") {
+      return;
+    }
+    card.dataset.addressBound = "true";
+
+    function field(name) {
+      return card.querySelector('[data-field="' + name + '"]');
+    }
+
+    function read() {
+      return {
+        street: field("street") ? field("street").value : "",
+        street2: field("street2") ? field("street2").value : "",
+        city: field("city") ? field("city").value : "",
+        state: field("state") ? field("state").value : "",
+        zip: field("zip") ? field("zip").value : "",
+        latitude: field("latitude") ? field("latitude").value : "",
+        longitude: field("longitude") ? field("longitude").value : ""
+      };
+    }
+
+    function write(components) {
+      function set(name, value) {
+        const el = field(name);
+        if (!el || value === undefined) {
+          return;
+        }
+        el.value = value == null ? "" : String(value);
+      }
+      set("street", components.street);
+      set("street2", components.street2);
+      set("city", components.city);
+      set("state", components.state);
+      set("zip", components.zip);
+      set("latitude", components.latitude);
+      set("longitude", components.longitude);
+      if (components.latitude && components.longitude) {
+        set(
+          "latLong",
+          formatLatLongPair(components.latitude, components.longitude)
+        );
+      } else if (components.latLong) {
+        set("latLong", components.latLong);
+      }
+    }
+
+    function setStatus(message, isOk) {
+      const status = field("addressStatus");
+      if (!status) {
+        return;
+      }
+      if (!message) {
+        status.hidden = true;
+        status.textContent = "";
+        status.classList.remove("is-ok");
+        return;
+      }
+      status.hidden = false;
+      status.textContent = message;
+      if (isOk) {
+        status.classList.add("is-ok");
+      } else {
+        status.classList.remove("is-ok");
+      }
+    }
+
+    function apply() {
+      const result = validateAddress(read());
+      write(result.normalized);
+      const ids = ["street", "street2", "city", "state", "zip"];
+      const invalid = {};
+      result.errors.forEach(function (error) {
+        invalid[error.field] = error.message;
+      });
+      ids.forEach(function (name) {
+        const el = field(name);
+        if (!el) {
+          return;
+        }
+        if (invalid[name]) {
+          el.classList.add("is-invalid");
+          el.setAttribute("title", invalid[name]);
+        } else {
+          el.classList.remove("is-invalid");
+          el.removeAttribute("title");
+        }
+      });
+      if (result.errors.length) {
+        setStatus(
+          result.errors
+            .map(function (error) {
+              return error.message;
+            })
+            .join(". ")
+        );
+      } else {
+        setStatus("");
+      }
+      return result;
+    }
+
+    function completeAddressOrExplain() {
+      const result = apply();
+      if (result.complete) {
+        return result;
+      }
+      setStatus(
+        result.errors.length
+          ? result.errors
+              .map(function (error) {
+                return error.message;
+              })
+              .join(". ")
+          : "Enter a complete address first."
+      );
+      return null;
+    }
+
+    function lookupCoordinates(result, button, pendingMessage) {
+      if (button) {
+        button.disabled = true;
+      }
+      setStatus(pendingMessage, true);
+      return geocodeAddress(result.normalized)
+        .then(function (geo) {
+          write({
+            latitude: geo.latitude,
+            longitude: geo.longitude
+          });
+          setStatus(
+            "Lat " +
+              geo.latitude +
+              ", Long " +
+              geo.longitude +
+              " (" +
+              geo.source +
+              ")",
+            true
+          );
+          return geo;
+        })
+        .catch(function (err) {
+          setStatus(
+            "Could not fetch coordinates (" +
+              (err && err.message ? err.message : "network") +
+              "). Serve over http(s) if this keeps failing."
+          );
+          return null;
+        })
+        .then(function (geo) {
+          if (button) {
+            button.disabled = false;
+          }
+          return geo;
+        });
+    }
+
+    function resolveAddress() {
+      const result = completeAddressOrExplain();
+      if (!result) {
+        return;
+      }
+      const url = googleMapsSearchUrl(formatAddressQuery(result.normalized));
+      if (typeof window !== "undefined" && window.open) {
+        window.open(url, "_blank", "noopener");
+      }
+      lookupCoordinates(
+        result,
+        field("resolveAddressButton"),
+        "Maps opened. Looking up coordinates…"
+      );
+    }
+
+    function mapThisCard() {
+      const result = completeAddressOrExplain();
+      if (!result) {
+        return;
+      }
+      lookupCoordinates(
+        result,
+        field("mapAddressButton"),
+        "Looking up coordinates…"
+      );
+    }
+
+    const street = field("street");
+    if (street) {
+      street.setAttribute(
+        "title",
+        "Paste a full address to fill city, state, and ZIP"
+      );
+      street.addEventListener("paste", function () {
+        window.setTimeout(function () {
+          const parsed = parseAddress(street.value);
+          if (
+            parsed.isComplete ||
+            (parsed.components.city && parsed.components.state)
+          ) {
+            write(parsed.components);
+          }
+          apply();
+        }, 0);
+      });
+    }
+
+    ["street", "street2", "city", "state", "zip"].forEach(function (name) {
+      const el = field(name);
+      if (!el) {
+        return;
+      }
+      el.addEventListener("input", function () {
+        liveFormatAddressField(el, name);
+        const status = field("addressStatus");
+        if (status && !status.classList.contains("is-ok")) {
+          setStatus("");
+        }
+      });
+      el.addEventListener("blur", function () {
+        apply();
+      });
+    });
+
+    function applyLatLongField(raw, opts) {
+      opts = opts || {};
+      const showStatus = opts.showStatus !== false;
+      const pairEl = field("latLong");
+      const result = validateLatLong(raw);
+
+      function mark(message) {
+        if (!pairEl) {
+          return;
+        }
+        if (message) {
+          pairEl.classList.add("is-invalid");
+          pairEl.setAttribute("title", message);
+          pairEl.setAttribute("aria-invalid", "true");
+        } else {
+          pairEl.classList.remove("is-invalid");
+          pairEl.removeAttribute("title");
+          pairEl.removeAttribute("aria-invalid");
+        }
+      }
+
+      if (result.valid && result.complete) {
+        write({
+          latitude: result.latitude,
+          longitude: result.longitude,
+          latLong: result.formatted
+        });
+        mark("");
+        if (showStatus) {
+          setStatus(result.formatted, true);
+        }
+        return result;
+      }
+
+      if (!String(raw || "").trim()) {
+        write({ latitude: "", longitude: "", latLong: "" });
+        mark("");
+        if (showStatus) {
+          setStatus("");
+        }
+        return result;
+      }
+
+      if (showStatus) {
+        mark(result.reason);
+        setStatus(result.reason);
+      }
+      return result;
+    }
+
+    const latLongEl = field("latLong");
+    if (latLongEl) {
+      latLongEl.addEventListener("input", function () {
+        clearFieldInvalid(latLongEl);
+        const result = validateLatLong(latLongEl.value);
+        if (result.valid && result.complete) {
+          applyLatLongField(latLongEl.value, { showStatus: false });
+        }
+      });
+      latLongEl.addEventListener("paste", function () {
+        window.setTimeout(function () {
+          applyLatLongField(latLongEl.value, { showStatus: true });
+        }, 0);
+      });
+      latLongEl.addEventListener("blur", function () {
+        applyLatLongField(latLongEl.value, { showStatus: true });
+      });
+    }
+
+    const resolveButton = field("resolveAddressButton");
+    if (resolveButton) {
+      resolveButton.addEventListener("click", function () {
+        resolveAddress();
+      });
+    }
+
+    const mapButton = field("mapAddressButton");
+    if (mapButton) {
+      mapButton.addEventListener("click", function () {
+        mapThisCard();
+      });
+    }
   }
 
   function getController() {
@@ -942,6 +1655,12 @@
     validateAddress: validateAddress,
     formatFullAddress: formatFullAddress,
     formatAddressQuery: formatAddressQuery,
+    parseMapLink: parseMapLink,
+    parseLatLong: parseLatLong,
+    validateLatLong: validateLatLong,
+    formatLatLongPair: formatLatLongPair,
+    googleMapsSearchUrl: googleMapsSearchUrl,
+    formatCoordinate: formatCoordinate,
     normalizeState: normalizeState,
     normalizeZip: normalizeZip,
     formatStreetLine: formatStreetLine,
@@ -961,6 +1680,7 @@
     mapAddress: mapAddress,
     openAddressInGoogleMaps: openAddressInGoogleMaps,
     geocodeAddress: geocodeAddress,
+    bindAddressCard: bindAddressCard,
     attachAddressValidation: attachAddressValidation,
     // constants if needed
     ADDRESS_STATE_NAMES: ADDRESS_STATE_NAMES,
@@ -978,6 +1698,13 @@
   global.validateAddress = validateAddress;
   global.applyAddressValidation = applyAddressValidation;
   global.mapAddress = mapAddress;
+  global.bindAddressCard = bindAddressCard;
+  global.parseMapLink = parseMapLink;
+  global.parseLatLong = parseLatLong;
+  global.validateLatLong = validateLatLong;
+  global.formatLatLongPair = formatLatLongPair;
+  global.googleMapsSearchUrl = googleMapsSearchUrl;
+  global.formatCoordinate = formatCoordinate;
   global.attachAddressValidation = attachAddressValidation;
   global.formatFullAddress = formatFullAddress;
   global.clearAddressFields = clearAddressFields;

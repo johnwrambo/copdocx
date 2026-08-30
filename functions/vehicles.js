@@ -122,4 +122,5 @@ function bindVehicleCard(card) {
       fillBodyStyleOptions();
     });
   }
+
 }

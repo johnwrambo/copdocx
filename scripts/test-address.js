@@ -8,13 +8,21 @@ const context = {
       return null;
     }
   },
-  window: { setTimeout: setTimeout }
+  window: { setTimeout: setTimeout },
+  URL: URL
 };
 vm.createContext(context);
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, "..", "functions/address.js"), "utf8"),
   context
 );
+const parseAddress = context.window.parseAddress;
+const validateAddress = context.window.validateAddress;
+const formatAddressQuery = context.window.AddressUtils.formatAddressQuery;
+const googleMapsSearchUrl = context.window.googleMapsSearchUrl;
+const formatCoordinate = context.window.formatCoordinate;
+const parseMapLink = context.window.parseMapLink;
+const parseLatLong = context.window.parseLatLong;
 
 let fail = 0;
 function check(label, ok, extra) {
@@ -26,7 +34,7 @@ function check(label, ok, extra) {
   }
 }
 
-const parsed = context.parseAddress(
+const parsed = parseAddress(
   "123 n main st apt 4, houston, tx 77002"
 );
 check(
@@ -40,11 +48,11 @@ check("parse state", parsed.components.state === "TX");
 check("parse zip", parsed.components.zip === "77002");
 check("parse complete", parsed.isComplete === true);
 
-const texas = context.parseAddress("500 Travis Street, Houston, Texas 77002-1234");
+const texas = parseAddress("500 Travis Street, Houston, Texas 77002-1234");
 check("state name", texas.components.state === "TX");
 check("zip+4", texas.components.zip === "77002-1234");
 
-const empty = context.validateAddress({
+const empty = validateAddress({
   street: "",
   street2: "",
   city: "",
@@ -53,7 +61,7 @@ const empty = context.validateAddress({
 });
 check("empty is valid", empty.valid === true && empty.complete === false);
 
-const good = context.validateAddress({
+const good = validateAddress({
   street: "123 main st",
   street2: "",
   city: "houston",
@@ -65,7 +73,7 @@ check("norm street", good.normalized.street === "123 Main St");
 check("norm city", good.normalized.city === "Houston");
 check("norm state", good.normalized.state === "TX");
 
-const badZip = context.validateAddress({
+const badZip = validateAddress({
   street: "123 Main St",
   city: "Houston",
   state: "TX",
@@ -79,7 +87,7 @@ check(
     })
 );
 
-const badState = context.validateAddress({
+const badState = validateAddress({
   street: "123 Main St",
   city: "Houston",
   state: "ZZ",
@@ -93,15 +101,15 @@ check(
     })
 );
 
-const poBox = context.validateAddress({
+const poBox = validateAddress({
   street: "po box 441",
   city: "Laredo",
   state: "TX",
   zip: "78040"
 });
-check("po box", poBox.valid && poBox.normalized.street === "Po Box 441");
+check("po box", poBox.valid && poBox.normalized.street === "PO Box 441");
 
-const query = context.formatAddressQuery({
+const query = formatAddressQuery({
   street: "123 Main St",
   street2: "Apt 4",
   city: "Houston",
@@ -115,9 +123,147 @@ check(
 );
 check(
   "maps url",
-  context.googleMapsSearchUrl(query).indexOf("google.com/maps/search") !== -1
+  googleMapsSearchUrl(query).indexOf("google.com/maps/search") !== -1
 );
-check("coord format", context.formatCoordinate(-95.36981234) === "-95.369812");
+check("coord format", formatCoordinate(-95.36981234) === "-95.369812");
+
+const googlePlace = parseMapLink(
+  "https://www.google.com/maps/place/Foo/@29.7604,-95.3698,17z/data=!3d29.760427!4d-95.369803"
+);
+check("google place url", googlePlace.url.indexOf("google.com/maps/place") !== -1);
+check(
+  "google pin coords beat camera",
+  googlePlace.latitude === "29.760427" && googlePlace.longitude === "-95.369803",
+  googlePlace
+);
+
+const googleAt = parseMapLink("https://www.google.com/maps/@29.7604,-95.3698,17z");
+check(
+  "google @ camera",
+  googleAt.latitude === "29.7604" && googleAt.longitude === "-95.3698"
+);
+
+const googleQuery = parseMapLink(
+  "https://www.google.com/maps/search/?api=1&query=29.7604,-95.3698"
+);
+check(
+  "google query coords",
+  googleQuery.latitude === "29.7604" && googleQuery.longitude === "-95.3698"
+);
+
+const apple = parseMapLink("https://maps.apple.com/?ll=29.7604,-95.3698&q=Houston");
+check(
+  "apple ll",
+  apple.latitude === "29.7604" && apple.longitude === "-95.3698"
+);
+
+const osm = parseMapLink("https://www.openstreetmap.org/#map=17/29.7604/-95.3698");
+check(
+  "osm hash",
+  osm.latitude === "29.7604" && osm.longitude === "-95.3698"
+);
+
+const waze = parseMapLink("https://waze.com/ul?ll=29.7604,-95.3698&navigate=yes");
+check(
+  "waze ll",
+  waze.latitude === "29.7604" && waze.longitude === "-95.3698"
+);
+
+const shortLink = parseMapLink("maps.app.goo.gl/abc123");
+check(
+  "short link protocol",
+  shortLink.url.indexOf("https://maps.app.goo.gl/abc123") === 0 && !shortLink.error,
+  shortLink
+);
+check("short link no coords", shortLink.latitude === "" && shortLink.longitude === "");
+
+const wrapped = parseMapLink(
+  "check this https://maps.apple.com/?ll=29.76,-95.37 thanks."
+);
+check(
+  "extract url from extra text",
+  wrapped.url.indexOf("maps.apple.com") !== -1 &&
+    wrapped.latitude === "29.76" &&
+    wrapped.longitude === "-95.37"
+);
+
+const pastedPair = parseLatLong(
+  "32.74458235328899, -97.81617603781437"
+);
+check(
+  "paste lat long pair",
+  pastedPair.latitude === "32.74458235328899" &&
+    pastedPair.longitude === "-97.81617603781437",
+  pastedPair
+);
+
+const spacedPair = parseLatLong("32.74458235328899  -97.81617603781437");
+check(
+  "space separated pair",
+  spacedPair.latitude === "32.74458235328899" &&
+    spacedPair.longitude === "-97.81617603781437"
+);
+
+const swapped = parseLatLong("-97.816176, 32.744582");
+check(
+  "lng lat swap when first is longitude",
+  swapped.latitude === "32.744582" && swapped.longitude === "-97.816176",
+  swapped
+);
+
+const nsewPair = parseLatLong("32.744582 N, 97.816176 W");
+check(
+  "nsew pair",
+  nsewPair.latitude === "32.744582" && nsewPair.longitude === "-97.816176",
+  nsewPair
+);
+
+const labeled = parseLatLong("lat: 32.744582, lng: -97.816176");
+check(
+  "labeled pair",
+  labeled.latitude === "32.744582" && labeled.longitude === "-97.816176",
+  labeled
+);
+
+const singleLat = parseLatLong("32.74458235328899", { as: "latitude" });
+check(
+  "single lat stays in field",
+  singleLat.value === "32.74458235328899" &&
+    !singleLat.latitude &&
+    !singleLat.longitude
+);
+
+const badLat = parseLatLong("97.8", { as: "latitude" });
+check("lat out of range", !!badLat.error);
+
+const validateLatLong = context.window.validateLatLong;
+const formatLatLongPair = context.window.formatLatLongPair;
+check("pair display", formatLatLongPair("32.74", "-97.81") === "32.74, -97.81");
+check("empty lat long allowed", validateLatLong("").valid === true && !validateLatLong("").complete);
+const goodPair = validateLatLong("32.744582, -97.816176");
+check(
+  "valid pair",
+  goodPair.valid === true &&
+    goodPair.complete === true &&
+    goodPair.formatted === "32.744582, -97.816176"
+);
+check("single number incomplete", validateLatLong("32.744582").valid === false);
+check("zero zero rejected", validateLatLong("0, 0").valid === false);
+check("lat too big", validateLatLong("99.1, -97.8").valid === false);
+check("lng too big", validateLatLong("32.7, -200").valid === false);
+check(
+  "swapped pair accepted",
+  validateLatLong("-97.816176, 32.744582").valid === true &&
+    validateLatLong("-97.816176, 32.744582").latitude === "32.744582"
+);
+
+const notALink = parseMapLink("123 Main St Houston TX");
+check("street is not a map link", !!notALink.error && !notALink.url);
+
+check(
+  "bindAddressCard exported",
+  typeof context.window.bindAddressCard === "function"
+);
 
 if (fail) {
   process.exit(1);

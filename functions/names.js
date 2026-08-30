@@ -201,33 +201,55 @@ function formatNamePhrase(text) {
   return tokenizeName(text).map(capitalizeNameToken).join(" ");
 }
 
+/**
+ * Last-name display: FATHERSURNAME-Mothersurname.
+ * One surname → ALL CAPS. Two surnames (space or hyphen) → paternal ALL
+ * CAPS, hyphen, maternal Title Case. A trailing space is kept so the
+ * second surname can still be typed.
+ */
 function hyphenateLastName(text) {
-  var tokens = tokenizeName(text);
+  var raw = String(text || "");
+  var trailingSpace = /\s$/.test(raw);
+  var lastName = raw.replace(/[\t\n\r]+/g, " ").trim();
+  if (!lastName) {
+    return "";
+  }
+
+  if (lastName.indexOf("-") !== -1) {
+    var hyphenPosition = lastName.indexOf("-");
+    var paternalHyphen = lastName.slice(0, hyphenPosition).trim().toUpperCase();
+    var maternalHyphen = lastName.slice(hyphenPosition + 1).trim();
+    if (!maternalHyphen) {
+      return paternalHyphen + (trailingSpace ? " " : "-");
+    }
+    return paternalHyphen + "-" + formatNamePhrase(maternalHyphen);
+  }
+
+  var tokens = tokenizeName(lastName);
   if (!tokens.length) {
     return "";
   }
 
-  var surnames = [];
-  var particles = [];
-  var i;
-
-  for (i = 0; i < tokens.length; i++) {
-    if (isParticleToken(tokens[i])) {
-      particles.push(tokens[i]);
-    } else {
-      surnames.push(tokens[i]);
-    }
+  var leadingParticles = [];
+  var i = 0;
+  while (i < tokens.length && isParticleToken(tokens[i])) {
+    leadingParticles.push(tokens[i]);
+    i += 1;
+  }
+  if (i >= tokens.length) {
+    return lastName.toUpperCase() + (trailingSpace ? " " : "");
   }
 
-  if (surnames.length >= 2) {
-    var hyphenated = surnames.map(capitalizeNameToken).join("-");
-    if (particles.length) {
-      return particles.map(capitalizeNameToken).join(" ") + " " + hyphenated;
-    }
-    return hyphenated;
+  var paternalBits = leadingParticles.concat([tokens[i]]);
+  var rest = tokens.slice(i + 1);
+  if (!rest.length) {
+    return paternalBits.join(" ").toUpperCase() + (trailingSpace ? " " : "");
   }
-
-  return formatNamePhrase(text);
+  return (
+    paternalBits.join(" ").toUpperCase() +
+    "-" +
+    formatNamePhrase(rest.join(" "))
+  );
 }
 
 function withSuffix(last, suffix) {
@@ -382,13 +404,52 @@ function applyParsedName(parsed, root) {
   return false;
 }
 
+function formatNamePhraseLive(text) {
+  var raw = String(text || "");
+  var trailingSpace = /\s$/.test(raw);
+  var formatted = formatNamePhrase(raw);
+  if (!formatted) {
+    return "";
+  }
+  return formatted + (trailingSpace ? " " : "");
+}
+
+function rewriteLiveValue(input, formatted) {
+  if (!input) {
+    return;
+  }
+  var before = String(input.value || "");
+  if (formatted === before) {
+    return;
+  }
+  var atEnd =
+    input.selectionStart === before.length &&
+    input.selectionEnd === before.length;
+  input.value = formatted;
+  if (atEnd && typeof input.setSelectionRange === "function") {
+    input.setSelectionRange(formatted.length, formatted.length);
+  }
+}
+
+function liveFormatNameField(input) {
+  if (!input) {
+    return;
+  }
+  var field = input.getAttribute("data-field") || input.id;
+  var formatted =
+    field === "lastName"
+      ? hyphenateLastName(input.value)
+      : formatNamePhraseLive(input.value);
+  rewriteLiveValue(input, formatted);
+}
+
 function formatNameFieldValue(input) {
   if (!input || !input.value) {
     return;
   }
   var field = input.getAttribute("data-field") || input.id;
   if (field === "lastName") {
-    input.value = hyphenateLastName(input.value);
+    input.value = hyphenateLastName(input.value).replace(/\s+$/, "");
     return;
   }
   input.value = formatNamePhrase(input.value);
@@ -400,15 +461,20 @@ function attachNamePasteParser(input, card) {
   }
   input.dataset.nameBound = "true";
   card = card || nameCardRoot(input);
+  var field = input.getAttribute("data-field") || input.id;
 
   input.addEventListener("paste", function () {
     window.setTimeout(function () {
-      var field = input.getAttribute("data-field") || input.id;
       var parsed = parsePersonName(input.value, { field: field });
       if (!applyParsedName(parsed, card)) {
         formatNameFieldValue(input);
       }
     }, 0);
+  });
+
+  // input = live format, no errors. blur = finish format (trim trailing space).
+  input.addEventListener("input", function () {
+    liveFormatNameField(input);
   });
 
   input.addEventListener("blur", function () {
