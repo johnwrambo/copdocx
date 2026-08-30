@@ -80,15 +80,18 @@ Default **All**. Drafts first (badge `.record-status-draft`), then committed by 
 - Sort drafts first.
 - Filter chips All · Drafts · Committed + CSS (`.record-filter-chips`). Lead list reuses the same CSS when it ships.
 
-Lead columns (when the list ships):
+Lead list columns:
 
 | Column | Source |
 | --- | --- |
-| Name | `formatPersonLabel(subject)` or “Untitled lead” |
-| Source / case | Human label from `SOURCE_LABELS` **added to** `functions/lead-source.js` in the triad PR (`tag` → “Plate Check”, matching today’s `<option>` text on `lead.html`). `leads.js` reads that map. Do **not** scrape `#leadSource` — the list page has no select. That file today only shows/hides `[data-source]` panels; it has no label map yet. Plus `source.caseNumber`. |
-| City | first `person.locations[].city`, else **—** (plate-check-only leads have no person city) |
-| Updated | `meta.updatedAt` date |
-| Status | Draft / Committed |
+| Name | `formatPersonLabel(subject)` or “Untitled lead”. Draft badge on this cell. |
+| Crim status | `person.criminal.isCriminal` → Criminal / Non-criminal |
+| Immigration disposition | `person.immigration.disposition` via `IMMIGRATION_DISPOSITIONS` label |
+| City | first `person.locations[].city`, else **—** |
+| Vehicle | first vehicle plate · state; `+N` if more |
+| FBI number | `person.criminal.fbiNumber` |
+| A-Number | `person.immigration.alienNumber` |
+| FINS | `person.immigration.finNumber` |
 
 ## Validation
 

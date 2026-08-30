@@ -84,6 +84,47 @@
       .join(" · ");
   }
 
+  function vehicleLine(snapshot) {
+    var vehicles = (snapshot && snapshot.vehicles) || [];
+    var first = firstPlate(snapshot);
+    if (!first) {
+      return "";
+    }
+    if (vehicles.length > 1) {
+      return first + " +" + (vehicles.length - 1);
+    }
+    return first;
+  }
+
+  function crimStatus(person) {
+    var criminal = (person && person.criminal) || {};
+    return criminal.isCriminal ? "Criminal" : "Non-criminal";
+  }
+
+  function catalogLabel(items, code) {
+    var key = String(code || "").trim();
+    if (!key) {
+      return "";
+    }
+    var list = items || [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i] && list[i].code === key) {
+        return list[i].label || key;
+      }
+    }
+    return key;
+  }
+
+  function dispositionLine(person) {
+    var immigration = (person && person.immigration) || {};
+    var items =
+      typeof IMMIGRATION_DISPOSITIONS !== "undefined"
+        ? IMMIGRATION_DISPOSITIONS
+        : [];
+    return catalogLabel(items, immigration.disposition);
+  }
+
   function isCommitted(row) {
     var m = model();
     if (m && typeof m.isCommitted === "function") {
@@ -147,12 +188,17 @@
       var tr = document.createElement("tr");
       var name = (m.formatPersonLabel && m.formatPersonLabel(subject)) || "Untitled lead";
       var committed = isCommitted(snap);
+      var criminal = (subject && subject.criminal) || {};
+      var immigration = (subject && subject.immigration) || {};
       [
         name,
-        sourceLine(snap) || "—",
+        crimStatus(subject),
+        dispositionLine(subject) || "—",
         personCity(subject) || "—",
-        formatWhen(snap.meta && snap.meta.updatedAt),
-        committed ? "Committed" : "Draft"
+        vehicleLine(snap) || "—",
+        criminal.fbiNumber || "—",
+        immigration.alienNumber || "—",
+        immigration.finNumber || "—"
       ].forEach(function (text, index) {
         var td = document.createElement("td");
         td.textContent = text;

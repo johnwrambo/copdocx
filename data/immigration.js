@@ -4,6 +4,9 @@ const immigrationDispositionSelect = document.getElementById(
 const immigrationStatusSelect = document.getElementById("immigrationStatus");
 
 function buildSelectOptions(select, items, placeholderText) {
+  if (!select) {
+    return;
+  }
   select.replaceChildren();
 
   const placeholderOption = document.createElement("option");
