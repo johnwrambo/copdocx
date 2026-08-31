@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Issue I-200</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="i200-form" data-form-type="I-200">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.11.1"
+        >
+          Version 0.11.1
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <p id="warrantMissing" class="records-empty" hidden>Lead not found.</p>
+      <div id="warrantForm">
+        <fieldset class="card-static">
+          <legend>I-200 Warrant for Arrest of Alien</legend>
+          <p class="section-note">
+            Subject: <strong id="warrantSubjectName">—</strong>
+            · A-Number: <strong id="warrantSubjectFileNo">—</strong>
+          </p>
+          <div class="row">
+            <div class="field">
+              <label for="fileNo">File No</label>
+              <input type="text" id="fileNo" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="issueDate">Date</label>
+              <input type="text" id="issueDate" autocomplete="off" />
+            </div>
+          </div>
+          <div class="row">
+            <div class="field field-span-2">
+              <label for="determination">This determination is based upon (optional)</label>
+              <textarea id="determination" rows="3"></textarea>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Basis (check all that apply)</legend>
+          <div class="check-grid">
+            <label>
+              <input type="checkbox" id="basisCharging" />
+              charging document to initiate removal proceedings
+            </label>
+            <label>
+              <input type="checkbox" id="basisPending" />
+              ongoing removal proceedings
+            </label>
+            <label>
+              <input type="checkbox" id="basisDeferred" />
+              deferred inspection / admissibility
+            </label>
+            <label>
+              <input type="checkbox" id="basisBiometric" />
+              biometric identity + federal records check
+            </label>
+            <label>
+              <input type="checkbox" id="basisVoluntary" />
+              voluntary statements to an immigration officer
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Issuing officer</legend>
+          <div class="row row-4">
+            <div class="field">
+              <label for="issuingOfficer">Issuing officer</label>
+              <select id="issuingOfficer"></select>
+            </div>
+            <div class="field">
+              <label for="officerTitle">Title</label>
+              <input type="text" id="officerTitle" autocomplete="off" />
+            </div>
+            <div class="field field-span-2">
+              <label for="issuingOffice">Location (office)</label>
+              <input type="text" id="issuingOffice" autocomplete="off" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Service (optional)</legend>
+          <div class="row row-4">
+            <div class="field">
+              <label for="nameOfAlien">Name of alien</label>
+              <input type="text" id="nameOfAlien" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="dateOfService">Date of service</label>
+              <input type="text" id="dateOfService" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="serviceLanguage">Language</label>
+              <input type="text" id="serviceLanguage" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="interpreter">Interpreter</label>
+              <input type="text" id="interpreter" autocomplete="off" />
+            </div>
+          </div>
+          <p class="section-note">
+            Signature fields stay empty so the PDF can be digitally signed in Acrobat.
+          </p>
+        </fieldset>
+      </div>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/alien-number.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/lead.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/pdf/i200-map.js"></script>
+    <script src="functions/pdf/i205-map.js"></script>
+    <script src="functions/pdf/fill-warrant.js"></script>
+    <script src="functions/warrant-issue.js"></script>
+  </body>
+</html>

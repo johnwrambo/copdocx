@@ -32,6 +32,7 @@
         age: "",
         citizenship: "",
         ssn: "",
+        lexId: "",
         locations: [],
         aliases: [],
         documents: [],
@@ -52,7 +53,10 @@
           disposition: "",
           status: "",
           finalOrder: false,
-          finalOrderDate: ""
+          finalOrderDate: "",
+          firstDeportationDate: "",
+          lastDeportationDate: "",
+          baseballCards: []
         }
       },
       extra
@@ -139,7 +143,8 @@
   }
 
   function createWarrant(extra) {
-    return model.assign(
+    extra = extra || {};
+    var built = model.assign(
       {
         warrantId: model.newId("wnt"),
         charge: "",
@@ -147,10 +152,48 @@
         warrantDate: "",
         warrantStatus: "",
         warrantIssuer: "",
-        warrantIssuerCode: ""
+        warrantIssuerCode: "",
+        formType: "",
+        fileNo: "",
+        pdfFileName: "",
+        office: "",
+        officerName: "",
+        officerTitle: "",
+        basis: [],
+        inaLaw: "",
+        entryPlace: "",
+        entryDate: "",
+        issuedAt: ""
       },
       extra
     );
+    if (!Array.isArray(built.basis)) {
+      built.basis = [];
+    }
+    return built;
+  }
+
+  function createBaseballCard(extra) {
+    extra = extra || {};
+    return model.assign(
+      {
+        cardId: model.newId("bbc"),
+        generatedAt: model.nowIso ? model.nowIso() : "",
+        text: "",
+        arrestDate: "",
+        disposition: ""
+      },
+      extra
+    );
+  }
+
+  function isIssuedWarrant(row) {
+    var formType = row && row.formType;
+    return formType === "I-200" || formType === "I-205";
+  }
+
+  function issuedWarrants(person) {
+    return ((person && person.warrants) || []).filter(isIssuedWarrant);
   }
 
   function formatPersonLabel(person) {
@@ -181,6 +224,9 @@
   model.createArrest = createArrest;
   model.createConviction = createConviction;
   model.createWarrant = createWarrant;
+  model.createBaseballCard = createBaseballCard;
+  model.isIssuedWarrant = isIssuedWarrant;
+  model.issuedWarrants = issuedWarrants;
   model.formatPersonLabel = formatPersonLabel;
   model.isBlankPerson = isBlankPerson;
 })(typeof window !== "undefined" ? window : globalThis);

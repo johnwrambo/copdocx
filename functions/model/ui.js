@@ -419,14 +419,16 @@
   }
 
   function updateCancelHref(snapshot) {
-    var a = byId("appBarCancel");
+    var a = byId("appBarBack") || byId("appBarCancel");
     if (!a) {
       return;
     }
     if (snapshot && snapshot.leadId && snapshot.meta && snapshot.meta.committedAt) {
       a.href = "lead.html?id=" + encodeURIComponent(snapshot.leadId);
+      a.textContent = "Back to lead";
     } else {
       a.href = "leads.html";
+      a.textContent = "Back to leads";
     }
   }
 

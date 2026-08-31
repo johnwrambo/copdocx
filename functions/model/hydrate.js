@@ -148,7 +148,8 @@
         dateOfBirth: subject.dateOfBirth,
         age: subject.age === "" || subject.age == null ? "" : String(subject.age),
         citizenship: subject.citizenship,
-        ssn: subject.ssn || ""
+        ssn: subject.ssn || "",
+        lexId: subject.lexId || ""
       });
       if (typeof global.updateAgeDisplay === "function") {
         global.updateAgeDisplay();
@@ -207,7 +208,10 @@
       setEntity(card, row.convictionId);
       fillCard(card, row);
     }, true);
-    replaceList("warrantList", "warrant", subject.warrants, function (card, row) {
+    var rapWarrants = (subject.warrants || []).filter(function (row) {
+      return !(model.isIssuedWarrant && model.isIssuedWarrant(row));
+    });
+    replaceList("warrantList", "warrant", rapWarrants, function (card, row) {
       setEntity(card, row.warrantId);
       fillCard(card, row);
     }, true);
@@ -219,6 +223,9 @@
     setById("immigrationStatus", immigration.status || "");
     setById("finalOrder", immigration.finalOrder);
     setById("finalOrderDate", immigration.finalOrderDate || "");
+    setById("firstDeportationDate", immigration.firstDeportationDate || "");
+    setById("lastDeportationDate", immigration.lastDeportationDate || "");
+    setById("lexId", subject.lexId || "");
 
     replaceList(
       "locationList",

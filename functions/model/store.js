@@ -22,7 +22,8 @@
       schema: model.STORE_SCHEMA || "copdocx.store.v1",
       currentLeadId: "",
       people: {},
-      leads: {}
+      leads: {},
+      encounters: {}
     };
   }
 
@@ -61,13 +62,19 @@
 
   function loadFromDisk() {
     var disk = readDisk();
-    if (disk && disk.leads) {
+    if (disk) {
       state = disk;
       state.people = state.people || {};
       state.leads = state.leads || {};
+      state.encounters = state.encounters || {};
       Object.keys(state.leads).forEach(function (id) {
         if (typeof model.ensureRecordMeta === "function") {
           model.ensureRecordMeta(state.leads[id]);
+        }
+      });
+      Object.keys(state.encounters).forEach(function (id) {
+        if (typeof model.ensureRecordMeta === "function") {
+          model.ensureRecordMeta(state.encounters[id]);
         }
       });
     }
@@ -166,6 +173,72 @@
     state.people[person.personId] = clone(person);
   }
 
+  function saveEncounter(record, opts) {
+    if (!record || !record.encounterId) {
+      return {
+        ok: false,
+        encounterId: "",
+        error: "Encounter is missing an encounterId."
+      };
+    }
+    var mode = (opts && opts.mode) || "commit";
+    var previous = state.encounters[record.encounterId]
+      ? clone(state.encounters[record.encounterId])
+      : null;
+    var saved = previous ? Object.assign({}, previous, record) : record;
+    saved.schema = record.schema || "copdocx.encounter.v1";
+    saved.encounterId = record.encounterId;
+    if (typeof model.stampMeta === "function") {
+      saved.meta = model.stampMeta(previous, mode);
+    } else {
+      saved.meta = record.meta || {};
+      saved.meta.updatedAt = model.nowIso();
+    }
+    saved.meta.markedComplete = false;
+    if (!Array.isArray(saved.vehicles)) {
+      saved.vehicles = [];
+    }
+    if (!Array.isArray(saved.locations)) {
+      saved.locations = [];
+    }
+    if (!Array.isArray(saved.subjects)) {
+      saved.subjects = [];
+    }
+    state.encounters[saved.encounterId] = clone(saved);
+    if (!writeDisk()) {
+      return {
+        ok: false,
+        encounterId: saved.encounterId,
+        error: "Could not write localStorage (quota or private mode)."
+      };
+    }
+    return { ok: true, encounterId: saved.encounterId, error: "" };
+  }
+
+  function getEncounter(encounterId) {
+    var row = state.encounters[encounterId];
+    return row ? clone(row) : null;
+  }
+
+  function listEncounters() {
+    return Object.keys(state.encounters)
+      .map(function (id) {
+        var row = state.encounters[id];
+        return {
+          encounterId: id,
+          startedAt: row.startedAt || "",
+          updatedAt: (row.meta && row.meta.updatedAt) || "",
+          metaStatus: model.metaStatus ? model.metaStatus(row) : "committed",
+          subjects: (row.subjects || []).slice(),
+          vehicles: (row.vehicles || []).slice(),
+          locations: (row.locations || []).slice()
+        };
+      })
+      .sort(function (a, b) {
+        return String(b.updatedAt).localeCompare(String(a.updatedAt));
+      });
+  }
+
   model.store = {
     STORAGE_KEY: STORAGE_KEY,
     loadFromDisk: loadFromDisk,
@@ -175,6 +248,9 @@
     allPeople: allPeople,
     getPerson: getPerson,
     upsertPerson: upsertPerson,
+    saveEncounter: saveEncounter,
+    getEncounter: getEncounter,
+    listEncounters: listEncounters,
     getCurrentLeadId: function () {
       return state.currentLeadId || "";
     },

@@ -199,6 +199,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     ]);
 
     let activeRecordId = null;
+    let pendingLeadId = "";
     let pendingRecordsImportMode = "merge";
     let suppressAutoSave = false;
     let lastSavedSignature = "";
@@ -1851,8 +1852,51 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         : "Save Current Record";
     }
 
+    function currentEncounterId() {
+      try {
+        return new URLSearchParams(window.location.search).get("encounterId") || "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function listedSavedRecords() {
+      const all = readSavedRecords();
+      const encounterId = currentEncounterId();
+      if (!encounterId) {
+        return all;
+      }
+      return all.filter(record => record && record.encounterId === encounterId);
+    }
+
+    function syncEncounterSubjects(record) {
+      const encounterId = currentEncounterId() || (record && record.encounterId) || "";
+      const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+      if (!encounterId || !store || typeof store.getEncounter !== "function") {
+        return;
+      }
+      store.loadFromDisk();
+      const encounter = store.getEncounter(encounterId);
+      if (!encounter) {
+        return;
+      }
+      encounter.subjects = listedSavedRecords().map(row => ({
+        personId: "",
+        leadId: row.leadId || "",
+        bookinRecordId: row.id,
+        lastName: row.lastName || "",
+        firstName: row.firstName || "",
+        alienNumber: row.aNumber || ""
+      }));
+      const committed =
+        COPDoc.model.isCommitted && COPDoc.model.isCommitted(encounter);
+      store.saveEncounter(encounter, {
+        mode: committed ? "commit" : "draft"
+      });
+    }
+
     function renderSavedRecords() {
-      const records = readSavedRecords().sort(
+      const records = listedSavedRecords().sort(
         (left, right) =>
           String(right.updatedAt || "").localeCompare(
             String(left.updatedAt || "")
@@ -1871,6 +1915,11 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       body.replaceChildren();
       empty.hidden = records.length > 0;
       tableWrap.hidden = records.length === 0;
+      if (!records.length) {
+        empty.textContent = currentEncounterId()
+          ? "No subjects on this encounter yet."
+          : "No saved records yet.";
+      }
 
       records.forEach(record => {
         const row = document.createElement("tr");
@@ -1960,6 +2009,9 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           lastName: data.lastName,
           aNumber: data.aNumber,
           iceEvent: data.iceEvent,
+          encounterId:
+            currentEncounterId() || (existing && existing.encounterId) || "",
+          leadId: pendingLeadId || (existing && existing.leadId) || "",
           formState: captureFormState()
         };
 
@@ -1973,6 +2025,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         activeRecordId = record.id;
         renderSavedRecords();
         rememberFormSignature();
+        syncEncounterSubjects(record);
 
         setStatus(
           quiet
@@ -1982,9 +2035,11 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
               : `Record saved: ${getRecordSubjectLabel(record)}`,
           "success"
         );
+        return true;
       } catch (error) {
         console.error(error);
         setStatus(`Error: ${error.message}`, "error");
+        return false;
       }
     }
 
@@ -2042,6 +2097,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       }
 
       renderSavedRecords();
+      syncEncounterSubjects(record);
       setStatus(
         `Saved record deleted: ${getRecordSubjectLabel(record)}`,
         "warning"
@@ -2049,8 +2105,111 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function startNewRecord() {
+      pendingLeadId = "";
       clearForm();
       setStatus("New blank record ready.");
+    }
+
+    function addEncounterSubject() {
+      startNewRecord();
+      if (currentEncounterId()) {
+        setStatus("New subject for this encounter. Save to attach it.", true);
+      }
+    }
+
+    function fillBookInFromLead(snap) {
+      const model = window.COPDoc && COPDoc.model;
+      const person = model && model.subjectOf ? model.subjectOf(snap) : snap.person || {};
+      const name = person.name || {};
+      const immigration = person.immigration || {};
+      const setVal = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.value = value == null ? "" : String(value);
+        }
+      };
+      setVal("lastName", name.lastName || "");
+      setVal("firstName", name.firstName || "");
+      setVal("dateOfBirth", person.dateOfBirth || "");
+      if (typeof updateAge === "function") {
+        updateAge();
+      }
+      const sex = String(person.sex || "").toLowerCase();
+      const male = document.getElementById("sexMale");
+      const female = document.getElementById("sexFemale");
+      if (male) {
+        male.checked = sex === "male" || sex === "m";
+      }
+      if (female) {
+        female.checked = sex === "female" || sex === "f";
+      }
+      const citizen = document.getElementById("citizenship");
+      if (citizen) {
+        const code =
+          typeof resolveCitizenshipCode === "function"
+            ? resolveCitizenshipCode(person.citizenship)
+            : person.citizenship || "";
+        citizen.value = code;
+      }
+      setVal("alienNumber", immigration.alienNumber || "");
+      if (typeof normalizeANumberInput === "function") {
+        normalizeANumberInput();
+      }
+      pendingLeadId = snap.leadId || "";
+      rememberFormSignature();
+    }
+
+    function openLoadLeadForEncounter() {
+      const dialog = document.getElementById("loadLeadDialog");
+      const select = document.getElementById("loadLeadSelect");
+      const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+      if (!dialog || !select || !store) {
+        setStatus("Lead store is not available.");
+        return;
+      }
+      store.loadFromDisk();
+      const rows = (store.listLeads() || []).filter(row => {
+        if (!COPDoc.model.isCommitted) {
+          return true;
+        }
+        const snap = store.getLead(row.leadId);
+        return snap && COPDoc.model.isCommitted(snap);
+      });
+      select.replaceChildren();
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = rows.length ? "Select a lead" : "No committed leads";
+      select.appendChild(blank);
+      rows.forEach(row => {
+        const opt = document.createElement("option");
+        opt.value = row.leadId;
+        opt.textContent = row.label || row.leadId;
+        select.appendChild(opt);
+      });
+      dialog.hidden = false;
+    }
+
+    function confirmLoadLead() {
+      const select = document.getElementById("loadLeadSelect");
+      const dialog = document.getElementById("loadLeadDialog");
+      const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+      const id = select && select.value;
+      if (!id || !store) {
+        setStatus("Pick a lead.");
+        return;
+      }
+      store.loadFromDisk();
+      const snap = store.getLead(id);
+      if (!snap) {
+        setStatus("Lead not found.");
+        return;
+      }
+      startNewRecord();
+      fillBookInFromLead(snap);
+      if (dialog) {
+        dialog.hidden = true;
+      }
+      setStatus("Lead loaded. Save to attach it to this encounter.", true);
     }
 
     function cleanPdfText(value) {
@@ -3418,6 +3577,26 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         });
 
         updateGenderLogic();
+        const encounterBanner = document.getElementById("encounterBanner");
+        const encounterIdLabel = document.getElementById("encounterBannerId");
+        const encounterId = currentEncounterId();
+        if (encounterBanner && encounterId) {
+          encounterBanner.hidden = false;
+          if (encounterIdLabel) {
+            encounterIdLabel.textContent = encounterId;
+          }
+        }
+        const loadLeadCancel = document.getElementById("loadLeadCancel");
+        const loadLeadConfirm = document.getElementById("loadLeadConfirm");
+        const loadLeadDialog = document.getElementById("loadLeadDialog");
+        if (loadLeadCancel && loadLeadDialog) {
+          loadLeadCancel.addEventListener("click", () => {
+            loadLeadDialog.hidden = true;
+          });
+        }
+        if (loadLeadConfirm) {
+          loadLeadConfirm.addEventListener("click", confirmLoadLead);
+        }
         renderSavedRecords();
         rememberFormSignature();
         bindBookInAutoSave();
@@ -3430,7 +3609,66 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     const notPrimaryCaregiverText =
       "The subject is not the primary caregiver of any children in the United States.";
 
+    function baseballDatePart(value) {
+      const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
+      return match ? match[1] : "";
+    }
+
+    function bookInLeadId() {
+      try {
+        return new URLSearchParams(window.location.search).get("leadId") || "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function openBaseballCard() {
+      if (!saveCurrentRecord({ quiet: true })) {
+        return;
+      }
+      const leadId = bookInLeadId();
+      const payload = {
+        from: "bookin",
+        leadId: leadId,
+        bookinRecordId: activeRecordId || "",
+        firstName: getValue("firstName"),
+        lastName: getValue("lastName"),
+        age: getValue("age"),
+        country: selectedOptionText("citizenship"),
+        alienNumber: getValue("alienNumber"),
+        disposition: selectedOptionText("immigrationDisposition"),
+        arrestDate: baseballDatePart(getValue("dateTime"))
+      };
+      try {
+        sessionStorage.setItem(
+          "copdocx.baseball.handoff.v1",
+          JSON.stringify(payload)
+        );
+      } catch (error) {
+        console.warn(error);
+      }
+      const baseballParams = [];
+      const encounterId = currentEncounterId();
+      if (encounterId) {
+        baseballParams.push(
+          "encounterId=" + encodeURIComponent(encounterId)
+        );
+      }
+      if (leadId) {
+        baseballParams.push("leadId=" + encodeURIComponent(leadId));
+      }
+      window.location.href = baseballParams.length
+        ? "baseballcard.html?" + baseballParams.join("&")
+        : "baseballcard.html";
+    }
+
     window.confirmClearForm = confirmClearForm;
+    window.addEncounterSubject = addEncounterSubject;
+    window.openLoadLeadForEncounter = openLoadLeadForEncounter;
+    window.openBaseballCard = openBaseballCard;
+    window.saveCurrentRecord = saveCurrentRecord;
+    window.startNewRecord = startNewRecord;
+    window.generateCombinedPacket = generateCombinedPacket;
 
     function focusBookInRecords() {
       const panel = document.querySelector(".records-panel");

@@ -18,9 +18,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.7.0"
+          data-version="0.11.1"
         >
-          Version 0.7.0
+          Version 0.11.1
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -29,6 +29,14 @@
     </header>
 
     <div class="page">
+      <div id="encounterBanner" class="page-header" hidden>
+        <div>
+          <p class="section-note">Encounter ID</p>
+          <p>
+            <strong id="encounterBannerId"></strong>
+          </p>
+        </div>
+      </div>
       <p class="section-note">
         Enter the information to generate both the CAP Tear Sheet and the
         Medical Questionnaire.
@@ -854,6 +862,7 @@
     </div>
 
     <script src="functions/app-bar.js"></script>
+    <script src="functions/transfer.js"></script>
     <script src="functions/date.js"></script>
     <script src="functions/age.js"></script>
     <script src="functions/names.js"></script>
@@ -861,7 +870,32 @@
     <script src="data/countries.js"></script>
     <script src="data/immigration.js"></script>
     <script src="functions/cards.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/lead.js"></script>
+    <script src="functions/model/encounter.js"></script>
+    <script src="functions/model/store.js"></script>
     <script src="functions/book-in.js"></script>
     <script src="functions/baseballcard.js"></script>
+
+    <div id="loadLeadDialog" class="dialog-backdrop" hidden>
+      <div class="dialog-box" role="dialog" aria-labelledby="loadLeadTitle">
+        <h2 id="loadLeadTitle">Load from leads</h2>
+        <p class="section-note">Committed leads only. Fills Book-in fields that exist.</p>
+        <div class="field">
+          <label for="loadLeadSelect">Lead</label>
+          <select id="loadLeadSelect"></select>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="action-button-secondary" id="loadLeadCancel">
+            Cancel
+          </button>
+          <button type="button" class="action-button" id="loadLeadConfirm">
+            Load
+          </button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
+

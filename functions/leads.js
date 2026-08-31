@@ -238,14 +238,62 @@
   }
 
   function hidePrimary(hide) {
-    var el = byId("appBarPrimaryAction");
-    if (el) {
-      el.hidden = hide;
+    [
+      "appBarPrimaryAction",
+      "bookInLeadButton",
+      "issueI200Button",
+      "issueI205Button"
+    ].forEach(function (id) {
+      var el = byId(id);
+      if (el) {
+        el.hidden = hide;
+      }
+    });
+  }
+
+  function paintIssuedWarrants(subject) {
+    var empty = byId("warrantsIssuedEmpty");
+    var wrap = byId("warrantsIssuedTableWrap");
+    var body = byId("warrantsIssuedBody");
+    var card = byId("warrantsIssuedCard");
+    if (!body || !empty || !wrap) {
+      return;
     }
-    var bookin = byId("bookInLeadButton");
-    if (bookin) {
-      bookin.hidden = hide;
+    var m = model();
+    var rows =
+      m && typeof m.issuedWarrants === "function"
+        ? m.issuedWarrants(subject)
+        : ((subject && subject.warrants) || []).filter(function (row) {
+            return row && (row.formType === "I-200" || row.formType === "I-205");
+          });
+    body.replaceChildren();
+    if (card) {
+      card.hidden = false;
     }
+    empty.hidden = rows.length > 0;
+    wrap.hidden = rows.length === 0;
+    rows
+      .slice()
+      .sort(function (a, b) {
+        return String(b.issuedAt || b.warrantDate || "").localeCompare(
+          String(a.issuedAt || a.warrantDate || "")
+        );
+      })
+      .forEach(function (row) {
+        var tr = document.createElement("tr");
+        [
+          row.formType || "—",
+          row.warrantDate || (row.issuedAt || "").slice(0, 10) || "—",
+          row.fileNo || row.warrantNumber || "—",
+          row.officerName || row.warrantIssuer || "—",
+          row.pdfFileName || "—"
+        ].forEach(function (text) {
+          var td = document.createElement("td");
+          td.textContent = text;
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
   }
 
   function paintView() {
@@ -260,10 +308,14 @@
     }
     m.store.loadFromDisk();
     var id = queryId();
+    var issuedCard = byId("warrantsIssuedCard");
     if (!id) {
       missing.hidden = false;
       missing.textContent = "Lead not found.";
       snapEl.hidden = true;
+      if (issuedCard) {
+        issuedCard.hidden = true;
+      }
       hidePrimary(true);
       return;
     }
@@ -272,6 +324,9 @@
       missing.hidden = false;
       missing.textContent = "Lead not found.";
       snapEl.hidden = true;
+      if (issuedCard) {
+        issuedCard.hidden = true;
+      }
       hidePrimary(true);
       if (window.COPDoc && COPDoc.setAppBarStatus) {
         COPDoc.setAppBarStatus("Lead not found.");
@@ -307,6 +362,7 @@
     }
     setViewText("viewPlate", firstPlate(snap));
     setViewText("viewUpdated", formatWhen(snap.meta && snap.meta.updatedAt));
+    paintIssuedWarrants(subject);
   }
 
   function downloadBlob(filename, mime, text) {

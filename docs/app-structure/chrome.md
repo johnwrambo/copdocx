@@ -4,8 +4,8 @@ Two-row sticky app bar (`style/style.css`, painted by `COPDoc.chrome` in `functi
 
 ```
 Row 1  COPDoc     Version x.y.z     {date}                 .app-bar-info
-Row 2  [ File ▾ ]  Leads | Book-in | Map | Admin ▾    [ ACTION SLOT ]
-       #fileMenu   ------------ .app-bar-nav -----------  .app-bar-actions
+Row 2  [ File ▾ ]  Home | Leads | Encounters | Book-in | Map | Narrative | Admin ▾  [ ACTION SLOT ]
+       #fileMenu   ---------------- .app-bar-nav ----------------  .app-bar-actions
 Status #appBarStatus
 ```
 
@@ -16,7 +16,7 @@ Info row stays in HTML (product stamp in `data-version` + visible text). `#appBa
 | Zone | Owner | Holds |
 | --- | --- | --- |
 | Left | `#fileMenu` | Disk import / export only |
-| Center | `.app-bar-nav` | Page tabs, including **Admin ▾** (`#adminMenu`) |
+| Center | `.app-bar-nav` | Page tabs, including Narrative and **Admin ▾** (`#adminMenu`) |
 | Right | `.app-bar-actions` | Record actions. **Not** page tabs. |
 
 Do not put Dashboard / Officers / Vehicles / Schedule on the right.
@@ -31,9 +31,10 @@ Unimplemented items use `data-not-built`. Do not pretend they work.
 
 | Page | Items | Ships |
 | --- | --- | --- |
-| Leads list | Import JSON | `data-not-built` |
-| Leads list | Export JSON / Download CSV (all **committed** leads) | lead-split PR |
+| Home, Leads list, Encounter list/form, Admin pages, Book-in | **Import** / **Export** (`#fileImportButton` / `#fileExportButton`) | 0.10.0 — dialog: types, optional date range, JSON/CSV/both. Merge import with summary confirm. Encounter pages pre-check Encounters (0.11.0). |
+| Leads list | (old silent Export JSON / Download CSV) | replaced by the Export dialog (Leads pre-checked) |
 | Lead view | Export JSON / Download CSV (this lead if committed) | lead-split PR |
+| I-200 / I-205 form | Download PDF (`#downloadWarrantPdfButton`, unflattened fill, no writeback) | 0.8.0 |
 | Lead form (`lead.html` until split) | Download JSON (`#downloadLeadButton`), Download CSV (`#downloadLeadCsvButton`) | **today**; save-shape PR: no-op unless stored `meta.status === "committed"` (never `collectLead()` of a draft). Painter **must emit these ids** — `ui.js` / `lead-csv.js` bind them. |
 | Lead form | **New** (`#newLeadButton`), **Open** (`#openLeadButton` + `#savedLeadSelect` in `.app-bar-menu-open`) | **exception:** keep until `leads.html` ships. Painter **must emit these ids**. Open is a select+button row, not a lone button. Save-shape PR: New `replaceState`s to `lead.html` with **no** query; Open `replaceState`s `lead.html?id=` ([records.md](records.md) Interim). |
 | Officers / vehicles lists, views, dashboard, schedule | Import JSON, Export JSON (roster) | `data-not-built` (inherit the same two items so File is not empty) |
@@ -41,15 +42,16 @@ Unimplemented items use `data-not-built`. Do not pretend they work.
 | **Vehicle form only** | in-app **Save** (`#adminSaveButton` → `addVehicle({ quiet: true })`) | **exception:** keep until shared autosave ships; then delete |
 | Other admin File Save | remove when chrome ships | officer already focusout-autosaves; dashboard `saveState()` is redundant |
 | Map | Save PDF, Export KMZ (iTAK), Export JSON, Export CSV | already `data-not-built` |
+| Narrative training workspace | Download JSON (`#downloadNarrativeJsonButton`), Download text (`#downloadNarrativeTextButton`) | Build 9 page; exports the active in-memory synthetic output |
 | Book-in | Export JSON, Import JSON (**merge**), Restore backup (**replace**, confirm) | already in the records **toolbar** (`#exportRecordsButton`, `#importRecordsButton`, `#restoreRecordsButton`). File-cleanup PR **moves** them into File and **removes the toolbar duplicates**. Not New/Save/Open. |
-| Baseball card | Export `data-not-built` only | File-cleanup PR strips New/Save/Open |
+| Baseball card | Export `data-not-built` only | Generate saves the card on the lead subject when `?leadId=` is present |
 
 **Exceptions (only these):**
 
 1. Lead File **New** and **Open** until `leads.html` exists.
 2. Vehicle-form File **Save** until `autosave.bind` exists on that form.
 
-Export is **committed records only**. Roster import/export stay labeled `data-not-built` until a later import PR (out of this program except the labels).
+Export is **committed records only** (Book-in and schedule shifts have no draft flag — export all of those). JSON bundle `copdocx.transfer.v1` is the backup; CSV is flat per type and is not imported.
 
 ## Admin dropdown
 
@@ -70,12 +72,16 @@ Chrome **paints** the control. It does **not** call `saveLead` / `addOfficer` / 
 
 | Page kind | Primary | Secondaries |
 | --- | --- | --- |
-| Collection | **Add {record}** (`<a>`) | — |
-| View | **Edit** (`<a href="{record}-form.html?id=">`) | Lead view: **Book-in** (committed only) |
-| Form | **Save** (`<button>`) | **Cancel** → view if `committedAt`, else list |
-| Dashboard, Map, Schedule | empty | Map is not +Person |
-| Book-in (until split) | **Generate** | New, Save record, Clear, Baseball card (move New/Save off File in the File-cleanup PR) |
-| Lead form extras | Save | Follow-ups; **+Person / +Vehicle / +Location** (`workflow.js`). Never on Book-in or Map. **Cancel omitted until the lead split** (no list/view to return to). |
+| Collection | **Add {record}** (`<a>`) | Encounter list: **Add encounter** → `encounter-form.html`. No Back (tabs leave lists). |
+| View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}**. Lead view then Book-in / Issue I-200 / Issue I-205. |
+| Form | **Save** (`<button>`) | First secondary: **Back to {origin}**. `committedAt` → view; else list. Not `history.back()`. |
+| Encounter form | **Save** (`call: commitEncounter`) | **Back to encounters**; **Add subjects** → `bookin.html?encounterId=`; **Generate I-213** → `narrative.html?encounterId=` |
+| I-200 / I-205 form | **Issue** (`#appBarPrimaryAction`, `data-chrome-action="save"`) | **Back to lead** (`lead.html?id=`) |
+| Home, Dashboard, Map, Schedule | empty | Home is not +Person. Map tools stay in `.map-toolbar`, not the slot |
+| Narrative | **Update draft** | With `?encounterId=`: **Back to encounter**. Then Add supplement; Inspect output. |
+| Book-in (until split) | **Generate** | With `?encounterId=`: **Back to encounter**, Add subject, Load from leads. With `?leadId=` only: **Back to lead**. Tab (no query): no Back. Then Clear, Baseball card. File: New / Save / Open. Encounter ID banner is display-only (no in-page Back). |
+| Baseball card | **Generate** (`persistBaseballCard`) | **Back to book-in** (keep `encounterId` / `leadId`) |
+| Lead form extras | Save | **Back to leads** (or **Back to lead** if `committedAt`); Follow-ups; **+Person / +Vehicle / +Location**. Never on Book-in or Map. |
 
 Six lead-form secondaries will wrap: at `max-width: 639px` `.app-bar-actions` is a full row, `justify-content: flex-end`. That crowding is accepted; do not move stubs onto other pages.
 
@@ -83,7 +89,7 @@ Baseball card stays a **book-in** action, not a lead-view action.
 
 ### Interim lead (`data-page="lead-form"` on today’s `lead.html`)
 
-Primary **Save**, stay on the page. No Cancel. No Book-in. File still has New/Open.
+Primary **Save**, stay on the page. **Back to leads** (or **Back to lead** after commit). No Book-in. File still has New/Open.
 
 ### Officer / vehicle forms after chrome
 
@@ -107,7 +113,7 @@ Do not hide File, tabs, or the slot.
 
 ```js
 COPDoc.chrome.mount({
-  tab: "leads",       // leads | bookin | map | admin
+  tab: "leads",       // home | leads | encounter | bookin | map | narrative | admin
   adminChild: "",     // dashboard | officers | vehicles | schedule | ""
   file: [
     { id: "newLeadButton", label: "New" },

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Encounter</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="encounter-form">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.11.1"
+        >
+          Version 0.11.1
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <main class="page page-wide">
+      <form id="encounterForm" autocomplete="off" novalidate>
+        <fieldset class="card-static">
+          <legend>Encounter details</legend>
+          <div class="row">
+            <div class="field">
+              <label for="encounterId">Encounter ID</label>
+              <input
+                type="text"
+                id="encounterId"
+                name="encounterId"
+                data-field="encounterId"
+                readonly
+              />
+            </div>
+            <div class="field">
+              <label for="encounterStartedAt">Date and time of stop / encounter</label>
+              <input
+                type="datetime-local"
+                id="encounterStartedAt"
+                name="encounterStartedAt"
+                data-field="startedAt"
+              />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Vehicles</legend>
+          <p class="section-note">Add the vehicle or vehicles involved in this encounter.</p>
+          <div id="encounterVehicleList" class="card-list" aria-live="polite"></div>
+          <div class="card-list-actions">
+            <button
+              type="button"
+              id="addEncounterVehicleButton"
+              class="add-card-btn"
+              aria-controls="encounterVehicleList"
+            >
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add vehicle
+            </button>
+          </div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Address / location</legend>
+          <p class="section-note">Add the primary stop or encounter location.</p>
+          <div
+            id="encounterLocationList"
+            class="card-list"
+            data-location-owner="encounter"
+            aria-live="polite"
+          ></div>
+          <div class="card-list-actions">
+            <button
+              type="button"
+              id="addEncounterLocationButton"
+              class="add-card-btn"
+              aria-controls="encounterLocationList"
+            >
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add address / location
+            </button>
+          </div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Arrested subjects</legend>
+          <p class="section-note">
+            Subjects are booked on the Book-in page for this encounter. Use Add subjects.
+          </p>
+          <div id="encounterSubjectsEmpty" class="records-empty">
+            No subjects on this encounter yet.
+          </div>
+          <div id="encounterSubjectsTableWrap" class="records-table-wrap" hidden>
+            <table class="records-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>A-Number</th>
+                  <th>Saved</th>
+                </tr>
+              </thead>
+              <tbody id="encounterSubjectsBody"></tbody>
+            </table>
+          </div>
+        </fieldset>
+      </form>
+    </main>
+
+    <template id="vehicleCardTemplate">
+      <fieldset data-card="vehicle">
+        <legend>Vehicle</legend>
+        <div class="row row-4">
+          <div class="field">
+            <label for="licensePlate">Plate</label>
+            <input type="text" id="licensePlate" data-field="licensePlate" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label for="plateState">Plate State</label>
+            <select id="plateState" data-field="plateState"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleYear">Year</label>
+            <select id="vehicleYear" data-field="vehicleYear"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleColor">Color</label>
+            <select id="vehicleColor" data-field="vehicleColor"></select>
+          </div>
+        </div>
+        <div class="row row-4">
+          <div class="field">
+            <label for="vehicleMake">Make</label>
+            <select id="vehicleMake" data-field="vehicleMake"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleModel">Model</label>
+            <select id="vehicleModel" data-field="vehicleModel"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleBodyStyle">Body Style</label>
+            <select id="vehicleBodyStyle" data-field="vehicleBodyStyle"></select>
+          </div>
+          <div class="field">
+            <label for="vin">VIN</label>
+            <input type="text" id="vin" data-field="vin" autocomplete="off" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label for="registeredOwner">Registered Owner</label>
+            <input type="text" id="registeredOwner" data-field="registeredOwner" autocomplete="off" />
+          </div>
+        </div>
+        <div class="nested-block">
+          <div class="card-list" data-nested-list="location" data-location-owner="vehicle"></div>
+          <div class="card-list-actions">
+            <button type="button" class="add-card-btn" data-add-nested="location">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add location
+            </button>
+          </div>
+        </div>
+        <div class="nested-block">
+          <div class="card-list" data-nested-list="link"></div>
+          <div class="card-list-actions">
+            <button type="button" class="add-card-btn" data-add-nested="link">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add link
+            </button>
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="locationCardTemplate">
+      <fieldset data-card="location">
+        <legend>Location</legend>
+        <div class="row">
+          <div class="field">
+            <label for="locationAssociation">Association</label>
+            <select id="locationAssociation" data-field="locationAssociation">
+              <option value="">Select an Option</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="targetPriority">Target Address</label>
+            <select id="targetPriority" data-field="targetPriority">
+              <option value="">Not a target address</option>
+              <option value="1">Primary target</option>
+              <option value="2">Secondary</option>
+              <option value="3">Tertiary</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label for="street">Street</label>
+            <input type="text" id="street" data-field="street" />
+          </div>
+          <div class="field field-span-2">
+            <label for="street2">Street 2</label>
+            <input type="text" id="street2" data-field="street2" />
+          </div>
+        </div>
+        <div class="row row-3">
+          <div class="field">
+            <label for="city">City</label>
+            <input type="text" id="city" data-field="city" />
+          </div>
+          <div class="field">
+            <label for="state">State</label>
+            <input type="text" id="state" data-field="state" />
+          </div>
+          <div class="field">
+            <label for="zip">Zip Code</label>
+            <input type="text" id="zip" data-field="zip" inputmode="numeric" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="latLong">Lat / Long</label>
+            <input type="text" id="latLong" data-field="latLong" autocomplete="off" placeholder="32.744582, -97.816176" />
+            <input type="hidden" id="latitude" data-field="latitude" />
+            <input type="hidden" id="longitude" data-field="longitude" />
+          </div>
+        </div>
+        <p class="field-status" data-field="addressStatus" hidden></p>
+      </fieldset>
+    </template>
+
+    <template id="linkCardTemplate">
+      <fieldset data-card="link">
+        <legend>Link</legend>
+        <div class="row">
+          <div class="field field-span-2 search-field">
+            <label for="linkedPersonSearch">Linked subject</label>
+            <input type="text" id="linkedPersonSearch" data-field="linkedPersonSearch" autocomplete="off" />
+            <input type="hidden" id="linkedPersonId" data-field="linkedPersonId" />
+            <ul class="search-results" role="listbox" hidden></ul>
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/transfer.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/names.js"></script>
+    <script src="functions/address.js"></script>
+    <script src="data/us-places.js"></script>
+    <script src="data/vehicles.js"></script>
+    <script src="functions/vehicles.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/location.js"></script>
+    <script src="functions/model/vehicle.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/lead.js"></script>
+    <script src="functions/model/encounter.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/model/autosave.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/encounters.js"></script>
+  </body>
+</html>

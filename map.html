@@ -5,30 +5,131 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Maps and Planning</title>
     <link rel="stylesheet" href="style/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
   </head>
   <body data-page="map">
+    <!--
+      Planning board. Empty action slot. File exports stay not-built.
+      Map viewport is #map. Targets list ranked lead locations.
+      Views persist only to copdocx.map.views.v1. No lead/admin/book-in writes.
+    -->
     <header class="app-bar">
       <div class="app-bar-info">
         <span class="app-bar-product">COPDoc</span>
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.7.0"
+          data-version="0.11.1"
         >
-          Version 0.7.0
+          Version 0.11.1
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
       <div class="app-bar-navrow" id="appBarNavRow"></div>
       <p id="appBarStatus" class="app-bar-status" hidden></p>
     </header>
-    <div class="page">
-      <fieldset>
-        <legend>Map</legend>
-        <div class="map"></div>
-      </fieldset>
+
+    <div class="page page-map">
+      <header class="page-header">
+        <h1>Maps and planning</h1>
+        <div class="page-meta">
+          <p>Ranked lead locations with coordinates plot as numbered pins.</p>
+        </div>
+      </header>
+
+      <div class="map-layout">
+        <fieldset class="map-card">
+          <legend>Map</legend>
+          <div class="map-toolbar">
+            <div class="map-basemap" role="group" aria-label="Basemap">
+              <button type="button" data-basemap="map" aria-pressed="true">
+                Map
+              </button>
+              <button type="button" data-basemap="satellite" aria-pressed="false">
+                Satellite
+              </button>
+              <button type="button" data-basemap="hybrid" aria-pressed="false">
+                Hybrid
+              </button>
+            </div>
+            <div class="map-views">
+              <button type="button" id="mapHomeButton" class="action-button">
+                Home
+              </button>
+              <button
+                type="button"
+                id="mapSetHomeButton"
+                class="action-button-secondary"
+              >
+                Set home
+              </button>
+              <button
+                type="button"
+                id="mapSavePresetButton"
+                class="action-button-secondary"
+              >
+                Save preset
+              </button>
+              <select id="mapPresetSelect" aria-label="Saved map views">
+                <option value="">No presets yet</option>
+              </select>
+              <button
+                type="button"
+                id="mapDeletePresetButton"
+                class="action-button-secondary"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+          <p id="mapViewHint" class="map-view-hint" hidden></p>
+          <div
+            id="map"
+            class="map"
+            role="application"
+            aria-label="Planning map"
+          ></div>
+        </fieldset>
+
+        <fieldset class="targets-card">
+          <legend>Targets</legend>
+          <p id="targetsEmpty" class="targets-empty">
+            No ranked locations with coordinates.
+          </p>
+          <div class="targets-table-wrap">
+            <table class="targets-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Subject</th>
+                  <th>Address</th>
+                  <th>Association</th>
+                </tr>
+              </thead>
+              <tbody id="targetsTableBody"></tbody>
+            </table>
+          </div>
+        </fieldset>
+      </div>
     </div>
+
     <script src="functions/app-bar.js"></script>
     <script src="functions/date.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="functions/map-views.js"></script>
+    <script src="functions/map.js"></script>
+    <script src="functions/map-targets.js"></script>
   </body>
 </html>

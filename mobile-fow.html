@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Mobile FOW</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="mobile-fow">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.11.1"
+        >
+          Version 0.11.1
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <main class="mobile-fow-page">
+      <nav class="mobile-fow-pagebar" aria-label="Target sheet navigation">
+        <div class="mobile-fow-pagebar-title">
+          <span>Mobile FOW</span>
+          <small>Field target sheet</small>
+        </div>
+      </nav>
+
+      <div
+        id="mobileFowMissing"
+        class="mobile-fow-missing"
+        role="status"
+        aria-live="polite"
+        hidden
+      >
+        <strong>Target sheet unavailable</strong>
+        <span>The requested committed target record could not be loaded.</span>
+      </div>
+
+      <article
+        id="mobileFowSheet"
+        class="mobile-fow-output"
+        aria-labelledby="targetName"
+      >
+        <div
+          id="targetWarnings"
+          class="fow-warning-strip"
+          role="status"
+          aria-label="Target warnings"
+          hidden
+        ></div>
+
+        <div
+          class="fow-target-band"
+          role="note"
+          aria-label="Target. Law enforcement use only. For official use."
+        >
+          <span class="fow-target-mark">Target</span>
+          <span class="fow-target-copy">
+            Law enforcement use only &middot; For official use
+          </span>
+        </div>
+
+        <section class="fow-pid-stack" aria-label="Positive identification">
+          <figure class="fow-photo-card">
+            <img id="targetPhoto" alt="Target photograph" hidden />
+            <div
+              id="targetPhotoPlaceholder"
+              class="fow-photo-placeholder"
+              role="img"
+              aria-label="No subject photograph loaded"
+            >
+              <span class="fow-photo-placeholder-mark" aria-hidden="true"></span>
+              <strong>No subject photo</strong>
+              <span>Target photograph will display here</span>
+            </div>
+            <figcaption id="targetPhotoMeta" class="fow-photo-meta">
+              Photo date and source not loaded
+            </figcaption>
+          </figure>
+
+          <div class="fow-pid-panel">
+            <header class="fow-pid-header">
+              <p>Enforcement target &middot; Positive ID</p>
+              <span id="targetDisposition" class="fow-status-pill">&mdash;</span>
+            </header>
+
+            <h1 id="targetName" class="fow-target-name">Target not loaded</h1>
+
+            <div class="fow-pid-chips" aria-label="Core identifiers">
+              <div class="fow-pid-chip fow-pid-chip-key">
+                <span class="fow-pid-label">DOB / Age</span>
+                <span id="targetDobAge" class="fow-pid-value">&mdash;</span>
+              </div>
+              <div class="fow-pid-chip fow-pid-chip-key">
+                <span class="fow-pid-label">A-Number</span>
+                <span id="targetAlienNumber" class="fow-pid-value fow-mono">
+                  &mdash;
+                </span>
+              </div>
+              <div class="fow-pid-chip">
+                <span class="fow-pid-label">Sex</span>
+                <span id="targetSex" class="fow-pid-value">&mdash;</span>
+              </div>
+              <div class="fow-pid-chip">
+                <span class="fow-pid-label">Citizenship</span>
+                <span id="targetCitizenship" class="fow-pid-value">&mdash;</span>
+              </div>
+            </div>
+
+            <div class="fow-pid-detail">
+              <span class="fow-pid-label">Physical description</span>
+              <p id="targetPhysicalDescription">&mdash;</p>
+            </div>
+
+            <div class="fow-pid-detail">
+              <span class="fow-pid-label">Aliases / AKAs</span>
+              <p id="targetAliases">None listed</p>
+            </div>
+
+            <div class="fow-field-cues" aria-label="Immediate field cues">
+              <div class="fow-field-cue fow-field-cue-vehicle">
+                <span class="fow-field-cue-label">Vehicle / plate</span>
+                <strong id="targetVehicleCue">No primary vehicle loaded</strong>
+              </div>
+              <div class="fow-field-cue fow-field-cue-location">
+                <span class="fow-field-cue-label">Primary location</span>
+                <strong id="targetLocationCue">No primary location loaded</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="fow-field-reference" aria-labelledby="fieldReferenceTitle">
+          <h2 id="fieldReferenceTitle" class="fow-visually-hidden">
+            Field reference
+          </h2>
+
+          <section id="targetPrimaryLocation" class="fow-card fow-priority-card">
+            <header class="fow-card-header">
+              <span class="fow-card-tag fow-card-tag-location">Loc</span>
+              <h3>Primary location</h3>
+            </header>
+            <p id="targetLocationName" class="fow-location-name">
+              No primary location loaded
+            </p>
+            <p id="targetLastKnownAddress" class="fow-location-address">
+              Address will display here.
+            </p>
+            <p id="targetLocationMeta" class="fow-muted-line">
+              Source and verification date not loaded
+            </p>
+            <div class="fow-map-actions" aria-label="Location actions">
+              <a
+                id="targetMapLink"
+                href="#"
+                class="fow-map-button"
+                data-not-built="Open target location in Maps"
+              >
+                Open in Maps
+              </a>
+              <button
+                id="copyTargetPinButton"
+                type="button"
+                class="fow-map-button fow-map-button-secondary"
+                data-not-built="Copy target location pin"
+              >
+                Copy pin
+              </button>
+            </div>
+            <div id="targetLocationPhotos" class="fow-inline-empty">
+              No location photos loaded.
+            </div>
+          </section>
+
+          <section id="targetPrimaryVehicle" class="fow-card fow-priority-card">
+            <header class="fow-card-header">
+              <span class="fow-card-tag fow-card-tag-vehicle">Veh</span>
+              <h3>Known vehicle</h3>
+            </header>
+            <dl class="fow-data-list">
+              <dt>Vehicle</dt>
+              <dd id="targetPrimaryVehicleSummary">&mdash;</dd>
+              <dt>Plate</dt>
+              <dd>
+                <span id="targetPrimaryPlate" class="fow-plate-badge">&mdash;</span>
+              </dd>
+              <dt>Registered owner</dt>
+              <dd id="targetVehicleOwner">&mdash;</dd>
+              <dt>Association</dt>
+              <dd id="targetVehicleAssociation">&mdash;</dd>
+              <dt>Registered address</dt>
+              <dd id="targetVehicleAddress">&mdash;</dd>
+              <dt>Overnight location</dt>
+              <dd id="targetVehicleOvernight">&mdash;</dd>
+            </dl>
+            <div id="targetVehiclePhotos" class="fow-inline-empty">
+              No vehicle photos loaded.
+            </div>
+          </section>
+        </section>
+
+        <section class="fow-supporting-details" aria-labelledby="supportingDetailsTitle">
+          <h2 id="supportingDetailsTitle" class="fow-visually-hidden">
+            Supporting details
+          </h2>
+
+          <details class="fow-card fow-secondary-card">
+            <summary>Case / status details</summary>
+            <dl class="fow-data-list">
+              <dt>Case number</dt>
+              <dd id="targetCaseNumber">&mdash;</dd>
+              <dt>Lead source</dt>
+              <dd id="targetSource">&mdash;</dd>
+              <dt>Immigration status</dt>
+              <dd id="targetImmigrationStatus">&mdash;</dd>
+              <dt>Disposition</dt>
+              <dd id="targetImmigrationDisposition">&mdash;</dd>
+              <dt>Final order date</dt>
+              <dd id="targetFinalOrderDate">&mdash;</dd>
+              <dt>FIN</dt>
+              <dd id="targetFinNumber" class="fow-mono">&mdash;</dd>
+              <dt>Updated</dt>
+              <dd id="targetUpdated">&mdash;</dd>
+            </dl>
+          </details>
+
+          <details class="fow-card fow-secondary-card">
+            <summary>Operation assignment</summary>
+            <dl class="fow-data-list">
+              <dt>Team / arrest team</dt>
+              <dd id="targetTeam">&mdash;</dd>
+              <dt>Primary surveillance eye</dt>
+              <dd id="targetPrimaryEye">&mdash;</dd>
+              <dt>Backup surveillance eye</dt>
+              <dd id="targetBackupEye">&mdash;</dd>
+            </dl>
+          </details>
+
+          <details class="fow-card fow-secondary-card">
+            <summary>All target locations</summary>
+            <div id="targetLocationsList" class="fow-inline-empty">
+              No additional locations loaded.
+            </div>
+          </details>
+
+          <details class="fow-card fow-secondary-card">
+            <summary>All known vehicles</summary>
+            <div id="targetVehiclesList" class="fow-inline-empty">
+              No additional vehicles loaded.
+            </div>
+          </details>
+
+          <details class="fow-card fow-secondary-card">
+            <summary>Record and operational details</summary>
+            <div class="fow-record-block">
+              <span class="fow-record-label">Criminal status</span>
+              <p id="targetCriminalStatus">&mdash;</p>
+            </div>
+            <dl class="fow-data-list fow-record-identifiers">
+              <dt>FBI number</dt>
+              <dd id="targetFbiNumber" class="fow-mono">&mdash;</dd>
+              <dt>NCIC number</dt>
+              <dd id="targetNcicNumber" class="fow-mono">&mdash;</dd>
+              <dt>State ID</dt>
+              <dd id="targetStateId" class="fow-mono">&mdash;</dd>
+            </dl>
+            <div class="fow-record-block">
+              <span class="fow-record-label">Criminal history</span>
+              <div id="targetCriminalHistoryList" class="fow-inline-empty">
+                No criminal history loaded.
+              </div>
+            </div>
+            <div class="fow-record-block">
+              <span class="fow-record-label">Convictions</span>
+              <p id="targetConvictions">None loaded.</p>
+            </div>
+            <div class="fow-record-block">
+              <span class="fow-record-label">Current status</span>
+              <p id="targetCurrentStatus">None loaded.</p>
+            </div>
+            <div class="fow-record-block">
+              <span class="fow-record-label">EARM case status</span>
+              <p id="targetEarmStatus">None loaded.</p>
+            </div>
+            <div class="fow-record-block">
+              <span class="fow-record-label">Immigration history</span>
+              <p id="targetImmigrationHistory">None loaded.</p>
+            </div>
+            <div class="fow-record-block">
+              <span class="fow-record-label">Case posture</span>
+              <p id="targetCasePosture">None loaded.</p>
+            </div>
+            <div class="fow-record-block">
+              <span class="fow-record-label">
+                Enforcement authority / probable cause
+              </span>
+              <p id="targetProbableCause">None loaded.</p>
+            </div>
+            <div class="fow-record-block">
+              <span class="fow-record-label">Safety notes</span>
+              <p id="targetSafetyNotes">None loaded.</p>
+            </div>
+            <div class="fow-record-block">
+              <span class="fow-record-label">Operational notes</span>
+              <p id="targetOperationalNotes">None loaded.</p>
+            </div>
+          </details>
+
+          <details class="fow-card fow-secondary-card fow-notes-card">
+            <summary>Notes</summary>
+            <p id="targetNotes">No notes loaded.</p>
+          </details>
+        </section>
+
+        <footer class="fow-sheet-footer">
+          Read-only mobile field reference
+        </footer>
+      </article>
+    </main>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+  </body>
+</html>

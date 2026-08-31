@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Encounters</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="encounter">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.11.1"
+        >
+          Version 0.11.1
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <main class="page page-wide">
+      <header class="page-header">
+        <div>
+          <h1>Encounters</h1>
+          <p class="section-note">
+            Stops and arrests. Add an encounter, then attach vehicles, location, and subjects.
+          </p>
+        </div>
+      </header>
+
+      <fieldset class="card-static">
+        <legend>Existing encounters</legend>
+        <div id="encountersEmpty" class="records-empty">No encounters yet.</div>
+        <div id="encountersTableWrap" class="records-table-wrap" hidden>
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Encounter ID</th>
+                <th>Date / time</th>
+                <th>Vehicle(s)</th>
+                <th>Address / location</th>
+                <th>Arrested subjects</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="encountersBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+    </main>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/transfer.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/encounter.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/encounters.js"></script>
+  </body>
+</html>

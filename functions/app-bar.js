@@ -3,9 +3,9 @@
  * Rules: docs/app-structure/chrome.md
  */
 (function () {
-  var ROSTER_FILE = [
-    { label: "Import JSON", notBuilt: "Import JSON" },
-    { label: "Export JSON", notBuilt: "Export JSON" }
+  var WORKSPACE_FILE = [
+    { id: "fileImportButton", label: "Import", call: "openFileImport" },
+    { id: "fileExportButton", label: "Export", call: "openFileExport" }
   ];
 
   var ADMIN_LINKS = [
@@ -58,7 +58,26 @@
   }
 
   function isLeadPage(page) {
-    return page === "leads" || page === "lead" || page === "lead-form";
+    return (
+      page === "leads" ||
+      page === "lead" ||
+      page === "lead-form" ||
+      page === "mobile-fow" ||
+      page === "i200-form" ||
+      page === "i205-form"
+    );
+  }
+
+  function isEncounterPage(page) {
+    return page === "encounter" || page === "encounter-form";
+  }
+
+  function queryParam(name) {
+    try {
+      return new URLSearchParams(window.location.search).get(name) || "";
+    } catch (error) {
+      return "";
+    }
   }
 
   function recordIdHref(path, id) {
@@ -68,16 +87,126 @@
     return path + "?id=" + encodeURIComponent(id);
   }
 
+  function hasCommittedAt(meta) {
+    return !!(meta && String(meta.committedAt || "").trim());
+  }
+
+  function leadHasCommittedAt(leadId) {
+    if (!leadId) {
+      return false;
+    }
+    try {
+      var model = window.COPDoc && COPDoc.model;
+      if (!model || !model.store || typeof model.store.getLead !== "function") {
+        return false;
+      }
+      if (typeof model.store.loadFromDisk === "function") {
+        model.store.loadFromDisk();
+      }
+      var snap = model.store.getLead(leadId);
+      return hasCommittedAt(snap && snap.meta);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function adminRecordHasCommittedAt(kind, id) {
+    if (!id) {
+      return false;
+    }
+    try {
+      var raw = localStorage.getItem("copdoc.admin.v1");
+      var admin = raw ? JSON.parse(raw) : {};
+      var list = kind === "officer" ? admin.officers : admin.vehicles;
+      var i;
+      for (i = 0; i < (list || []).length; i++) {
+        var row = list[i];
+        if (!row) {
+          continue;
+        }
+        if (row.id === id || row.officerId === id || row.vehicleId === id) {
+          return hasCommittedAt(row.meta);
+        }
+      }
+    } catch (error) {
+      return false;
+    }
+    return false;
+  }
+
+  function backAction(label, href) {
+    return {
+      id: "appBarBack",
+      label: label,
+      href: href
+    };
+  }
+
+  function withQuery(path, params) {
+    var parts = [];
+    var key;
+    for (key in params) {
+      if (Object.prototype.hasOwnProperty.call(params, key) && params[key]) {
+        parts.push(key + "=" + encodeURIComponent(params[key]));
+      }
+    }
+    return parts.length ? path + "?" + parts.join("&") : path;
+  }
+
   function configFor(page) {
     var id = queryId();
+    if (page === "home") {
+      return {
+        tab: "home",
+        file: WORKSPACE_FILE,
+        actions: []
+      };
+    }
+    if (page === "encounter") {
+      return {
+        tab: "encounter",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            label: "Add encounter",
+            href: "encounter-form.html",
+            primary: true,
+            chromeAction: "add"
+          }
+        ]
+      };
+    }
+    if (page === "encounter-form") {
+      return {
+        tab: "encounter",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            label: "Save",
+            primary: true,
+            chromeAction: "save",
+            call: "commitEncounter"
+          },
+          backAction("Back to encounters", "encounter.html"),
+          {
+            id: "addEncounterSubjectsButton",
+            label: "Add subjects",
+            href: id
+              ? "bookin.html?encounterId=" + encodeURIComponent(id)
+              : "bookin.html"
+          },
+          {
+            id: "generateI213Button",
+            label: "Generate I-213",
+            call: "generateEncounterNarrative"
+          }
+        ]
+      };
+    }
     if (page === "leads") {
       return {
         tab: "leads",
-        file: [
-          { label: "Import JSON", notBuilt: "Import JSON" },
-          { id: "downloadLeadsJsonButton", label: "Export JSON" },
-          { id: "downloadLeadsCsvButton", label: "Download CSV" }
-        ],
+        file: WORKSPACE_FILE,
         actions: [
           {
             label: "Add lead",
@@ -95,13 +224,24 @@
           href: recordIdHref("lead-form.html", id),
           primary: true,
           chromeAction: "edit"
-        }
+        },
+        backAction("Back to leads", "leads.html")
       ];
       if (id) {
         actions.push({
           id: "bookInLeadButton",
           label: "Book-in",
           href: "bookin.html?leadId=" + encodeURIComponent(id)
+        });
+        actions.push({
+          id: "issueI200Button",
+          label: "Issue I-200",
+          href: "i200-form.html?id=" + encodeURIComponent(id)
+        });
+        actions.push({
+          id: "issueI205Button",
+          label: "Issue I-205",
+          href: "i205-form.html?id=" + encodeURIComponent(id)
         });
       }
       return {
@@ -113,6 +253,54 @@
         actions: actions
       };
     }
+    if (page === "mobile-fow") {
+      var mobileFowActions = [];
+      if (id) {
+        mobileFowActions.push({
+          label: "Edit lead",
+          href: recordIdHref("lead-form.html", id),
+          primary: true,
+          chromeAction: "edit"
+        });
+        mobileFowActions.push(backAction("Back to lead", recordIdHref("lead.html", id)));
+      } else {
+        mobileFowActions.push(backAction("Back to leads", "leads.html"));
+      }
+      return {
+        tab: "leads",
+        file: [
+          {
+            id: "downloadMobileFowButton",
+            label: "Download FOW",
+            notBuilt: "Download FOW"
+          }
+        ],
+        actions: mobileFowActions
+      };
+    }
+    if (page === "i200-form" || page === "i205-form") {
+      return {
+        tab: "leads",
+        file: [
+          {
+            id: "downloadWarrantPdfButton",
+            label: "Download PDF",
+            call: "downloadWarrantPdf"
+          }
+        ],
+        actions: [
+          {
+            label: "Issue",
+            primary: true,
+            chromeAction: "save",
+            call: "issueWarrant"
+          },
+          id
+            ? backAction("Back to lead", recordIdHref("lead.html", id))
+            : backAction("Back to leads", "leads.html")
+        ]
+      };
+    }
     if (page === "lead-form") {
       return {
         tab: "leads",
@@ -122,11 +310,9 @@
         ],
         actions: [
           { label: "Save", primary: true, chromeAction: "save" },
-          {
-            id: "appBarCancel",
-            label: "Cancel",
-            href: id ? recordIdHref("lead.html", id) : "leads.html"
-          },
+          leadHasCommittedAt(id)
+            ? backAction("Back to lead", recordIdHref("lead.html", id))
+            : backAction("Back to leads", "leads.html"),
           { id: "stubPersonButton", label: "+ Person" },
           { id: "stubVehicleButton", label: "+ Vehicle" },
           { id: "stubLocationButton", label: "+ Location" },
@@ -135,9 +321,48 @@
       };
     }
     if (page === "bookin") {
+      var encounterId = queryParam("encounterId");
+      var bookinLeadId = queryParam("leadId");
+      var bookinActions = [
+        {
+          id: "generateButton",
+          label: "Generate",
+          primary: true,
+          chromeAction: "save",
+          call: "generateCombinedPacket"
+        }
+      ];
+      if (encounterId) {
+        bookinActions.push(
+          backAction(
+            "Back to encounter",
+            recordIdHref("encounter-form.html", encounterId)
+          )
+        );
+        bookinActions.push({
+          id: "addEncounterSubjectButton",
+          label: "Add subject",
+          call: "addEncounterSubject"
+        });
+        bookinActions.push({
+          id: "loadLeadIntoEncounterButton",
+          label: "Load from leads",
+          call: "openLoadLeadForEncounter"
+        });
+      } else if (bookinLeadId) {
+        bookinActions.push(
+          backAction("Back to lead", recordIdHref("lead.html", bookinLeadId))
+        );
+      }
+      bookinActions.push({ label: "Clear", call: "confirmClearForm" });
+      bookinActions.push({
+        id: "generatebaseballCard",
+        label: "Baseball card",
+        call: "openBaseballCard"
+      });
       return {
         tab: "bookin",
-        file: [
+        file: WORKSPACE_FILE.concat([
           { id: "bookInFileNew", label: "New", call: "startNewRecord" },
           {
             id: "saveRecordButton",
@@ -149,22 +374,8 @@
             label: "Open",
             call: "focusBookInRecords"
           }
-        ],
-        actions: [
-          {
-            id: "generateButton",
-            label: "Generate",
-            primary: true,
-            chromeAction: "save",
-            call: "generateCombinedPacket"
-          },
-          { label: "Clear", call: "confirmClearForm" },
-          {
-            id: "generatebaseballCard",
-            label: "Baseball card",
-            call: "onGenerateBaseballCard"
-          }
-        ]
+        ]),
+        actions: bookinActions
       };
     }
     if (page === "map") {
@@ -180,21 +391,31 @@
       };
     }
     if (page === "narrative") {
+      var narrativeEncounterId = queryParam("encounterId");
+      var narrativeActions = [
+        {
+          label: "Update draft",
+          primary: true,
+          chromeAction: "save"
+        }
+      ];
+      if (narrativeEncounterId) {
+        narrativeActions.push(
+          backAction(
+            "Back to encounter",
+            recordIdHref("encounter-form.html", narrativeEncounterId)
+          )
+        );
+      }
+      narrativeActions.push({ id: "addSupplementButton", label: "Add supplement" });
+      narrativeActions.push({ id: "inspectOutputButton", label: "Inspect output" });
       return {
         tab: "narrative",
         file: [
           { id: "downloadNarrativeJsonButton", label: "Download JSON" },
           { id: "downloadNarrativeTextButton", label: "Download text" }
         ],
-        actions: [
-          {
-            label: "Update draft",
-            primary: true,
-            chromeAction: "save"
-          },
-          { id: "addSupplementButton", label: "Add supplement" },
-          { id: "inspectOutputButton", label: "Inspect output" }
-        ]
+        actions: narrativeActions
       };
     }
     if (page === "baseballcard") {
@@ -207,18 +428,25 @@
             label: "Generate",
             primary: true,
             chromeAction: "save",
-            call: "createBaseballText"
-          }
+            call: "persistBaseballCard"
+          },
+          backAction(
+            "Back to book-in",
+            withQuery("bookin.html", {
+              encounterId: queryParam("encounterId"),
+              leadId: queryParam("leadId")
+            })
+          )
         ]
       };
     }
     if (page === "dashboard" || page === "schedule") {
-      return { tab: "admin", file: ROSTER_FILE, actions: [] };
+      return { tab: "admin", file: WORKSPACE_FILE, actions: [] };
     }
     if (page === "officers") {
       return {
         tab: "admin",
-        file: ROSTER_FILE,
+        file: WORKSPACE_FILE,
         actions: [
           {
             label: "Add officer",
@@ -232,37 +460,34 @@
     if (page === "officer") {
       return {
         tab: "admin",
-        file: ROSTER_FILE,
+        file: WORKSPACE_FILE,
         actions: [
           {
             label: "Edit",
             href: recordIdHref("officer-form.html", id),
             primary: true,
             chromeAction: "edit"
-          }
+          },
+          backAction("Back to officers", "officers.html")
         ]
       };
     }
     if (page === "officer-form") {
       return {
         tab: "admin",
-        file: ROSTER_FILE,
+        file: WORKSPACE_FILE,
         actions: [
           { label: "Save", primary: true, chromeAction: "save" },
-          {
-            id: "appBarCancel",
-            label: "Cancel",
-            href: id
-              ? recordIdHref("officer.html", id)
-              : "officers.html"
-          }
+          adminRecordHasCommittedAt("officer", id)
+            ? backAction("Back to officer", recordIdHref("officer.html", id))
+            : backAction("Back to officers", "officers.html")
         ]
       };
     }
     if (page === "vehicles") {
       return {
         tab: "admin",
-        file: ROSTER_FILE,
+        file: WORKSPACE_FILE,
         actions: [
           {
             label: "Add vehicle",
@@ -276,30 +501,27 @@
     if (page === "vehicle") {
       return {
         tab: "admin",
-        file: ROSTER_FILE,
+        file: WORKSPACE_FILE,
         actions: [
           {
             label: "Edit",
             href: recordIdHref("vehicle-form.html", id),
             primary: true,
             chromeAction: "edit"
-          }
+          },
+          backAction("Back to vehicles", "vehicles.html")
         ]
       };
     }
     if (page === "vehicle-form") {
       return {
         tab: "admin",
-        file: ROSTER_FILE,
+        file: WORKSPACE_FILE,
         actions: [
           { label: "Save", primary: true, chromeAction: "save" },
-          {
-            id: "appBarCancel",
-            label: "Cancel",
-            href: id
-              ? recordIdHref("vehicle.html", id)
-              : "vehicles.html"
-          }
+          adminRecordHasCommittedAt("vehicle", id)
+            ? backAction("Back to vehicle", recordIdHref("vehicle.html", id))
+            : backAction("Back to vehicles", "vehicles.html")
         ]
       };
     }
@@ -427,7 +649,15 @@
       return a;
     }
 
+    nav.appendChild(tabLink("home.html", "Home", tab === "home" || page === "home"));
     nav.appendChild(tabLink("leads.html", "Leads", tab === "leads" || isLeadPage(page)));
+    nav.appendChild(
+      tabLink(
+        "encounter.html",
+        "Encounters",
+        tab === "encounter" || isEncounterPage(page)
+      )
+    );
     nav.appendChild(tabLink("bookin.html", "Book-in", tab === "bookin"));
     nav.appendChild(tabLink("map.html", "Map", tab === "map"));
     nav.appendChild(tabLink("narrative.html", "Narrative", tab === "narrative"));

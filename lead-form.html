@@ -35,9 +35,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.7.0"
+          data-version="0.11.1"
         >
-          Version 0.7.0
+          Version 0.11.1
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -218,7 +218,7 @@
             </div>
             <div class="field">
               <label for="lexId">LexID</label>
-              <input type="text" id="lexId" name="lexId" />
+              <input type="text" id="lexId" name="lexId" data-field="lexId" autocomplete="off" />
             </div>
           </div>
         </fieldset>
@@ -411,13 +411,13 @@
               <label for="immigrationStatus">Immigration Status</label>
               <select id="immigrationStatus" name="immigrationStatus"></select>
             </div>
-            <div>
+            <div class="field">
               <label for="firstDeportationDate">First Deportation Date</label>
-              <input id="firstDeportationDate" type="date">
+              <input id="firstDeportationDate" type="date" name="firstDeportationDate" />
             </div>
-            <div>
+            <div class="field">
               <label for="lastDeportationDate">Last Deportation Date</label>
-              <input id="lastDeportationDate" type="date">
+              <input id="lastDeportationDate" type="date" name="lastDeportationDate" />
             </div>
             <div class="field">
               <label for="finalOrderDate">Final Order Date</label>

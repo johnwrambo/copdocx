@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Home</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="home">
+    <!--
+      Briefing hub. Chrome only. Empty action slot.
+      Counts and lists are placeholders until a later painter reads
+      committed leads / admin roster / book-in (cross-store reads).
+    -->
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.11.1"
+        >
+          Version 0.11.1
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide page-home">
+      <header class="page-header">
+        <h1>Briefing</h1>
+        <div class="page-meta">
+          <p>Duty desk for today. Open a module to work a record.</p>
+        </div>
+      </header>
+
+      <div class="stat-row" aria-label="Duty snapshot">
+        <article class="stat-card">
+          <p class="stat-label">Committed leads</p>
+          <p id="homeStatLeads" class="stat-value">—</p>
+          <p class="stat-hint">Case files ready to view</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Officers available</p>
+          <p id="homeStatOfficers" class="stat-value">—</p>
+          <p class="stat-hint">Committed, duty: available</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Vehicles available</p>
+          <p id="homeStatVehicles" class="stat-value">—</p>
+          <p class="stat-hint">Committed, fleet: available</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Book-ins this week</p>
+          <p id="homeStatBookins" class="stat-value">—</p>
+          <p class="stat-hint">Sun–Sat, book-in store</p>
+        </article>
+      </div>
+
+      <nav class="home-modules" aria-label="Modules">
+        <a class="home-module" href="leads.html">
+          <span class="home-module-icon" data-icon="Crosshair" data-icon-size="22"></span>
+          <span class="home-module-label">Leads</span>
+          <span class="home-module-hint">Case files</span>
+        </a>
+        <a class="home-module" href="bookin.html">
+          <span class="home-module-icon" data-icon="FileText" data-icon-size="22"></span>
+          <span class="home-module-label">Book-in</span>
+          <span class="home-module-hint">Packet / PDF</span>
+        </a>
+        <a class="home-module" href="map.html">
+          <span class="home-module-icon" data-icon="Map" data-icon-size="22"></span>
+          <span class="home-module-label">Map</span>
+          <span class="home-module-hint">Priority targets</span>
+        </a>
+        <a class="home-module" href="narrative.html">
+          <span class="home-module-icon" data-icon="NotebookPen" data-icon-size="22"></span>
+          <span class="home-module-label">Narrative</span>
+          <span class="home-module-hint">Training workspace</span>
+        </a>
+        <a class="home-module" href="admin.html">
+          <span class="home-module-icon" data-icon="Shield" data-icon-size="22"></span>
+          <span class="home-module-label">Admin</span>
+          <span class="home-module-hint">Roster and duty</span>
+        </a>
+      </nav>
+
+      <div class="home-split">
+        <fieldset class="card-static">
+          <legend>Recent leads</legend>
+          <div class="dash-card-head">
+            <p class="section-note" id="homeLeadsNote">No committed leads.</p>
+            <a href="leads.html" class="action-button-secondary">Open leads</a>
+          </div>
+          <ul id="homeLeadsPreview" class="dash-preview" hidden></ul>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>On duty today</legend>
+          <div class="dash-card-head">
+            <p class="section-note" id="homeDutyNote">No shifts today.</p>
+            <a href="schedule.html" class="action-button-secondary">Open schedule</a>
+          </div>
+          <ul id="homeDutyPreview" class="dash-preview" hidden></ul>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Priority targets</legend>
+          <div class="dash-card-head">
+            <p class="section-note" id="homeTargetsNote">No ranked locations with coordinates.</p>
+            <a href="map.html" class="action-button-secondary">Open map</a>
+          </div>
+          <ul id="homeTargetsPreview" class="dash-preview" hidden></ul>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Follow-ups</legend>
+          <div class="dash-card-head">
+            <p class="section-note" id="homeFollowUpsNote">No open follow-ups.</p>
+            <a href="leads.html" class="action-button-secondary">Open leads</a>
+          </div>
+          <ul id="homeFollowUpsPreview" class="dash-preview" hidden></ul>
+        </fieldset>
+      </div>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/transfer.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="assets/icons/copdoc-icons.js"></script>
+    <script src="functions/home.js"></script>
+  </body>
+</html>

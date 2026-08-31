@@ -88,6 +88,14 @@ function locationAssociationChoices(owner) {
   ) {
     return COPDoc.model.VEHICLE_LOCATION_ASSOCIATIONS;
   }
+  if (
+    window.COPDoc &&
+    COPDoc.model &&
+    owner === "encounter" &&
+    COPDoc.model.ENCOUNTER_LOCATION_ASSOCIATIONS
+  ) {
+    return COPDoc.model.ENCOUNTER_LOCATION_ASSOCIATIONS;
+  }
   if (window.COPDoc && COPDoc.model && COPDoc.model.PERSON_LOCATION_ASSOCIATIONS) {
     return COPDoc.model.PERSON_LOCATION_ASSOCIATIONS;
   }
@@ -833,6 +841,28 @@ initRepeatable({
   title: "Location",
   prefix: "location",
   bind: bindAddressCardFull
+});
+
+initRepeatable({
+  listId: "encounterVehicleList",
+  templateId: "vehicleCardTemplate",
+  addButtonId: "addEncounterVehicleButton",
+  title: "Vehicle",
+  prefix: "encounterVehicle",
+  bind: bindVehicleCardFull,
+  seed: false,
+  allowEmpty: true
+});
+
+initRepeatable({
+  listId: "encounterLocationList",
+  templateId: "locationCardTemplate",
+  addButtonId: "addEncounterLocationButton",
+  title: "Location",
+  prefix: "encounterLocation",
+  bind: bindAddressCardFull,
+  seed: false,
+  allowEmpty: true
 });
 
 function bindDocumentCard(card) {

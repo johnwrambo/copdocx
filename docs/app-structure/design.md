@@ -32,15 +32,18 @@ This design makes every record type follow the officer/vehicle template, splits 
 
 | Page | Role today |
 | --- | --- |
-| `index.html` | Refresh **and** canonical **and** fallback link → `lead.html` |
+| `index.html` | Refresh **and** canonical **and** fallback link → `home.html` |
 | `lead.html` | Lead **form**. Bare `<body>` (no `data-page`). Tab label **Lead** (singular). File: New / Save / Open select / Download JSON / CSV. Right: +Person +Vehicle +Location, Follow-ups, `#quickSaveLeadButton` Save. |
 | `bookin.html` | Form. File: New / Save / Open. Right: Clear, Baseball card, Generate. Records **toolbar** already has Export / Import-merge / Restore-replace. |
-| `map.html` | Map. File: Save PDF / KMZ / JSON / CSV (`data-not-built`). No action slot. |
+| `map.html` | Planning board (`data-page="map"`). Map card + targets table. File: Save PDF / KMZ / JSON / CSV (`data-not-built`). Empty action slot. |
 | `admin.html` | Dashboard (`data-admin-page="dashboard"`). |
 | `officers.html` / `officer.html` / `officer-form.html` | List / view / form. View is `data-admin-page="officer-view"` (not `officer`). Form Save is `#addOfficerButton` in the **body** (~129–132). View Edit is `#officerEditLink` (`<a>`). |
 | `vehicles.html` / `vehicle.html` / `vehicle-form.html` | List / view / form. View is `data-admin-page="vehicle-view"`. Form Save is `#addVehicleButton` in the body (~136–138). **No** focusout autosave. File Save on the vehicle form calls `addVehicle({ quiet: true })` (`admin.js` ~1587–1591). |
 | `schedule.html` | Week grid + add-shift on the same page. File is only `#adminSaveButton`. |
-| `home.html`, `encounter.html`, `operation.html` | **Zero-byte** files, not chrome shells. |
+| `home.html` | Briefing hub (`data-page="home"`). Chrome shell, empty action slot, no store writes. |
+| `encounter.html` | Encounter **list** (`data-page="encounter"`). 0.11.0. |
+| `encounter-form.html` | Encounter **form**. ID minted on Add. Subjects via Book-in `?encounterId=`. Generate I-213. |
+| `operation.html` | **Zero-byte** file, not a chrome shell. |
 | `baseballcard.html` | Chrome + playground. File: New/Save/Open `data-not-built`. |
 
 Stamp `0.5.2` is in every header `data-version` **and** `functions/book-in.js` `APP_RELEASE.version` (backup filenames / `createdWithVersion`). Those are different clocks — see Key Decision 14.
@@ -137,7 +140,7 @@ flowchart LR
 - Confirm-on-leave; twin committed snapshot / undo.
 - Fleet parking locations; shift draft/commit.
 - Book-in list/view/form split (follow-on, same taxonomy).
-- Fleshing out zero-byte `home.html` / `encounter.html` / `operation.html`.
+- Fleshing out zero-byte `encounter.html` / `operation.html`. Home is a briefing skeleton (no store writes).
 - Bundler, router, or framework.
 - Implementing roster Import JSON (label only).
 - Purging historical `people{}` rows created by today’s autosave.
@@ -146,7 +149,7 @@ flowchart LR
 
 ## Key Decisions
 
-1. **Leads use the officer/vehicle file triad** (end state). `leads.html` list, `lead.html` view, `lead-form.html` form. `index.html` refresh **and** canonical **and** fallback `<a>` → `leads.html`. Names: [taxonomy.md](C:\Users\johnw\PycharmProjects\COPDocX\docs\app-structure\taxonomy.md).
+1. **Leads use the officer/vehicle file triad** (end state). `leads.html` list, `lead.html` view, `lead-form.html` form. `index.html` refresh **and** canonical **and** fallback `<a>` → `home.html`. Names: [taxonomy.md](C:\Users\johnw\PycharmProjects\COPDocX\docs\app-structure\taxonomy.md).
 
 2. **One primary action slot; Edit and Save are the same control** — `#appBarPrimaryAction` only. **No dual ids.** Add/Edit are `<a href>`; Save is `<button type="button">` with `data-chrome-action="add|edit|save"`. Chrome **paints**; page scripts **bind Save**. Hide `#quickSaveLeadButton`, `#addOfficerButton`, `#addVehicleButton`, `#officerEditLink`, `#vehicleEditLink` in the chrome PR. Tables: [chrome.md](C:\Users\johnw\PycharmProjects\COPDocX\docs\app-structure\chrome.md).
 
@@ -180,7 +183,7 @@ flowchart LR
 
 17. **Lead list city** is first `person.locations[].city`, else **—**. Source column uses human labels (`tag` → “Plate Check”), not raw codes. **`functions/lead-source.js` has no label map today** (it only toggles `[data-source]` panels; labels live as `<option>` text on `lead.html`). The triad PR **adds `SOURCE_LABELS`** there; `leads.js` reads that map. Do not scrape `#leadSource`.
 
-18. **Zero-byte stubs stay empty** in this program. PR “remaining pages” is File taxonomy on book-in and baseball, not writing `home.html` from scratch.
+18. **`encounter.html` / `operation.html` stay empty** in this program. `home.html` is the briefing hub (`data-page="home"`); counts stay placeholders until a later painter.
 
 ---
 
@@ -507,7 +510,7 @@ PR numbers below are **this plan’s** numbers. File-menu exceptions are named b
 - **Files:** `bookin.html`, `functions/book-in.js` (File: Export, Import-merge, Restore-replace; **remove toolbar duplicates**; New/Save record as action secondaries; Generate primary); `baseballcard.html` (File: Export `data-not-built` only)
 - **Dependencies:** PR 2 (PR 7 if load-order conflicts)
 - **Stamp:** **0.7.2**
-- **Description:** File menus match chrome.md. **Do not** write `home.html` / `encounter.html` / `operation.html`. No Map export implementations. No book-in triad.
+- **Description:** File menus match chrome.md. **Do not** write `encounter.html` / `operation.html`. No Map export implementations. No book-in triad.
 
 ### Follow-on (not this program)
 

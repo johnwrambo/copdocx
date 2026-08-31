@@ -55,14 +55,16 @@ function addCriminalHistoryRow() {
     const row = document.createElement("div");
     row.className = "criminal-history-row";
     row.innerHTML =
-        '<label for="' + uid + '-charge">Charge</label>' +
-        '<input id="' + uid + '-charge" type="text" data-field="charge">' +
-        '<label for="' + uid + '-convictionDate">Conviction Date</label>' +
-        '<input id="' + uid + '-convictionDate" type="date" data-field="convictionDate">' +
-        '<label for="' + uid + '-county">County</label>' +
-        '<input id="' + uid + '-county" type="text" data-field="county">' +
-        '<label for="' + uid + '-state">State</label>' +
-        '<input id="' + uid + '-state" type="text" data-field="state">';
+        '<div class="field"><label for="' + uid + '-charge">Charge</label>' +
+        '<input id="' + uid + '-charge" type="text" data-field="charge"></div>' +
+        '<div class="field"><label for="' + uid + '-convictionDate">Conviction date</label>' +
+        '<input id="' + uid + '-convictionDate" type="date" data-field="convictionDate"></div>' +
+        '<div class="field"><label for="' + uid + '-county">County</label>' +
+        '<input id="' + uid + '-county" type="text" data-field="county"></div>' +
+        '<div class="field"><label for="' + uid + '-state">State</label>' +
+        '<input id="' + uid + '-state" type="text" data-field="state"></div>' +
+        '<div class="field"><label for="' + uid + '-court">Court</label>' +
+        '<input id="' + uid + '-court" type="text" data-field="court"></div>';
     criminalHistoryList.appendChild(row);
     return row;
 }
@@ -393,6 +395,5 @@ if (baseballCardEditor) {
             addCriminalHistoryRow();
             createBaseballText();
         });
-        addCriminalHistoryRow();
     }
 }

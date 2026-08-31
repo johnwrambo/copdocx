@@ -32,6 +32,7 @@ function load(rel) {
 load("functions/model/util.js");
 load("functions/model/lead.js");
 load("functions/model/person.js");
+load("functions/model/encounter.js");
 load("functions/model/location.js");
 load("functions/model/vehicle.js");
 load("functions/model/officer.js");
@@ -196,10 +197,185 @@ var caseVeh = model.createVehicle({ licensePlate: "XYZ999" });
 check("case vehicle is not gov", caseVeh.governmentVehicle === false && caseVeh.status === "");
 check("case vehicle aliases id", !!caseVeh.vehicleId && caseVeh.id === caseVeh.vehicleId);
 
+var rapWarrant = model.createWarrant({
+  charge: "FTA",
+  warrantNumber: "CR-1"
+});
+check("rap warrant has empty formType", rapWarrant.formType === "");
+check(
+  "rap is not issued form",
+  model.isIssuedWarrant(rapWarrant) === false
+);
+
+var i200 = model.createWarrant({
+  formType: "I-200",
+  fileNo: "A000 111 222",
+  pdfFileName: "I-200_GARCIA_LUIS_A000111222_20260830.pdf",
+  office: "ERO Dallas",
+  officerName: "REYES, Maria",
+  officerTitle: "IO",
+  basis: ["the execution of a charging document to initiate removal proceedings against the subject"],
+  issuedAt: "2026-08-30T12:00:00.000Z",
+  warrantStatus: "active"
+});
+check("issued I-200 formType", i200.formType === "I-200" && model.isIssuedWarrant(i200));
+check("issued warrant keeps RAP fields", i200.warrantStatus === "active" && !!i200.warrantId);
+
+var mixedPerson = model.createPerson();
+mixedPerson.warrants = [rapWarrant, i200];
+check(
+  "issuedWarrants filters RAP",
+  model.issuedWarrants(mixedPerson).length === 1 &&
+    model.issuedWarrants(mixedPerson)[0].formType === "I-200"
+);
+
+var issuedLead = model.createLeadSnapshot();
+issuedLead.person.name.lastName = "GARCIA";
+issuedLead.person.name.firstName = "LUIS";
+issuedLead.person.warrants = [i200];
+model.store.saveLead(issuedLead, { mode: "commit" });
+var reloaded = model.store.getLead(issuedLead.leadId);
+reloaded.person.warrants.push(
+  model.createWarrant({ formType: "I-205", fileNo: "A000 111 222" })
+);
+model.store.saveLead(reloaded, { mode: "commit" });
+var afterIssue = model.store.getLead(issuedLead.leadId);
+check(
+  "issue writeback stays committed",
+  afterIssue.meta.status === "committed" && !!afterIssue.meta.committedAt
+);
+check(
+  "issue writeback keeps both forms",
+  model.issuedWarrants(afterIssue.person).length === 2
+);
+
+var personFields = model.createPerson({
+  lexId: "LEX-9",
+  immigration: {
+    firstDeportationDate: "2019-01-02",
+    lastDeportationDate: "2024-06-15"
+  }
+});
+check("person lexId", personFields.lexId === "LEX-9");
+check(
+  "person deportation dates",
+  personFields.immigration.firstDeportationDate === "2019-01-02" &&
+    personFields.immigration.lastDeportationDate === "2024-06-15"
+);
+check("person baseballCards array", Array.isArray(personFields.immigration.baseballCards));
+
+var bbcLead = model.createLeadSnapshot();
+bbcLead.person.lexId = "LEX-9";
+bbcLead.person.immigration.firstDeportationDate = "2019-01-02";
+bbcLead.person.immigration.lastDeportationDate = "2024-06-15";
+bbcLead.person.immigration.finalOrderDate = "2018-12-01";
+bbcLead.person.immigration.baseballCards = [
+  model.createBaseballCard({ text: "ICE Dallas arrested ...", disposition: "REINST" })
+];
+model.store.saveLead(bbcLead, { mode: "commit" });
+var bbcStored = model.store.getLead(bbcLead.leadId);
+check(
+  "lead save keeps lexId and deportation dates",
+  bbcStored.person.lexId === "LEX-9" &&
+    bbcStored.person.immigration.firstDeportationDate === "2019-01-02" &&
+    bbcStored.person.immigration.lastDeportationDate === "2024-06-15"
+);
+check(
+  "lead save keeps baseballCards",
+  bbcStored.person.immigration.baseballCards.length === 1 &&
+    bbcStored.person.immigration.baseballCards[0].text.indexOf("ICE Dallas") !== -1
+);
+bbcStored.person.immigration.alienNumber = "A000111222";
+model.store.saveLead(bbcStored, { mode: "commit" });
+var bbcAgain = model.store.getLead(bbcLead.leadId);
+check(
+  "later commit keeps baseballCards",
+  bbcAgain.person.immigration.baseballCards.length === 1 &&
+    bbcAgain.meta.status === "committed"
+);
+
 var govVeh = model.createVehicle({ governmentVehicle: true, unit: "U-1" });
 check(
   "gov vehicle defaults fleet status",
   govVeh.governmentVehicle === true && govVeh.status === "available"
+);
+
+var enc = model.createEncounterRecord();
+check(
+  "encounter id minted",
+  typeof enc.encounterId === "string" && enc.encounterId.indexOf("enc") === 0
+);
+check("encounter entity", enc.entityType === "ENCOUNTER");
+check("encounter schema", enc.schema === "copdocx.encounter.v1");
+check("new encounter is draft", enc.meta.status === "draft");
+check(
+  "encounter empty collections",
+  enc.subjects.length === 0 &&
+    enc.vehicles.length === 0 &&
+    enc.locations.length === 0
+);
+check(
+  "encounter subject factory",
+  model.createEncounterSubject({ lastName: "LOKI" }).lastName === "LOKI"
+);
+
+model.store.saveEncounter(enc, { mode: "draft" });
+check(
+  "draft encounter listed",
+  model.store.listEncounters().some(function (row) {
+    return row.encounterId === enc.encounterId;
+  })
+);
+check(
+  "draft encounter status",
+  model.store.getEncounter(enc.encounterId).meta.status === "draft"
+);
+
+enc.startedAt = "2026-08-30T12:00";
+enc.subjects.push(
+  model.createEncounterSubject({
+    lastName: "LOKI",
+    firstName: "Laufeyson",
+    alienNumber: "A000111222"
+  })
+);
+model.store.saveEncounter(enc, { mode: "commit" });
+var savedEnc = model.store.getEncounter(enc.encounterId);
+check(
+  "commit encounter",
+  savedEnc.meta.status === "committed" && !!savedEnc.meta.committedAt
+);
+check(
+  "commit keeps subject",
+  savedEnc.subjects[0] && savedEnc.subjects[0].lastName === "LOKI"
+);
+
+var keepEncAt = savedEnc.meta.committedAt;
+model.store.saveEncounter(
+  { encounterId: enc.encounterId, startedAt: "2026-08-30T13:00" },
+  { mode: "draft" }
+);
+var demotedEnc = model.store.getEncounter(enc.encounterId);
+check(
+  "draft of committed encounter keeps committedAt",
+  demotedEnc.meta.status === "draft" && demotedEnc.meta.committedAt === keepEncAt
+);
+check(
+  "draft merge keeps subjects",
+  demotedEnc.subjects[0] && demotedEnc.subjects[0].lastName === "LOKI"
+);
+
+load("functions/encounter-narrative.js");
+var bundle = context.COPDoc.encounterNarrative.bundleFromEncounter(enc.encounterId);
+check("narrative adapter returns bundle", !!(bundle && bundle.encounter));
+check(
+  "narrative adapter uses encounter id",
+  bundle.encounter.encounterId === enc.encounterId
+);
+check(
+  "narrative adapter maps subject",
+  bundle.participants[0] &&
+    String(bundle.participants[0].identitySnapshot.displayName).indexOf("LOKI") !== -1
 );
 
 if (fail) {

@@ -1,0 +1,2157 @@
+{
+  "format": "copdocx.transfer.v1",
+  "appVersion": "0.10.0",
+  "exportedAt": "2026-08-30T18:00:00.000Z",
+  "filters": {
+    "types": [
+      "leads",
+      "officers",
+      "vehicles",
+      "shifts",
+      "bookin"
+    ],
+    "from": "",
+    "to": ""
+  },
+  "note": "Demonstration workspace. File → Import. Avengers = officers; MCU villains = leads. DFW addresses include latitude/longitude for the map. Not loaded unless you import it.",
+  "leads": [
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6k_6qbr8y",
+      "subjectPersonId": "p_mtgh8f6k_g2dnxm",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "elite",
+        "caseNumber": "DAL-26-1001",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": "Subject using the alias Loki of Asgard. Frequent no-show at ERO Dallas."
+      },
+      "person": {
+        "personId": "p_mtgh8f6k_g2dnxm",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "LAUFEYSON",
+          "firstName": "Loki",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1985-12-17",
+        "age": "40",
+        "citizenship": "IS",
+        "ssn": "",
+        "lexId": "LEX-LOKI",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6k_34jbyh",
+            "entityType": "LOCATION",
+            "street": "2200 Ross Ave",
+            "street2": "Ste 4800",
+            "city": "Dallas",
+            "state": "TX",
+            "zip": "75201",
+            "latitude": "32.7874",
+            "longitude": "-96.7970",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "1",
+            "latLong": "32.7874, -96.7970"
+          },
+          {
+            "locationId": "loc_mtgh8f6k_9k7rn8",
+            "entityType": "LOCATION",
+            "street": "2403 Flora St",
+            "street2": "",
+            "city": "Dallas",
+            "state": "TX",
+            "zip": "75201",
+            "latitude": "32.7894",
+            "longitude": "-96.7984",
+            "association": "work",
+            "parksHere": "",
+            "targetPriority": "2",
+            "latLong": "32.7894, -96.7984"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 001",
+          "finNumber": "",
+          "disposition": "WA/NTA",
+          "status": "D",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [
+        {
+          "vehicleId": "veh_mtgh8f6l_jjrfvs",
+          "entityType": "VEHICLE",
+          "licensePlate": "TRCKSTR",
+          "plateState": "TX",
+          "vehicleYear": "2019",
+          "vehicleMake": "Audi",
+          "vehicleModel": "A6",
+          "vehicleColor": "Green",
+          "vehicleBodyStyle": "",
+          "vin": "",
+          "registeredOwnerName": "LAUFEYSON, LOKI",
+          "locations": [
+            {
+              "locationId": "loc_mtgh8f6k_gqhxtu",
+              "entityType": "LOCATION",
+              "street": "2200 Ross Ave",
+              "street2": "",
+              "city": "Dallas",
+              "state": "TX",
+              "zip": "75201",
+              "latitude": "32.7874",
+              "longitude": "-96.7970",
+              "association": "known-parking",
+              "parksHere": "",
+              "targetPriority": "3",
+              "latLong": "32.7874, -96.7970"
+            }
+          ],
+          "governmentVehicle": false,
+          "unit": "",
+          "status": "",
+          "barcode": "",
+          "driverNumber": "",
+          "assignedOfficerIds": [],
+          "equipment": [],
+          "meta": {
+            "createdAt": "2026-08-12T14:00:00.000Z",
+            "updatedAt": "2026-08-12T14:00:00.000Z",
+            "markedComplete": false,
+            "status": "committed",
+            "committedAt": "2026-08-12T14:00:00.000Z"
+          },
+          "id": "veh_mtgh8f6l_jjrfvs",
+          "plate": "TRCKSTR"
+        }
+      ],
+      "links": [
+        {
+          "linkId": "link_mtgh8f6l_hs5m9y",
+          "from": {
+            "type": "VEHICLE",
+            "id": "veh_mtgh8f6l_jjrfvs"
+          },
+          "to": {
+            "type": "PERSON",
+            "id": "p_mtgh8f6k_g2dnxm"
+          },
+          "reasons": [
+            "OPERATES"
+          ],
+          "notes": ""
+        }
+      ],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-12T14:00:00.000Z",
+        "updatedAt": "2026-08-12T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-12T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6l_uhrez4",
+      "subjectPersonId": "p_mtgh8f6l_46896c",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "otherLe",
+        "caseNumber": "DAL-26-1002",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6l_46896c",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "THANOS",
+          "firstName": "Dione",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1970-01-01",
+        "age": "56",
+        "citizenship": "GR",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6l_eof3c9",
+            "entityType": "LOCATION",
+            "street": "1300 Robert B Cullum Blvd",
+            "street2": "",
+            "city": "Dallas",
+            "state": "TX",
+            "zip": "75210",
+            "latitude": "32.7816",
+            "longitude": "-96.7617",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "1",
+            "latLong": "32.7816, -96.7617"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": true,
+          "fbiNumber": "123456AA0",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [
+          {
+            "convictionId": "cnv_mtgh8f6l_d0gf51",
+            "crime": "Aggravated assault",
+            "convictionStatute": "",
+            "convictionClass": "felony",
+            "disposition": "",
+            "convictionDate": "2016-04-12",
+            "dispositionDate": "",
+            "court": "Dallas County",
+            "docketNumber": "",
+            "sentence": ""
+          }
+        ],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 002",
+          "finNumber": "",
+          "disposition": "REINST",
+          "status": "D",
+          "finalOrder": true,
+          "finalOrderDate": "2018-07-09",
+          "firstDeportationDate": "2018-08-01",
+          "lastDeportationDate": "2023-02-14",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-14T14:00:00.000Z",
+        "updatedAt": "2026-08-14T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-14T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6l_oe31pk",
+      "subjectPersonId": "p_mtgh8f6l_7j1gdy",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "tag",
+        "caseNumber": "DAL-26-1003",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6l_7j1gdy",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "ULTRON",
+          "firstName": "Victor",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1991-05-01",
+        "age": "35",
+        "citizenship": "DE",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6l_wzoskf",
+            "entityType": "LOCATION",
+            "street": "8687 N Central Expy",
+            "street2": "",
+            "city": "Dallas",
+            "state": "TX",
+            "zip": "75225",
+            "latitude": "32.8687",
+            "longitude": "-96.7736",
+            "association": "work",
+            "parksHere": "",
+            "targetPriority": "2",
+            "latLong": "32.8687, -96.7736"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 003",
+          "finNumber": "",
+          "disposition": "ER",
+          "status": "",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [
+        {
+          "vehicleId": "veh_mtgh8f6l_znjbq7",
+          "entityType": "VEHICLE",
+          "licensePlate": "NTLGNC",
+          "plateState": "TX",
+          "vehicleYear": "2020",
+          "vehicleMake": "Tesla",
+          "vehicleModel": "Model S",
+          "vehicleColor": "Silver",
+          "vehicleBodyStyle": "",
+          "vin": "",
+          "registeredOwnerName": "ULTRON, VICTOR",
+          "locations": [
+            {
+              "locationId": "loc_mtgh8f6l_ethbvl",
+              "entityType": "LOCATION",
+              "street": "8687 N Central Expy",
+              "street2": "",
+              "city": "Dallas",
+              "state": "TX",
+              "zip": "75225",
+              "latitude": "32.8687",
+              "longitude": "-96.7736",
+              "association": "plate-check",
+              "parksHere": "",
+              "targetPriority": "",
+              "latLong": "32.8687, -96.7736"
+            }
+          ],
+          "governmentVehicle": false,
+          "unit": "",
+          "status": "",
+          "barcode": "",
+          "driverNumber": "",
+          "assignedOfficerIds": [],
+          "equipment": [],
+          "meta": {
+            "createdAt": "2026-08-15T14:00:00.000Z",
+            "updatedAt": "2026-08-15T14:00:00.000Z",
+            "markedComplete": false,
+            "status": "committed",
+            "committedAt": "2026-08-15T14:00:00.000Z"
+          },
+          "id": "veh_mtgh8f6l_znjbq7",
+          "plate": "NTLGNC"
+        }
+      ],
+      "links": [
+        {
+          "linkId": "link_mtgh8f6l_lt8ppx",
+          "from": {
+            "type": "VEHICLE",
+            "id": "veh_mtgh8f6l_znjbq7"
+          },
+          "to": {
+            "type": "PERSON",
+            "id": "p_mtgh8f6l_7j1gdy"
+          },
+          "reasons": [
+            "OPERATES"
+          ],
+          "notes": ""
+        }
+      ],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-15T14:00:00.000Z",
+        "updatedAt": "2026-08-15T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-15T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6l_2f2frp",
+      "subjectPersonId": "p_mtgh8f6l_1fmmcn",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "discovered",
+        "caseNumber": "DAL-26-1004",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6l_1fmmcn",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "ODINSDOTTIR",
+          "firstName": "Hela",
+          "middleName": ""
+        },
+        "sex": "female",
+        "dateOfBirth": "1978-11-02",
+        "age": "47",
+        "citizenship": "NO",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6l_0akph7",
+            "entityType": "LOCATION",
+            "street": "131 E Exchange Ave",
+            "street2": "",
+            "city": "Fort Worth",
+            "state": "TX",
+            "zip": "76164",
+            "latitude": "32.7887",
+            "longitude": "-97.3473",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "1",
+            "latLong": "32.7887, -97.3473"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 004",
+          "finNumber": "",
+          "disposition": "ADMDPT",
+          "status": "",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-16T14:00:00.000Z",
+        "updatedAt": "2026-08-16T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-16T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6l_tsphkz",
+      "subjectPersonId": "p_mtgh8f6l_1z26hs",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "otherLe",
+        "caseNumber": "DAL-26-1005",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6l_1z26hs",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "SCHMIDT",
+          "firstName": "Johann",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1968-03-03",
+        "age": "58",
+        "citizenship": "DE",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6l_ee3uof",
+            "entityType": "LOCATION",
+            "street": "411 Elm St",
+            "street2": "",
+            "city": "Dallas",
+            "state": "TX",
+            "zip": "75202",
+            "latitude": "32.7787",
+            "longitude": "-96.8083",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "1",
+            "latLong": "32.7787, -96.8083"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": true,
+          "fbiNumber": "999111BB1",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtgh8f6l_evkr43",
+            "arrestDate": "2026-08-17",
+            "arrestCharge": "Reentry after deportation",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": ""
+          }
+        ],
+        "convictions": [
+          {
+            "convictionId": "cnv_mtgh8f6l_7djt2a",
+            "crime": "Unlawful possession of a firearm",
+            "convictionStatute": "",
+            "convictionClass": "felony",
+            "disposition": "",
+            "convictionDate": "2014-09-22",
+            "dispositionDate": "",
+            "court": "Northern District of Texas",
+            "docketNumber": "",
+            "sentence": ""
+          }
+        ],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 005",
+          "finNumber": "",
+          "disposition": "HCA",
+          "status": "",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-17T14:00:00.000Z",
+        "updatedAt": "2026-08-17T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-17T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6m_p3cufo",
+      "subjectPersonId": "p_mtgh8f6l_0rykxt",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "elite",
+        "caseNumber": "DAL-26-1006",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6l_0rykxt",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "STEVENS",
+          "firstName": "Erik",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1988-02-14",
+        "age": "38",
+        "citizenship": "ZA",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6m_1k3eqq",
+            "entityType": "LOCATION",
+            "street": "201 Main St",
+            "street2": "",
+            "city": "Fort Worth",
+            "state": "TX",
+            "zip": "76102",
+            "latitude": "32.7555",
+            "longitude": "-97.3308",
+            "association": "work",
+            "parksHere": "",
+            "targetPriority": "2",
+            "latLong": "32.7555, -97.3308"
+          },
+          {
+            "locationId": "loc_mtgh8f6m_57flwd",
+            "entityType": "LOCATION",
+            "street": "1500 Marilla St",
+            "street2": "",
+            "city": "Dallas",
+            "state": "TX",
+            "zip": "75201",
+            "latitude": "32.7763",
+            "longitude": "-96.7969",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "3",
+            "latLong": "32.7763, -96.7969"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 006",
+          "finNumber": "",
+          "disposition": "REINST",
+          "status": "",
+          "finalOrder": true,
+          "finalOrderDate": "2021-06-01",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "2021-07-15",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-18T14:00:00.000Z",
+        "updatedAt": "2026-08-18T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-18T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6m_5e4y7h",
+      "subjectPersonId": "p_mtgh8f6m_61vbo5",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "discovered",
+        "caseNumber": "DAL-26-1007",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6m_61vbo5",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "ZEMO",
+          "firstName": "Helmut",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1975-09-09",
+        "age": "50",
+        "citizenship": "AT",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6m_j3hz8u",
+            "entityType": "LOCATION",
+            "street": "1520 K Ave",
+            "street2": "",
+            "city": "Plano",
+            "state": "TX",
+            "zip": "75074",
+            "latitude": "33.0198",
+            "longitude": "-96.6989",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "2",
+            "latLong": "33.0198, -96.6989"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 007",
+          "finNumber": "",
+          "disposition": "PD",
+          "status": "",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-19T14:00:00.000Z",
+        "updatedAt": "2026-08-19T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-19T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6m_cukrq9",
+      "subjectPersonId": "p_mtgh8f6m_1hwm4n",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "tag",
+        "caseNumber": "DAL-26-1008",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6m_1hwm4n",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "RONAN",
+          "firstName": "Kree",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1982-04-04",
+        "age": "44",
+        "citizenship": "IE",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6m_1srcj7",
+            "entityType": "LOCATION",
+            "street": "2400 Aviation Dr",
+            "street2": "",
+            "city": "DFW Airport",
+            "state": "TX",
+            "zip": "75261",
+            "latitude": "32.8998",
+            "longitude": "-97.0403",
+            "association": "work",
+            "parksHere": "",
+            "targetPriority": "1",
+            "latLong": "32.8998, -97.0403"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 008",
+          "finNumber": "",
+          "disposition": "ER/CF",
+          "status": "",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [
+        {
+          "vehicleId": "veh_mtgh8f6m_3u8h4f",
+          "entityType": "VEHICLE",
+          "licensePlate": "ACCSR1",
+          "plateState": "TX",
+          "vehicleYear": "2018",
+          "vehicleMake": "GMC",
+          "vehicleModel": "Yukon",
+          "vehicleColor": "Black",
+          "vehicleBodyStyle": "",
+          "vin": "",
+          "registeredOwnerName": "RONAN, KREE",
+          "locations": [],
+          "governmentVehicle": false,
+          "unit": "",
+          "status": "",
+          "barcode": "",
+          "driverNumber": "",
+          "assignedOfficerIds": [],
+          "equipment": [],
+          "meta": {
+            "createdAt": "2026-08-20T14:00:00.000Z",
+            "updatedAt": "2026-08-20T14:00:00.000Z",
+            "markedComplete": false,
+            "status": "committed",
+            "committedAt": "2026-08-20T14:00:00.000Z"
+          },
+          "id": "veh_mtgh8f6m_3u8h4f",
+          "plate": "ACCSR1"
+        }
+      ],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-20T14:00:00.000Z",
+        "updatedAt": "2026-08-20T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-20T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6m_hfmi3v",
+      "subjectPersonId": "p_mtgh8f6m_2oet4p",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "otherLe",
+        "caseNumber": "DAL-26-1009",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6m_2oet4p",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "MAW",
+          "firstName": "Ebony",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1979-08-08",
+        "age": "46",
+        "citizenship": "ET",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6m_4s8em7",
+            "entityType": "LOCATION",
+            "street": "8008 Herb Kelleher Way",
+            "street2": "",
+            "city": "Dallas",
+            "state": "TX",
+            "zip": "75235",
+            "latitude": "32.8471",
+            "longitude": "-96.8518",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "2",
+            "latLong": "32.8471, -96.8518"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 009",
+          "finNumber": "",
+          "disposition": "WA/NTA",
+          "status": "",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-21T14:00:00.000Z",
+        "updatedAt": "2026-08-21T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-21T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6m_mkj18b",
+      "subjectPersonId": "p_mtgh8f6m_mljzjm",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "discovered",
+        "caseNumber": "DAL-26-1010",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6m_mljzjm",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "MIDNIGHT",
+          "firstName": "Proxima",
+          "middleName": ""
+        },
+        "sex": "female",
+        "dateOfBirth": "1990-10-31",
+        "age": "35",
+        "citizenship": "KE",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6m_8gskkm",
+            "entityType": "LOCATION",
+            "street": "734 Stadium Dr",
+            "street2": "",
+            "city": "Arlington",
+            "state": "TX",
+            "zip": "76011",
+            "latitude": "32.7473",
+            "longitude": "-97.0842",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "1",
+            "latLong": "32.7473, -97.0842"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 010",
+          "finNumber": "",
+          "disposition": "V",
+          "status": "",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-22T14:00:00.000Z",
+        "updatedAt": "2026-08-22T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-22T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6m_dp36gf",
+      "subjectPersonId": "p_mtgh8f6m_5ix2b6",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "elite",
+        "caseNumber": "DAL-26-1011",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6m_5ix2b6",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "GLAIVE",
+          "firstName": "Corvus",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1984-06-06",
+        "age": "42",
+        "citizenship": "RU",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6m_khob8z",
+            "entityType": "LOCATION",
+            "street": "9200 World Cup Way",
+            "street2": "",
+            "city": "Frisco",
+            "state": "TX",
+            "zip": "75033",
+            "latitude": "33.1545",
+            "longitude": "-96.8353",
+            "association": "work",
+            "parksHere": "",
+            "targetPriority": "3",
+            "latLong": "33.1545, -96.8353"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 011",
+          "finNumber": "",
+          "disposition": "REINRF",
+          "status": "",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-23T14:00:00.000Z",
+        "updatedAt": "2026-08-23T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-23T14:00:00.000Z"
+      }
+    },
+    {
+      "schema": "copdocx.lead.v1",
+      "leadId": "lead_mtgh8f6m_o89308",
+      "subjectPersonId": "p_mtgh8f6m_6r7so0",
+      "caseRole": "LEAD",
+      "source": {
+        "leadSource": "discovered",
+        "caseNumber": "DAL-26-1012",
+        "refAgency": "",
+        "refAgencyCode": "",
+        "probationCheck": false,
+        "leadInfo": ""
+      },
+      "person": {
+        "personId": "p_mtgh8f6m_6r7so0",
+        "entityType": "PERSON",
+        "caseRole": "LEAD",
+        "name": {
+          "lastName": "KANG",
+          "firstName": "Nathaniel",
+          "middleName": ""
+        },
+        "sex": "male",
+        "dateOfBirth": "1973-01-30",
+        "age": "53",
+        "citizenship": "NL",
+        "ssn": "",
+        "lexId": "",
+        "locations": [
+          {
+            "locationId": "loc_mtgh8f6m_tbyylp",
+            "entityType": "LOCATION",
+            "street": "500 W Las Colinas Blvd",
+            "street2": "",
+            "city": "Irving",
+            "state": "TX",
+            "zip": "75039",
+            "latitude": "32.8786",
+            "longitude": "-96.9413",
+            "association": "residence",
+            "parksHere": "",
+            "targetPriority": "1",
+            "latLong": "32.8786, -96.9413"
+          },
+          {
+            "locationId": "loc_mtgh8f6m_45f435",
+            "entityType": "LOCATION",
+            "street": "8101 N Stemmons Freeway",
+            "street2": "",
+            "city": "Dallas",
+            "state": "TX",
+            "zip": "75247",
+            "latitude": "32.8445",
+            "longitude": "-96.8750",
+            "association": "work",
+            "parksHere": "",
+            "targetPriority": "",
+            "latLong": "32.8445, -96.8750"
+          }
+        ],
+        "aliases": [],
+        "documents": [],
+        "criminal": {
+          "isCriminal": false,
+          "fbiNumber": "",
+          "ncicNumber": "",
+          "stateId": "",
+          "rapSheet": ""
+        },
+        "encounters": [],
+        "arrests": [],
+        "convictions": [],
+        "warrants": [],
+        "immigration": {
+          "alienNumber": "A200 111 012",
+          "finNumber": "",
+          "disposition": "WA/NTA",
+          "status": "IA",
+          "finalOrder": false,
+          "finalOrderDate": "",
+          "firstDeportationDate": "",
+          "lastDeportationDate": "",
+          "baseballCards": []
+        }
+      },
+      "vehicles": [],
+      "links": [],
+      "followUps": [],
+      "meta": {
+        "createdAt": "2026-08-24T14:00:00.000Z",
+        "updatedAt": "2026-08-24T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-08-24T14:00:00.000Z"
+      }
+    }
+  ],
+  "officers": [
+    {
+      "officerId": "ofc_mtgh8f6h_80q1ds",
+      "entityType": "OFFICER",
+      "lastName": "ROGERS",
+      "firstName": "Steve",
+      "middleName": "",
+      "badge": "1776",
+      "callSign": "CAP",
+      "duty": "available",
+      "role": "IO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f63_yi06hr",
+          "entityType": "LOCATION",
+          "street": "8101 N Stemmons Freeway",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75247",
+          "latitude": "32.8445",
+          "longitude": "-96.8750",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.8445, -96.8750"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "ero-basic",
+        "1801"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "firearm",
+        "radio",
+        "armor"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-01T14:00:00.000Z",
+        "updatedAt": "2026-07-01T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-01T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6h_80q1ds",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "8101 N Stemmons Freeway",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75247",
+        "latLong": "32.8445, -96.8750",
+        "latitude": "32.8445",
+        "longitude": "-96.8750"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6i_7iupm8",
+      "entityType": "OFFICER",
+      "lastName": "STARK",
+      "firstName": "Tony",
+      "middleName": "",
+      "badge": "3000",
+      "callSign": "IRON",
+      "duty": "admin",
+      "role": "SDDO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f6i_jcjib0",
+          "entityType": "LOCATION",
+          "street": "2200 Ross Ave",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75201",
+          "latitude": "32.7874",
+          "longitude": "-96.7970",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.7874, -96.7970"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "ero-basic"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "gov-phone",
+        "laptop"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-01T14:00:00.000Z",
+        "updatedAt": "2026-07-01T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-01T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6i_7iupm8",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "2200 Ross Ave",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75201",
+        "latLong": "32.7874, -96.7970",
+        "latitude": "32.7874",
+        "longitude": "-96.7970"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6i_fhhy7y",
+      "entityType": "OFFICER",
+      "lastName": "ROMANOFF",
+      "firstName": "Natasha",
+      "middleName": "",
+      "badge": "1013",
+      "callSign": "WIDOW",
+      "duty": "in-field",
+      "role": "IO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f63_yi06hr",
+          "entityType": "LOCATION",
+          "street": "8101 N Stemmons Freeway",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75247",
+          "latitude": "32.8445",
+          "longitude": "-96.8750",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.8445, -96.8750"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "if",
+        "spanish",
+        "ero-basic"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "firearm",
+        "radio",
+        "armor",
+        "oc"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-02T14:00:00.000Z",
+        "updatedAt": "2026-07-02T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-02T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6i_fhhy7y",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "8101 N Stemmons Freeway",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75247",
+        "latLong": "32.8445, -96.8750",
+        "latitude": "32.8445",
+        "longitude": "-96.8750"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6i_wzcu01",
+      "entityType": "OFFICER",
+      "lastName": "BARTON",
+      "firstName": "Clint",
+      "middleName": "",
+      "badge": "1988",
+      "callSign": "HAWK",
+      "duty": "available",
+      "role": "IO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f6i_k06wyn",
+          "entityType": "LOCATION",
+          "street": "2500 Victory Ave",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75219",
+          "latitude": "32.7905",
+          "longitude": "-96.8103",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.7905, -96.8103"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "ero-basic"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "firearm",
+        "radio"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-02T14:00:00.000Z",
+        "updatedAt": "2026-07-02T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-02T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6i_wzcu01",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "2500 Victory Ave",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75219",
+        "latLong": "32.7905, -96.8103",
+        "latitude": "32.7905",
+        "longitude": "-96.8103"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6i_x39up4",
+      "entityType": "OFFICER",
+      "lastName": "BANNER",
+      "firstName": "Bruce",
+      "middleName": "",
+      "badge": "1962",
+      "callSign": "HULK",
+      "duty": "admin",
+      "role": "IO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f63_yi06hr",
+          "entityType": "LOCATION",
+          "street": "8101 N Stemmons Freeway",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75247",
+          "latitude": "32.8445",
+          "longitude": "-96.8750",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.8445, -96.8750"
+        }
+      ],
+      "qualifications": [
+        "ero-basic"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "laptop"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-03T14:00:00.000Z",
+        "updatedAt": "2026-07-03T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-03T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6i_x39up4",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "8101 N Stemmons Freeway",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75247",
+        "latLong": "32.8445, -96.8750",
+        "latitude": "32.8445",
+        "longitude": "-96.8750"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6i_t8ofl2",
+      "entityType": "OFFICER",
+      "lastName": "ODINSON",
+      "firstName": "Thor",
+      "middleName": "",
+      "badge": "0001",
+      "callSign": "THOR",
+      "duty": "available",
+      "role": "IO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f6i_dtb67u",
+          "entityType": "LOCATION",
+          "street": "300 Reunion Blvd E",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75207",
+          "latitude": "32.7756",
+          "longitude": "-96.8089",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.7756, -96.8089"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "ero-basic",
+        "1801"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "firearm",
+        "radio",
+        "armor"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-03T14:00:00.000Z",
+        "updatedAt": "2026-07-03T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-03T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6i_t8ofl2",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "300 Reunion Blvd E",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75207",
+        "latLong": "32.7756, -96.8089",
+        "latitude": "32.7756",
+        "longitude": "-96.8089"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6i_mjhvls",
+      "entityType": "OFFICER",
+      "lastName": "WILSON",
+      "firstName": "Sam",
+      "middleName": "",
+      "badge": "1941",
+      "callSign": "FALCON",
+      "duty": "in-field",
+      "role": "IO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f63_yi06hr",
+          "entityType": "LOCATION",
+          "street": "8101 N Stemmons Freeway",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75247",
+          "latitude": "32.8445",
+          "longitude": "-96.8750",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.8445, -96.8750"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "ero-basic"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "firearm",
+        "radio",
+        "armor"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-04T14:00:00.000Z",
+        "updatedAt": "2026-07-04T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-04T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6i_mjhvls",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "8101 N Stemmons Freeway",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75247",
+        "latLong": "32.8445, -96.8750",
+        "latitude": "32.8445",
+        "longitude": "-96.8750"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6i_epbk9g",
+      "entityType": "OFFICER",
+      "lastName": "FURY",
+      "firstName": "Nick",
+      "middleName": "",
+      "badge": "0007",
+      "callSign": "FURY",
+      "duty": "admin",
+      "role": "AFOD",
+      "team": "DAL - FOD",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f63_yi06hr",
+          "entityType": "LOCATION",
+          "street": "8101 N Stemmons Freeway",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75247",
+          "latitude": "32.8445",
+          "longitude": "-96.8750",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.8445, -96.8750"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "ero-basic",
+        "1801"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "firearm",
+        "gov-phone"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-01T14:00:00.000Z",
+        "updatedAt": "2026-07-01T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-01T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6i_epbk9g",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "8101 N Stemmons Freeway",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75247",
+        "latLong": "32.8445, -96.8750",
+        "latitude": "32.8445",
+        "longitude": "-96.8750"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6i_ck2bj6",
+      "entityType": "OFFICER",
+      "lastName": "DANVERS",
+      "firstName": "Carol",
+      "middleName": "",
+      "badge": "1989",
+      "callSign": "MARVEL",
+      "duty": "available",
+      "role": "IO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f6i_m8ow3s",
+          "entityType": "LOCATION",
+          "street": "8008 Herb Kelleher Way",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75235",
+          "latitude": "32.8471",
+          "longitude": "-96.8518",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.8471, -96.8518"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "ero-basic"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "firearm",
+        "radio",
+        "armor"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-05T14:00:00.000Z",
+        "updatedAt": "2026-07-05T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-05T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6i_ck2bj6",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "8008 Herb Kelleher Way",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75235",
+        "latLong": "32.8471, -96.8518",
+        "latitude": "32.8471",
+        "longitude": "-96.8518"
+      }
+    },
+    {
+      "officerId": "ofc_mtgh8f6j_7in01w",
+      "entityType": "OFFICER",
+      "lastName": "RHODES",
+      "firstName": "James",
+      "middleName": "",
+      "badge": "1999",
+      "callSign": "RHODEY",
+      "duty": "available",
+      "role": "IO",
+      "team": "DAL - 3 / Street",
+      "eod": "",
+      "phoneGov": "",
+      "phonePrivate": "",
+      "locations": [
+        {
+          "locationId": "loc_mtgh8f63_yi06hr",
+          "entityType": "LOCATION",
+          "street": "8101 N Stemmons Freeway",
+          "street2": "",
+          "city": "Dallas",
+          "state": "TX",
+          "zip": "75247",
+          "latitude": "32.8445",
+          "longitude": "-96.8750",
+          "association": "work",
+          "parksHere": "",
+          "targetPriority": "",
+          "latLong": "32.8445, -96.8750"
+        }
+      ],
+      "qualifications": [
+        "firearms",
+        "ero-basic",
+        "cdl"
+      ],
+      "qualOther": "",
+      "equipment": [
+        "creds",
+        "firearm",
+        "radio"
+      ],
+      "equipNotes": "",
+      "meta": {
+        "createdAt": "2026-07-05T14:00:00.000Z",
+        "updatedAt": "2026-07-05T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-05T14:00:00.000Z"
+      },
+      "id": "ofc_mtgh8f6j_7in01w",
+      "address": {
+        "locationAssociation": "work",
+        "association": "work",
+        "targetPriority": "",
+        "parksHere": "",
+        "street": "8101 N Stemmons Freeway",
+        "street2": "",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": "75247",
+        "latLong": "32.8445, -96.8750",
+        "latitude": "32.8445",
+        "longitude": "-96.8750"
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "vehicleId": "veh_mtgh8f6j_ybz5uj",
+      "entityType": "VEHICLE",
+      "licensePlate": "TX G0V031",
+      "plateState": "TX",
+      "vehicleYear": "2023",
+      "vehicleMake": "Ford",
+      "vehicleModel": "Explorer",
+      "vehicleColor": "White",
+      "vehicleBodyStyle": "SUV",
+      "vin": "",
+      "registeredOwnerName": "",
+      "locations": [],
+      "governmentVehicle": true,
+      "unit": "DAL-31",
+      "status": "assigned",
+      "barcode": "DAL31",
+      "driverNumber": "D-31",
+      "assignedOfficerIds": [
+        "ofc_mtgh8f6h_80q1ds"
+      ],
+      "equipment": [
+        "radio",
+        "emergency-lights",
+        "caged"
+      ],
+      "meta": {
+        "createdAt": "2026-07-10T14:00:00.000Z",
+        "updatedAt": "2026-07-10T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-10T14:00:00.000Z"
+      },
+      "plate": "TX G0V031",
+      "id": "veh_mtgh8f6j_ybz5uj"
+    },
+    {
+      "vehicleId": "veh_mtgh8f6j_hbcvq4",
+      "entityType": "VEHICLE",
+      "licensePlate": "TX G0V032",
+      "plateState": "TX",
+      "vehicleYear": "2022",
+      "vehicleMake": "Chevrolet",
+      "vehicleModel": "Tahoe",
+      "vehicleColor": "White",
+      "vehicleBodyStyle": "SUV",
+      "vin": "",
+      "registeredOwnerName": "",
+      "locations": [],
+      "governmentVehicle": true,
+      "unit": "DAL-32",
+      "status": "assigned",
+      "barcode": "DAL32",
+      "driverNumber": "",
+      "assignedOfficerIds": [
+        "ofc_mtgh8f6i_fhhy7y",
+        "ofc_mtgh8f6i_wzcu01"
+      ],
+      "equipment": [
+        "radio",
+        "emergency-lights",
+        "gun-box"
+      ],
+      "meta": {
+        "createdAt": "2026-07-10T14:00:00.000Z",
+        "updatedAt": "2026-07-10T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-10T14:00:00.000Z"
+      },
+      "plate": "TX G0V032",
+      "id": "veh_mtgh8f6j_hbcvq4"
+    },
+    {
+      "vehicleId": "veh_mtgh8f6j_9a1912",
+      "entityType": "VEHICLE",
+      "licensePlate": "TX G0V033",
+      "plateState": "TX",
+      "vehicleYear": "2021",
+      "vehicleMake": "Ford",
+      "vehicleModel": "Transit",
+      "vehicleColor": "White",
+      "vehicleBodyStyle": "Van",
+      "vin": "",
+      "registeredOwnerName": "",
+      "locations": [],
+      "governmentVehicle": true,
+      "unit": "DAL-33",
+      "status": "available",
+      "barcode": "DAL33",
+      "driverNumber": "",
+      "assignedOfficerIds": [
+        "ofc_mtgh8f6j_7in01w"
+      ],
+      "equipment": [
+        "radio",
+        "caged"
+      ],
+      "meta": {
+        "createdAt": "2026-07-11T14:00:00.000Z",
+        "updatedAt": "2026-07-11T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-11T14:00:00.000Z"
+      },
+      "plate": "TX G0V033",
+      "id": "veh_mtgh8f6j_9a1912"
+    },
+    {
+      "vehicleId": "veh_mtgh8f6j_ipokag",
+      "entityType": "VEHICLE",
+      "licensePlate": "TX G0V034",
+      "plateState": "TX",
+      "vehicleYear": "2024",
+      "vehicleMake": "Dodge",
+      "vehicleModel": "Durango",
+      "vehicleColor": "Black",
+      "vehicleBodyStyle": "SUV",
+      "vin": "",
+      "registeredOwnerName": "",
+      "locations": [],
+      "governmentVehicle": true,
+      "unit": "DAL-34",
+      "status": "available",
+      "barcode": "DAL34",
+      "driverNumber": "",
+      "assignedOfficerIds": [
+        "ofc_mtgh8f6i_mjhvls"
+      ],
+      "equipment": [
+        "radio",
+        "emergency-lights"
+      ],
+      "meta": {
+        "createdAt": "2026-07-11T14:00:00.000Z",
+        "updatedAt": "2026-07-11T14:00:00.000Z",
+        "markedComplete": false,
+        "status": "committed",
+        "committedAt": "2026-07-11T14:00:00.000Z"
+      },
+      "plate": "TX G0V034",
+      "id": "veh_mtgh8f6j_ipokag"
+    }
+  ],
+  "shifts": [
+    {
+      "id": "sft_demo_1",
+      "date": "2026-08-31",
+      "officerId": "ofc_mtgh8f6h_80q1ds",
+      "vehicleId": "veh_mtgh8f6j_ybz5uj",
+      "start": "06:00",
+      "end": "14:00",
+      "assignment": "field"
+    },
+    {
+      "id": "sft_demo_2",
+      "date": "2026-08-31",
+      "officerId": "ofc_mtgh8f6i_fhhy7y",
+      "vehicleId": "veh_mtgh8f6j_hbcvq4",
+      "start": "06:00",
+      "end": "14:00",
+      "assignment": "field"
+    },
+    {
+      "id": "sft_demo_3",
+      "date": "2026-08-31",
+      "officerId": "ofc_mtgh8f6i_epbk9g",
+      "vehicleId": "",
+      "start": "07:00",
+      "end": "15:00",
+      "assignment": "office"
+    },
+    {
+      "id": "sft_demo_4",
+      "date": "2026-09-01",
+      "officerId": "ofc_mtgh8f6i_wzcu01",
+      "vehicleId": "veh_mtgh8f6j_hbcvq4",
+      "start": "14:00",
+      "end": "22:00",
+      "assignment": "field"
+    },
+    {
+      "id": "sft_demo_5",
+      "date": "2026-09-01",
+      "officerId": "ofc_mtgh8f6i_mjhvls",
+      "vehicleId": "veh_mtgh8f6j_ipokag",
+      "start": "06:00",
+      "end": "14:00",
+      "assignment": "field"
+    },
+    {
+      "id": "sft_demo_6",
+      "date": "2026-09-02",
+      "officerId": "ofc_mtgh8f6i_t8ofl2",
+      "vehicleId": "veh_mtgh8f6j_ybz5uj",
+      "start": "06:00",
+      "end": "14:00",
+      "assignment": "field"
+    },
+    {
+      "id": "sft_demo_7",
+      "date": "2026-09-02",
+      "officerId": "ofc_mtgh8f6i_ck2bj6",
+      "vehicleId": "veh_mtgh8f6j_9a1912",
+      "start": "14:00",
+      "end": "22:00",
+      "assignment": "transport"
+    },
+    {
+      "id": "sft_demo_8",
+      "date": "2026-09-03",
+      "officerId": "ofc_mtgh8f6j_7in01w",
+      "vehicleId": "veh_mtgh8f6j_9a1912",
+      "start": "06:00",
+      "end": "14:00",
+      "assignment": "transport"
+    }
+  ],
+  "bookin": [
+    {
+      "id": "bk_demo_lead_mtgh8f6k_6qbr8y",
+      "createdAt": "2026-08-12T14:00:00.000Z",
+      "updatedAt": "2026-08-12T14:00:00.000Z",
+      "createdWithVersion": "0.5.2",
+      "updatedWithVersion": "0.5.2",
+      "firstName": "Loki",
+      "lastName": "LAUFEYSON",
+      "aNumber": "200111001",
+      "iceEvent": "E260812001"
+    },
+    {
+      "id": "bk_demo_lead_mtgh8f6l_uhrez4",
+      "createdAt": "2026-08-14T14:00:00.000Z",
+      "updatedAt": "2026-08-14T14:00:00.000Z",
+      "createdWithVersion": "0.5.2",
+      "updatedWithVersion": "0.5.2",
+      "firstName": "Dione",
+      "lastName": "THANOS",
+      "aNumber": "200111002",
+      "iceEvent": "E260814002"
+    },
+    {
+      "id": "bk_demo_lead_mtgh8f6l_tsphkz",
+      "createdAt": "2026-08-17T14:00:00.000Z",
+      "updatedAt": "2026-08-17T14:00:00.000Z",
+      "createdWithVersion": "0.5.2",
+      "updatedWithVersion": "0.5.2",
+      "firstName": "Johann",
+      "lastName": "SCHMIDT",
+      "aNumber": "200111005",
+      "iceEvent": "E260817005"
+    },
+    {
+      "id": "bk_demo_lead_mtgh8f6m_mkj18b",
+      "createdAt": "2026-08-22T14:00:00.000Z",
+      "updatedAt": "2026-08-22T14:00:00.000Z",
+      "createdWithVersion": "0.5.2",
+      "updatedWithVersion": "0.5.2",
+      "firstName": "Proxima",
+      "lastName": "MIDNIGHT",
+      "aNumber": "200111010",
+      "iceEvent": "E260822010"
+    }
+  ]
+}

@@ -193,7 +193,8 @@
         return isFinite(n) ? n : "";
       })(),
       citizenship: textValue(byId("citizenship")) || leadFields.citizenship || "",
-      ssn: leadFields.ssn || textValue(byId("ssn")) || ""
+      ssn: leadFields.ssn || textValue(byId("ssn")) || "",
+      lexId: leadFields.lexId || textValue(byId("lexId")) || ""
     });
 
     cardsIn("aliasList").forEach(function (card) {
@@ -322,7 +323,10 @@
       disposition: textValue(byId("immigrationDisposition")),
       status: textValue(byId("immigrationStatus")),
       finalOrder: checked(byId("finalOrder")),
-      finalOrderDate: textValue(byId("finalOrderDate"))
+      finalOrderDate: textValue(byId("finalOrderDate")),
+      firstDeportationDate: textValue(byId("firstDeportationDate")),
+      lastDeportationDate: textValue(byId("lastDeportationDate")),
+      baseballCards: []
     };
 
     cardsIn("locationList").forEach(function (card) {
@@ -394,6 +398,23 @@
       leadId = model.newId("lead");
       if (leadCard) {
         leadCard.dataset.leadId = leadId;
+      }
+    }
+    if (model.store && typeof model.store.getLead === "function") {
+      var previous = model.store.getLead(leadId);
+      var prevSubject = previous
+        ? model.subjectOf
+          ? model.subjectOf(previous)
+          : previous.person
+        : null;
+      ((prevSubject && prevSubject.warrants) || []).forEach(function (row) {
+        if (model.isIssuedWarrant && model.isIssuedWarrant(row)) {
+          person.warrants.push(row);
+        }
+      });
+      var prevImm = (prevSubject && prevSubject.immigration) || {};
+      if (Array.isArray(prevImm.baseballCards) && prevImm.baseballCards.length) {
+        person.immigration.baseballCards = prevImm.baseballCards.slice();
       }
     }
     var createdAt =

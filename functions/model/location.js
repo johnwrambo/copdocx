@@ -28,6 +28,12 @@
     { value: "plate-check", label: "Plate check location" }
   ];
 
+  model.ENCOUNTER_LOCATION_ASSOCIATIONS = [
+    { value: "stop", label: "Stop / encounter location" },
+    { value: "staging", label: "Staging / processing" },
+    { value: "other", label: "Other" }
+  ];
+
   function createLocation(extra) {
     return model.assign(
       {

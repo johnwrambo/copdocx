@@ -13,9 +13,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.7.0"
+          data-version="0.11.1"
         >
-          Version 0.7.0
+          Version 0.11.1
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -67,6 +67,27 @@
               <p id="viewUpdated" class="snapshot-value">—</p>
             </div>
           </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static" id="warrantsIssuedCard">
+        <legend>Warrants issued</legend>
+        <p id="warrantsIssuedEmpty" class="records-empty">
+          No I-200 or I-205 issued yet.
+        </p>
+        <div id="warrantsIssuedTableWrap" hidden>
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Form</th>
+                <th>Date</th>
+                <th>File no</th>
+                <th>Officer</th>
+                <th>File</th>
+              </tr>
+            </thead>
+            <tbody id="warrantsIssuedBody"></tbody>
+          </table>
         </div>
       </fieldset>
     </div>
