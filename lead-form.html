@@ -35,9 +35,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.11.1"
+          data-version="0.16.1"
         >
-          Version 0.11.1
+          Version 0.16.1
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -296,10 +296,35 @@
           <div class="stage-body">
         <fieldset>
           <legend>Criminal Profile</legend>
-          <div class="row">
-            <div class="field checkbox-field">
-              <input type="checkbox" id="isCriminal" name="isCriminal" />
-              <label for="isCriminal">Criminal?</label>
+          <p class="section-note">
+            Derived from convictions, arrests, and criminal warrants. I-200 / I-205 do not count as criminal warrants.
+          </p>
+          <div id="criminalProfile" class="criminal-profile" aria-live="polite">
+            <div class="snapshot-grid">
+              <div class="snapshot-item">
+                <p class="snapshot-label">Has criminal record</p>
+                <p id="profileHasCriminalRecord" class="snapshot-value">No</p>
+              </div>
+              <div class="snapshot-item">
+                <p class="snapshot-label">Has criminal warrants</p>
+                <p id="profileHasCriminalWarrants" class="snapshot-value">No</p>
+              </div>
+              <div class="snapshot-item">
+                <p class="snapshot-label">Sex offender</p>
+                <p id="profileSexOffender" class="snapshot-value">No</p>
+              </div>
+              <div class="snapshot-item">
+                <p class="snapshot-label">Foreign fugitive</p>
+                <p id="profileForeignFugitive" class="snapshot-value">No</p>
+              </div>
+              <div class="snapshot-item">
+                <p class="snapshot-label">Armed</p>
+                <p id="profileArmed" class="snapshot-value">No</p>
+              </div>
+              <div class="snapshot-item">
+                <p class="snapshot-label">Total threat level</p>
+                <p id="profileThreatLevel" class="snapshot-value">None</p>
+              </div>
             </div>
           </div>
 

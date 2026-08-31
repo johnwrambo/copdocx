@@ -13,9 +13,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.11.1"
+          data-version="0.16.1"
         >
-          Version 0.11.1
+          Version 0.16.1
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -36,6 +36,18 @@
                 name="encounterId"
                 data-field="encounterId"
                 readonly
+              />
+            </div>
+            <div class="field">
+              <label for="encounterTeam">Team</label>
+              <input
+                type="number"
+                id="encounterTeam"
+                name="encounterTeam"
+                data-field="team"
+                min="1"
+                step="1"
+                value="3"
               />
             </div>
             <div class="field">
@@ -92,7 +104,7 @@
         <fieldset class="card-static">
           <legend>Arrested subjects</legend>
           <p class="section-note">
-            Subjects are booked on the Book-in page for this encounter. Use Add subjects.
+            Subjects are Book-in records tagged with this encounter. Edit opens Book-in. Remove unlinks them; the Book-in packet is kept.
           </p>
           <div id="encounterSubjectsEmpty" class="records-empty">
             No subjects on this encounter yet.
@@ -102,12 +114,43 @@
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Role</th>
                   <th>A-Number</th>
                   <th>Saved</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="encounterSubjectsBody"></tbody>
             </table>
+          </div>
+          <div class="card-list-actions">
+            <a
+              id="addEncounterSubjectTableButton"
+              class="add-card-btn"
+              href="bookin.html"
+            >
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add subject
+            </a>
+          </div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Supervisor summary</legend>
+          <p class="section-note">
+            Built from this encounter’s I-213 coverage. Open narratives to update it.
+          </p>
+          <p id="encounterSupervisorSummary" class="section-note">
+            No supervisor summary yet. Generate I-213 and update a draft.
+          </p>
+          <div class="card-list-actions">
+            <a
+              id="openEncounterNarrativesButton"
+              class="add-card-btn"
+              href="narrative.html"
+            >
+              Open narratives
+            </a>
           </div>
         </fieldset>
       </form>

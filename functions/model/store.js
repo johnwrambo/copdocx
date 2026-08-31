@@ -204,6 +204,12 @@
     if (!Array.isArray(saved.subjects)) {
       saved.subjects = [];
     }
+    if (!Array.isArray(saved.narratives)) {
+      saved.narratives = [];
+    }
+    if (!saved.supervisorSummary || typeof saved.supervisorSummary !== "object") {
+      saved.supervisorSummary = { text: "", derivedAt: "", coverage: null };
+    }
     state.encounters[saved.encounterId] = clone(saved);
     if (!writeDisk()) {
       return {
@@ -218,6 +224,21 @@
   function getEncounter(encounterId) {
     var row = state.encounters[encounterId];
     return row ? clone(row) : null;
+  }
+
+  function deleteEncounter(encounterId) {
+    if (!encounterId || !state.encounters[encounterId]) {
+      return { ok: false, encounterId: encounterId || "", error: "Encounter not found." };
+    }
+    delete state.encounters[encounterId];
+    if (!writeDisk()) {
+      return {
+        ok: false,
+        encounterId: encounterId,
+        error: "Could not write localStorage (quota or private mode)."
+      };
+    }
+    return { ok: true, encounterId: encounterId, error: "" };
   }
 
   function listEncounters() {
@@ -250,6 +271,7 @@
     upsertPerson: upsertPerson,
     saveEncounter: saveEncounter,
     getEncounter: getEncounter,
+    deleteEncounter: deleteEncounter,
     listEncounters: listEncounters,
     getCurrentLeadId: function () {
       return state.currentLeadId || "";

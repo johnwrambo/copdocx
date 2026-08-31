@@ -36,11 +36,17 @@ Until book-in is split, `bookin.html` is the working form. Prefill uses **`booki
 
 ### Non-record pages
 
-`home.html` (`data-page="home"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`.
+`home.html` (`data-page="home"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`).
 `i200-form.html` (`data-page="i200-form"`) and `i205-form.html` (`data-page="i205-form"`) are lead-view issuance forms (`?id=` is the **leadId**). Leads tab stays current. They are not a warrant triad.
 `operation.html` is still empty — leave it. `encounter.html` is the 0.11.0 list.
 
 Home is a briefing hub, not a record triad. Action slot empty. Counts and lists are placeholders until a later painter (cross-store **reads** of committed leads, admin roster, book-in). Do not write any store from `home.html`.
+
+`photo-picker.html` is a development workspace for upload / crop / tags. Not a chrome tab. Isolated key `copdocx.photo-picker.v1`. Do not write leads, admin, or book-in from it.
+
+`file-upload.html` is the same tagging workspace for any file, plus document type (identity catalog + case packets). Isolated key `copdocx.file-upload.v1`. Not a chrome tab. Do not write leads, admin, or book-in from it.
+
+**Product Save (planned):** both pickers accept `?ownerType=&id=` (see [data-models.md](data-models.md) Media). Primary becomes **Save photo** / **Save file** and writes IndexedDB `copdocx.media.v1`. No query → lab library only. Views show a **Photo** card (hero + thumbs) and a **Documents** list via `functions/media-card.js`.
 
 Map is a planning board, not a record triad. Action slot empty. The only write is `copdocx.map.views.v1`. File PDF/KMZ/JSON/CSV stay `data-not-built`.
 
@@ -56,10 +62,12 @@ Map is a planning board, not a record triad. Action slot empty. The only write i
 
 **Open (do not invent yet):** what else is origin besides plate-check (LE referral scene, encounter location, demoted former targets); arrest rows are a free-text string today with no lat/long; toggles are independent checkboxes (default Active on), not a single-select radio.
 
-`narrative.html` (`data-page="narrative"`) is the Build 9 workspace, not a
-Narrative record view or form. No query → synthetic demo fixture. **`?encounterId=`**
-loads the live encounter via `encounter-narrative.js` (I-213). Update draft does
-not survive reload and does not write any canonical store.
+`narrative.html` (`data-page="narrative"`) is the I-213 / Build 9 workspace, not
+a chrome tab. Open it from the encounter form (**Generate I-213**). The Encounters
+tab stays current. No query → synthetic training lab (Home tile). **`?encounterId=`**
+loads the live encounter via `encounter-narrative.js`. A missing encounter does
+**not** fall back to the demo. **Save I-213** writes `encounter.narratives[]` and
+`supervisorSummary`. Training **Update draft** stays in memory.
 
 Today the Leads tab label is **Lead** (singular) on a bare `<body>`. End state label: **Leads**.
 
@@ -86,6 +94,8 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | `map.html` | `map` | — |
 | `narrative.html` | `narrative` | — |
 | `baseballcard.html` | `baseballcard` | — |
+| `photo-picker.html` | `photo-picker` | — |
+| `file-upload.html` | `file-upload` | — |
 | `i200-form.html` | `i200-form` | — |
 | `i205-form.html` | `i205-form` | — |
 | `encounter.html` | `encounter` | — |
@@ -124,9 +134,8 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | Status | `#appBarStatus` | — | `<p>` |
 | Lead follow-up stubs (form only) | `#stubPersonButton`, `#stubVehicleButton`, `#stubLocationButton` | + Person / Vehicle / Location | buttons (`workflow.js`) |
 | Follow-ups | `#followUpsToggle` | Follow-ups | button |
-| Narrative update (training page) | `#appBarPrimaryAction` | Update draft | button + `data-chrome-action="save"` |
-| Narrative supplement | `#addSupplementButton` | Add supplement | button |
-| Narrative output audit | `#inspectOutputButton` | Inspect output | button |
+| Narrative save | `#appBarPrimaryAction` | Save I-213 / Update draft | button + `data-chrome-action="save"` |
+| Narrative copy | `#copyNarrativeButton` | Copy | button (plain text) |
 | Narrative downloads | `#downloadNarrativeJsonButton`, `#downloadNarrativeTextButton` | Download JSON / text | File-menu buttons |
 | Workspace Import | `#fileImportButton` | Import | File-menu button `call: openFileImport` |
 | Workspace Export | `#fileExportButton` | Export | File-menu button `call: openFileExport` |
@@ -134,11 +143,15 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | Add subjects (encounter form) | `#addEncounterSubjectsButton` | Add subjects | `<a href="bookin.html?encounterId=">` |
 | Generate I-213 (encounter form) | `#generateI213Button` | Generate I-213 | button `call: generateEncounterNarrative` |
 | Add subject (book-in + `?encounterId=`) | `#addEncounterSubjectButton` | Add subject | button `call: addEncounterSubject` |
-| Load from leads (book-in + `?encounterId=`) | `#loadLeadIntoEncounterButton` | Load from leads | button `call: openLoadLeadForEncounter` |
+| Load from leads (book-in) | `#loadLeadIntoEncounterButton` | Load from leads | button `call: openLoadLeadForEncounter`. Always on Book-in. |
 | Map views | `#mapHomeButton`, `#mapSetHomeButton`, `#mapSavePresetButton`, `#mapPresetSelect`, `#mapDeletePresetButton` | Home / Set home / presets | in `.map-toolbar`, not the action slot |
 | Map layers (planned) | layer toggles for active / arrest / origin | independent; default Active on | in `.map-toolbar`, not the action slot |
 | Map hint | `#mapViewHint` | view-mode status | in `.map-card` |
 | Map targets | `#targetsTableBody`, `#targetsEmpty` | ranked locations | `.targets-card` |
+| Photo picker add | `#appBarPrimaryAction` | Add photos | button `call: openPhotoPicker` |
+| Photo picker file | `#downloadPhotoLibraryButton`, `#clearPhotoLibraryButton` | Download JSON / Clear library | File menu |
+| File upload add | `#appBarPrimaryAction` | Add files | button `call: openFileUpload` |
+| File upload file | `#downloadFileLibraryButton`, `#clearFileLibraryButton` | Download JSON / Clear library | File menu |
 
 Retire `#leadSaveStatus`, `#quickSaveLeadButton`, `#addOfficerButton`, `#addVehicleButton`, `#officerEditLink`, `#vehicleEditLink` in the **chrome PR** (same PR the slot becomes the only visible Save/Edit). Page scripts bind **Save** to `#appBarPrimaryAction[data-chrome-action="save"]`.
 
@@ -159,6 +172,9 @@ List tables: `#{records}Body`, `#{records}Empty`, `#{records}TableWrap`.
 | Narrative shell / engine scope | `.narrative-*`, `.narrative-engine-host` |
 | Home briefing hub | `.page-home`, `.home-modules`, `.home-module`, `.home-split` |
 | Map planning board | `.page-map`, `.map-layout`, `.map-card`, `.map-toolbar`, `.targets-card` |
+| Photo picker (test) | `.page-photo-picker`, `.photo-library`, `.photo-crop-stage`, `.photo-tag-list` |
+| File upload (test) | `.file-library`, `.file-row`, `.file-preview` |
+| Object view media | `.media-photo-card`, `.media-doc-list` (planned) |
 
 Do not add per-page stylesheets unless print/PDF requires it.
 
@@ -194,6 +210,24 @@ app-bar.js → transfer.js → date.js → assets/icons/copdoc-icons.js → func
 ```
 
 Do **not** load `store.js`, `admin.js`, `collect.js`, `hydrate.js`, `workflow.js`, or `cards.js`. Skeleton does not write storage. A later painter may **read** committed leads / roster / book-in.
+
+**Photo picker test** (`photo-picker.html`):
+
+```
+app-bar.js → date.js → model/util.js → photo-picker.js
+```
+
+Not a chrome tab. Isolated key `copdocx.photo-picker.v1`. Do **not** write leads, admin, or book-in.
+
+**File upload test** (`file-upload.html`):
+
+```
+app-bar.js → date.js → model/util.js → data/identity-document-types.js → file-upload.js
+```
+
+Not a chrome tab. Isolated key `copdocx.file-upload.v1`. Same kind/tags as photos, plus `documentType`. Do **not** write leads, admin, or book-in.
+
+**Media (planned):** `functions/model/media.js` (IndexedDB). Views load `media.js` then `functions/media-card.js`. Pickers with `?ownerType=&id=` call `COPDoc.media.save`. Do not load media into `collect.js` / `hydrate.js`.
 
 **Map** (`map.html`):
 
@@ -260,7 +294,7 @@ app-bar.js → date.js → existing book-in catalogs
 
 Do **not** load `officer.js`, `autosave.js`, `collect.js`, or `createLead` beyond `lead.js` + `store.js`. `lead.js` requires `util.js` after the extract.
 
-**Narrative Build 9 training workspace** (`narrative.html`):
+**Narrative** (`narrative.html`): I-213 when `?encounterId=`; otherwise Build 9 training lab.
 
 ```
 app-bar.js → date.js
@@ -275,6 +309,9 @@ app-bar.js → date.js
 → functions/narratives/build9/encounter-summary.js
 → functions/narratives/build9/index.js
 → data/narratives/build9/demo-fixtures.js
+→ data/countries.js → data/immigration.js
+→ functions/model/util.js → person.js → lead.js → encounter.js → store.js
+→ functions/encounter-narrative.js
 → functions/narratives/narrative-page.js
 ```
 

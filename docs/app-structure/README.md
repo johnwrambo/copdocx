@@ -23,6 +23,7 @@ If a PR disagrees with these files, change the files in that PR and say why.
 | [data-models.md](data-models.md) | Officer, vehicle (`governmentVehicle` vs fleet `status`), location, stores, migration |
 | [implementation-plan.md](implementation-plan.md) | Ordered PRs (index). File lists: [design.md](design.md). |
 | [design.md](design.md) | Decisions, alternatives, risks, detailed PR file lists |
+| [media-plan.md](media-plan.md) | Proposed: attach photos/files to the object they depict. Comment on D# / PR# / Q# before 0.17.x. |
 
 ## Constraints that do not move
 

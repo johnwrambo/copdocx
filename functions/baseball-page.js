@@ -141,6 +141,14 @@
     if (arrests[0] && arrests[0].arrestDate) {
       fillIfEmpty("arrestDate", arrests[0].arrestDate);
     }
+    var criminal =
+      m && typeof m.deriveCriminalProfile === "function"
+        ? m.deriveCriminalProfile(subject)
+        : subject.criminal || {};
+    var criminalBox = byId("isCriminal");
+    if (criminalBox && (criminal.isCriminal || criminal.hasCriminalRecord)) {
+      criminalBox.checked = true;
+    }
     var convictions = subject.convictions || [];
     var list = byId("criminalHistoryList");
     if (list && convictions.length && typeof addCriminalHistoryRow === "function") {
@@ -176,6 +184,10 @@
     fillIfEmpty("finalOrderDate", data.finalOrderDate);
     fillIfEmpty("firstDeportationDate", data.firstDeportationDate);
     fillIfEmpty("lastDeportationDate", data.lastDeportationDate);
+    var criminalBox = byId("isCriminal");
+    if (criminalBox && data.isCriminal) {
+      criminalBox.checked = true;
+    }
   }
 
   function editorText() {

@@ -69,7 +69,7 @@
   }
 
   function isEncounterPage(page) {
-    return page === "encounter" || page === "encounter-form";
+    return page === "encounter" || page === "encounter-form" || page === "narrative";
   }
 
   function queryParam(name) {
@@ -344,16 +344,16 @@
           label: "Add subject",
           call: "addEncounterSubject"
         });
-        bookinActions.push({
-          id: "loadLeadIntoEncounterButton",
-          label: "Load from leads",
-          call: "openLoadLeadForEncounter"
-        });
       } else if (bookinLeadId) {
         bookinActions.push(
           backAction("Back to lead", recordIdHref("lead.html", bookinLeadId))
         );
       }
+      bookinActions.push({
+        id: "loadLeadIntoEncounterButton",
+        label: "Load from leads",
+        call: "openLoadLeadForEncounter"
+      });
       bookinActions.push({ label: "Clear", call: "confirmClearForm" });
       bookinActions.push({
         id: "generatebaseballCard",
@@ -394,7 +394,7 @@
       var narrativeEncounterId = queryParam("encounterId");
       var narrativeActions = [
         {
-          label: "Update draft",
+          label: narrativeEncounterId ? "Save I-213" : "Update draft",
           primary: true,
           chromeAction: "save"
         }
@@ -407,15 +407,48 @@
           )
         );
       }
-      narrativeActions.push({ id: "addSupplementButton", label: "Add supplement" });
-      narrativeActions.push({ id: "inspectOutputButton", label: "Inspect output" });
+      narrativeActions.push({ id: "copyNarrativeButton", label: "Copy" });
       return {
-        tab: "narrative",
+        tab: "encounter",
         file: [
           { id: "downloadNarrativeJsonButton", label: "Download JSON" },
           { id: "downloadNarrativeTextButton", label: "Download text" }
         ],
         actions: narrativeActions
+      };
+    }
+    if (page === "file-upload") {
+      return {
+        tab: "",
+        file: [
+          { id: "downloadFileLibraryButton", label: "Download JSON" },
+          { id: "clearFileLibraryButton", label: "Clear library" }
+        ],
+        actions: [
+          {
+            label: "Add files",
+            primary: true,
+            chromeAction: "add",
+            call: "openFileUpload"
+          }
+        ]
+      };
+    }
+    if (page === "photo-picker") {
+      return {
+        tab: "",
+        file: [
+          { id: "downloadPhotoLibraryButton", label: "Download JSON" },
+          { id: "clearPhotoLibraryButton", label: "Clear library" }
+        ],
+        actions: [
+          {
+            label: "Add photos",
+            primary: true,
+            chromeAction: "add",
+            call: "openPhotoPicker"
+          }
+        ]
       };
     }
     if (page === "baseballcard") {
@@ -660,7 +693,6 @@
     );
     nav.appendChild(tabLink("bookin.html", "Book-in", tab === "bookin"));
     nav.appendChild(tabLink("map.html", "Map", tab === "map"));
-    nav.appendChild(tabLink("narrative.html", "Narrative", tab === "narrative"));
 
     var admin = document.createElement("details");
     admin.className = "app-bar-menu";

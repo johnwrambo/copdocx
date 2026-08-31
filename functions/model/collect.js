@@ -231,7 +231,6 @@
     });
 
     person.criminal = {
-      isCriminal: checked(byId("isCriminal")),
       fbiNumber: textValue(byId("fbiNumber")),
       ncicNumber: textValue(byId("ncicNumber")),
       stateId: textValue(byId("stateId")),
@@ -416,6 +415,9 @@
       if (Array.isArray(prevImm.baseballCards) && prevImm.baseballCards.length) {
         person.immigration.baseballCards = prevImm.baseballCards.slice();
       }
+    }
+    if (typeof model.deriveCriminalProfile === "function") {
+      model.deriveCriminalProfile(person);
     }
     var createdAt =
       (leadCard && leadCard.dataset.createdAt) || model.nowIso();

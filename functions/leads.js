@@ -96,9 +96,19 @@
     return first;
   }
 
+  function criminalProfile(person) {
+    var m = model();
+    if (m && typeof m.deriveCriminalProfile === "function") {
+      return m.deriveCriminalProfile(person || {});
+    }
+    return (person && person.criminal) || {};
+  }
+
   function crimStatus(person) {
-    var criminal = (person && person.criminal) || {};
-    return criminal.isCriminal ? "Criminal" : "Non-criminal";
+    var criminal = criminalProfile(person);
+    return criminal.isCriminal || criminal.hasCriminalRecord
+      ? "Criminal"
+      : "Non-criminal";
   }
 
   function catalogLabel(items, code) {
@@ -357,6 +367,30 @@
     setViewText("viewDobAge", dobAge);
     setViewText("viewCitizenship", subject.citizenship);
     setViewText("viewAlienNumber", immigration.alienNumber);
+    var crim = criminalProfile(subject);
+    var crimBits = [];
+    if (crim.hasCriminalRecord || crim.isCriminal) {
+      crimBits.push("Criminal record");
+    }
+    if (crim.hasCriminalWarrants) {
+      crimBits.push("Criminal warrants");
+    }
+    if (crim.sexOffender) {
+      crimBits.push("Sex offender");
+    }
+    if (crim.foreignFugitive) {
+      crimBits.push("Foreign fugitive");
+    }
+    if (crim.armed) {
+      crimBits.push("Armed");
+    }
+    setViewText("viewCriminal", crimBits.join(" · ") || "Non-criminal");
+    setViewText(
+      "viewThreatLevel",
+      m.threatLevelLabel
+        ? m.threatLevelLabel(crim.threatLevel)
+        : crim.threatLevel || "None"
+    );
     if (byId("viewAddress")) {
       byId("viewAddress").textContent = formatAddress(loc);
     }
@@ -528,6 +562,105 @@
     }
   }
 
+  function paintFowCriminal(subject) {
+    var statusEl = byId("targetCriminalStatus");
+    var historyEl = byId("targetCriminalHistoryList");
+    var convictionsEl = byId("targetConvictions");
+    if (!statusEl && !historyEl && !convictionsEl) {
+      return;
+    }
+    var crim = criminalProfile(subject);
+    var m = model();
+    var bits = [];
+    if (crim.hasCriminalRecord || crim.isCriminal) {
+      bits.push("Criminal record");
+    }
+    if (crim.hasCriminalWarrants) {
+      bits.push("Criminal warrants");
+    }
+    if (crim.sexOffender) {
+      bits.push("Sex offender");
+    }
+    if (crim.foreignFugitive) {
+      bits.push("Foreign fugitive");
+    }
+    if (crim.armed) {
+      bits.push("Armed");
+    }
+    var threat = m.threatLevelLabel
+      ? m.threatLevelLabel(crim.threatLevel)
+      : crim.threatLevel || "None";
+    if (statusEl) {
+      statusEl.textContent = bits.length
+        ? bits.join(" · ") + " · Threat " + threat
+        : "Non-criminal · Threat " + threat;
+    }
+    var lines = ((subject && subject.convictions) || [])
+      .map(function (row) {
+        var offense = String((row && (row.crime || row.charge)) || "").trim();
+        if (!offense) {
+          return "";
+        }
+        return [offense, row.convictionDate, row.court].filter(Boolean).join(" · ");
+      })
+      .filter(Boolean);
+    if (historyEl) {
+      historyEl.textContent = lines.length
+        ? lines.join("; ")
+        : "No criminal history loaded.";
+      historyEl.classList.toggle("fow-inline-empty", !lines.length);
+    }
+    if (convictionsEl) {
+      convictionsEl.textContent = lines.length ? lines.join("; ") : "None loaded.";
+    }
+    if (byId("targetFbiNumber")) {
+      byId("targetFbiNumber").textContent =
+        (crim.fbiNumber || (subject.criminal && subject.criminal.fbiNumber) || "—");
+    }
+    if (byId("targetNcicNumber")) {
+      byId("targetNcicNumber").textContent =
+        ((subject.criminal && subject.criminal.ncicNumber) || "—");
+    }
+    if (byId("targetStateId")) {
+      byId("targetStateId").textContent =
+        ((subject.criminal && subject.criminal.stateId) || "—");
+    }
+  }
+
+  function paintFow() {
+    var missing = byId("mobileFowMissing");
+    var sheet = byId("mobileFowSheet");
+    var m = model();
+    if (!m || !m.store) {
+      return;
+    }
+    m.store.loadFromDisk();
+    var id = queryId();
+    var snap = id ? m.store.getLead(id) : null;
+    if (!snap) {
+      if (missing) {
+        missing.hidden = false;
+        missing.textContent = id ? "Lead not found." : "Open this sheet from a lead.";
+      }
+      if (sheet) {
+        sheet.hidden = true;
+      }
+      return;
+    }
+    if (missing) {
+      missing.hidden = true;
+    }
+    if (sheet) {
+      sheet.hidden = false;
+    }
+    var subject = m.subjectOf ? m.subjectOf(snap) : snap.person || {};
+    if (byId("targetName")) {
+      byId("targetName").textContent =
+        (m.formatPersonLabel && m.formatPersonLabel(subject)) || "Target";
+    }
+    paintFowCriminal(subject);
+  }
+
   function boot() {
     if (pageKey() === "leads") {
       bindFilters();
@@ -538,6 +671,10 @@
     if (pageKey() === "lead") {
       bindExports();
       paintView();
+      return;
+    }
+    if (pageKey() === "mobile-fow") {
+      paintFow();
     }
   }
 

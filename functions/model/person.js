@@ -38,6 +38,12 @@
         documents: [],
         criminal: {
           isCriminal: false,
+          hasCriminalRecord: false,
+          hasCriminalWarrants: false,
+          sexOffender: false,
+          foreignFugitive: false,
+          armed: false,
+          threatLevel: "none",
           fbiNumber: "",
           ncicNumber: "",
           stateId: "",
@@ -192,6 +198,155 @@
     return formType === "I-200" || formType === "I-205";
   }
 
+  var SEX_OFFENDER_NEEDLES = [
+    "sexual",
+    "rape",
+    "indecency",
+    "molest",
+    "lewd",
+    "child porn",
+    "pornograph",
+    "exploitation of a child",
+    "exploitation of child",
+    "failure to register"
+  ];
+  var FOREIGN_FUGITIVE_NEEDLES = [
+    "fugitive",
+    "interpol",
+    "red notice",
+    "extradition"
+  ];
+  var ARMED_NEEDLES = [
+    "firearm",
+    "handgun",
+    "shotgun",
+    "rifle",
+    "deadly weapon",
+    "shooting"
+  ];
+  var THREAT_LEVEL_LABELS = {
+    none: "None",
+    low: "Low",
+    moderate: "Moderate",
+    high: "High",
+    severe: "Severe"
+  };
+
+  function offenseBlob(row) {
+    if (!row) {
+      return "";
+    }
+    return [
+      row.crime,
+      row.charge,
+      row.arrestCharge,
+      row.convictionStatute,
+      row.arrestStatute
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function hayHas(hay, needle) {
+    var text = String(hay || "").toLowerCase();
+    var bit = String(needle || "").toLowerCase();
+    if (!text || !bit) {
+      return false;
+    }
+    if (bit.indexOf(" ") !== -1) {
+      return text.indexOf(bit) !== -1;
+    }
+    return new RegExp("\\b" + bit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(
+      text
+    );
+  }
+
+  function blobMatches(hay, needles) {
+    var i;
+    for (i = 0; i < needles.length; i++) {
+      if (hayHas(hay, needles[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function hasConvictionOffense(row) {
+    return !!(row && String(row.crime || row.charge || "").trim());
+  }
+
+  function isActiveCriminalWarrant(row) {
+    if (!row || isIssuedWarrant(row)) {
+      return false;
+    }
+    var status = String(row.warrantStatus || "").trim().toLowerCase();
+    return status === "" || status === "active" || status === "unknown";
+  }
+
+  function threatLevelLabel(level) {
+    return THREAT_LEVEL_LABELS[level] || THREAT_LEVEL_LABELS.none;
+  }
+
+  function deriveCriminalProfile(person) {
+    person = person || {};
+    var convictions = person.convictions || [];
+    var arrests = person.arrests || [];
+    var warrants = person.warrants || [];
+    var hay = "";
+    convictions.forEach(function (row) {
+      hay += " " + offenseBlob(row);
+    });
+    arrests.forEach(function (row) {
+      hay += " " + offenseBlob(row);
+    });
+    warrants.forEach(function (row) {
+      if (!isIssuedWarrant(row)) {
+        hay += " " + offenseBlob(row);
+      }
+    });
+    var hasCriminalRecord = convictions.some(hasConvictionOffense);
+    var hasCriminalWarrants = warrants.some(isActiveCriminalWarrant);
+    var hasFelony = convictions.some(function (row) {
+      return (
+        hasConvictionOffense(row) &&
+        String(row.convictionClass || "").toLowerCase() === "felony"
+      );
+    });
+    var sexOffender = blobMatches(hay, SEX_OFFENDER_NEEDLES) || hayHas(hay, "sex");
+    var foreignFugitive = blobMatches(hay, FOREIGN_FUGITIVE_NEEDLES);
+    var armed =
+      blobMatches(hay, ARMED_NEEDLES) ||
+      hayHas(hay, "gun") ||
+      hayHas(hay, "guns") ||
+      hayHas(hay, "weapon") ||
+      hayHas(hay, "armed");
+    var rank = 0;
+    if (hasCriminalRecord || hasCriminalWarrants) {
+      rank = 1;
+    }
+    if (hasFelony || hasCriminalWarrants) {
+      rank = Math.max(rank, 2);
+    }
+    if (armed) {
+      rank = Math.max(rank, 3);
+    }
+    if (sexOffender || foreignFugitive) {
+      rank = Math.max(rank, 4);
+    }
+    var levels = ["none", "low", "moderate", "high", "severe"];
+    var derived = {
+      isCriminal: hasCriminalRecord,
+      hasCriminalRecord: hasCriminalRecord,
+      hasCriminalWarrants: hasCriminalWarrants,
+      sexOffender: sexOffender,
+      foreignFugitive: foreignFugitive,
+      armed: armed,
+      threatLevel: levels[rank] || "none"
+    };
+    person.criminal = model.assign(person.criminal || {}, derived);
+    return person.criminal;
+  }
+
   function issuedWarrants(person) {
     return ((person && person.warrants) || []).filter(isIssuedWarrant);
   }
@@ -227,6 +382,8 @@
   model.createBaseballCard = createBaseballCard;
   model.isIssuedWarrant = isIssuedWarrant;
   model.issuedWarrants = issuedWarrants;
+  model.deriveCriminalProfile = deriveCriminalProfile;
+  model.threatLevelLabel = threatLevelLabel;
   model.formatPersonLabel = formatPersonLabel;
   model.isBlankPerson = isBlankPerson;
 })(typeof window !== "undefined" ? window : globalThis);

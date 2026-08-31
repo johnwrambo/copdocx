@@ -156,6 +156,18 @@
               ]
             },
             {
+              id: "other_arrested",
+              label: "Other persons arrested",
+              options: [
+                N.NOT_INCLUDED,
+                {
+                  id: "include_all_other_arrested",
+                  label: "Include all other arrested",
+                  text: ""
+                }
+              ]
+            },
+            {
               id: "bwc_closing_statement",
               label: "Body-worn camera",
               options: [

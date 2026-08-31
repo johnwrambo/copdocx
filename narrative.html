@@ -11,8 +11,8 @@
     <header class="app-bar">
       <div class="app-bar-info">
         <span class="app-bar-product">COPDoc</span>
-        <span id="appVersion" class="app-version" data-version="0.11.1">
-          Version 0.11.1
+        <span id="appVersion" class="app-version" data-version="0.16.1">
+          Version 0.16.1
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -21,25 +21,37 @@
     </header>
 
     <main class="page page-wide narrative-page">
-      <div class="page-header narrative-page-header">
+      <div class="page-header narrative-page-header" id="narrativePageHeader">
         <div>
-          <h1>Narrative Builder</h1>
-          <p class="section-note">
+          <h1 id="narrativePageTitle">Narrative Builder</h1>
+          <p class="section-note" id="narrativePageNote">
             Build 9 training workspace. All people, identifiers, and events on this page are synthetic.
           </p>
         </div>
         <span id="libraryVerification" class="narrative-status">Loading prose libraries…</span>
       </div>
 
-      <div class="narrative-layout">
+      <div class="narrative-live-header" id="narrativeLiveHeader" hidden>
+        <div>
+          <h1>I-213</h1>
+          <p class="section-note" id="narrativeLiveMeta"></p>
+        </div>
+      </div>
+
+      <div class="card-static narrative-empty" id="narrativeEmptyState" hidden>
+        <p id="narrativeEmptyText"></p>
+        <a class="action-button" id="narrativeEmptyLink" hidden>Add subjects</a>
+      </div>
+
+      <div class="narrative-layout" id="narrativeWorkspace">
         <aside class="narrative-sidebar" aria-label="Narrative overview">
-          <fieldset class="card-static">
+          <fieldset class="card-static narrative-sidebar-subjects">
             <legend>Narratives</legend>
             <p class="section-note">One primary narrative per Target or Collateral participant.</p>
             <div id="participantNarratives" class="narrative-participant-list"></div>
           </fieldset>
 
-          <fieldset class="card-static">
+          <fieldset class="card-static narrative-sidebar-coverage">
             <legend>Primary coverage</legend>
             <div class="narrative-card-heading">
               <span class="section-note">Required participant narratives</span>
@@ -51,11 +63,11 @@
               id="completeMissingNarrativeButton"
               class="action-button narrative-full-action"
             >
-              Create missing T3 narrative
+              Create missing narrative
             </button>
           </fieldset>
 
-          <fieldset class="card-static">
+          <fieldset class="card-static narrative-sidebar-summary">
             <legend>Supervisor summary</legend>
             <div id="metricGrid" class="narrative-metric-grid"></div>
             <p id="supervisorSummaryText" class="section-note narrative-summary-text"></p>
@@ -65,9 +77,9 @@
         <section class="narrative-main" aria-label="Active narrative workspace">
           <fieldset class="card-static narrative-focus-card">
             <legend>Active narrative</legend>
-            <h2 id="activeNarrativeTitle">Loading synthetic encounter…</h2>
+            <h2 id="activeNarrativeTitle">Loading training encounter…</h2>
             <p class="section-note">
-              Changes remain in this training session until you update the draft or download its output.
+              Training changes stay in this session until you update the draft or download its output.
             </p>
           </fieldset>
 
@@ -79,14 +91,16 @@
 
           <fieldset class="card-static narrative-output-audit">
             <legend>Structured output</legend>
-            <div class="narrative-card-heading">
-              <p class="section-note">Section boundaries and generated output payload.</p>
-              <span id="outputSchemaBadge" class="narrative-status">Waiting for output</span>
-            </div>
-            <div id="sectionAudit" class="narrative-section-audit"></div>
-            <details class="narrative-json-details">
-              <summary>Output JSON</summary>
-              <pre id="outputJson"></pre>
+            <details class="narrative-json-details" id="narrativeOutputDetails">
+              <summary class="narrative-card-heading">
+                <span>Section boundaries and generated output payload</span>
+                <span id="outputSchemaBadge" class="narrative-status">Waiting for output</span>
+              </summary>
+              <div id="sectionAudit" class="narrative-section-audit"></div>
+              <details class="narrative-json-details">
+                <summary>Output JSON</summary>
+                <pre id="outputJson"></pre>
+              </details>
             </details>
           </fieldset>
         </section>
@@ -115,6 +129,8 @@
     <script src="functions/narratives/build9/encounter-summary.js"></script>
     <script src="functions/narratives/build9/index.js"></script>
     <script src="data/narratives/build9/demo-fixtures.js"></script>
+    <script src="data/countries.js"></script>
+    <script src="data/immigration.js"></script>
     <script src="functions/model/util.js"></script>
     <script src="functions/model/person.js"></script>
     <script src="functions/model/lead.js"></script>

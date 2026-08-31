@@ -1,43 +1,62 @@
 /**
- * COPDoc Narrative Build 9 training-page controller.
+ * COPDoc Narrative page controller.
  *
- * This page exercises the production narrative boundary with deterministic,
- * synthetic Encounter data. It never mutates canonical source facts.
+ * `?encounterId=` is the I-213 workspace for a saved encounter.
+ * With no query, this page stays a Build 9 training lab on synthetic data.
  */
 (function (global) {
   "use strict";
 
   var fixture = global.COPDocNarrativeDemoFixture;
+  var liveEncounter = false;
+  var liveEncounterId = "";
+  var liveMiss = false;
   try {
-    var liveEncounterId = new URLSearchParams(window.location.search).get(
+    liveEncounterId = new URLSearchParams(window.location.search).get(
       "encounterId"
-    );
-    var live =
-      liveEncounterId &&
-      global.COPDoc &&
-      COPDoc.encounterNarrative &&
-      typeof COPDoc.encounterNarrative.bundleFromEncounter === "function"
-        ? COPDoc.encounterNarrative.bundleFromEncounter(liveEncounterId)
-        : null;
-    if (live && live.encounter) {
-      fixture = {
-        encounter: live.encounter,
-        operation: live.operation,
-        participants: live.participants || [],
-        events: live.events || [],
-        encounterVehicles: live.encounterVehicles || [],
-        location: live.location,
-        officers: live.officers || [],
-        vehicles: live.vehicles || [],
-        narrativesInitial: live.narrativesInitial || []
-      };
+    ) || "";
+    if (liveEncounterId) {
+      var live =
+        global.COPDoc &&
+        COPDoc.encounterNarrative &&
+        typeof COPDoc.encounterNarrative.bundleFromEncounter === "function"
+          ? COPDoc.encounterNarrative.bundleFromEncounter(liveEncounterId)
+          : null;
+      if (live && live.encounter) {
+        liveEncounter = true;
+        fixture = {
+          encounter: live.encounter,
+          operation: live.operation,
+          participants: live.participants || [],
+          events: live.events || [],
+          encounterVehicles: live.encounterVehicles || [],
+          location: live.location,
+          officers: live.officers || [],
+          vehicles: live.vehicles || [],
+          narrativesInitial: live.narrativesInitial || []
+        };
+      } else {
+        liveMiss = true;
+        fixture = {
+          encounter: { encounterId: liveEncounterId },
+          participants: [],
+          events: [],
+          encounterVehicles: [],
+          officers: [],
+          vehicles: [],
+          narrativesInitial: []
+        };
+      }
     }
   } catch (error) {
     console.warn(error);
   }
   var narratives = global.COPDoc && global.COPDoc.narratives;
   var domain = narratives && narratives.build9;
-  if (!fixture || !narratives || !domain) {
+  if (!narratives || !domain) {
+    throw new Error("Narrative Build 9 dependencies did not load.");
+  }
+  if (!liveMiss && !fixture) {
     throw new Error("Narrative Build 9 dependencies did not load.");
   }
 
@@ -46,13 +65,51 @@
   if (!host) {
     throw new Error("Narrative page host is missing.");
   }
+
+  var liveEmpty = liveEncounter && !(fixture.participants && fixture.participants.length);
+  var emptyState = byId("narrativeEmptyState");
+  var emptyText = byId("narrativeEmptyText");
+  var emptyLink = byId("narrativeEmptyLink");
+  var workspace = byId("narrativeWorkspace");
+  var liveHeader = byId("narrativeLiveHeader");
+  if (liveMiss || liveEmpty) {
+    document.body.classList.add("narrative-empty");
+    if (workspace) workspace.hidden = true;
+    if (liveHeader) liveHeader.hidden = true;
+    if (emptyState) emptyState.hidden = false;
+    if (emptyText) {
+      emptyText.textContent = liveMiss
+        ? "Encounter not found."
+        : "Add subjects on Book-in before writing an I-213.";
+    }
+    if (emptyLink && liveEmpty && liveEncounterId) {
+      emptyLink.hidden = false;
+      emptyLink.href = "bookin.html?encounterId=" + encodeURIComponent(liveEncounterId);
+      emptyLink.textContent = "Add subjects";
+    }
+    document.title = "I-213";
+    showStatus(
+      liveMiss ? "Encounter not found." : "Add subjects on Book-in before writing an I-213.",
+      false
+    );
+    return;
+  }
+
+  document.body.classList.add(liveEncounter ? "narrative-live" : "narrative-training");
+  if (liveEncounter) {
+    document.title = "I-213";
+    if (liveHeader) liveHeader.hidden = false;
+    var pageHeader = byId("narrativePageHeader");
+    if (pageHeader) pageHeader.hidden = true;
+  }
+
   global.OpDocNarrativeConfig = {
     mode: "embedded",
     enableDemo: false,
     enableTestPacket: false,
     enableJsonImport: false,
     enableLocalStorage: false,
-    canEditTemplates: true,
+    canEditTemplates: false,
     canEditSourceValues: false,
     requireResolvedBeforeCopy: false,
     allowUnknownFields: false
@@ -60,9 +117,15 @@
   host.innerHTML = narratives.ENGINE_MARKUP;
   var engine = global.__opdocNarrativeBootstrap();
   var store = domain.createNarrativeStore(fixture.narrativesInitial);
+  if (liveEncounter && liveEncounterId && global.COPDoc && COPDoc.model && COPDoc.model.store) {
+    COPDoc.model.store.loadFromDisk();
+    var storedEncounter = COPDoc.model.store.getEncounter(liveEncounterId);
+    if (storedEncounter && Array.isArray(storedEncounter.narratives) && storedEncounter.narratives.length) {
+      store.replaceAll(storedEncounter.narratives);
+    }
+  }
   var unsavedDraftStateByParticipant = new Map();
   var activeParticipantId = null;
-  var syntheticCounter = 1;
 
   function byId(id) {
     return document.getElementById(id);
@@ -81,6 +144,81 @@
 
   function roleCode(participant) {
     return (participant.encounterRole === "TARGET" ? "T" : "C") + participant.roleSequence;
+  }
+
+  function looksEmptyUnknown(value) {
+    var text = String(value == null ? "" : value).trim().toLowerCase();
+    return !text || text === "unknown" || text === "null";
+  }
+
+  function seedFinalDisposition(participant) {
+    var selections = {};
+    if (!participant) {
+      return selections;
+    }
+    if (String(participant.finalOutcome || "").toUpperCase() === "ARRESTED") {
+      selections.final_outcome = "transported_ice_office";
+    }
+    var closing = participant.closing || {};
+    var health = String(closing.health || "").trim();
+    if (!looksEmptyUnknown(health) && /good|none|n\/a/.test(health.toLowerCase())) {
+      selections.claimed_health = "claims_good_health";
+    }
+    var meds = String(closing.medication || closing.medications || "").trim();
+    if (!looksEmptyUnknown(meds)) {
+      selections.medication_statement = /^(none|no\b)/i.test(meds)
+        ? "claims_no_medications"
+        : "claims_named_medications";
+    }
+    var minors = String(closing.minors || "").trim();
+    if (!looksEmptyUnknown(minors) && /^(none|no\b)/i.test(minors)) {
+      selections.minor_children_statement = "claims_no_minor_children_us";
+    }
+    var cash = closing.currency && closing.currency.amountUsd;
+    if (cash) {
+      selections.currency_statement = "usd_in_possession";
+    }
+    var others = (fixture.participants || []).filter(function (row) {
+      return row &&
+        row.encounterParticipantId !== participant.encounterParticipantId &&
+        String(row.finalOutcome || "").toUpperCase() === "ARRESTED";
+    });
+    if (others.length) {
+      selections.other_arrested = "include_all_other_arrested";
+    }
+    return selections;
+  }
+
+  function persistLiveEncounter() {
+    if (!liveEncounter || !liveEncounterId) {
+      return;
+    }
+    var model = global.COPDoc && COPDoc.model;
+    if (!model || !model.store) {
+      return;
+    }
+    model.store.loadFromDisk();
+    var enc = model.store.getEncounter(liveEncounterId);
+    if (!enc) {
+      return;
+    }
+    enc.narratives = store.all();
+    var coverage = currentCoverage();
+    var summary = domain.deriveEncounterSummary(demoBundle(), {
+      narrativeCoverage: coverage,
+      now: new Date().toISOString()
+    });
+    enc.supervisorSummary = {
+      text: (summary && summary.generatedSupervisorText) || "",
+      derivedAt: new Date().toISOString(),
+      coverage: {
+        complete: !!(coverage && coverage.coverageComplete),
+        missing: (coverage && coverage.missingParticipantIds) || []
+      }
+    };
+    model.store.saveEncounter(enc, {
+      mode: model.isCommitted && model.isCommitted(enc) ? "commit" : "draft"
+    });
   }
 
   function primaryFor(participantId) {
@@ -111,14 +249,16 @@
       primaryLocation: fixture.location,
       officers: fixture.officers,
       narratives: store.all(),
-      narrativeFacts: {
-        command: "unlock the vehicle and exit",
-        conduct: "pulling both arms away and attempting to turn toward Officers",
-        facts_supporting_arrest: "the confirmed identity and immigration records",
-        authority_and_basis: "the applicable administrative enforcement authority",
-        technique_or_tool: "a control hold",
-        tool: "a window punch"
-      }
+      narrativeFacts: liveEncounter
+        ? {}
+        : {
+            command: "unlock the vehicle and exit",
+            conduct: "pulling both arms away and attempting to turn toward Officers",
+            facts_supporting_arrest: "the confirmed identity and immigration records",
+            authority_and_basis: "the applicable administrative enforcement authority",
+            technique_or_tool: "a control hold",
+            tool: "a window punch"
+          }
     };
   }
 
@@ -158,6 +298,7 @@
       meta.className = "narrative-participant-meta";
       meta.textContent = (primary ? primary.workflowStatus || "DRAFT" : "MISSING") +
         " · " + participant.finalOutcome.replaceAll("_", " ") +
+        (participant.iceEventNumber ? " · " + participant.iceEventNumber : "") +
         (supplements.length ? " · +" + supplements.length : "");
       text.append(name, document.createElement("br"), meta);
 
@@ -204,13 +345,33 @@
 
     var missingButton = byId("completeMissingNarrativeButton");
     missingButton.disabled = coverage.missingParticipantIds.length === 0;
-    missingButton.textContent = coverage.missingParticipantIds.length
-      ? "Create missing T3 narrative"
-      : "Primary coverage complete";
+    if (!coverage.missingParticipantIds.length) {
+      missingButton.textContent = "Primary coverage complete";
+    } else {
+      var missingParticipant = fixture.participants.find(function (row) {
+        return row.encounterParticipantId === coverage.missingParticipantIds[0];
+      });
+      missingButton.textContent = missingParticipant
+        ? "Create missing " + roleCode(missingParticipant) + " narrative"
+        : "Create missing narrative";
+    }
+
+    var liveMeta = byId("narrativeLiveMeta");
+    if (liveMeta && liveEncounter) {
+      var active = fixture.participants.find(function (row) {
+        return row.encounterParticipantId === activeParticipantId;
+      }) || fixture.participants[0];
+      liveMeta.textContent = [
+        fixture.encounter && fixture.encounter.encounterId,
+        active ? roleCode(active) + " · " + participantName(active) : "",
+        active && active.iceEventNumber,
+        coverage.coveredCount + "/" + coverage.requiredCount + " covered"
+      ].filter(Boolean).join(" · ");
+    }
 
     var summary = domain.deriveEncounterSummary(demoBundle(), {
       narrativeCoverage: coverage,
-      now: "2026-08-09T19:10:00.000Z"
+      now: new Date().toISOString()
     });
     var metrics = [
       [summary.what.arrestedCount, "Arrested"],
@@ -237,7 +398,7 @@
     byId("supervisorSummaryText").textContent = summary.generatedSupervisorText;
   }
 
-  function seededSelections(record) {
+  function seededSelections(record, participant) {
     var state = record && record.engine && record.engine.state;
     var selections = Object.assign({}, state && state.encounter && state.encounter.selections || {});
     if (
@@ -246,6 +407,9 @@
       selections.window_break
     ) {
       selections.incident_subject = selections.incident_subject || "primary_subject";
+    }
+    if (liveEncounter && !(state && state.encounter && state.encounter.selections)) {
+      selections = Object.assign(seedFinalDisposition(participant), selections);
     }
     return selections;
   }
@@ -290,7 +454,9 @@
       if (!options.silent) showStatus("Dynamic narrative updated for " + participantName(participant) + ".");
     } else if (options.createMissing) {
       store.create({
-        narrativeId: "nar_demo_" + activeParticipantId + "_primary",
+        narrativeId: liveEncounter
+          ? "nar_" + liveEncounterId + "_" + activeParticipantId + "_primary"
+          : "nar_demo_" + activeParticipantId + "_primary",
         encounterId: fixture.encounter.encounterId,
         narrativeKind: domain.NARRATIVE_KINDS.PRIMARY_SUBJECT,
         focusEncounterParticipantId: activeParticipantId,
@@ -309,13 +475,18 @@
         output: output,
         bindings: output.bindings,
         factsManifest: output.factsManifest,
-        validationSnapshot: output.validation
+        validationSnapshot: output.validation,
+        sourceSnapshot: {
+          encounterId: fixture.encounter.encounterId,
+          iceEventNumber: participant.iceEventNumber || ""
+        }
       });
       unsavedDraftStateByParticipant.delete(activeParticipantId);
       if (!options.silent) showStatus("Primary narrative created for " + participantName(participant) + ".");
     } else {
       unsavedDraftStateByParticipant.set(activeParticipantId, state);
     }
+    persistLiveEncounter();
     renderParticipantList();
     renderCoverageAndSummary();
     renderOutputAudit();
@@ -324,14 +495,15 @@
 
   function switchFocus(participantId) {
     if (participantId === activeParticipantId) return;
-    if (activeParticipantId) captureCurrent({ silent: true, createMissing: false });
-    activeParticipantId = participantId;
     var participant = fixture.participants.find(function (row) {
       return row.encounterParticipantId === participantId;
     });
+    if (!participant) return;
+    if (activeParticipantId) captureCurrent({ silent: true, createMissing: false });
+    activeParticipantId = participantId;
     var existing = primaryFor(participantId);
     var packet = narratives.buildPacketFromBundle(demoBundle(), participantId, {
-      isTestData: true,
+      isTestData: !liveEncounter,
       vehicleResolver: vehicleResolver
     });
 
@@ -347,13 +519,14 @@
         autoBind: true
       });
     } else {
-      engine.setSelections(seededSelections(existing), { rebuild: true });
+      engine.setSelections(seededSelections(existing, participant), { rebuild: true });
     }
     engine.setView("values");
     byId("activeNarrativeTitle").textContent =
       roleCode(participant) + " · " + participantName(participant) +
       (existing ? " · " + (existing.workflowStatus || "DRAFT") : " · MISSING PRIMARY");
     renderParticipantList();
+    renderCoverageAndSummary();
     renderOutputAudit();
   }
 
@@ -425,13 +598,33 @@
     showStatus("Narrative text downloaded.");
   }
 
-  byId("appBarPrimaryAction").addEventListener("click", function () {
-    captureCurrent({ createMissing: true });
-  });
-  byId("inspectOutputButton").addEventListener("click", function () {
-    renderOutputAudit();
-    byId("sectionAudit").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+  var primaryAction = byId("appBarPrimaryAction");
+  if (primaryAction) {
+    primaryAction.addEventListener("click", function () {
+      captureCurrent({ createMissing: true });
+    });
+  }
+  var copyAction = byId("copyNarrativeButton");
+  if (copyAction) {
+    copyAction.addEventListener("click", function () {
+      var engineCopy = document.getElementById("copyButton");
+      if (engineCopy) {
+        engineCopy.click();
+        return;
+      }
+      var output = engine.getOutput();
+      var text = output.plainText || output.generatedResolvedText || "";
+      if (!text) {
+        showStatus("Build the narrative before copying.", false);
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          showStatus("Narrative copied.");
+        });
+      }
+    });
+  }
   byId("downloadNarrativeJsonButton").addEventListener("click", downloadOutputJson);
   byId("downloadNarrativeTextButton").addEventListener("click", downloadOutputText);
   byId("completeMissingNarrativeButton").addEventListener("click", function () {
@@ -440,41 +633,24 @@
     if (!participantId) return;
     if (participantId === activeParticipantId) {
       captureCurrent({ createMissing: true });
+    } else if (liveEncounter) {
+      switchFocus(participantId);
+      captureCurrent({ createMissing: true });
     } else {
       if (typeof fixture.makeMissingPrimaryNarrative === "function") {
         store.create(fixture.makeMissingPrimaryNarrative());
       }
       renderParticipantList();
       renderCoverageAndSummary();
-      showStatus("Created the missing T3 primary narrative. Coverage is now complete.");
+      var missing = fixture.participants.find(function (row) {
+        return row.encounterParticipantId === participantId;
+      });
+      showStatus(
+        "Created the missing " +
+          (missing ? roleCode(missing) + " " : "") +
+          "primary narrative. Coverage is now complete."
+      );
     }
-  });
-  byId("addSupplementButton").addEventListener("click", function () {
-    if (!activeParticipantId) return;
-    var participant = fixture.participants.find(function (row) {
-      return row.encounterParticipantId === activeParticipantId;
-    });
-    var id = "nar_demo_supplement_" + syntheticCounter++;
-    store.addAdditional({
-      narrativeId: id,
-      encounterId: fixture.encounter.encounterId,
-      focusEncounterParticipantId: activeParticipantId,
-      title: participantName(participant) + " — Additional narrative",
-      output: {
-        sections: [{
-          sectionId: "supplement",
-          sequence: 1,
-          title: "Supplement",
-          sectionType: "MANUAL_SUPPLEMENT",
-          manualTextOverride: "Synthetic additional narrative created inside the encounter demonstration."
-        }],
-        plainTextIsManual: true,
-        finalPlainText: "Synthetic additional narrative created inside the encounter demonstration."
-      }
-    });
-    renderParticipantList();
-    renderCoverageAndSummary();
-    showStatus("Additional subject narrative added to this training session.");
   });
 
   global.addEventListener(engine.events.narrativeChange, function () {
@@ -488,9 +664,28 @@
     "Prose libraries verified · " + master.length + "/" + fields.length + "/" + options.length;
   byId("libraryVerification").className = "narrative-status is-ok";
 
+  if (liveEncounter) {
+    var headingActions = document.querySelector(".narrative-heading-actions");
+    if (headingActions && !document.getElementById("narrativeAdvancedButton")) {
+      var advanced = document.createElement("button");
+      advanced.id = "narrativeAdvancedButton";
+      advanced.type = "button";
+      advanced.className = "compact ghost";
+      advanced.textContent = "Advanced";
+      advanced.setAttribute("aria-pressed", "false");
+      advanced.addEventListener("click", function () {
+        var on = document.body.classList.toggle("narrative-advanced");
+        advanced.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      headingActions.insertBefore(advanced, headingActions.firstChild);
+    }
+  }
+
   renderParticipantList();
   renderCoverageAndSummary();
-  switchFocus("ep_demo_t1");
+  switchFocus(
+    fixture.participants[0] && fixture.participants[0].encounterParticipantId
+  );
   }
 
   if (document.readyState === "loading") {

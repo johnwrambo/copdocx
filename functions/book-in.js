@@ -1860,6 +1860,30 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       }
     }
 
+    function currentEncounterRole() {
+      const target = document.getElementById("encounterRoleTarget");
+      const collateral = document.getElementById("encounterRoleCollateral");
+      if (target && target.checked) {
+        return "TARGET";
+      }
+      if (collateral && collateral.checked) {
+        return "COLLATERAL";
+      }
+      return "";
+    }
+
+    function setEncounterRole(role) {
+      const target = document.getElementById("encounterRoleTarget");
+      const collateral = document.getElementById("encounterRoleCollateral");
+      const value = String(role || "").toUpperCase();
+      if (target) {
+        target.checked = value === "TARGET";
+      }
+      if (collateral) {
+        collateral.checked = value === "COLLATERAL";
+      }
+    }
+
     function listedSavedRecords() {
       const all = readSavedRecords();
       const encounterId = currentEncounterId();
@@ -1886,7 +1910,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         bookinRecordId: row.id,
         lastName: row.lastName || "",
         firstName: row.firstName || "",
-        alienNumber: row.aNumber || ""
+        alienNumber: row.aNumber || "",
+        encounterRole: row.encounterRole || ""
       }));
       const committed =
         COPDoc.model.isCommitted && COPDoc.model.isCommitted(encounter);
@@ -1997,6 +2022,14 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           ? records[existingIndex]
           : null;
 
+        const encounterId =
+          currentEncounterId() || (existing && existing.encounterId) || "";
+        const encounterRole = currentEncounterRole();
+        if (encounterId && !encounterRole && !quiet) {
+          setStatus("Select Target or Collateral for this encounter.");
+          return false;
+        }
+
         const record = {
           id: existing ? existing.id : createRecordId(),
           createdAt: existing ? existing.createdAt : now,
@@ -2009,8 +2042,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           lastName: data.lastName,
           aNumber: data.aNumber,
           iceEvent: data.iceEvent,
-          encounterId:
-            currentEncounterId() || (existing && existing.encounterId) || "",
+          encounterId: encounterId,
+          encounterRole: encounterRole || (existing && existing.encounterRole) || "",
           leadId: pendingLeadId || (existing && existing.leadId) || "",
           formState: captureFormState()
         };
@@ -2107,6 +2140,9 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     function startNewRecord() {
       pendingLeadId = "";
       clearForm();
+      if (bookInLeadId()) {
+        rememberLeadInUrl("");
+      }
       setStatus("New blank record ready.");
     }
 
@@ -2155,8 +2191,56 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       if (typeof normalizeANumberInput === "function") {
         normalizeANumberInput();
       }
+      const criminal =
+        model && typeof model.deriveCriminalProfile === "function"
+          ? model.deriveCriminalProfile(person)
+          : person.criminal || {};
+      const criminalBox = document.getElementById("isCriminal");
+      if (criminalBox) {
+        criminalBox.checked = !!(
+          criminal.isCriminal || criminal.hasCriminalRecord
+        );
+      }
+      setEncounterRole("TARGET");
       pendingLeadId = snap.leadId || "";
       rememberFormSignature();
+    }
+
+    function rememberLeadInUrl(leadId) {
+      const params = new URLSearchParams();
+      const encounterId = currentEncounterId();
+      if (encounterId) {
+        params.set("encounterId", encounterId);
+      }
+      if (leadId) {
+        params.set("leadId", leadId);
+      }
+      const next = params.toString()
+        ? "bookin.html?" + params.toString()
+        : "bookin.html";
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, "", next);
+      }
+      if (
+        window.COPDoc &&
+        COPDoc.chrome &&
+        typeof COPDoc.chrome.mount === "function"
+      ) {
+        COPDoc.chrome.mount();
+      }
+    }
+
+    function applyLeadToForm(snap, message) {
+      suppressAutoSave = true;
+      pendingLeadId = "";
+      clearForm({ quiet: true });
+      fillBookInFromLead(snap);
+      rememberLeadInUrl(snap.leadId || "");
+      suppressAutoSave = false;
+      setStatus(
+        message || "Lead loaded. Save to keep this Book-in record.",
+        true
+      );
     }
 
     function openLoadLeadForEncounter() {
@@ -2204,12 +2288,43 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         setStatus("Lead not found.");
         return;
       }
-      startNewRecord();
-      fillBookInFromLead(snap);
+      if (COPDoc.model.isCommitted && !COPDoc.model.isCommitted(snap)) {
+        setStatus("That lead is still a draft. Save it first.");
+        return;
+      }
       if (dialog) {
         dialog.hidden = true;
       }
-      setStatus("Lead loaded. Save to attach it to this encounter.", true);
+      applyLeadToForm(
+        snap,
+        currentEncounterId()
+          ? "Lead loaded. Save to attach it to this encounter."
+          : "Lead loaded. Save to keep this Book-in record."
+      );
+    }
+
+    function prefillFromLeadQuery() {
+      const id = bookInLeadId();
+      if (!id) {
+        return;
+      }
+      const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+      if (!store) {
+        setStatus("Lead store is not available.");
+        return;
+      }
+      store.loadFromDisk();
+      const snap = store.getLead(id);
+      if (!snap || (COPDoc.model.isCommitted && !COPDoc.model.isCommitted(snap))) {
+        setStatus("Lead not found or not saved.", "error");
+        return;
+      }
+      applyLeadToForm(
+        snap,
+        currentEncounterId()
+          ? "Lead loaded. Save to attach it to this encounter."
+          : "Lead loaded. Save to keep this Book-in record."
+      );
     }
 
     function cleanPdfText(value) {
@@ -3407,7 +3522,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       });
     }
 
-    function clearForm() {
+    function clearForm(options) {
+      const quiet = Boolean(options && options.quiet);
       suppressAutoSave = true;
       document
         .querySelectorAll(
@@ -3442,8 +3558,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       updateGenderLogic();
       renderSavedRecords();
       rememberFormSignature();
-      suppressAutoSave = false;
-      setStatus("All form fields cleared.");
+      if (!quiet) {
+        suppressAutoSave = false;
+        setStatus("All form fields cleared.");
+      }
     }
 
     window.addEventListener(
@@ -3600,6 +3718,29 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         renderSavedRecords();
         rememberFormSignature();
         bindBookInAutoSave();
+        const recordId = (function () {
+          try {
+            return new URLSearchParams(window.location.search).get("recordId") || "";
+          } catch (error) {
+            return "";
+          }
+        })();
+        if (recordId) {
+          const match = readSavedRecords().find(item => item && item.id === recordId);
+          if (!match) {
+            setStatus("The selected Book-in record was not found.", "error");
+          } else if (
+            encounterId &&
+            match.encounterId &&
+            match.encounterId !== encounterId
+          ) {
+            setStatus("That Book-in record is not on this encounter.", "error");
+          } else {
+            loadSavedRecord(recordId);
+          }
+        } else {
+          prefillFromLeadQuery();
+        }
       }
     );
 
@@ -3637,7 +3778,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         country: selectedOptionText("citizenship"),
         alienNumber: getValue("alienNumber"),
         disposition: selectedOptionText("immigrationDisposition"),
-        arrestDate: baseballDatePart(getValue("dateTime"))
+        arrestDate: baseballDatePart(getValue("dateTime")),
+        isCriminal: Boolean(
+          (document.getElementById("isCriminal") || {}).checked
+        )
       };
       try {
         sessionStorage.setItem(

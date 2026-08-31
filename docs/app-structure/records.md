@@ -66,6 +66,21 @@ Test: autosave of a previously committed lead keeps `committedAt`.
 
 Same preservation rule for officer/vehicle quiet saves in `admin.js`.
 
+## View: photo card + documents
+
+On **committed** views that have an owner id, paint the shared media widgets from [data-models.md](data-models.md) Media. Query `copdocx.media.v1` by owner. Do not hydrate blobs into `collectLead`.
+
+| View | Owner passed to the widget |
+| --- | --- |
+| `lead.html` | **One widget per object:** subject `PERSON`, each case `VEHICLE`, each `LOCATION`. Photos attach to the object they depict, not the lead. |
+| `officer.html` | `OFFICER` (portrait of that officer) |
+| `vehicle.html` | `VEHICLE` (photos of that unit) |
+| `encounter.html` (view, when it exists) / encounter form snapshot | Scene files on `ENCOUNTER`; people/cars/places use their own owners |
+| `bookin.html` (until split) | Detainee photo → linked `PERSON` |
+| `mobile-fow.html` | `#targetPhoto` from PERSON; location/vehicle strips from those owners |
+
+No location view page — location photos sit on that location’s card on the parent snapshot.
+
 ## List UX
 
 Default **All**. Drafts first (badge `.record-status-draft`), then committed by `meta.updatedAt` desc.
@@ -85,7 +100,7 @@ Lead list columns:
 | Column | Source |
 | --- | --- |
 | Name | `formatPersonLabel(subject)` or “Untitled lead”. Draft badge on this cell. |
-| Crim status | `person.criminal.isCriminal` → Criminal / Non-criminal |
+| Crim status | derived `isCriminal` (any conviction with an offense) → Criminal / Non-criminal |
 | Immigration disposition | `person.immigration.disposition` via `IMMIGRATION_DISPOSITIONS` label |
 | City | first `person.locations[].city`, else **—** |
 | Vehicle | first vehicle plate · state; `+N` if more |
@@ -118,8 +133,10 @@ No view yet. List `encounter.html` (`data-page="encounter"`). Form `encounter-fo
 - Commit requires `startedAt`, then goes to the list (not a view).
 - **Add subjects** → `bookin.html?encounterId=`. Banner shows the ID (not editable) and Back to encounter.
 - Book-in **Add subject** starts a blank form tagged to that encounter. **Load from leads** fills committed-lead fields that exist on Book-in (same map as 0.7.1; no middle name).
+- Book-in **Target / Collateral** radios are this booking’s role on this encounter (`encounterRole` on the Book-in record and `encounter.subjects[]`). Load from leads defaults to Target. Required to Save when `?encounterId=` is set. Not the RAP `person.encounters[].encounterRole` card.
+- Encounter form subjects table is Book-in records with this `encounterId`. **Edit** → `bookin.html?encounterId=&recordId=`. **×** clears `encounterId` (keeps the Book-in packet) and rebuilds `encounter.subjects[]`.
 - Saved-records table with `?encounterId=` lists only subjects assigned to that encounter. Book-in Save/Delete writes `encounter.subjects[]`.
-- **Generate I-213** (form, after subjects exist) → `narrative.html?encounterId=`.
+- **Generate I-213** (form, after subjects exist) → `narrative.html?encounterId=`. One primary I-213 per arrested subject; **Save I-213** writes `encounter.narratives[]` and `supervisorSummary`. Missing encounter ids do not fall back to training data. Section 10 **Include all other arrested** lists the other subjects’ disposition / health / meds / kids / cash.
 
 Do not inline RAP person cards on the encounter form. Baseball card stays a Book-in action.
 
@@ -128,6 +145,8 @@ Do not inline RAP person cards on the encounter form. Baseball card stays a Book
 Own store. Do not merge.
 
 `bookin.html?leadId=` **always** `startNewRecord()` then prefill (page load is a fresh JS heap; do not branch on `activeRecordId`). If the lead is missing or `meta.status !== "committed"`, status error, leave the new blank form.
+
+**Load from leads** is always on the Book-in action slot (not only `?encounterId=`). Same field map. No write until Save. After load, `replaceState` keeps `encounterId` if present and sets `leadId`.
 
 Map **only fields that exist** on `bookin.html`: `#lastName`, `#firstName`, `#dateOfBirth`, `#sexMale`/`#sexFemale`, `#citizenship`, `#alienNumber`. **No `#middleName`** — do not invent it; drop middle (do not concatenate).
 

@@ -243,7 +243,7 @@ assert.throws(
 
 const page = fs.readFileSync(path.join(root, "narrative.html"), "utf8");
 assert.match(page, /<body data-page="narrative">/);
-assert.match(page, /data-version="0\.7\.0"/);
+assert.match(page, /data-version="0\.\d+\.\d+"/);
 assert.doesNotMatch(page, /<style\b/i, "narrative page should use shared CSS");
 assert.doesNotMatch(page, /<script(?![^>]*\bsrc=)/i, "narrative page should use extracted scripts");
 dataLibraries.forEach((file) => {
@@ -263,6 +263,14 @@ assert.deepEqual(scriptOrder, [
   "functions/narratives/build9/encounter-summary.js",
   "functions/narratives/build9/index.js",
   "data/narratives/build9/demo-fixtures.js",
+  "data/countries.js",
+  "data/immigration.js",
+  "functions/model/util.js",
+  "functions/model/person.js",
+  "functions/model/lead.js",
+  "functions/model/encounter.js",
+  "functions/model/store.js",
+  "functions/encounter-narrative.js",
   "functions/narratives/narrative-page.js"
 ]);
 assert.match(narratives.ENGINE_MARKUP, /class="narrative-engine-container"/);

@@ -4,7 +4,7 @@ Two-row sticky app bar (`style/style.css`, painted by `COPDoc.chrome` in `functi
 
 ```
 Row 1  COPDoc     Version x.y.z     {date}                 .app-bar-info
-Row 2  [ File ▾ ]  Home | Leads | Encounters | Book-in | Map | Narrative | Admin ▾  [ ACTION SLOT ]
+Row 2  [ File ▾ ]  Home | Leads | Encounters | Book-in | Map | Admin ▾  [ ACTION SLOT ]
        #fileMenu   ---------------- .app-bar-nav ----------------  .app-bar-actions
 Status #appBarStatus
 ```
@@ -16,7 +16,7 @@ Info row stays in HTML (product stamp in `data-version` + visible text). `#appBa
 | Zone | Owner | Holds |
 | --- | --- | --- |
 | Left | `#fileMenu` | Disk import / export only |
-| Center | `.app-bar-nav` | Page tabs, including Narrative and **Admin ▾** (`#adminMenu`) |
+| Center | `.app-bar-nav` | Page tabs and **Admin ▾** (`#adminMenu`). I-213 is an Encounter sub-page, not a tab. |
 | Right | `.app-bar-actions` | Record actions. **Not** page tabs. |
 
 Do not put Dashboard / Officers / Vehicles / Schedule on the right.
@@ -42,9 +42,11 @@ Unimplemented items use `data-not-built`. Do not pretend they work.
 | **Vehicle form only** | in-app **Save** (`#adminSaveButton` → `addVehicle({ quiet: true })`) | **exception:** keep until shared autosave ships; then delete |
 | Other admin File Save | remove when chrome ships | officer already focusout-autosaves; dashboard `saveState()` is redundant |
 | Map | Save PDF, Export KMZ (iTAK), Export JSON, Export CSV | already `data-not-built` |
-| Narrative training workspace | Download JSON (`#downloadNarrativeJsonButton`), Download text (`#downloadNarrativeTextButton`) | Build 9 page; exports the active in-memory synthetic output |
+| Narrative | Download JSON (`#downloadNarrativeJsonButton`), Download text (`#downloadNarrativeTextButton`) | Active I-213 or training draft |
 | Book-in | Export JSON, Import JSON (**merge**), Restore backup (**replace**, confirm) | already in the records **toolbar** (`#exportRecordsButton`, `#importRecordsButton`, `#restoreRecordsButton`). File-cleanup PR **moves** them into File and **removes the toolbar duplicates**. Not New/Save/Open. |
 | Baseball card | Export `data-not-built` only | Generate saves the card on the lead subject when `?leadId=` is present |
+| Photo picker (test) | Download JSON (`#downloadPhotoLibraryButton`), Clear library (`#clearPhotoLibraryButton`) | Own key `copdocx.photo-picker.v1`. Not a chrome tab. |
+| File upload (test) | Download JSON (`#downloadFileLibraryButton`), Clear library (`#clearFileLibraryButton`) | Own key `copdocx.file-upload.v1`. Not a chrome tab. |
 
 **Exceptions (only these):**
 
@@ -78,8 +80,10 @@ Chrome **paints** the control. It does **not** call `saveLead` / `addOfficer` / 
 | Encounter form | **Save** (`call: commitEncounter`) | **Back to encounters**; **Add subjects** → `bookin.html?encounterId=`; **Generate I-213** → `narrative.html?encounterId=` |
 | I-200 / I-205 form | **Issue** (`#appBarPrimaryAction`, `data-chrome-action="save"`) | **Back to lead** (`lead.html?id=`) |
 | Home, Dashboard, Map, Schedule | empty | Home is not +Person. Map tools stay in `.map-toolbar`, not the slot |
-| Narrative | **Update draft** | With `?encounterId=`: **Back to encounter**. Then Add supplement; Inspect output. |
-| Book-in (until split) | **Generate** | With `?encounterId=`: **Back to encounter**, Add subject, Load from leads. With `?leadId=` only: **Back to lead**. Tab (no query): no Back. Then Clear, Baseball card. File: New / Save / Open. Encounter ID banner is display-only (no in-page Back). |
+| Photo picker (test) | **Add photos**; with owner query **Save photo** | File: Download JSON / Clear library. Not a chrome tab. |
+| File upload (test) | **Add files**; with owner query **Save file** | File: Download JSON / Clear library. Not a chrome tab. |
+| I-213 (`narrative.html`, Encounter sub-page, not a tab) | **Save I-213** when `?encounterId=`; else **Update draft** | With `?encounterId=`: **Back to encounter**. Then **Copy**. Encounters tab current. |
+| Book-in (until split) | **Generate** | **Load from leads** always (committed leads only). With `?encounterId=`: **Back to encounter**, Add subject. With `?leadId=` only: **Back to lead**. Tab (no query): no Back. Then Clear, Baseball card. File: New / Save / Open. Encounter ID banner is display-only (no in-page Back). |
 | Baseball card | **Generate** (`persistBaseballCard`) | **Back to book-in** (keep `encounterId` / `leadId`) |
 | Lead form extras | Save | **Back to leads** (or **Back to lead** if `committedAt`); Follow-ups; **+Person / +Vehicle / +Location**. Never on Book-in or Map. |
 
@@ -113,7 +117,7 @@ Do not hide File, tabs, or the slot.
 
 ```js
 COPDoc.chrome.mount({
-  tab: "leads",       // home | leads | encounter | bookin | map | narrative | admin
+  tab: "leads",       // home | leads | encounter | bookin | map | admin
   adminChild: "",     // dashboard | officers | vehicles | schedule | ""
   file: [
     { id: "newLeadButton", label: "New" },

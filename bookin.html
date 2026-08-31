@@ -18,9 +18,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.11.1"
+          data-version="0.16.1"
         >
-          Version 0.11.1
+          Version 0.16.1
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -126,6 +126,43 @@
           <div class="field">
             <label for="dateTime">Date and time</label>
             <input type="datetime-local" id="dateTime" name="dateTime" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field checkbox-field">
+            <input
+              type="checkbox"
+              id="isCriminal"
+              name="isCriminal"
+              data-field="isCriminal"
+              disabled
+            />
+            <label for="isCriminal">Criminal</label>
+          </div>
+          <div class="field">
+            <span class="field-caption">Encounter role</span>
+            <div class="radio-row">
+              <label class="radio-field" for="encounterRoleTarget">
+                <input
+                  type="radio"
+                  id="encounterRoleTarget"
+                  name="encounterRole"
+                  data-field="encounterRole"
+                  value="TARGET"
+                />
+                Target
+              </label>
+              <label class="radio-field" for="encounterRoleCollateral">
+                <input
+                  type="radio"
+                  id="encounterRoleCollateral"
+                  name="encounterRole"
+                  data-field="encounterRole"
+                  value="COLLATERAL"
+                />
+                Collateral
+              </label>
+            </div>
           </div>
         </div>
         <div class="row row-3">

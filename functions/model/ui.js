@@ -484,8 +484,33 @@
     fillPersonSelects();
     refreshSavedLeadSelect();
     bindLeadAutoSave();
+    bindCriminalProfileLive();
     rememberLeadSignature();
     suppressAutoSave = false;
+  }
+
+  function bindCriminalProfileLive() {
+    var stage = document.querySelector('[data-stage="criminal"]');
+    if (!stage || typeof model.paintCriminalProfile !== "function") {
+      return;
+    }
+    function refresh() {
+      if (typeof model.collectLead !== "function") {
+        return;
+      }
+      try {
+        var snap = model.collectLead();
+        var person = model.subjectOf ? model.subjectOf(snap) : snap.person;
+        model.paintCriminalProfile(person);
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+    stage.addEventListener("input", refresh);
+    stage.addEventListener("change", refresh);
+    stage.addEventListener("click", function () {
+      window.setTimeout(refresh, 0);
+    });
   }
 
   model.fillPersonSelects = fillPersonSelects;

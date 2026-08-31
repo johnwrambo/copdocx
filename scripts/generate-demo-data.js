@@ -356,7 +356,6 @@ function leadFrom(opts) {
   person.citizenship = opts.citizenship || "";
   person.lexId = opts.lexId || "";
   person.criminal = {
-    isCriminal: !!opts.criminal,
     fbiNumber: opts.fbiNumber || "",
     ncicNumber: "",
     stateId: "",
@@ -401,6 +400,9 @@ function leadFrom(opts) {
       })
     );
   });
+  if (typeof model.deriveCriminalProfile === "function") {
+    model.deriveCriminalProfile(person);
+  }
   return snap;
 }
 

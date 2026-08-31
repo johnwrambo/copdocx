@@ -176,6 +176,7 @@
         ),
         health: clean(closing.health),
         medications: clean(closing.medications || closing.medication),
+        minors: clean(closing.minors || closing.minorChildren),
         currency_usd: clean(closing.currencyUsd != null ? closing.currencyUsd : currency.amountUsd)
       },
       metadata: {

@@ -2869,7 +2869,18 @@ const MASTER_SECTION_BY_ID = new Map(
 
     function appendSystemNarrativeSections(paragraphs) {
       const definition = SYSTEM_SECTION_DEFINITIONS.otherArrested;
-      if (!definition || !definition.text || getOtherArrestedObjects().length === 0) {
+      const selections = typeof captureEncounterSelections === "function"
+        ? captureEncounterSelections()
+        : {};
+      const includeAll = Object.keys(selections || {}).some(function (key) {
+        return selections[key] === "include_all_other_arrested";
+      });
+      if (
+        !definition ||
+        !definition.text ||
+        !includeAll ||
+        getOtherArrestedObjects().length === 0
+      ) {
         return paragraphs;
       }
 
@@ -3556,6 +3567,42 @@ const MASTER_SECTION_BY_ID = new Map(
       return `${clean.slice(0, -1).join(", ")}, and ${clean.at(-1)}`;
     }
 
+    function formatOtherArrestedEntry(object) {
+      const fields = (object && object.fields) || {};
+      const name = String(fields.full_name || object.label || "").trim();
+      const digits = String(fields.a_number || "").replace(/\D/g, "");
+      const aNumber = digits
+        ? "A" + digits.padStart(9, "0")
+        : "";
+      const head = [name, aNumber ? "(" + aNumber + ")" : ""].filter(Boolean).join(" ");
+      const bits = [];
+      const disposition = String(
+        fields.immigration_status_or_disposition ||
+          fields.immigration_disposition_code ||
+          ""
+      ).trim();
+      if (disposition && disposition.toUpperCase() !== "UNKNOWN") {
+        bits.push(disposition);
+      }
+      const health = String(fields.health || "").trim();
+      if (health && health.toUpperCase() !== "UNKNOWN") {
+        bits.push("health " + health);
+      }
+      const meds = String(fields.medications || "").trim();
+      if (meds && meds.toUpperCase() !== "UNKNOWN") {
+        bits.push("medications " + meds);
+      }
+      const minors = String(fields.minors || fields.minor_children || "").trim();
+      if (minors && minors.toUpperCase() !== "UNKNOWN") {
+        bits.push("minor children " + minors);
+      }
+      const cash = fields.currency_usd;
+      if (cash !== "" && cash != null && String(cash).toUpperCase() !== "UNKNOWN") {
+        bits.push("$" + String(cash).replace(/^\$/, "") + " USD");
+      }
+      return bits.length ? head + " — " + bits.join("; ") : head;
+    }
+
     function getSystemNarrativeObjects() {
       const arrested = getOtherArrestedObjects();
       if (!arrested.length) return [];
@@ -3567,7 +3614,7 @@ const MASTER_SECTION_BY_ID = new Map(
         roles: [{ role: "other_arrested_summary", ordinal: 1 }],
         label: "Other persons arrested",
         fields: {
-          other_arrested_list: joinNarrativeNames(arrested.map((object) => object.fields?.full_name || object.label))
+          other_arrested_list: joinNarrativeNames(arrested.map(formatOtherArrestedEntry))
         },
         metadata: {
           source_encounter_participant_ids: arrested.map(getEncounterParticipantKey)
@@ -5762,13 +5809,35 @@ const MASTER_SECTION_BY_ID = new Map(
       runTokenDemoButton.hidden = !moduleConfig.enableDemo;
       loadTestDataButton.hidden = !moduleConfig.enableTestPacket;
       importDataButton.hidden = !moduleConfig.enableJsonImport;
+      clearDataButton.hidden = moduleConfig.mode === "embedded";
       templateManagerButton.hidden = !moduleConfig.canEditTemplates;
       saveTemplateButton.hidden = !moduleConfig.canEditTemplates;
+      if (activeTemplateStatus) {
+        activeTemplateStatus.hidden = !moduleConfig.canEditTemplates;
+      }
       detectTokensButton.hidden = moduleConfig.mode === "embedded";
       form.querySelectorAll(".field-edit-button, .field-add-button, .field-remove-button, .drag-handle")
         .forEach((control) => {
           control.hidden = !moduleConfig.canEditTemplates;
         });
+      form.querySelectorAll(".field-repeat-actions").forEach((group) => {
+        const buttons = Array.from(group.querySelectorAll("button"));
+        group.hidden = !buttons.some((button) => !button.hidden);
+      });
+      const hostRoot = form.closest(".narrative-engine-host") || form;
+      hostRoot.classList.toggle("narrative-authoring", moduleConfig.canEditTemplates);
+      const toolbar = document.querySelector(".editor-toolbar");
+      if (toolbar) {
+        toolbar.querySelectorAll(".toolbar-group").forEach((group) => {
+          const controls = Array.from(
+            group.querySelectorAll("button, input, select, .template-status")
+          );
+          if (!controls.length) {
+            return;
+          }
+          group.hidden = !controls.some((control) => !control.hidden);
+        });
+      }
     }
 
     function configureModule(options = {}) {

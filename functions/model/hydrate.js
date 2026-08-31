@@ -190,7 +190,6 @@
     );
 
     var criminal = subject.criminal || {};
-    setById("isCriminal", criminal.isCriminal);
     setById("fbiNumber", criminal.fbiNumber || "");
     setById("ncicNumber", criminal.ncicNumber || "");
     setById("stateId", criminal.stateId || "");
@@ -323,8 +322,38 @@
     if (typeof model.fillPersonSelects === "function") {
       model.fillPersonSelects();
     }
+    paintCriminalProfile(subject);
+  }
+
+  function yesNo(value) {
+    return value ? "Yes" : "No";
+  }
+
+  function paintCriminalProfile(person) {
+    var profile =
+      model.deriveCriminalProfile && person
+        ? model.deriveCriminalProfile(person)
+        : {};
+    function setText(id, text) {
+      var el = byId(id);
+      if (el) {
+        el.textContent = text;
+      }
+    }
+    setText("profileHasCriminalRecord", yesNo(profile.hasCriminalRecord));
+    setText("profileHasCriminalWarrants", yesNo(profile.hasCriminalWarrants));
+    setText("profileSexOffender", yesNo(profile.sexOffender));
+    setText("profileForeignFugitive", yesNo(profile.foreignFugitive));
+    setText("profileArmed", yesNo(profile.armed));
+    setText(
+      "profileThreatLevel",
+      model.threatLevelLabel
+        ? model.threatLevelLabel(profile.threatLevel)
+        : profile.threatLevel || "None"
+    );
   }
 
   model.hydrateLead = hydrateLead;
+  model.paintCriminalProfile = paintCriminalProfile;
   model.clearRepeatableList = clearList;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -83,9 +83,11 @@
       .join("; ");
   }
 
+  var BOOKIN_KEY = "alien-book-in.saved-records.v1";
+
   function bookinRecords() {
     try {
-      var raw = localStorage.getItem("alien-book-in.saved-records.v1");
+      var raw = localStorage.getItem(BOOKIN_KEY);
       var list = raw ? JSON.parse(raw) : [];
       return Array.isArray(list) ? list : [];
     } catch (error) {
@@ -93,28 +95,29 @@
     }
   }
 
+  function writeBookinRecords(list) {
+    localStorage.setItem(BOOKIN_KEY, JSON.stringify(list || []));
+  }
+
   function subjectsForEncounter(encounterId) {
     if (!encounterId) {
       return [];
     }
-    var fromBookin = bookinRecords().filter(function (row) {
-      return row && row.encounterId === encounterId;
-    });
-    if (fromBookin.length) {
-      return fromBookin.map(function (row) {
+    return bookinRecords()
+      .filter(function (row) {
+        return row && row.encounterId === encounterId;
+      })
+      .map(function (row) {
         return {
           bookinRecordId: row.id,
           leadId: row.leadId || "",
           lastName: row.lastName || "",
           firstName: row.firstName || "",
           alienNumber: row.aNumber || "",
+          encounterRole: row.encounterRole || "",
           updatedAt: row.updatedAt || ""
         };
       });
-    }
-    var m = model();
-    var rec = m && m.store && m.store.getEncounter(encounterId);
-    return (rec && rec.subjects) || [];
   }
 
   function paintList() {
@@ -273,6 +276,8 @@
       record.meta = previous.meta;
     }
     record.startedAt = (byId("encounterStartedAt") && byId("encounterStartedAt").value) || "";
+    record.team = (byId("encounterTeam") && byId("encounterTeam").value) || record.team || "3";
+    record.officeCode = record.officeCode || "DAL";
     record.vehicles = [];
     Array.prototype.forEach.call(
       document.querySelectorAll("#encounterVehicleList > fieldset"),
@@ -288,6 +293,16 @@
       }
     );
     record.subjects = subjectsForEncounter(record.encounterId);
+    if (previous) {
+      record.narratives = Array.isArray(previous.narratives)
+        ? previous.narratives.slice()
+        : [];
+      record.supervisorSummary = previous.supervisorSummary || {
+        text: "",
+        derivedAt: "",
+        coverage: null
+      };
+    }
     return record;
   }
 
@@ -307,6 +322,9 @@
     }
     if (byId("encounterStartedAt")) {
       byId("encounterStartedAt").value = record.startedAt || "";
+    }
+    if (byId("encounterTeam")) {
+      byId("encounterTeam").value = record.team || "3";
     }
     var vehList = byId("encounterVehicleList");
     if (vehList) {
@@ -366,6 +384,113 @@
       });
     }
     paintSubjectsTable(record.encounterId);
+    paintSupervisorSummary(record);
+  }
+
+  function paintSupervisorSummary(record) {
+    var el = byId("encounterSupervisorSummary");
+    var link = byId("openEncounterNarrativesButton");
+    if (link && record && record.encounterId) {
+      link.href =
+        "narrative.html?encounterId=" + encodeURIComponent(record.encounterId);
+    }
+    if (!el) {
+      return;
+    }
+    var text =
+      record &&
+      record.supervisorSummary &&
+      String(record.supervisorSummary.text || "").trim();
+    el.textContent = text ||
+      "No supervisor summary yet. Generate I-213 and update a draft.";
+  }
+
+  function subjectLabel(row) {
+    var last = String((row && row.lastName) || "").trim();
+    var first = String((row && row.firstName) || "").trim();
+    if (last && first) {
+      return last + ", " + first;
+    }
+    return [first, last].filter(Boolean).join(" ") || "this subject";
+  }
+
+  function bookinHref(encounterId, recordId) {
+    var parts = [];
+    if (encounterId) {
+      parts.push("encounterId=" + encodeURIComponent(encounterId));
+    }
+    if (recordId) {
+      parts.push("recordId=" + encodeURIComponent(recordId));
+    }
+    return parts.length ? "bookin.html?" + parts.join("&") : "bookin.html";
+  }
+
+  function rebuildEncounterSubjects(encounterId) {
+    var m = model();
+    if (!encounterId || !m || !m.store) {
+      return;
+    }
+    m.store.loadFromDisk();
+    var encounter = m.store.getEncounter(encounterId);
+    if (!encounter) {
+      return;
+    }
+    encounter.subjects = subjectsForEncounter(encounterId).map(function (row) {
+      return {
+        personId: row.personId || "",
+        leadId: row.leadId || "",
+        bookinRecordId: row.bookinRecordId || "",
+        lastName: row.lastName || "",
+        firstName: row.firstName || "",
+        alienNumber: row.alienNumber || "",
+        encounterRole: row.encounterRole || ""
+      };
+    });
+    m.store.saveEncounter(encounter, {
+      mode: isCommitted(encounter) ? "commit" : "draft"
+    });
+  }
+
+  function unlinkEncounterSubject(encounterId, bookinRecordId) {
+    var rows = subjectsForEncounter(encounterId);
+    var row = null;
+    rows.forEach(function (item) {
+      if (item && item.bookinRecordId === bookinRecordId) {
+        row = item;
+      }
+    });
+    if (
+      !window.confirm(
+        "Remove " +
+          subjectLabel(row) +
+          " from this encounter? Their Book-in record is kept."
+      )
+    ) {
+      return;
+    }
+    if (bookinRecordId) {
+      var list = bookinRecords().map(function (item) {
+        if (item && item.id === bookinRecordId) {
+          item.encounterId = "";
+        }
+        return item;
+      });
+      writeBookinRecords(list);
+    } else {
+      var m = model();
+      var encounter = m && m.store && m.store.getEncounter(encounterId);
+      if (encounter && Array.isArray(encounter.subjects)) {
+        encounter.subjects = encounter.subjects.filter(function (item) {
+          return item && item.bookinRecordId;
+        });
+        m.store.saveEncounter(encounter, {
+          mode: isCommitted(encounter) ? "commit" : "draft"
+        });
+      }
+    }
+    rebuildEncounterSubjects(encounterId);
+    paintSubjectsTable(encounterId);
+    setStatus("Subject removed from this encounter.", true);
   }
 
   function paintSubjectsTable(encounterId) {
@@ -382,18 +507,50 @@
     rows.forEach(function (row) {
       var tr = document.createElement("tr");
       var name = [row.lastName, row.firstName].filter(Boolean).join(", ");
-      [name || "—", row.alienNumber || "—", (row.updatedAt || "").slice(0, 16) || "—"].forEach(
-        function (text) {
-          var td = document.createElement("td");
-          td.textContent = text;
-          tr.appendChild(td);
-        }
-      );
+      var role = String(row.encounterRole || "").toUpperCase();
+      var roleLabel =
+        role === "COLLATERAL" ? "Collateral" : role === "TARGET" ? "Target" : "—";
+      [
+        name || "—",
+        roleLabel,
+        row.alienNumber || "—",
+        (row.updatedAt || "").slice(0, 16) || "—"
+      ].forEach(function (text) {
+        var td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      var actions = document.createElement("td");
+      var cluster = document.createElement("div");
+      cluster.className = "record-actions";
+      if (row.bookinRecordId) {
+        var edit = document.createElement("a");
+        edit.className = "action-button-secondary compact";
+        edit.href = bookinHref(encounterId, row.bookinRecordId);
+        edit.textContent = "Edit";
+        cluster.appendChild(edit);
+      }
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "action-button-danger compact";
+      remove.setAttribute("aria-label", "Remove " + subjectLabel(row));
+      remove.textContent = "×";
+      remove.addEventListener("click", function () {
+        unlinkEncounterSubject(encounterId, row.bookinRecordId || "");
+      });
+      cluster.appendChild(remove);
+      actions.appendChild(cluster);
+      tr.appendChild(actions);
       body.appendChild(tr);
     });
+    var href = bookinHref(encounterId);
     var addBtn = byId("addEncounterSubjectsButton");
     if (addBtn && encounterId) {
-      addBtn.href = "bookin.html?encounterId=" + encodeURIComponent(encounterId);
+      addBtn.href = href;
+    }
+    var tableAdd = byId("addEncounterSubjectTableButton");
+    if (tableAdd && encounterId) {
+      tableAdd.href = href;
     }
   }
 
@@ -451,7 +608,13 @@
         return existing;
       }
     }
-    var created = m.createEncounterRecord();
+    var existingIds = (m.store.listEncounters() || []).map(function (row) {
+      return row.encounterId;
+    });
+    var created = m.createEncounterRecord({
+      team: (byId("encounterTeam") && byId("encounterTeam").value) || "3",
+      existingIds: existingIds
+    });
     m.store.saveEncounter(created, { mode: "draft" });
     if (window.history && window.history.replaceState) {
       window.history.replaceState(
@@ -467,12 +630,83 @@
     return created;
   }
 
+  function existingEncounterIds(exceptId) {
+    var m = model();
+    return (m.store.listEncounters() || [])
+      .map(function (row) {
+        return row.encounterId;
+      })
+      .filter(function (id) {
+        return id && id !== exceptId;
+      });
+  }
+
+  function bindTeamRemint() {
+    var teamEl = byId("encounterTeam");
+    if (!teamEl || teamEl.dataset.remintBound === "true") {
+      return;
+    }
+    teamEl.dataset.remintBound = "true";
+    teamEl.addEventListener("change", function () {
+      var m = model();
+      var id = (byId("encounterId") && byId("encounterId").value) || queryId();
+      if (!id || !m || !m.store) {
+        return;
+      }
+      m.store.loadFromDisk();
+      var current = m.store.getEncounter(id);
+      if (!current) {
+        return;
+      }
+      if (isCommitted(current)) {
+        setStatus("Team is locked after the encounter is saved.");
+        teamEl.value = current.team || "3";
+        return;
+      }
+      if (subjectsForEncounter(id).length) {
+        setStatus("Team cannot change after subjects are booked to this encounter.");
+        teamEl.value = current.team || "3";
+        return;
+      }
+      var team = teamEl.value || "3";
+      var nextId = m.nextEncounterId({
+        office: current.officeCode || "DAL",
+        team: team,
+        existingIds: existingEncounterIds(id)
+      });
+      if (nextId === id) {
+        current.team = String(team);
+        m.store.saveEncounter(current, { mode: "draft" });
+        return;
+      }
+      current.team = String(team);
+      current.encounterId = nextId;
+      m.store.saveEncounter(current, { mode: "draft" });
+      if (m.store.deleteEncounter) {
+        m.store.deleteEncounter(id);
+      }
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(
+          {},
+          "",
+          "encounter-form.html?id=" + encodeURIComponent(nextId)
+        );
+      }
+      if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
+        COPDoc.chrome.mount();
+      }
+      hydrateEncounter(current);
+      setStatus("Encounter ID updated for team " + team + ".", true);
+    });
+  }
+
   function bootForm() {
     var m = model();
     if (!m || !m.store) {
       return;
     }
     ensureNewEncounter();
+    bindTeamRemint();
     if (m.autosave && typeof m.autosave.bind === "function") {
       m.autosave.bind({
         key: "encounter-form",

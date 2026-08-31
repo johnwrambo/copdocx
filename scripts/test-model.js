@@ -300,10 +300,34 @@ check(
   govVeh.governmentVehicle === true && govVeh.status === "available"
 );
 
-var enc = model.createEncounterRecord();
+check(
+  "encounter id format",
+  /^DAL\d+-\d{8}-\d{3}$/.test(model.nextEncounterId({ team: 3, existingIds: [] }))
+);
+check(
+  "encounter id sequences",
+  model.nextEncounterId({
+    team: 3,
+    date: new Date(2026, 7, 31),
+    existingIds: ["DAL3-20260831-001"]
+  }) === "DAL3-20260831-002"
+);
+check(
+  "encounter id is per team",
+  model.nextEncounterId({
+    team: 4,
+    date: new Date(2026, 7, 31),
+    existingIds: ["DAL3-20260831-001"]
+  }) === "DAL4-20260831-001"
+);
+
+var enc = model.createEncounterRecord({
+  existingIds: [],
+  date: new Date(2026, 7, 31)
+});
 check(
   "encounter id minted",
-  typeof enc.encounterId === "string" && enc.encounterId.indexOf("enc") === 0
+  typeof enc.encounterId === "string" && /^DAL3-\d{8}-\d{3}$/.test(enc.encounterId)
 );
 check("encounter entity", enc.entityType === "ENCOUNTER");
 check("encounter schema", enc.schema === "copdocx.encounter.v1");
@@ -312,11 +336,16 @@ check(
   "encounter empty collections",
   enc.subjects.length === 0 &&
     enc.vehicles.length === 0 &&
-    enc.locations.length === 0
+    enc.locations.length === 0 &&
+    enc.narratives.length === 0
 );
 check(
   "encounter subject factory",
   model.createEncounterSubject({ lastName: "LOKI" }).lastName === "LOKI"
+);
+check(
+  "encounter subject role default",
+  model.createEncounterSubject().encounterRole === ""
 );
 
 model.store.saveEncounter(enc, { mode: "draft" });
@@ -376,6 +405,239 @@ check(
   "narrative adapter maps subject",
   bundle.participants[0] &&
     String(bundle.participants[0].identitySnapshot.displayName).indexOf("LOKI") !== -1
+);
+
+context.localStorage.setItem(
+  "alien-book-in.saved-records.v1",
+  JSON.stringify([
+    {
+      id: "bk_c",
+      encounterId: enc.encounterId,
+      lastName: "COLL",
+      firstName: "B",
+      encounterRole: "COLLATERAL"
+    },
+    {
+      id: "bk_t",
+      encounterId: enc.encounterId,
+      lastName: "TARGET",
+      firstName: "A",
+      encounterRole: "TARGET"
+    }
+  ])
+);
+var roleBundle = context.COPDoc.encounterNarrative.bundleFromEncounter(
+  enc.encounterId
+);
+check(
+  "adapter keeps collateral role",
+  roleBundle.participants[0] &&
+    roleBundle.participants[0].encounterRole === "COLLATERAL"
+);
+check(
+  "adapter primary is first target",
+  roleBundle.participants[1] &&
+    roleBundle.participants[1].encounterRole === "TARGET" &&
+    roleBundle.participants[1].primaryForReport === true &&
+    roleBundle.participants[0].primaryForReport === false
+);
+
+context.localStorage.setItem(
+  "alien-book-in.saved-records.v1",
+  JSON.stringify([
+    {
+      id: "bk_live",
+      encounterId: enc.encounterId,
+      lastName: "LOKI",
+      firstName: "Laufeyson",
+      aNumber: "A000111001",
+      iceEvent: "DAL-1",
+      encounterRole: "TARGET",
+      formState: {
+        lastName: { value: "LOKI", type: "text" },
+        firstName: { value: "Laufeyson", type: "text" },
+        alienNumber: { value: "A000111001", type: "text" },
+        dateOfBirth: { value: "1985-12-17", type: "date" },
+        sexMale: { checked: true, value: "male", type: "radio" },
+        citizenship: { value: "MX", type: "select-one" },
+        iceEvent: { value: "DAL-1", type: "text" },
+        officersName: { value: "REYES, Maria", type: "text" },
+        dateTime: { value: "2026-08-31T13:22", type: "datetime-local" },
+        cash: { value: "40", type: "text" },
+        medicine: { value: "ibuprofen", type: "text" },
+        children: { value: "none", type: "textarea" },
+        medicalIssues: { value: "", type: "text" },
+        travelDocs: { value: "passport", type: "text" }
+      }
+    },
+    {
+      id: "bk_col",
+      encounterId: enc.encounterId,
+      lastName: "WALK",
+      firstName: "In",
+      encounterRole: "COLLATERAL",
+      formState: {
+        lastName: { value: "WALK", type: "text" },
+        firstName: { value: "In", type: "text" },
+        sexFemale: { checked: true, value: "female", type: "radio" }
+      }
+    }
+  ])
+);
+enc.vehicles = [
+  {
+    vehicleId: "veh_1",
+    licensePlate: "ABC123",
+    plateState: "TX",
+    vehicleYear: "2018",
+    vehicleMake: "Honda",
+    vehicleModel: "Civic",
+    vehicleColor: "Blue"
+  }
+];
+enc.locations = [
+  {
+    locationId: "loc_1",
+    street: "100 Main",
+    city: "Dallas",
+    state: "TX",
+    zip: "75201",
+    association: "stop",
+    latitude: "32.78",
+    longitude: "-96.8"
+  }
+];
+model.store.saveEncounter(enc, { mode: "commit" });
+var liveBundle = context.COPDoc.encounterNarrative.bundleFromEncounter(
+  enc.encounterId
+);
+check(
+  "live target identity from book-in",
+  liveBundle.participants[0].identitySnapshot.displayName.indexOf("LOKI") !== -1 &&
+    liveBundle.participants[0].identitySnapshot.aNumber === "000111001" &&
+    liveBundle.participants[0].identitySnapshot.sex === "MALE"
+);
+check(
+  "live role sequence per role",
+  liveBundle.participants[0].roleSequence === 1 &&
+    liveBundle.participants[0].encounterRole === "TARGET" &&
+    liveBundle.participants[1].encounterRole === "COLLATERAL" &&
+    liveBundle.participants[1].roleSequence === 1
+);
+check(
+  "live ice event and arrest time",
+  liveBundle.participants[0].iceEventNumber === "DAL-1" &&
+    String(liveBundle.participants[0].finalOutcomeAt).indexOf("2026-08-31") !== -1
+);
+check(
+  "live closing from book-in",
+  liveBundle.participants[0].closing.medication === "ibuprofen" &&
+    liveBundle.participants[0].closing.currency &&
+    String(liveBundle.participants[0].closing.currency.amountUsd) === "40"
+);
+check(
+  "live location and plate",
+  liveBundle.location.postalAddress.city === "Dallas" &&
+    liveBundle.location.locationTypeCode === "PUBLIC_ROADWAY" &&
+    liveBundle.vehicles[0].plate.value === "ABC123" &&
+    liveBundle.encounter.eventType === "VEHICLE_STOP"
+);
+check(
+  "live reporting officer",
+  liveBundle.officers[0] &&
+    liveBundle.officers[0].displayName.indexOf("REYES") !== -1 &&
+    liveBundle.officers[0].roles[0] === "REPORTING"
+);
+check("live has no events", liveBundle.events.length === 0);
+
+enc.narratives = [{ narrativeId: "nar_x", iceEventNumber: "DAL-1" }];
+enc.supervisorSummary = { text: "Supervisor line.", derivedAt: "2026-08-31T00:00:00.000Z" };
+model.store.saveEncounter(enc, { mode: "commit" });
+var withNar = model.store.getEncounter(enc.encounterId);
+check(
+  "encounter persists narratives",
+  withNar.narratives[0] && withNar.narratives[0].narrativeId === "nar_x"
+);
+check(
+  "encounter persists supervisor summary",
+  withNar.supervisorSummary &&
+    withNar.supervisorSummary.text === "Supervisor line."
+);
+
+var blankCrim = model.createPerson();
+var blankProfile = model.deriveCriminalProfile(blankCrim);
+check("blank person is not criminal", blankProfile.isCriminal === false);
+check("blank threat is none", blankProfile.threatLevel === "none");
+
+var convPerson = model.createPerson();
+convPerson.convictions.push(
+  model.createConviction({ crime: "Theft", convictionClass: "misdemeanor" })
+);
+var convProfile = model.deriveCriminalProfile(convPerson);
+check("conviction sets isCriminal", convProfile.isCriminal === true);
+check("misdemeanor threat is low", convProfile.threatLevel === "low");
+
+var felonyPerson = model.createPerson();
+felonyPerson.convictions.push(
+  model.createConviction({
+    crime: "Aggravated assault",
+    convictionClass: "felony"
+  })
+);
+check(
+  "felony threat is moderate",
+  model.deriveCriminalProfile(felonyPerson).threatLevel === "moderate"
+);
+
+var armedPerson = model.createPerson();
+armedPerson.convictions.push(
+  model.createConviction({
+    crime: "Unlawful possession of a firearm",
+    convictionClass: "felony"
+  })
+);
+var armedProfile = model.deriveCriminalProfile(armedPerson);
+check("firearm sets armed", armedProfile.armed === true);
+check("armed threat is high", armedProfile.threatLevel === "high");
+
+var soPerson = model.createPerson();
+soPerson.convictions.push(
+  model.createConviction({ crime: "Sexual assault", convictionClass: "felony" })
+);
+check(
+  "sex offense is severe",
+  model.deriveCriminalProfile(soPerson).sexOffender === true &&
+    model.deriveCriminalProfile(soPerson).threatLevel === "severe"
+);
+
+var fugPerson = model.createPerson();
+fugPerson.arrests.push(
+  model.createArrest({ arrestCharge: "Foreign fugitive, Interpol red notice" })
+);
+var fugProfile = model.deriveCriminalProfile(fugPerson);
+check("arrest does not set isCriminal", fugProfile.isCriminal === false);
+check("fugitive from arrest text", fugProfile.foreignFugitive === true);
+check("fugitive threat is severe", fugProfile.threatLevel === "severe");
+
+var warPerson = model.createPerson();
+warPerson.warrants.push(
+  model.createWarrant({ charge: "Burglary", warrantStatus: "active" })
+);
+warPerson.warrants.push(
+  model.createWarrant({ formType: "I-200", charge: "Immigration", warrantStatus: "active" })
+);
+var warProfile = model.deriveCriminalProfile(warPerson);
+check("RAP warrant sets hasCriminalWarrants", warProfile.hasCriminalWarrants === true);
+check("I-200 is not a criminal warrant", warProfile.isCriminal === false);
+check("active RAP warrant threat moderate", warProfile.threatLevel === "moderate");
+
+var servedPerson = model.createPerson();
+servedPerson.warrants.push(
+  model.createWarrant({ charge: "Theft", warrantStatus: "served" })
+);
+check(
+  "served warrant does not flag outstanding",
+  model.deriveCriminalProfile(servedPerson).hasCriminalWarrants === false
 );
 
 if (fail) {
