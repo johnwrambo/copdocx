@@ -264,6 +264,56 @@
     return isNaN(d.getTime()) ? "" : d.toISOString();
   }
 
+  function ymdFromDate(d) {
+    if (!d || isNaN(d.getTime())) {
+      return "";
+    }
+    function pad(n) {
+      return String(n).padStart(2, "0");
+    }
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  function takenFromFile(file) {
+    if (!file || !file.lastModified) {
+      return { takenAt: "", precision: "", source: "" };
+    }
+    var d = new Date(file.lastModified);
+    var takenAt = ymdFromDate(d);
+    return {
+      takenAt: takenAt,
+      precision: takenAt ? "day" : "",
+      source: takenAt ? "file" : ""
+    };
+  }
+
+  function defaultCaption(photo) {
+    if (model && typeof model.formatPhotoCaption === "function") {
+      return model.formatPhotoCaption({
+        takenAt: photo.takenAt,
+        takenAtPrecision: photo.takenAtPrecision,
+        takenAtApproximate: photo.takenAtApproximate,
+        place: photo.place,
+        captionCustom: false,
+        caption: ""
+      });
+    }
+    return "";
+  }
+
+  function sourceLabel(photo) {
+    if (!photo) {
+      return "";
+    }
+    if (photo.takenAtSource === "operator") {
+      return "Source: entered by operator";
+    }
+    if (photo.takenAtSource === "file") {
+      return "Source: file date";
+    }
+    return "";
+  }
+
   function importFile(file) {
     if (!file || !String(file.type || "").match(/^image\//)) {
       return Promise.resolve(null);
@@ -276,9 +326,7 @@
       return Promise.resolve(null);
     }
     var photoId = newId("pho");
-    var taken = file.lastModified
-      ? new Date(file.lastModified).toISOString()
-      : nowIso();
+    var taken = takenFromFile(file);
     if (ownerMode) {
       sourceFiles[photoId] = file;
       return fileToBitmap(file).then(function (bmp) {
@@ -305,7 +353,11 @@
           }),
           kind: "subject",
           caption: "",
-          takenAt: taken,
+          captionCustom: false,
+          takenAt: taken.takenAt,
+          takenAtPrecision: taken.precision,
+          takenAtApproximate: false,
+          takenAtSource: taken.source,
           place: "",
           tags: [],
           notes: "",
@@ -336,7 +388,11 @@
         originalDataUrl: dataUrl,
         kind: "subject",
         caption: "",
-        takenAt: taken,
+        captionCustom: false,
+        takenAt: taken.takenAt,
+        takenAtPrecision: taken.precision,
+        takenAtApproximate: false,
+        takenAtSource: taken.source,
         place: "",
         tags: [],
         notes: "",
@@ -620,7 +676,6 @@
       return;
     }
     photo.kind = (byId("photoKind") && byId("photoKind").value) || photo.kind || "subject";
-    photo.caption = byId("photoCaption").value.trim();
     if (byId("photoPrimary")) {
       if (byId("photoPrimary").checked) {
         setPrimaryExclusive(photo.photoId);
@@ -630,8 +685,35 @@
     }
     photo.place = byId("photoPlace").value.trim();
     photo.notes = byId("photoNotes").value.trim();
-    photo.takenAt = fromDatetimeLocal(byId("photoTakenAt").value);
+    var previousTaken = photo.takenAt || "";
+    var parsed =
+      model && typeof model.normalizeTakenAt === "function"
+        ? model.normalizeTakenAt(byId("photoTakenAt").value)
+        : { takenAt: byId("photoTakenAt").value.trim(), precision: "day" };
+    photo.takenAt = parsed.takenAt;
+    photo.takenAtPrecision = parsed.precision;
+    photo.takenAtApproximate = !!(
+      byId("photoTakenApprox") && byId("photoTakenApprox").checked
+    );
+    if (photo.takenAt !== previousTaken) {
+      photo.takenAtSource = photo.takenAt ? "operator" : "";
+    }
+    var typed = byId("photoCaption").value.trim();
+    var generated = defaultCaption(photo);
+    if (!typed || typed === generated) {
+      photo.caption = "";
+      photo.captionCustom = false;
+    } else {
+      photo.caption = typed;
+      photo.captionCustom = true;
+    }
     photo.updatedAt = nowIso();
+    if (byId("photoCaption") && !photo.captionCustom) {
+      byId("photoCaption").placeholder = defaultCaption(photo);
+    }
+    if (byId("photoTakenSource")) {
+      byId("photoTakenSource").textContent = sourceLabel(photo);
+    }
     saveState();
   }
 
@@ -694,10 +776,20 @@
     if (byId("photoPrimary")) {
       byId("photoPrimary").checked = !!photo.primary;
     }
-    byId("photoCaption").value = photo.caption || "";
+    byId("photoCaption").value = photo.captionCustom ? photo.caption || "" : "";
+    byId("photoCaption").placeholder = defaultCaption(photo);
     byId("photoPlace").value = photo.place || "";
     byId("photoNotes").value = photo.notes || "";
-    byId("photoTakenAt").value = toDatetimeLocal(photo.takenAt);
+    byId("photoTakenAt").value =
+      model && typeof model.formatTakenAtInput === "function"
+        ? model.formatTakenAtInput(photo)
+        : photo.takenAt || "";
+    if (byId("photoTakenApprox")) {
+      byId("photoTakenApprox").checked = !!photo.takenAtApproximate;
+    }
+    if (byId("photoTakenSource")) {
+      byId("photoTakenSource").textContent = sourceLabel(photo);
+    }
     byId("photoFileMeta").textContent =
       (photo.originalName || "photo") +
       " · " +
@@ -862,9 +954,13 @@
     var fields = {
       kind: photo.kind || "subject",
       caption: photo.caption || "",
+      captionCustom: !!photo.captionCustom,
       place: photo.place || "",
       notes: photo.notes || "",
       takenAt: photo.takenAt || "",
+      takenAtPrecision: photo.takenAtPrecision || "",
+      takenAtApproximate: !!photo.takenAtApproximate,
+      takenAtSource: photo.takenAtSource || "",
       tags: photo.tags || [],
       crop: photo.crop || null,
       primary: !!photo.primary
@@ -1020,7 +1116,11 @@
               primary: !!row.primary,
               kind: row.kind || "subject",
               caption: row.caption || "",
+              captionCustom: !!row.captionCustom,
               takenAt: row.takenAt || "",
+              takenAtPrecision: row.takenAtPrecision || "",
+              takenAtApproximate: !!row.takenAtApproximate,
+              takenAtSource: row.takenAtSource || "",
               place: row.place || "",
               tags: row.tags || [],
               notes: row.notes || "",
@@ -1222,7 +1322,14 @@
       });
     });
 
-    ["photoKind", "photoCaption", "photoPlace", "photoNotes", "photoTakenAt"].forEach(
+    [
+      "photoKind",
+      "photoCaption",
+      "photoPlace",
+      "photoNotes",
+      "photoTakenAt",
+      "photoTakenApprox"
+    ].forEach(
       function (id) {
         var el = byId(id);
         if (!el) {

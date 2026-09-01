@@ -43,10 +43,10 @@
 
   function appVersion() {
     if (typeof document === "undefined") {
-      return "0.19.4";
+      return "0.19.5";
     }
     var el = document.getElementById("appVersion");
-    return (el && el.getAttribute("data-version")) || "0.19.4";
+    return (el && el.getAttribute("data-version")) || "0.19.5";
   }
 
   function todayStamp() {

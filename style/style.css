@@ -6869,9 +6869,17 @@ body.narrative-live:not(.narrative-advanced) [id="clearButton"] {
   margin: 0 0 0.55rem;
 }
 
-body.photo-owner-mode .photo-kind-filters,
-body.photo-owner-mode .photo-lab-fields {
+body.photo-owner-mode .photo-kind-filters {
   display: none;
+}
+
+.media-photo-count,
+.media-photo-gallery-btn {
+  margin: 0.35rem 0 0;
+}
+
+.media-photo-gallery-btn {
+  width: auto;
 }
 
 .photo-thumb.is-primary {

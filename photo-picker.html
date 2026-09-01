@@ -17,9 +17,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.19.4"
+          data-version="0.19.5"
         >
-          Version 0.19.4
+          Version 0.19.5
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -132,12 +132,6 @@
                 <label for="photoPrimary">Primary photo</label>
               </div>
               <div class="field">
-                <label for="photoTakenAt">Taken at</label>
-                <input id="photoTakenAt" type="datetime-local" />
-              </div>
-            </div>
-            <div class="row photo-lab-fields">
-              <div class="field">
                 <label for="photoKind">Kind</label>
                 <select id="photoKind">
                   <option value="subject">Subject</option>
@@ -150,20 +144,37 @@
               </div>
             </div>
             <div class="row">
-              <div class="field field-span-2">
-                <label for="photoCaption">Caption</label>
-                <input id="photoCaption" type="text" autocomplete="off" />
+              <div class="field">
+                <label for="photoTakenAt">Date taken</label>
+                <input
+                  id="photoTakenAt"
+                  type="text"
+                  autocomplete="off"
+                  inputmode="numeric"
+                  placeholder="MM-DD-YYYY, MM-YYYY, or YYYY"
+                />
+                <p id="photoTakenSource" class="field-caption"></p>
+              </div>
+              <div class="field checkbox-field">
+                <input type="checkbox" id="photoTakenApprox" />
+                <label for="photoTakenApprox">Approximate date</label>
               </div>
             </div>
-            <div class="row photo-lab-fields">
+            <div class="row">
               <div class="field field-span-2">
-                <label for="photoPlace">Place</label>
+                <label for="photoPlace">Location</label>
                 <input
                   id="photoPlace"
                   type="text"
                   autocomplete="off"
-                  placeholder="Street, city, or how the place is known"
+                  placeholder="Street, city, or unknown location"
                 />
+              </div>
+            </div>
+            <div class="row">
+              <div class="field field-span-2">
+                <label for="photoCaption">Caption</label>
+                <input id="photoCaption" type="text" autocomplete="off" />
               </div>
             </div>
             <div class="row photo-lab-fields">

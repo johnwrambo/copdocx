@@ -820,8 +820,6 @@
         fileTitle: "Files",
         pickerHref: leadPickerHref("PERSON", subject.personId, snap.leadId),
         filesHost: byId("leadSnapshotFiles"),
-        galleryButton: byId("leadPhotoGalleryButton"),
-        galleryWrap: byId("leadPhotoGalleryWrap"),
         showEmptyFiles: false,
         thumbs: false
       });

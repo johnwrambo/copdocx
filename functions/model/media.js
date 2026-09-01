@@ -84,6 +84,80 @@
     };
   }
 
+  function pad2(value) {
+    var n = String(value == null ? "" : value);
+    return n.length < 2 ? "0" + n : n.slice(-2);
+  }
+
+  function normalizeTakenAt(value) {
+    var text = String(value || "").trim();
+    if (!text) {
+      return { takenAt: "", precision: "" };
+    }
+    var iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+    if (iso) {
+      return { takenAt: iso[1] + "-" + iso[2] + "-" + iso[3], precision: "day" };
+    }
+    var us = text.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (us) {
+      return {
+        takenAt: us[3] + "-" + pad2(us[1]) + "-" + pad2(us[2]),
+        precision: "day"
+      };
+    }
+    var ym = text.match(/^(\d{4})-(\d{2})$/);
+    if (ym) {
+      return { takenAt: ym[1] + "-" + ym[2], precision: "month" };
+    }
+    var my = text.match(/^(\d{1,2})[\/\-](\d{4})$/);
+    if (my) {
+      return { takenAt: my[2] + "-" + pad2(my[1]), precision: "month" };
+    }
+    if (/^\d{4}$/.test(text)) {
+      return { takenAt: text, precision: "year" };
+    }
+    return { takenAt: text, precision: "day" };
+  }
+
+  function formatTakenAt(row) {
+    var parsed = normalizeTakenAt(row && row.takenAt);
+    var precision = (row && row.takenAtPrecision) || parsed.precision;
+    var stored = parsed.takenAt;
+    if (!stored) {
+      return "unknown date";
+    }
+    var parts = stored.split("-");
+    if (precision === "year" || parts.length === 1) {
+      return parts[0];
+    }
+    if (precision === "month" || parts.length === 2) {
+      return pad2(parts[1]) + "-" + parts[0];
+    }
+    if (parts.length >= 3) {
+      return pad2(parts[1]) + "-" + pad2(parts[2]) + "-" + parts[0];
+    }
+    return stored;
+  }
+
+  function formatTakenAtInput(row) {
+    var line = formatTakenAt(row);
+    return line === "unknown date" ? "" : line;
+  }
+
+  function formatPhotoCaption(row) {
+    row = row || {};
+    if (row.captionCustom && String(row.caption || "").trim()) {
+      return String(row.caption).trim();
+    }
+    var date = formatTakenAt(row);
+    var place = String(row.place || "").trim() || "unknown location";
+    var line = date + ", " + place;
+    if (row.takenAtApproximate) {
+      line += " (approx.)";
+    }
+    return line;
+  }
+
   function createMedia(fields) {
     fields = fields || {};
     var owner = normalizeOwner(fields.owner);
@@ -106,6 +180,15 @@
       : mediaClass === "photo"
         ? ["original", "display", "thumb"]
         : ["original"];
+    var taken = normalizeTakenAt(fields.takenAt);
+    var precision = String(fields.takenAtPrecision || taken.precision || "").trim();
+    if (precision !== "year" && precision !== "month" && precision !== "day") {
+      precision = taken.precision;
+    }
+    var source = String(fields.takenAtSource || "").trim();
+    if (source !== "file" && source !== "operator") {
+      source = taken.takenAt ? "file" : "";
+    }
     return {
       mediaId: fields.mediaId || newId("med"),
       entityType: "MEDIA",
@@ -117,7 +200,11 @@
       kind: String(fields.kind || (mediaClass === "photo" ? "subject" : "document")).trim(),
       documentType: String(fields.documentType || "").trim(),
       caption: String(fields.caption || "").trim(),
-      takenAt: String(fields.takenAt || "").trim(),
+      captionCustom: !!fields.captionCustom,
+      takenAt: taken.takenAt,
+      takenAtPrecision: precision,
+      takenAtApproximate: !!fields.takenAtApproximate,
+      takenAtSource: source,
       place: String(fields.place || "").trim(),
       tags: tags,
       notes: String(fields.notes || "").trim(),
@@ -458,13 +545,31 @@
     input = input || {};
     return getMeta(mediaId).then(function (row) {
       var fields = input.fields || input;
-      ["caption", "takenAt", "place", "notes", "kind", "originalName"].forEach(
+      ["caption", "place", "notes", "kind", "originalName"].forEach(
         function (key) {
           if (fields[key] != null) {
             row[key] = String(fields[key]);
           }
         }
       );
+      if (fields.takenAt != null) {
+        var taken = normalizeTakenAt(fields.takenAt);
+        row.takenAt = taken.takenAt;
+        row.takenAtPrecision =
+          fields.takenAtPrecision || taken.precision || row.takenAtPrecision || "";
+      }
+      if (fields.takenAtPrecision != null && fields.takenAt == null) {
+        row.takenAtPrecision = String(fields.takenAtPrecision || "");
+      }
+      if (fields.takenAtApproximate != null) {
+        row.takenAtApproximate = !!fields.takenAtApproximate;
+      }
+      if (fields.takenAtSource != null) {
+        row.takenAtSource = String(fields.takenAtSource || "");
+      }
+      if (fields.captionCustom != null) {
+        row.captionCustom = !!fields.captionCustom;
+      }
       if (fields.tags) {
         row.tags = Array.isArray(fields.tags) ? fields.tags.slice() : [];
       }
@@ -924,6 +1029,10 @@
   }
 
   model.createMedia = createMedia;
+  model.normalizeTakenAt = normalizeTakenAt;
+  model.formatTakenAt = formatTakenAt;
+  model.formatTakenAtInput = formatTakenAtInput;
+  model.formatPhotoCaption = formatPhotoCaption;
   model.MEDIA_DB = DB_NAME;
   model.PHOTO_MAX_BYTES = PHOTO_MAX_BYTES;
   model.FILE_MAX_BYTES = FILE_MAX_BYTES;

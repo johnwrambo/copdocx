@@ -1489,8 +1489,6 @@
         fileTitle: "Files",
         pickerHref: officerPickerHref("OFFICER", row.id, row.id),
         filesHost: byId("officerSnapshotFiles"),
-        galleryButton: byId("officerPhotoGalleryButton"),
-        galleryWrap: byId("officerPhotoGalleryWrap"),
         showEmptyFiles: false,
         thumbs: false
       });

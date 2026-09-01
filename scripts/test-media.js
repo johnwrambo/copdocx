@@ -56,6 +56,51 @@ function run() {
       check("ownerKey", row.ownerKey === "PERSON:p_1");
       check("photo not primary until save", row.primary === false);
       check("entity", row.entityType === "MEDIA");
+      check(
+        "caption unknown date and place",
+        model.formatPhotoCaption(row) === "unknown date, unknown location"
+      );
+      var dated = model.createMedia({
+        owner: { type: "PERSON", id: "p_cap" },
+        mediaClass: "photo",
+        takenAt: "2026-08-09",
+        place: "Irving, TX"
+      });
+      check(
+        "caption full day",
+        model.formatPhotoCaption(dated) === "08-09-2026, Irving, TX"
+      );
+      check("takenAt stored ISO day", dated.takenAt === "2026-08-09");
+      check("takenAt source defaults file", dated.takenAtSource === "file");
+      var monthOnly = model.createMedia({
+        owner: { type: "PERSON", id: "p_cap" },
+        mediaClass: "photo",
+        takenAt: "08-2026",
+        takenAtApproximate: true
+      });
+      check(
+        "caption month approx",
+        model.formatPhotoCaption(monthOnly) === "08-2026, unknown location (approx.)"
+      );
+      var yearOnly = model.createMedia({
+        owner: { type: "PERSON", id: "p_cap" },
+        mediaClass: "photo",
+        takenAt: "2026"
+      });
+      check("caption year", model.formatPhotoCaption(yearOnly) === "2026, unknown location");
+      var custom = model.createMedia({
+        owner: { type: "PERSON", id: "p_cap" },
+        mediaClass: "photo",
+        caption: "Mugshot",
+        captionCustom: true,
+        takenAt: "2026-08-09"
+      });
+      check("custom caption kept", model.formatPhotoCaption(custom) === "Mugshot");
+      check(
+        "US date parses",
+        model.normalizeTakenAt("08-09-2026").takenAt === "2026-08-09" &&
+          model.normalizeTakenAt("08-09-2026").precision === "day"
+      );
     })
     .then(function () {
       var threw = false;
@@ -184,6 +229,17 @@ function run() {
         check("vehicle own primary", saved.primary === true);
         return media.update(saved.mediaId, { fields: { caption: "plate" } }).then(function (updated) {
           check("update caption", updated.caption === "plate");
+          return media.update(saved.mediaId, {
+            fields: {
+              takenAt: "2019",
+              takenAtApproximate: true,
+              takenAtSource: "operator",
+              place: "Dallas"
+            }
+          });
+        }).then(function (again) {
+          check("update year precision", again.takenAt === "2019" && again.takenAtPrecision === "year");
+          check("update approx and source", again.takenAtApproximate === true && again.takenAtSource === "operator");
           return media.list({ type: "PERSON", id: "p_1" });
         });
       }).then(function (personRows) {
