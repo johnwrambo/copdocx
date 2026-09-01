@@ -488,6 +488,24 @@
     return m.store.saveLead(snap, { mode: "commit" });
   }
 
+  function issueErrors(payload) {
+    var errors = [];
+    var digits = String((payload && payload.fileNo) || "").replace(/\D/g, "");
+    if (digits.length !== 9) {
+      errors.push("Enter a 9-digit file number.");
+    }
+    if (!(payload && payload.officerName)) {
+      errors.push("Select an issuing officer.");
+    }
+    if (payload && payload.formType === "I-200" && !(payload.basis && payload.basis.length)) {
+      errors.push("Select at least one basis.");
+    }
+    if (payload && payload.formType === "I-205" && !(payload.basis && payload.basis.length)) {
+      errors.push("Select at least one order.");
+    }
+    return errors;
+  }
+
   function issue(opts) {
     opts = opts || {};
     var writeRecord = opts.writeRecord !== false;
@@ -504,6 +522,11 @@
     }
     persistOfficeAndOfficer();
     var payload = collectValues(snap);
+    var errors = issueErrors(payload);
+    if (errors.length) {
+      setStatus(errors[0]);
+      return Promise.resolve();
+    }
     var warrantId = model().newId("wnt");
     var filename = pdf.warrantFileName({
       formType: payload.formType,
@@ -514,6 +537,16 @@
       existingNames: existingFileNames(payload.person)
     });
     hideActions(false);
+    if (writeRecord) {
+      payload.warrantId = warrantId;
+      var saved = appendWarrant(snap, payload, filename);
+      if (!saved || !saved.ok) {
+        setStatus(
+          (saved && saved.error) || "Could not save the warrant on the lead."
+        );
+        return Promise.resolve();
+      }
+    }
     setStatus("Filling " + payload.formType + "…");
     var folderPromise = pickFolder
       ? getFolderOnGesture()
@@ -538,15 +571,6 @@
               setStatus("Downloaded " + filename + ".", true);
               return;
             }
-            payload.warrantId = warrantId;
-            var saved = appendWarrant(snap, payload, filename);
-            if (!saved || !saved.ok) {
-              setStatus(
-                (saved && saved.error) ||
-                  "Could not save the warrant on the lead."
-              );
-              return;
-            }
             var extra = savedToFolder ? " Saved to the warrants folder." : "";
             window.location.href =
               "lead.html?id=" + encodeURIComponent(snap.leadId);
@@ -556,6 +580,13 @@
       })
       .catch(function (error) {
         console.warn(error);
+        if (writeRecord) {
+          setStatus(
+            (error && error.message) ||
+              "Warrant is saved on the lead, but the PDF could not be filled."
+          );
+          return;
+        }
         setStatus((error && error.message) || "Could not fill the PDF.");
       });
   }
@@ -566,6 +597,11 @@
 
   window.downloadWarrantPdf = function () {
     return issue({ writeRecord: false, pickFolder: false });
+  };
+
+  var root = (window.COPDoc = window.COPDoc || {});
+  root.warrantIssue = {
+    issueErrors: issueErrors
   };
 
   function paintMissing(message) {

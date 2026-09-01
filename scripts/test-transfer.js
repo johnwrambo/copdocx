@@ -122,6 +122,39 @@ var fromBook = t.parseTransfer(JSON.stringify({
 }));
 check("legacy book-in backup", fromBook.bookin.length === 1 && fromBook.bookin[0].id === "bk_9");
 
+var demo = t.parseTransfer(JSON.stringify({
+  format: "copdocx-demo-import",
+  schema: "copdocx.import.v1",
+  admin: {
+    officers: [
+      {
+        id: "ofc_demo",
+        officerId: "ofc_demo",
+        lastName: "DEMO",
+        firstName: "One",
+        meta: { status: "committed" }
+      }
+    ]
+  },
+  leads: {
+    lead_demo: {
+      leadId: "lead_demo",
+      person: { personId: "p_demo" },
+      meta: { status: "committed" }
+    }
+  }
+}));
+check("demo import officers", demo.officers.length === 1 && demo.officers[0].officerId === "ofc_demo");
+check("demo import leads object", demo.leads.length === 1 && demo.leads[0].leadId === "lead_demo");
+
+var snap = t.parseTransfer(JSON.stringify({
+  schema: "copdocx.lead.v1",
+  leadId: "lead_snap",
+  person: { personId: "p_snap", name: { lastName: "SNAP" } },
+  meta: { status: "committed" }
+}));
+check("single-lead snapshot", snap.leads.length === 1 && snap.leads[0].leadId === "lead_snap");
+
 var incoming = t.parseTransfer(JSON.stringify({
   format: "copdocx.transfer.v1",
   officers: [
@@ -148,8 +181,19 @@ var after = JSON.parse(mem["copdoc.admin.v1"]);
 check("admin still has two officers", after.officers.length === 2);
 
 incoming.officers[0].role = "IO";
+incoming.officers[0].meta.updatedAt = "2026-08-12T00:00:00.000Z";
 var stats2 = t.applyImport(incoming, ["officers"]);
 check("import replaces different same id", stats2.updated === 1, stats2);
+
+incoming.officers[0].role = "OLD";
+incoming.officers[0].meta.updatedAt = "2026-08-01T00:00:00.000Z";
+var statsOld = t.applyImport(incoming, ["officers"]);
+check("import keeps newer local record", statsOld.updated === 0 && statsOld.skipped >= 1, statsOld);
+var afterOld = JSON.parse(mem["copdoc.admin.v1"]);
+check(
+  "older import did not overwrite",
+  afterOld.officers.filter(function (row) { return row.id === "ofc_1"; })[0].role === "IO"
+);
 
 var draftIn = t.cleanList("leads", [
   { leadId: "x", meta: { status: "draft" } },
@@ -189,6 +233,59 @@ check(
   "store has both encounters",
   !!afterEnc.encounters.enc_a && !!afterEnc.encounters.enc_b
 );
+
+var originalSet = context.localStorage.setItem;
+context.localStorage.setItem = function () {
+  throw new Error("quota");
+};
+var quotaIn = t.parseTransfer(
+  JSON.stringify({
+    format: "copdocx.transfer.v1",
+    officers: [
+      {
+        id: "ofc_quota",
+        officerId: "ofc_quota",
+        lastName: "QUOTA",
+        firstName: "Fail",
+        meta: { status: "committed", updatedAt: "2026-08-12T00:00:00.000Z" }
+      }
+    ]
+  })
+);
+var quotaStats = t.applyImport(quotaIn, ["officers"]);
+check("failed write is not counted as added", quotaStats.added === 0, quotaStats);
+check("failed write reports error", !!quotaStats.error, quotaStats);
+var afterQuota = JSON.parse(mem["copdoc.admin.v1"]);
+check(
+  "failed write leaves admin officers unchanged",
+  afterQuota.officers.every(function (row) {
+    return row.id !== "ofc_quota";
+  })
+);
+context.localStorage.setItem = originalSet;
+
+var leadBackup = mem["copdocx.store.v1"];
+mem["copdocx.store.v1"] = "{not json";
+var badLeadIn = t.parseTransfer(
+  JSON.stringify({
+    format: "copdocx.transfer.v1",
+    leads: [
+      {
+        leadId: "lead_inject",
+        person: { personId: "p_inject" },
+        meta: { status: "committed" }
+      }
+    ]
+  })
+);
+var badLeadStats = t.applyImport(badLeadIn, ["leads"]);
+check("corrupt store import is not counted", badLeadStats.added === 0, badLeadStats);
+check("corrupt store import reports error", /damaged/.test(badLeadStats.error || ""));
+check(
+  "corrupt store is not overwritten by import",
+  mem["copdocx.store.v1"] === "{not json"
+);
+mem["copdocx.store.v1"] = leadBackup;
 
 if (fail) {
   process.exit(1);

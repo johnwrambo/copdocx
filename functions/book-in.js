@@ -1497,6 +1497,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         `Imported record ${recordNumber} update date`
       );
 
+      const encounterRole = String(record.encounterRole || "")
+        .trim()
+        .toUpperCase();
+
       return {
         id,
         createdAt,
@@ -1530,6 +1534,18 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
             "ice_event",
             record.iceEvent
           )
+        ),
+        encounterId: normalizeImportedMetadataValue(
+          record.encounterId,
+          `Imported record ${recordNumber} encounter`
+        ),
+        encounterRole:
+          encounterRole === "TARGET" || encounterRole === "COLLATERAL"
+            ? encounterRole
+            : "",
+        leadId: normalizeImportedMetadataValue(
+          record.leadId,
+          `Imported record ${recordNumber} lead`
         ),
         formState
       };
@@ -1884,13 +1900,27 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       }
     }
 
-    function listedSavedRecords() {
+    function recordsForEncounter(encounterId) {
       const all = readSavedRecords();
-      const encounterId = currentEncounterId();
+      if (
+        window.COPDoc &&
+        COPDoc.model &&
+        typeof COPDoc.model.recordsForEncounter === "function"
+      ) {
+        return COPDoc.model.recordsForEncounter(all, encounterId);
+      }
       if (!encounterId) {
-        return all;
+        return [];
       }
       return all.filter(record => record && record.encounterId === encounterId);
+    }
+
+    function listedSavedRecords() {
+      const encounterId = currentEncounterId();
+      if (!encounterId) {
+        return readSavedRecords();
+      }
+      return recordsForEncounter(encounterId);
     }
 
     function syncEncounterSubjects(record) {
@@ -1904,20 +1934,28 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       if (!encounter) {
         return;
       }
-      encounter.subjects = listedSavedRecords().map(row => ({
-        personId: "",
-        leadId: row.leadId || "",
-        bookinRecordId: row.id,
-        lastName: row.lastName || "",
-        firstName: row.firstName || "",
-        alienNumber: row.aNumber || "",
-        encounterRole: row.encounterRole || ""
-      }));
+      encounter.subjects = recordsForEncounter(encounterId)
+        .filter(row => {
+          const role = String((row && row.encounterRole) || "").toUpperCase();
+          return role === "TARGET" || role === "COLLATERAL";
+        })
+        .map(row => ({
+          personId: "",
+          leadId: row.leadId || "",
+          bookinRecordId: row.id,
+          lastName: row.lastName || "",
+          firstName: row.firstName || "",
+          alienNumber: row.aNumber || "",
+          encounterRole: row.encounterRole || ""
+        }));
       const committed =
         COPDoc.model.isCommitted && COPDoc.model.isCommitted(encounter);
-      store.saveEncounter(encounter, {
+      const saved = store.saveEncounter(encounter, {
         mode: committed ? "commit" : "draft"
       });
+      if (saved && !saved.ok) {
+        setStatus(saved.error || "Could not update the encounter.", "error");
+      }
     }
 
     function renderSavedRecords() {
@@ -2026,7 +2064,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           currentEncounterId() || (existing && existing.encounterId) || "";
         const encounterRole = currentEncounterRole();
         if (encounterId && !encounterRole && !quiet) {
-          setStatus("Select Target or Collateral for this encounter.");
+          setStatus("Select Target or Collateral for this encounter.", "error");
           return false;
         }
 
@@ -2089,6 +2127,9 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
       suppressAutoSave = true;
       restoreFormState(record.formState);
+      if (!currentEncounterRole() && record.encounterRole) {
+        setEncounterRole(record.encounterRole);
+      }
       activeRecordId = record.id;
       renderSavedRecords();
       rememberFormSignature();

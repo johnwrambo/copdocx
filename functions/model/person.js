@@ -208,7 +208,7 @@
     "pornograph",
     "exploitation of a child",
     "exploitation of child",
-    "failure to register"
+    "sex offender"
   ];
   var FOREIGN_FUGITIVE_NEEDLES = [
     "fugitive",
@@ -217,12 +217,11 @@
     "extradition"
   ];
   var ARMED_NEEDLES = [
-    "firearm",
-    "handgun",
-    "shotgun",
-    "rifle",
-    "deadly weapon",
-    "shooting"
+    "armed and dangerous",
+    "currently armed",
+    "armed with",
+    "in possession of a firearm",
+    "possessing a firearm"
   ];
   var THREAT_LEVEL_LABELS = {
     none: "None",
@@ -312,14 +311,11 @@
         String(row.convictionClass || "").toLowerCase() === "felony"
       );
     });
-    var sexOffender = blobMatches(hay, SEX_OFFENDER_NEEDLES) || hayHas(hay, "sex");
+    var sexOffender =
+      blobMatches(hay, SEX_OFFENDER_NEEDLES) ||
+      (hayHas(hay, "sex offender") && hayHas(hay, "failure to register"));
     var foreignFugitive = blobMatches(hay, FOREIGN_FUGITIVE_NEEDLES);
-    var armed =
-      blobMatches(hay, ARMED_NEEDLES) ||
-      hayHas(hay, "gun") ||
-      hayHas(hay, "guns") ||
-      hayHas(hay, "weapon") ||
-      hayHas(hay, "armed");
+    var armed = blobMatches(hay, ARMED_NEEDLES);
     var rank = 0;
     if (hasCriminalRecord || hasCriminalWarrants) {
       rank = 1;

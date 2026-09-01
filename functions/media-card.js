@@ -46,6 +46,29 @@
     host.replaceChildren();
   }
 
+  function openStoredFile(row, rec, urlBag) {
+    var url = objectUrl(rec, urlBag);
+    if (!url) {
+      return;
+    }
+    var name = (row && (row.originalName || row.caption)) || "file";
+    var mime = (rec && rec.blob && rec.blob.type) || (row && row.mime) || "";
+    var unsafe =
+      root.model && typeof root.model.isActiveMarkupFile === "function"
+        ? root.model.isActiveMarkupFile(name, mime)
+        : /\.(html?|xhtml|svg)$/i.test(name);
+    if (unsafe) {
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = String(name).replace(/[<>:"/\\|?*]+/g, "_") || "file";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    window.open(url, "_blank", "noopener");
+  }
+
   function fileLabel(row) {
     return (
       (row.documentType || row.kind || "File") +
@@ -65,8 +88,7 @@
       link.addEventListener("click", function (event) {
         event.preventDefault();
         api.blob(row.mediaId, "original").then(function (rec) {
-          var url = objectUrl(rec, urlBag);
-          window.open(url, "_blank", "noopener");
+          openStoredFile(row, rec, urlBag);
         });
       });
       li.appendChild(link);

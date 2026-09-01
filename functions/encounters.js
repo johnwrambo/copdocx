@@ -105,7 +105,11 @@
     }
     return bookinRecords()
       .filter(function (row) {
-        return row && row.encounterId === encounterId;
+        if (!row || row.encounterId !== encounterId) {
+          return false;
+        }
+        var role = String(row.encounterRole || "").toUpperCase();
+        return role === "TARGET" || role === "COLLATERAL";
       })
       .map(function (row) {
         return {
@@ -132,6 +136,14 @@
       return;
     }
     m.store.loadFromDisk();
+    if (typeof m.store.diskError === "function" && m.store.diskError()) {
+      body.replaceChildren();
+      empty.hidden = false;
+      wrap.hidden = true;
+      empty.textContent = m.store.diskError();
+      setStatus(m.store.diskError());
+      return;
+    }
     var rows = m.store.listEncounters() || [];
     body.replaceChildren();
     empty.hidden = rows.length > 0;
@@ -243,9 +255,36 @@
     return loc;
   }
 
-  function collectVehicle(card) {
+  function collectLink(card, vehicleId) {
     var f = readFields(card);
-    var vehicle = model().createVehicle({
+    var reasons = [];
+    card.querySelectorAll('[data-field="linkReason"]').forEach(function (el) {
+      if (el.checked && el.value) {
+        reasons.push(el.value);
+      }
+    });
+    var toId = f.linkedPersonId || "";
+    if (!toId && !reasons.length && !f.linkNotes) {
+      return null;
+    }
+    var m = model();
+    if (!m || typeof m.createLink !== "function") {
+      return null;
+    }
+    return m.createLink({
+      linkId: card.dataset.entityId || (m.newId ? m.newId("link") : ""),
+      from: { type: "VEHICLE", id: vehicleId },
+      to: { type: "PERSON", id: toId },
+      reasons: reasons,
+      notes: f.linkNotes || ""
+    });
+  }
+
+  function collectVehicle(card, links) {
+    links = links || [];
+    var f = readFields(card);
+    var m = model();
+    var vehicle = m.createVehicle({
       vehicleId: card.dataset.entityId || "",
       licensePlate: f.licensePlate || "",
       plateState: f.plateState || "",
@@ -258,8 +297,20 @@
       registeredOwnerName: f.registeredOwner || "",
       governmentVehicle: false
     });
+    if (!vehicle.vehicleId && m.newId) {
+      vehicle.vehicleId = m.newId("veh");
+    }
+    if (card) {
+      card.dataset.entityId = vehicle.vehicleId || "";
+    }
     nestedCards(card, "location").forEach(function (locCard) {
       vehicle.locations.push(collectLocation(locCard));
+    });
+    nestedCards(card, "link").forEach(function (linkCard) {
+      var link = collectLink(linkCard, vehicle.vehicleId);
+      if (link && link.to && link.to.id) {
+        links.push(link);
+      }
     });
     return vehicle;
   }
@@ -279,10 +330,11 @@
     record.team = (byId("encounterTeam") && byId("encounterTeam").value) || record.team || "3";
     record.officeCode = record.officeCode || "DAL";
     record.vehicles = [];
+    record.links = [];
     Array.prototype.forEach.call(
       document.querySelectorAll("#encounterVehicleList > fieldset"),
       function (card) {
-        record.vehicles.push(collectVehicle(card));
+        record.vehicles.push(collectVehicle(card, record.links));
       }
     );
     record.locations = [];
@@ -311,6 +363,49 @@
       return COPDoc.cards.add(type);
     }
     return null;
+  }
+
+  function addNested(card, kind) {
+    if (card && card._addNested && typeof card._addNested[kind] === "function") {
+      return card._addNested[kind]();
+    }
+    return null;
+  }
+
+  function fillEncounterLocation(card, location) {
+    if (!card || !location) {
+      return;
+    }
+    card.dataset.entityId = location.locationId || "";
+    setCardValue(card, "locationAssociation", location.association || "");
+    setCardValue(card, "street", location.street || "");
+    setCardValue(card, "street2", location.street2 || "");
+    setCardValue(card, "city", location.city || "");
+    setCardValue(card, "state", location.state || "");
+    setCardValue(card, "zip", location.zip || "");
+    setCardValue(card, "latitude", location.latitude || "");
+    setCardValue(card, "longitude", location.longitude || "");
+    setCardValue(card, "targetPriority", location.targetPriority || "");
+    setCardValue(card, "parksHere", location.parksHere || "");
+    if (location.latitude && location.longitude) {
+      setCardValue(
+        card,
+        "latLong",
+        location.latitude + ", " + location.longitude
+      );
+    }
+    if (window.COPDoc && COPDoc.cards && COPDoc.cards.paintMedia) {
+      COPDoc.cards.paintMedia(card, "LOCATION");
+    }
+    if (window.COPDoc && COPDoc.locationMap && COPDoc.locationMap.sync) {
+      COPDoc.locationMap.sync(card);
+    }
+    if (typeof fillLocationAssociationSelect === "function") {
+      fillLocationAssociationSelect(
+        card.querySelector('[data-field="locationAssociation"]')
+      );
+      setCardValue(card, "locationAssociation", location.association || "");
+    }
   }
 
   function hydrateEncounter(record) {
@@ -351,6 +446,21 @@
         if (window.COPDoc && COPDoc.cards && COPDoc.cards.paintMedia) {
           COPDoc.cards.paintMedia(card, "VEHICLE");
         }
+        (vehicle.locations || []).forEach(function (location) {
+          var locCard = addNested(card, "location");
+          if (locCard) {
+            fillEncounterLocation(locCard, location);
+          }
+        });
+        (record.links || []).forEach(function (link) {
+          if (!link.from || link.from.id !== vehicle.vehicleId) {
+            return;
+          }
+          var linkCard = addNested(card, "link");
+          if (linkCard && typeof window.fillLinkCard === "function") {
+            window.fillLinkCard(linkCard, link);
+          }
+        });
       });
     }
     var locList = byId("encounterLocationList");
@@ -361,35 +471,7 @@
         if (!card) {
           return;
         }
-        card.dataset.entityId = location.locationId || "";
-        setCardValue(card, "locationAssociation", location.association || "");
-        setCardValue(card, "street", location.street || "");
-        setCardValue(card, "street2", location.street2 || "");
-        setCardValue(card, "city", location.city || "");
-        setCardValue(card, "state", location.state || "");
-        setCardValue(card, "zip", location.zip || "");
-        setCardValue(card, "latitude", location.latitude || "");
-        setCardValue(card, "longitude", location.longitude || "");
-        setCardValue(card, "targetPriority", location.targetPriority || "");
-        if (location.latitude && location.longitude) {
-          setCardValue(
-            card,
-            "latLong",
-            location.latitude + ", " + location.longitude
-          );
-        }
-        if (window.COPDoc && COPDoc.cards && COPDoc.cards.paintMedia) {
-          COPDoc.cards.paintMedia(card, "LOCATION");
-        }
-        if (window.COPDoc && COPDoc.locationMap && COPDoc.locationMap.sync) {
-          COPDoc.locationMap.sync(card);
-        }
-        if (typeof fillLocationAssociationSelect === "function") {
-          fillLocationAssociationSelect(
-            card.querySelector('[data-field="locationAssociation"]')
-          );
-          setCardValue(card, "locationAssociation", location.association || "");
-        }
+        fillEncounterLocation(card, location);
       });
     }
     paintSubjectsTable(record.encounterId);
@@ -569,7 +651,12 @@
     if (!record.encounterId) {
       return;
     }
-    m.store.saveEncounter(record, { mode: "draft" });
+    var saved = m.store.saveEncounter(record, { mode: "draft" });
+    if (saved && !saved.ok) {
+      setStatus(saved.error || "Could not save the encounter.");
+      return false;
+    }
+    return true;
   }
 
   function commitEncounter() {
@@ -624,7 +711,12 @@
       team: (byId("encounterTeam") && byId("encounterTeam").value) || "3",
       existingIds: existingIds
     });
-    m.store.saveEncounter(created, { mode: "draft" });
+    var createdSave = m.store.saveEncounter(created, { mode: "draft" });
+    if (createdSave && !createdSave.ok) {
+      setStatus(createdSave.error || "Could not save the encounter.");
+      hydrateEncounter(created);
+      return created;
+    }
     if (window.history && window.history.replaceState) {
       window.history.replaceState(
         {},

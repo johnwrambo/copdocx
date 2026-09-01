@@ -33,8 +33,20 @@
         if (signature() === last) {
           return;
         }
-        if (typeof opts.saveDraft === "function") {
-          opts.saveDraft();
+        if (typeof opts.saveDraft !== "function") {
+          return;
+        }
+        var result = opts.saveDraft();
+        if (result && typeof result.then === "function") {
+          result.then(function (ok) {
+            if (ok !== false && ok !== null) {
+              remember();
+            }
+          });
+          return;
+        }
+        if (result !== false && result !== null) {
+          remember();
         }
       }, 0);
     }

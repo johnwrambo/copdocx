@@ -277,6 +277,22 @@
 
   function importFiles(fileList) {
     var files = Array.prototype.slice.call(fileList || []);
+    var blocked = [];
+    files = files.filter(function (file) {
+      var unsafe =
+        model && typeof model.isActiveMarkupFile === "function"
+          ? model.isActiveMarkupFile(file.name, file.type)
+          : /\.(html?|xhtml|svg)$/i.test(file.name || "");
+      if (unsafe) {
+        blocked.push(file.name || "file");
+        return false;
+      }
+      return true;
+    });
+    if (blocked.length && !files.length) {
+      setStatus("HTML and SVG files cannot be stored here.");
+      return;
+    }
     if (!files.length) {
       return;
     }
@@ -298,6 +314,9 @@
             " over " +
             Math.round(MAX_STORE_BYTES / 1024 / 1024) +
             " MB stay in this session only.";
+        }
+        if (blocked.length) {
+          msg += " Skipped HTML/SVG: " + blocked.join(", ") + ".";
         }
         setStatus(msg, true);
       })

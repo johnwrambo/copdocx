@@ -268,6 +268,13 @@
     if (!file || !String(file.type || "").match(/^image\//)) {
       return Promise.resolve(null);
     }
+    if (
+      model &&
+      typeof model.isActiveMarkupFile === "function" &&
+      model.isActiveMarkupFile(file.name, file.type)
+    ) {
+      return Promise.resolve(null);
+    }
     var photoId = newId("pho");
     var taken = file.lastModified
       ? new Date(file.lastModified).toISOString()
@@ -341,6 +348,22 @@
 
   function importFiles(fileList) {
     var files = Array.prototype.slice.call(fileList || []);
+    var blocked = [];
+    files = files.filter(function (file) {
+      var unsafe =
+        model && typeof model.isActiveMarkupFile === "function"
+          ? model.isActiveMarkupFile(file.name, file.type)
+          : /\.(html?|xhtml|svg)$/i.test(file.name || "");
+      if (unsafe) {
+        blocked.push(file.name || "file");
+        return false;
+      }
+      return true;
+    });
+    if (blocked.length && !files.length) {
+      setStatus("HTML and SVG files cannot be stored here.");
+      return;
+    }
     if (!files.length) {
       return;
     }
@@ -355,10 +378,12 @@
         state.selectedId = added[0].photoId;
         saveState();
         paint();
-        setStatus(
-          "Added " + added.length + " photo" + (added.length === 1 ? "" : "s") + ".",
-          true
-        );
+        var msg =
+          "Added " + added.length + " photo" + (added.length === 1 ? "" : "s") + ".";
+        if (blocked.length) {
+          msg += " Skipped HTML/SVG: " + blocked.join(", ") + ".";
+        }
+        setStatus(msg, true);
       })
       .catch(function (err) {
         setStatus(err.message || "Could not read image.");
@@ -557,6 +582,25 @@
     });
   }
 
+  function ensureOriginal(photo) {
+    if (!photo) {
+      return Promise.resolve(null);
+    }
+    if (sourceFiles[photo.photoId]) {
+      return Promise.resolve(sourceFiles[photo.photoId]);
+    }
+    if (!photo.storedId || !mediaApi || typeof mediaApi.blob !== "function") {
+      return Promise.resolve(null);
+    }
+    return mediaApi.blob(photo.storedId, "original").then(function (orig) {
+      var file = blobAsFile(orig, photo.originalName, photo.mime);
+      if (file) {
+        sourceFiles[photo.photoId] = file;
+      }
+      return file;
+    });
+  }
+
   function blobAsFile(payload, name, mime) {
     var blob = payload && payload.blob ? payload.blob : payload;
     if (!blob) {
@@ -719,8 +763,10 @@
     if (!photo) {
       return;
     }
-    var file = sourceFiles[photo.photoId];
-    if (ownerMode && file) {
+    function restoreFromFile(file) {
+      if (!file) {
+        return;
+      }
       photo.crop = null;
       photo.cropDirty = true;
       if (photo.previewUrl && String(photo.previewUrl).indexOf("blob:") === 0) {
@@ -731,6 +777,9 @@
       saveState();
       paint();
       setStatus("Restored original.", true);
+    }
+    if (ownerMode) {
+      ensureOriginal(photo).then(restoreFromFile);
       return;
     }
     if (!photo.originalDataUrl) {
@@ -810,7 +859,6 @@
   }
 
   function persistOnePhoto(current, photo) {
-    var file = sourceFiles[photo.photoId];
     var fields = {
       kind: photo.kind || "subject",
       caption: photo.caption || "",
@@ -825,39 +873,47 @@
       if (!photo.cropDirty) {
         return mediaApi.update(photo.storedId, { fields: fields });
       }
-      if (!file) {
-        return Promise.reject(new Error("Missing original for " + (photo.originalName || "photo")));
-      }
-      return buildPhotoBlobs(file, photo.crop).then(function (parts) {
-        return mediaApi.update(photo.storedId, {
-          display: parts.display,
-          thumb: parts.thumb,
-          fields: Object.assign({}, fields, {
-            width: parts.width,
-            height: parts.height
-          })
+      return ensureOriginal(photo).then(function (file) {
+        if (!file) {
+          return Promise.reject(
+            new Error("Missing original for " + (photo.originalName || "photo"))
+          );
+        }
+        return buildPhotoBlobs(file, photo.crop).then(function (parts) {
+          return mediaApi.update(photo.storedId, {
+            display: parts.display,
+            thumb: parts.thumb,
+            fields: Object.assign({}, fields, {
+              width: parts.width,
+              height: parts.height
+            })
+          });
         });
       });
     }
-    if (!file) {
-      return Promise.reject(new Error("Missing original file for " + (photo.originalName || "photo")));
-    }
-    return buildPhotoBlobs(file, photo.crop).then(function (parts) {
-      return mediaApi.save({
-        owner: { type: current.type, id: current.id },
-        mediaClass: "photo",
-        original: parts.original,
-        display: parts.display,
-        thumb: parts.thumb,
-        mime: file.type || "image/jpeg",
-        originalName: photo.originalName,
-        bytes: file.size || photo.bytes,
-        width: parts.width,
-        height: parts.height,
-        fields: fields
-      }).then(function (saved) {
-        photo.storedId = saved.mediaId;
-        return saved;
+    return ensureOriginal(photo).then(function (file) {
+      if (!file) {
+        return Promise.reject(
+          new Error("Missing original file for " + (photo.originalName || "photo"))
+        );
+      }
+      return buildPhotoBlobs(file, photo.crop).then(function (parts) {
+        return mediaApi.save({
+          owner: { type: current.type, id: current.id },
+          mediaClass: "photo",
+          original: parts.original,
+          display: parts.display,
+          thumb: parts.thumb,
+          mime: file.type || "image/jpeg",
+          originalName: photo.originalName,
+          bytes: file.size || photo.bytes,
+          width: parts.width,
+          height: parts.height,
+          fields: fields
+        }).then(function (saved) {
+          photo.storedId = saved.mediaId;
+          return saved;
+        });
       });
     });
   }
@@ -933,43 +989,58 @@
       var photos = (rows || []).filter(function (row) {
         return row.mediaClass === "photo";
       });
-      return Promise.all(
-        photos.map(function (row) {
-          return mediaApi.blob(row.mediaId, "original").then(function (orig) {
-            sourceFiles[row.mediaId] = blobAsFile(orig, row.originalName, row.mime);
-            return mediaApi.blob(row.mediaId, "display").catch(function () {
-              return orig;
-            }).then(function (disp) {
-              var preview = (disp && disp.blob) || (orig && orig.blob);
-              return {
-                photoId: row.mediaId,
-                storedId: row.mediaId,
-                originalName: row.originalName || "photo.jpg",
-                mime: row.mime || "image/jpeg",
-                bytes: row.bytes || 0,
-                width: row.width || 0,
-                height: row.height || 0,
-                previewUrl: preview
-                  ? URL.createObjectURL(
-                      preview instanceof Blob ? preview : new Blob([preview])
-                    )
-                  : "",
-                crop: row.crop || null,
-                cropDirty: false,
-                primary: !!row.primary,
-                kind: row.kind || "subject",
-                caption: row.caption || "",
-                takenAt: row.takenAt || "",
-                place: row.place || "",
-                tags: row.tags || [],
-                notes: row.notes || "",
-                createdAt: (row.meta && row.meta.createdAt) || nowIso(),
-                updatedAt: (row.meta && row.meta.updatedAt) || nowIso()
-              };
-            });
+      var loaded = [];
+      var i = 0;
+      function loadPreview(row) {
+        return mediaApi
+          .blob(row.mediaId, "thumb")
+          .catch(function () {
+            return mediaApi.blob(row.mediaId, "display");
+          })
+          .catch(function () {
+            return null;
+          })
+          .then(function (disp) {
+            var preview = disp && disp.blob;
+            return {
+              photoId: row.mediaId,
+              storedId: row.mediaId,
+              originalName: row.originalName || "photo.jpg",
+              mime: row.mime || "image/jpeg",
+              bytes: row.bytes || 0,
+              width: row.width || 0,
+              height: row.height || 0,
+              previewUrl: preview
+                ? URL.createObjectURL(
+                    preview instanceof Blob ? preview : new Blob([preview])
+                  )
+                : "",
+              crop: row.crop || null,
+              cropDirty: false,
+              primary: !!row.primary,
+              kind: row.kind || "subject",
+              caption: row.caption || "",
+              takenAt: row.takenAt || "",
+              place: row.place || "",
+              tags: row.tags || [],
+              notes: row.notes || "",
+              createdAt: (row.meta && row.meta.createdAt) || nowIso(),
+              updatedAt: (row.meta && row.meta.updatedAt) || nowIso()
+            };
           });
-        })
-      );
+      }
+      function next() {
+        if (i >= photos.length) {
+          return Promise.resolve(loaded);
+        }
+        var row = photos[i];
+        i += 1;
+        return loadPreview(row).then(function (item) {
+          loaded.push(item);
+          return next();
+        });
+      }
+      return next();
     }).then(function (loaded) {
       state.photos = loaded.concat(state.photos);
       if (!state.selectedId && state.photos.length) {

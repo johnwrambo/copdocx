@@ -193,6 +193,40 @@ check(
 );
 check("officer city helper", model.officerCity(ofc) === "Dallas");
 
+var staleOfc = model.createOfficer({
+  lastName: "LEE",
+  firstName: "Sam",
+  address: { street: "9 Pine", city: "Austin", state: "TX" },
+  locations: [
+    { street: "1 Main", city: "Dallas", state: "TX", association: "residence" }
+  ]
+});
+model.syncOfficerPlaces(staleOfc);
+check(
+  "officer address overwrites stale location",
+  staleOfc.locations[0] && staleOfc.locations[0].city === "Austin"
+);
+check(
+  "officerAddress follows synced address",
+  model.officerAddress(staleOfc).city === "Austin"
+);
+
+check(
+  "recordsForEncounter filters by id",
+  model.recordsForEncounter(
+    [
+      { id: "a", encounterId: "E1" },
+      { id: "b", encounterId: "E2" },
+      { id: "c", encounterId: "E1" }
+    ],
+    "E1"
+  ).length === 2
+);
+check(
+  "recordsForEncounter empty without id",
+  model.recordsForEncounter([{ id: "a", encounterId: "E1" }], "").length === 0
+);
+
 var caseVeh = model.createVehicle({ licensePlate: "XYZ999" });
 check("case vehicle is not gov", caseVeh.governmentVehicle === false && caseVeh.status === "");
 check("case vehicle aliases id", !!caseVeh.vehicleId && caseVeh.id === caseVeh.vehicleId);
@@ -337,6 +371,7 @@ check(
   enc.subjects.length === 0 &&
     enc.vehicles.length === 0 &&
     enc.locations.length === 0 &&
+    enc.links.length === 0 &&
     enc.narratives.length === 0
 );
 check(
@@ -379,7 +414,33 @@ check(
   savedEnc.subjects[0] && savedEnc.subjects[0].lastName === "LOKI"
 );
 
-var keepEncAt = savedEnc.meta.committedAt;
+savedEnc.vehicles.push(
+  model.createVehicle({
+    licensePlate: "AAA111",
+    locations: [model.createLocation({ street: "9 Pine", city: "Austin" })]
+  })
+);
+savedEnc.links.push(
+  model.createLink({
+    from: { type: "VEHICLE", id: savedEnc.vehicles[0].vehicleId },
+    to: { type: "PERSON", id: "p_link" },
+    reasons: ["REGISTERED_OWNER"]
+  })
+);
+model.store.saveEncounter(savedEnc, { mode: "commit" });
+var keptVeh = model.store.getEncounter(enc.encounterId);
+check(
+  "encounter keeps vehicle locations",
+  keptVeh.vehicles[0] &&
+    keptVeh.vehicles[0].locations[0] &&
+    keptVeh.vehicles[0].locations[0].street === "9 Pine"
+);
+check(
+  "encounter keeps vehicle links",
+  keptVeh.links[0] && keptVeh.links[0].to.id === "p_link"
+);
+
+var keepEncAt = keptVeh.meta.committedAt;
 model.store.saveEncounter(
   { encounterId: enc.encounterId, startedAt: "2026-08-30T13:00" },
   { mode: "draft" }
@@ -597,8 +658,39 @@ armedPerson.convictions.push(
   })
 );
 var armedProfile = model.deriveCriminalProfile(armedPerson);
-check("firearm sets armed", armedProfile.armed === true);
-check("armed threat is high", armedProfile.threatLevel === "high");
+check("firearm conviction is not currently armed", armedProfile.armed === false);
+check("firearm felony stays moderate", armedProfile.threatLevel === "moderate");
+
+var nowArmed = model.createPerson();
+nowArmed.arrests.push(
+  model.createArrest({ arrestCharge: "Subject is armed and dangerous" })
+);
+check(
+  "current armed language sets armed",
+  model.deriveCriminalProfile(nowArmed).armed === true
+);
+
+var registerPerson = model.createPerson();
+registerPerson.convictions.push(
+  model.createConviction({ crime: "Failure to register", convictionClass: "misdemeanor" })
+);
+check(
+  "failure to register is not sex offender",
+  model.deriveCriminalProfile(registerPerson).sexOffender === false
+);
+
+var soRegister = model.createPerson();
+soRegister.convictions.push(
+  model.createConviction({
+    crime: "Failure to register as a sex offender",
+    convictionClass: "felony"
+  })
+);
+check(
+  "sex offender failure to register is severe",
+  model.deriveCriminalProfile(soRegister).sexOffender === true &&
+    model.deriveCriminalProfile(soRegister).threatLevel === "severe"
+);
 
 var soPerson = model.createPerson();
 soPerson.convictions.push(
@@ -638,6 +730,24 @@ servedPerson.warrants.push(
 check(
   "served warrant does not flag outstanding",
   model.deriveCriminalProfile(servedPerson).hasCriminalWarrants === false
+);
+
+check("csvCell prefixes equals", model.csvCell("=1+1") === "'=1+1");
+check("csvCell prefixes plus", model.csvCell("+cmd") === "'+cmd");
+check("csvCell prefixes minus", model.csvCell("-1") === "'-1");
+check("csvCell prefixes at", model.csvCell("@SUM(A1)") === "'@SUM(A1)");
+check("csvCell quotes comma", model.csvCell("GARCIA, LUIS") === '"GARCIA, LUIS"');
+check(
+  "html is active markup",
+  model.isActiveMarkupFile("note.html", "text/html") === true
+);
+check(
+  "svg is active markup",
+  model.isActiveMarkupFile("pic.svg", "image/svg+xml") === true
+);
+check(
+  "pdf is not markup",
+  model.isActiveMarkupFile("scan.pdf", "application/pdf") === false
 );
 
 if (fail) {

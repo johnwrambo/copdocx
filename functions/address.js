@@ -1107,7 +1107,7 @@
     }
   }
 
-  function geocodeWithCensus(address) {
+  function geocodeWithCensus(address, signal) {
     const normalized = validateAddress(address).normalized;
     const params = new URLSearchParams({
       street: [normalized.street, normalized.street2]
@@ -1122,7 +1122,8 @@
 
     return fetch(
       "https://geocoding.geo.census.gov/geocoder/locations/address?" +
-        params.toString()
+        params.toString(),
+      signal ? { signal: signal } : undefined
     ).then((response) => {
       if (!response.ok) {
         throw new Error("Census geocoder HTTP " + response.status);
@@ -1187,8 +1188,13 @@
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    return geocodeWithCensus(address)
-      .catch(() => geocodeWithNominatim(address, controller.signal))
+    return geocodeWithCensus(address, controller.signal)
+      .catch((error) => {
+        if (controller.signal.aborted) {
+          throw error;
+        }
+        return geocodeWithNominatim(address, controller.signal);
+      })
       .then((geo) => {
         setCachedGeo(query, geo);
         return geo;

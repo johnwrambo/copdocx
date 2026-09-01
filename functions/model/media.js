@@ -405,48 +405,12 @@
     });
   }
 
-  function clearPrimaryOnOwner(ownerKey, exceptId) {
-    function demote(rows) {
-      rows.forEach(function (row) {
-        if (row.mediaClass === "photo" && row.primary && row.mediaId !== exceptId) {
-          row.primary = false;
-        }
-      });
-    }
-    if (useMemory) {
-      demote(memoryList(ownerKey));
-      return Promise.resolve();
-    }
-    return openDb().then(function (db) {
-      var tx = db.transaction("meta", "readwrite");
-      var index = tx.objectStore("meta").index("ownerKey");
-      return idbRequest(index.getAll(ownerKey)).then(function (rows) {
-        (rows || []).forEach(function (row) {
-          if (row.mediaClass === "photo" && row.primary && row.mediaId !== exceptId) {
-            row.primary = false;
-            tx.objectStore("meta").put(row);
-          }
-        });
-        return txDone(tx);
-      });
-    });
-  }
-
-  function promoteNextPrimary(owner) {
-    return list(owner).then(function (rows) {
-      var photos = rows.filter(function (row) {
-        return row.mediaClass === "photo";
-      });
-      if (!photos.length) {
-        return null;
+  function demoteOtherPrimaries(rows, exceptId) {
+    (rows || []).forEach(function (row) {
+      if (row.mediaClass === "photo" && row.primary && row.mediaId !== exceptId) {
+        row.primary = false;
+        row.meta = stampMeta(row, "commit");
       }
-      var current = photos.filter(function (row) {
-        return row.primary;
-      })[0];
-      if (current) {
-        return current;
-      }
-      return setPrimary(photos[0].mediaId);
     });
   }
 
@@ -455,21 +419,37 @@
       if (row.mediaClass !== "photo") {
         throw MediaError("NOT_A_PHOTO", "Only photos can be primary.");
       }
-      return clearPrimaryOnOwner(row.ownerKey, row.mediaId).then(function () {
-        row.primary = true;
-        row.meta = stampMeta(row, "commit");
-        if (useMemory) {
-          memory.meta[row.mediaId].primary = true;
-          memory.meta[row.mediaId].meta = row.meta;
-          return clone(memory.meta[row.mediaId]);
-        }
-        return openDb().then(function (db) {
-          var tx = db.transaction("meta", "readwrite");
-          tx.objectStore("meta").put(row);
-          return txDone(tx).then(function () {
-            return clone(row);
-          });
-        });
+      row.primary = true;
+      row.meta = stampMeta(row, "commit");
+      if (useMemory) {
+        demoteOtherPrimaries(memoryList(row.ownerKey), row.mediaId);
+        memory.meta[row.mediaId].primary = true;
+        memory.meta[row.mediaId].meta = row.meta;
+        return clone(memory.meta[row.mediaId]);
+      }
+      return openDb().then(function (db) {
+        var tx = db.transaction("meta", "readwrite");
+        var store = tx.objectStore("meta");
+        return idbRequest(store.index("ownerKey").getAll(row.ownerKey)).then(
+          function (rows) {
+            demoteOtherPrimaries(rows, row.mediaId);
+            (rows || []).forEach(function (item) {
+              if (item.mediaId === row.mediaId) {
+                item.primary = true;
+                item.meta = row.meta;
+              }
+              store.put(item);
+            });
+            if (!(rows || []).some(function (item) {
+              return item.mediaId === row.mediaId;
+            })) {
+              store.put(row);
+            }
+            return txDone(tx).then(function () {
+              return clone(row);
+            });
+          }
+        );
       });
     });
   }
@@ -574,75 +554,113 @@
       return sha256Hex(original);
     }).then(function (sha) {
       var token = ownerShaOf(owner.type + ":" + owner.id, sha);
-      return findByOwnerSha(token).then(function (existing) {
-        if (existing) {
-          var err = MediaError("ALREADY_SAVED", "Already saved.");
-          err.existing = existing;
-          throw err;
+      var ownerKey = owner.type + ":" + owner.id;
+      function buildRow(rows) {
+        var photoCount = (rows || []).filter(function (item) {
+          return item.mediaClass === "photo";
+        }).length;
+        var fields = Object.assign({}, input.fields || {}, input, {
+          owner: owner,
+          mediaClass: mediaClass,
+          sha256: sha,
+          bytes: bytes,
+          mime: input.mime || (original && original.type) || "",
+          originalName: input.originalName || (original && original.name) || ""
+        });
+        if (mediaClass === "photo") {
+          fields.primary = photoCount === 0 ? true : !!fields.primary;
+        } else {
+          fields.primary = false;
         }
-        return list(owner).then(function (rows) {
-          var photoCount = rows.filter(function (row) {
-            return row.mediaClass === "photo";
-          }).length;
-          var fields = Object.assign({}, input.fields || {}, input, {
-            owner: owner,
-            mediaClass: mediaClass,
-            sha256: sha,
-            bytes: bytes,
-            mime: input.mime || (original && original.type) || "",
-            originalName: input.originalName || (original && original.name) || ""
+        var row = createMedia(fields);
+        var mime = row.mime || "application/octet-stream";
+        var parts = [
+          blobRecord(row.mediaId, "original", mime, bytes, original)
+        ];
+        if (mediaClass === "photo") {
+          if (input.display) {
+            parts.push(
+              blobRecord(
+                row.mediaId,
+                "display",
+                "image/jpeg",
+                sourceSize(input.display),
+                input.display
+              )
+            );
+          }
+          if (input.thumb) {
+            parts.push(
+              blobRecord(
+                row.mediaId,
+                "thumb",
+                "image/jpeg",
+                sourceSize(input.thumb),
+                input.thumb
+              )
+            );
+          }
+          row.roles = parts.map(function (part) {
+            return part.role;
           });
-          if (mediaClass === "photo") {
-            fields.primary = photoCount === 0 ? true : !!fields.primary;
-          } else {
-            fields.primary = false;
+        }
+        return { row: row, parts: parts };
+      }
+      function already(existing) {
+        var err = MediaError("ALREADY_SAVED", "Already saved.");
+        err.existing = existing;
+        throw err;
+      }
+      if (useMemory) {
+        var existingMem = null;
+        Object.keys(memory.meta).forEach(function (id) {
+          if (memory.meta[id].ownerSha === token) {
+            existingMem = memory.meta[id];
           }
-          var row = createMedia(fields);
-          var mime = row.mime || "application/octet-stream";
-          var parts = [
-            blobRecord(row.mediaId, "original", mime, bytes, original)
-          ];
-          if (mediaClass === "photo") {
-            if (input.display) {
-              parts.push(
-                blobRecord(
-                  row.mediaId,
-                  "display",
-                  "image/jpeg",
-                  sourceSize(input.display),
-                  input.display
-                )
-              );
-            }
-            if (input.thumb) {
-              parts.push(
-                blobRecord(
-                  row.mediaId,
-                  "thumb",
-                  "image/jpeg",
-                  sourceSize(input.thumb),
-                  input.thumb
-                )
-              );
-            }
-            row.roles = parts.map(function (part) {
-              return part.role;
-            });
-          }
-          var write = function () {
-            if (row.primary) {
-              return clearPrimaryOnOwner(row.ownerKey, row.mediaId).then(function () {
-                return writeAll(row, parts);
-              });
-            }
-            return writeAll(row, parts);
-          };
-          return write().then(function (saved) {
-            return maybePersist().then(function () {
-              return saved;
-            });
+        });
+        if (existingMem) {
+          already(clone(existingMem));
+        }
+        var built = buildRow(memoryList(ownerKey));
+        if (built.row.primary) {
+          demoteOtherPrimaries(memoryList(ownerKey), built.row.mediaId);
+        }
+        return writeAll(built.row, built.parts).then(function (saved) {
+          return maybePersist().then(function () {
+            return saved;
           });
         });
+      }
+      return openDb().then(function (db) {
+        var tx = db.transaction(["meta", "blobs"], "readwrite");
+        var metaStore = tx.objectStore("meta");
+        return idbRequest(metaStore.index("ownerSha").get(token)).then(
+          function (existing) {
+            if (existing) {
+              already(clone(existing));
+            }
+            return idbRequest(metaStore.index("ownerKey").getAll(ownerKey)).then(
+              function (rows) {
+                var built = buildRow(rows || []);
+                if (built.row.primary) {
+                  demoteOtherPrimaries(rows, built.row.mediaId);
+                  (rows || []).forEach(function (item) {
+                    metaStore.put(item);
+                  });
+                }
+                metaStore.put(built.row);
+                built.parts.forEach(function (part) {
+                  tx.objectStore("blobs").put(part);
+                });
+                return txDone(tx).then(function () {
+                  return maybePersist().then(function () {
+                    return clone(built.row);
+                  });
+                });
+              }
+            );
+          }
+        );
       });
     });
   }
@@ -673,37 +691,236 @@
     });
   }
 
+  function deleteBlobsFor(row, blobStore) {
+    var roles = row.roles && row.roles.length ? row.roles : ["original", "display", "thumb"];
+    roles.forEach(function (role) {
+      if (blobStore) {
+        blobStore.delete([row.mediaId, role]);
+      } else {
+        delete memory.blobs[row.mediaId + ":" + role];
+      }
+    });
+  }
+
+  function promoteFirstPhoto(rows, store) {
+    var photos = (rows || []).filter(function (item) {
+      return item.mediaClass === "photo";
+    });
+    if (!photos.length) {
+      return null;
+    }
+    if (photos.some(function (item) {
+      return item.primary;
+    })) {
+      return photos.filter(function (item) {
+        return item.primary;
+      })[0];
+    }
+    photos[0].primary = true;
+    photos[0].meta = stampMeta(photos[0], "commit");
+    if (store) {
+      store.put(photos[0]);
+    }
+    return photos[0];
+  }
+
   function remove(mediaId) {
     return getMeta(mediaId).then(function (row) {
-      var roles = row.roles && row.roles.length ? row.roles : ["original", "display", "thumb"];
-      var after = function () {
-        if (row.mediaClass === "photo" && row.primary) {
-          return promoteNextPrimary(row.owner);
-        }
-        return null;
-      };
       if (useMemory) {
         delete memory.meta[row.mediaId];
-        roles.forEach(function (role) {
-          delete memory.blobs[row.mediaId + ":" + role];
-        });
-        return Promise.resolve(after()).then(function () {
-          return { removed: row.mediaId };
-        });
+        deleteBlobsFor(row, null);
+        if (row.mediaClass === "photo" && row.primary) {
+          promoteFirstPhoto(memoryList(row.ownerKey), null);
+        }
+        return { removed: row.mediaId };
       }
       return openDb().then(function (db) {
         var tx = db.transaction(["meta", "blobs"], "readwrite");
-        tx.objectStore("meta").delete(row.mediaId);
-        roles.forEach(function (role) {
-          tx.objectStore("blobs").delete([row.mediaId, role]);
-        });
+        var metaStore = tx.objectStore("meta");
+        var blobStore = tx.objectStore("blobs");
+        metaStore.delete(row.mediaId);
+        deleteBlobsFor(row, blobStore);
+        if (row.mediaClass === "photo" && row.primary) {
+          return idbRequest(metaStore.index("ownerKey").getAll(row.ownerKey)).then(
+            function (rows) {
+              var remaining = (rows || []).filter(function (item) {
+                return item.mediaId !== row.mediaId;
+              });
+              promoteFirstPhoto(remaining, metaStore);
+              return txDone(tx).then(function () {
+                return { removed: row.mediaId };
+              });
+            }
+          );
+        }
         return txDone(tx).then(function () {
-          return after();
-        }).then(function () {
           return { removed: row.mediaId };
         });
       });
     });
+  }
+
+  function listAll() {
+    if (useMemory) {
+      return Promise.resolve(
+        Object.keys(memory.meta).map(function (id) {
+          return clone(memory.meta[id]);
+        })
+      );
+    }
+    return openDb().then(function (db) {
+      var tx = db.transaction("meta", "readonly");
+      return idbRequest(tx.objectStore("meta").getAll()).then(function (rows) {
+        return (rows || []).map(clone);
+      });
+    });
+  }
+
+  function removeByOwner(owner) {
+    return list(owner).then(function (rows) {
+      var i = 0;
+      function next() {
+        if (i >= rows.length) {
+          return Promise.resolve({ removed: rows.length });
+        }
+        var id = rows[i].mediaId;
+        i += 1;
+        return remove(id).then(next, next);
+      }
+      return next();
+    });
+  }
+
+  var BASE64 =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+  function bytesToBase64(source) {
+    return asArrayBuffer(source).then(function (buf) {
+      var bytes = new Uint8Array(buf);
+      var out = "";
+      var i;
+      for (i = 0; i < bytes.length; i += 3) {
+        var a = bytes[i];
+        var b = i + 1 < bytes.length ? bytes[i + 1] : 0;
+        var c = i + 2 < bytes.length ? bytes[i + 2] : 0;
+        out += BASE64[a >> 2];
+        out += BASE64[((a & 3) << 4) | (b >> 4)];
+        out += i + 1 < bytes.length ? BASE64[((b & 15) << 2) | (c >> 6)] : "=";
+        out += i + 2 < bytes.length ? BASE64[c & 63] : "=";
+      }
+      return out;
+    });
+  }
+
+  function base64ToBytes(text) {
+    var clean = String(text || "").replace(/=+$/, "");
+    var len = clean.length;
+    var out = [];
+    var i;
+    for (i = 0; i < len; i += 4) {
+      var a = BASE64.indexOf(clean.charAt(i));
+      var b = BASE64.indexOf(clean.charAt(i + 1));
+      var c = i + 2 < len ? BASE64.indexOf(clean.charAt(i + 2)) : -1;
+      var d = i + 3 < len ? BASE64.indexOf(clean.charAt(i + 3)) : -1;
+      out.push((a << 2) | (b >> 4));
+      if (c >= 0) {
+        out.push(((b & 15) << 4) | (c >> 2));
+      }
+      if (d >= 0) {
+        out.push(((c & 3) << 6) | d);
+      }
+    }
+    return new Uint8Array(out);
+  }
+
+  function exportBundle() {
+    return listAll().then(function (rows) {
+      var out = [];
+      var i = 0;
+      function next() {
+        if (i >= rows.length) {
+          return Promise.resolve(out);
+        }
+        var row = rows[i];
+        i += 1;
+        var roles = row.roles && row.roles.length ? row.roles : ["original"];
+        var blobs = [];
+        var r = 0;
+        function nextBlob() {
+          if (r >= roles.length) {
+            out.push({ meta: row, blobs: blobs });
+            return next();
+          }
+          var role = roles[r];
+          r += 1;
+          return getBlob(row.mediaId, role).then(
+            function (part) {
+              return bytesToBase64(part.blob).then(function (b64) {
+                blobs.push({
+                  role: part.role,
+                  mime: part.mime,
+                  bytes: part.bytes,
+                  base64: b64
+                });
+                return nextBlob();
+              });
+            },
+            function () {
+              return nextBlob();
+            }
+          );
+        }
+        return nextBlob();
+      }
+      return next();
+    });
+  }
+
+  function importBundle(items) {
+    var rows = Array.isArray(items) ? items : [];
+    var i = 0;
+    var added = 0;
+    var skipped = 0;
+    function next() {
+      if (i >= rows.length) {
+        return Promise.resolve({ added: added, skipped: skipped });
+      }
+      var item = rows[i] || {};
+      i += 1;
+      var meta = item.meta;
+      if (!meta || !meta.mediaId || !meta.owner) {
+        skipped += 1;
+        return next();
+      }
+      var token = meta.ownerSha || ownerShaOf(meta.ownerKey, meta.sha256);
+      return findByOwnerSha(token).then(function (existing) {
+        if (existing || memory.meta[meta.mediaId]) {
+          skipped += 1;
+          return next();
+        }
+        var parts = (item.blobs || []).map(function (part) {
+          return blobRecord(
+            meta.mediaId,
+            part.role || "original",
+            part.mime || meta.mime,
+            part.bytes,
+            base64ToBytes(part.base64)
+          );
+        });
+        if (!parts.length) {
+          skipped += 1;
+          return next();
+        }
+        return writeAll(createMedia(meta), parts).then(function () {
+          added += 1;
+          return next();
+        }, function () {
+          skipped += 1;
+          return next();
+        });
+      });
+    }
+    return next();
   }
 
   model.createMedia = createMedia;
@@ -786,10 +1003,14 @@
     save: save,
     update: update,
     list: list,
+    listAll: listAll,
     get: getMeta,
     blob: getBlob,
     remove: remove,
+    removeByOwner: removeByOwner,
     setPrimary: setPrimary,
+    exportBundle: exportBundle,
+    importBundle: importBundle,
     ownerKey: ownerKeyOf,
     ownerFromPage: ownerFromPage,
     returnHref: returnHref,

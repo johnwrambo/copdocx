@@ -282,29 +282,94 @@
     return dirty;
   }
 
-  function loadState() {
+  var diskError = "";
+
+  function readDisk() {
+    if (typeof localStorage === "undefined") {
+      return { ok: true, missing: true, data: null, error: "" };
+    }
+    var raw = "";
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        return;
-      }
-      var parsed = JSON.parse(raw);
-      state.officers = parsed.officers || [];
-      state.vehicles = parsed.vehicles || [];
-      state.shifts = parsed.shifts || [];
-      var dirty =
-        migrateAdminList(state.officers, "officers") ||
-        migrateAdminList(state.vehicles, "vehicles");
-      if (dirty) {
-        saveState();
-      }
-    } catch (error) {
-      state = { officers: [], vehicles: [], shifts: [] };
+      raw = localStorage.getItem(STORAGE_KEY) || "";
+    } catch (err) {
+      return {
+        ok: false,
+        missing: false,
+        data: null,
+        error: "Cannot read localStorage."
+      };
+    }
+    if (!raw) {
+      return { ok: true, missing: true, data: null, error: "" };
+    }
+    try {
+      return { ok: true, missing: false, data: JSON.parse(raw), error: "" };
+    } catch (err) {
+      return {
+        ok: false,
+        missing: false,
+        data: null,
+        error:
+          "Admin storage is damaged. Do not Save. Copy the site data out if you have a backup."
+      };
+    }
+  }
+
+  function writeDisk() {
+    if (diskError) {
+      return false;
+    }
+    if (typeof localStorage === "undefined") {
+      return true;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function adoptDisk() {
+    var disk = readDisk();
+    if (!disk.ok) {
+      diskError = disk.error;
+      return { ok: false, error: disk.error };
+    }
+    diskError = "";
+    if (disk.data) {
+      state.officers = disk.data.officers || [];
+      state.vehicles = disk.data.vehicles || [];
+      state.shifts = disk.data.shifts || [];
+    }
+    return { ok: true, error: "" };
+  }
+
+  function loadState() {
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      setStatus(fresh.error);
+      return;
+    }
+    var dirty =
+      migrateAdminList(state.officers, "officers") ||
+      migrateAdminList(state.vehicles, "vehicles");
+    if (dirty && !writeDisk()) {
+      setStatus("Could not write localStorage (quota or private mode).");
     }
   }
 
   function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return writeDisk();
+  }
+
+  function persistOrRollback() {
+    if (!writeDisk()) {
+      adoptDisk();
+      setStatus("Could not write localStorage (quota or private mode).");
+      return false;
+    }
+    return true;
   }
 
   function val(id) {
@@ -709,6 +774,11 @@
     btn.className = "action-button-danger compact";
     btn.textContent = "Remove";
     btn.addEventListener("click", function () {
+      var fresh = adoptDisk();
+      if (!fresh.ok) {
+        setStatus(fresh.error);
+        return;
+      }
       state[kind] = state[kind].filter(function (row) {
         if (kind === "officers") {
           return row.id !== id && row.officerId !== id;
@@ -730,7 +800,22 @@
           }
         });
       }
-      saveState();
+      if (!persistOrRollback()) {
+        return;
+      }
+      if (
+        window.COPDoc &&
+        COPDoc.media &&
+        typeof COPDoc.media.removeByOwner === "function"
+      ) {
+        var ownerType = kind === "officers" ? "OFFICER" : kind === "vehicles" ? "VEHICLE" : "";
+        if (ownerType) {
+          COPDoc.media.removeByOwner({ type: ownerType, id: id }).then(
+            function () {},
+            function () {}
+          );
+        }
+      }
       paint();
     });
     return btn;
@@ -1059,11 +1144,314 @@
     }
   }
 
+  function officerPickerHref(ownerType, objectId, officerId) {
+    if (!objectId) {
+      return "";
+    }
+    var ret = officerId
+      ? "officer.html?id=" + encodeURIComponent(officerId)
+      : "officer.html";
+    return (
+      "photo-picker.html?ownerType=" +
+      encodeURIComponent(ownerType) +
+      "&id=" +
+      encodeURIComponent(objectId) +
+      "&return=" +
+      encodeURIComponent(ret)
+    );
+  }
+
+  function parseCoordPair(lat, lng) {
+    var y = Number(lat);
+    var x = Number(lng);
+    if (!isFinite(y) || !isFinite(x)) {
+      return null;
+    }
+    if (y === 0 && x === 0) {
+      return null;
+    }
+    if (y < -90 || y > 90 || x < -180 || x > 180) {
+      return null;
+    }
+    return [y, x];
+  }
+
+  function officerPlaceKind(loc) {
+    var assoc = String(
+      (loc && (loc.association || loc.locationAssociation || loc.kind)) || ""
+    ).toLowerCase();
+    if (assoc === "work" || assoc === "office") {
+      return "work";
+    }
+    return "home";
+  }
+
+  function officerPlaceTitle(loc) {
+    var assoc = String(
+      (loc && (loc.association || loc.locationAssociation || loc.kind)) || ""
+    ).trim();
+    if (ADDR_KIND_LABELS[assoc]) {
+      return ADDR_KIND_LABELS[assoc];
+    }
+    return officerPlaceKind(loc) === "work" ? "Work" : "Home";
+  }
+
+  function collectOfficerPlaces(row) {
+    var places = [];
+    var seen = {};
+    function pushLoc(loc) {
+      if (!loc) {
+        return;
+      }
+      var addr = formatAddressLine(loc);
+      if (addr === "—") {
+        addr = "";
+      }
+      var pair = parseCoordPair(loc.latitude, loc.longitude);
+      if (!addr && !pair) {
+        return;
+      }
+      var key = (loc.locationId || "") + "|" + addr;
+      if (seen[key]) {
+        return;
+      }
+      seen[key] = true;
+      var kind = officerPlaceKind(loc);
+      places.push({
+        id: loc.locationId || "ofc-place-" + places.length,
+        kind: kind,
+        title: officerPlaceTitle(loc),
+        address: addr,
+        extra: TARGET_LABELS[loc.targetPriority] || "",
+        meta: [TARGET_LABELS[loc.targetPriority] || "", addr]
+          .filter(Boolean)
+          .join(" · "),
+        lat: pair ? pair[0] : "",
+        lng: pair ? pair[1] : "",
+        mapped: !!pair,
+        loc: loc
+      });
+    }
+    (row.locations || []).forEach(pushLoc);
+    if (!places.length) {
+      var address =
+        window.COPDoc && COPDoc.model && COPDoc.model.officerAddress
+          ? COPDoc.model.officerAddress(row)
+          : row.address || {};
+      pushLoc(address);
+    }
+    return places;
+  }
+
+  function appendOfficerFact(host, label, value) {
+    var text = String(value == null ? "" : value).trim();
+    if (!text || text === "—") {
+      return;
+    }
+    var row = document.createElement("div");
+    row.className = "snapshot-fact";
+    var dt = document.createElement("span");
+    dt.className = "snapshot-label";
+    dt.textContent = label;
+    var dd = document.createElement("span");
+    dd.className = "snapshot-value";
+    dd.textContent = text;
+    row.appendChild(dt);
+    row.appendChild(dd);
+    host.appendChild(row);
+  }
+
+  function paintOfficerFacts(row) {
+    var host = byId("officerSnapshotFacts");
+    if (!host) {
+      return;
+    }
+    host.replaceChildren();
+    appendOfficerFact(host, "Name", officerName(row));
+    appendOfficerFact(host, "Badge", row.badge);
+    appendOfficerFact(host, "Call sign", row.callSign);
+    appendOfficerFact(host, "Team", row.team);
+    appendOfficerFact(host, "Duty", DUTY_LABELS[row.duty] || row.duty);
+    appendOfficerFact(host, "Role", ROLE_LABELS[row.role] || row.role);
+    var eod = formatEod(row.eod);
+    appendOfficerFact(host, "EOD", eod === "—" ? "" : eod);
+    appendOfficerFact(host, "Gov phone", row.phoneGov);
+    appendOfficerFact(host, "Private phone", row.phonePrivate);
+  }
+
+  function paintOfficerObjectCard(list, options) {
+    options = options || {};
+    var card = document.createElement("article");
+    card.className = "case-object-card";
+    var photo = document.createElement("div");
+    photo.className = "case-object-photo media-block";
+    var body = document.createElement("div");
+    body.className = "case-object-body";
+    var title = document.createElement("strong");
+    title.textContent = options.title || "—";
+    var meta = document.createElement("p");
+    meta.className = "section-note";
+    meta.textContent = options.meta || "";
+    body.appendChild(title);
+    body.appendChild(meta);
+    card.appendChild(photo);
+    card.appendChild(body);
+    list.appendChild(card);
+    if (window.COPDoc && COPDoc.mediaCard && options.owner && options.owner.id) {
+      COPDoc.mediaCard.mount(photo, {
+        owner: options.owner,
+        compact: true,
+        photoTitle: "",
+        pickerHref: options.pickerHref || ""
+      });
+    } else {
+      var empty = document.createElement("div");
+      empty.className = "media-photo-placeholder";
+      empty.innerHTML =
+        '<span class="fow-photo-placeholder-mark" aria-hidden="true"></span><strong>No photo</strong>';
+      photo.appendChild(empty);
+    }
+  }
+
+  function paintOfficerLocations(row) {
+    var list = byId("officerLocations");
+    var empty = byId("officerLocationsEmpty");
+    var card = byId("officerLocationsCard");
+    if (!list) {
+      return;
+    }
+    var places = collectOfficerPlaces(row);
+    list.replaceChildren();
+    if (!places.length) {
+      if (empty) {
+        empty.hidden = false;
+      }
+      list.hidden = true;
+      if (card) {
+        card.hidden = false;
+      }
+      return;
+    }
+    if (empty) {
+      empty.hidden = true;
+    }
+    list.hidden = false;
+    if (card) {
+      card.hidden = false;
+    }
+    places.forEach(function (place) {
+      var locId = (place.loc && place.loc.locationId) || "";
+      var title = place.address || place.title;
+      var metaBits = [place.title, place.extra].filter(function (bit) {
+        return bit && bit !== title;
+      });
+      paintOfficerObjectCard(list, {
+        title: title,
+        meta: metaBits.join(" · "),
+        owner: locId ? { type: "LOCATION", id: locId } : null,
+        pickerHref: officerPickerHref("LOCATION", locId, row.id)
+      });
+    });
+  }
+
+  function paintOfficerCaseMap(row) {
+    var card = byId("officerCaseMapCard");
+    var host = byId("officerCaseMap");
+    var empty = byId("officerCaseMapEmpty");
+    var legend = byId("officerCaseMapLegend");
+    var list = byId("officerCaseMapList");
+    if (!card || !host) {
+      return;
+    }
+    var places = collectOfficerPlaces(row);
+    var mapped = places.filter(function (place) {
+      return place.mapped;
+    });
+    card.hidden = false;
+    if (!places.length) {
+      host.hidden = true;
+      if (legend) {
+        legend.hidden = true;
+      }
+      if (empty) {
+        empty.hidden = false;
+      }
+      return;
+    }
+    if (empty) {
+      empty.hidden = true;
+    }
+    if (legend && list) {
+      legend.hidden = false;
+      list.replaceChildren();
+      places.forEach(function (place) {
+        var item = document.createElement("li");
+        item.className = "case-map-list-item is-" + place.kind;
+        if (place.mapped) {
+          item.classList.add("is-mapped");
+        }
+        var kind = document.createElement("span");
+        kind.className = "case-map-key-dot is-" + place.kind;
+        var body = document.createElement("div");
+        var label = document.createElement("strong");
+        label.textContent = place.title;
+        var addr = document.createElement("span");
+        addr.textContent = place.address || "No address";
+        body.appendChild(label);
+        body.appendChild(addr);
+        item.appendChild(kind);
+        item.appendChild(body);
+        if (place.mapped) {
+          item.tabIndex = 0;
+          item.setAttribute("role", "button");
+          item.addEventListener("click", function () {
+            if (window.COPDoc && COPDoc.locationMap && COPDoc.locationMap.focus) {
+              COPDoc.locationMap.focus(host, place.id);
+            }
+          });
+          item.addEventListener("keydown", function (event) {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              item.click();
+            }
+          });
+        }
+        list.appendChild(item);
+      });
+    }
+    if (!mapped.length) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    if (window.COPDoc && COPDoc.locationMap && COPDoc.locationMap.displayMany) {
+      COPDoc.locationMap.displayMany(host, mapped);
+    }
+  }
+
   function paintOfficerView(id) {
     var row = findOfficer(id);
     var missing = byId("officerMissing");
     var snap = byId("officerSnapshot");
     var edit = chromePrimary();
+    var mapCard = byId("officerCaseMapCard");
+    var locCard = byId("officerLocationsCard");
+    var qualsCard = byId("officerQualsCard");
+    var equipCard = byId("officerEquipCard");
+    function hideExtras(hide) {
+      if (mapCard) {
+        mapCard.hidden = hide;
+      }
+      if (locCard) {
+        locCard.hidden = hide;
+      }
+      if (qualsCard) {
+        qualsCard.hidden = hide;
+      }
+      if (equipCard) {
+        equipCard.hidden = hide;
+      }
+    }
     if (!row) {
       if (missing) {
         missing.hidden = false;
@@ -1074,6 +1462,7 @@
       if (edit) {
         edit.hidden = true;
       }
+      hideExtras(true);
       setStatus("Officer not found.");
       return;
     }
@@ -1087,64 +1476,46 @@
       edit.hidden = false;
       edit.href = "officer-form.html?id=" + encodeURIComponent(row.id);
     }
+    hideExtras(false);
     if (byId("officerViewTitle")) {
       byId("officerViewTitle").textContent = officerName(row) || "Officer";
     }
     document.title = (officerName(row) || "Officer") + " — COPDoc";
-    setViewText("viewName", officerName(row));
-    setViewText("viewBadge", row.badge);
-    setViewText("viewCallSign", row.callSign);
-    setViewText("viewTeam", row.team);
-    setViewText("viewDuty", DUTY_LABELS[row.duty] || row.duty);
-    setViewText("viewRole", ROLE_LABELS[row.role] || row.role);
-    setViewText("viewEod", formatEod(row.eod) === "—" ? "" : formatEod(row.eod));
-    if (byId("viewEod")) {
-      byId("viewEod").textContent = formatEod(row.eod);
-    }
-    setViewText("viewPhoneGov", row.phoneGov);
-    setViewText("viewPhonePrivate", row.phonePrivate);
+    paintOfficerFacts(row);
     if (window.COPDoc && COPDoc.mediaCard && row.id) {
       COPDoc.mediaCard.mount(byId("officerMedia"), {
-        owner: { type: "OFFICER", id: row.id }
+        owner: { type: "OFFICER", id: row.id },
+        photoTitle: "Photo",
+        fileTitle: "Files",
+        pickerHref: officerPickerHref("OFFICER", row.id, row.id),
+        filesHost: byId("officerSnapshotFiles"),
+        galleryButton: byId("officerPhotoGalleryButton"),
+        galleryWrap: byId("officerPhotoGalleryWrap"),
+        showEmptyFiles: false,
+        thumbs: false
       });
     }
-    var address =
-      window.COPDoc && COPDoc.model && COPDoc.model.officerAddress
-        ? COPDoc.model.officerAddress(row)
-        : row.address || {};
-    setViewText(
-      "viewAddrKind",
-      ADDR_KIND_LABELS[address.locationAssociation] ||
-        ADDR_KIND_LABELS[address.kind] ||
-        address.locationAssociation ||
-        address.kind
-    );
-    setViewText(
-      "viewTarget",
-      TARGET_LABELS[address.targetPriority] || address.targetPriority
-    );
-    if (byId("viewAddress")) {
-      byId("viewAddress").textContent = formatAddressLine(address);
-    }
-    if (byId("viewLatLong")) {
-      byId("viewLatLong").textContent = displayOrDash(
-        address.latLong ||
-          (address.latitude && address.longitude
-            ? address.latitude + ", " + address.longitude
-            : "")
-      );
-    }
+    paintOfficerCaseMap(row);
+    paintOfficerLocations(row);
     var quals = labeledList(row.qualifications, QUAL_LABELS);
     if (row.qualOther) {
       quals = quals === "—" ? row.qualOther : quals + "; " + row.qualOther;
     }
-    setViewText("viewQuals", quals === "—" ? "" : quals);
     if (byId("viewQuals")) {
       byId("viewQuals").textContent = quals;
     }
-    setViewText("viewEquip", labeledList(row.equipment, EQUIP_LABELS));
+    if (qualsCard) {
+      qualsCard.hidden = quals === "—";
+    }
+    var equip = labeledList(row.equipment, EQUIP_LABELS);
+    if (byId("viewEquip")) {
+      byId("viewEquip").textContent = equip;
+    }
     if (byId("viewEquipNotes")) {
       byId("viewEquipNotes").textContent = row.equipNotes || "";
+    }
+    if (equipCard) {
+      equipCard.hidden = equip === "—" && !row.equipNotes;
     }
   }
 
@@ -1538,6 +1909,11 @@
         }
       }
     }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      setStatus(fresh.error);
+      return;
+    }
     var updating = Boolean(editingOfficerId);
     var existing = findOfficer(editingOfficerId) || {};
     var nextId =
@@ -1584,8 +1960,10 @@
     } else {
       state.officers.push(record);
     }
+    if (!persistOrRollback()) {
+      return;
+    }
     editingOfficerId = record.id;
-    saveState();
     paintAdminFormMediaLinks("officer", record.id);
     rememberOfficerSignature();
     if (byId("addOfficerButton")) {
@@ -1630,6 +2008,11 @@
       !editingVehicleId &&
       quiet
     ) {
+      return;
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      setStatus(fresh.error);
       return;
     }
     var existing = findVehicle(editingVehicleId) || {};
@@ -1680,8 +2063,10 @@
     } else {
       state.vehicles.push(record);
     }
+    if (!persistOrRollback()) {
+      return;
+    }
     editingVehicleId = record.id;
-    saveState();
     paintAdminFormMediaLinks("vehicle", record.id);
     if (byId("addVehicleButton")) {
       byId("addVehicleButton").textContent = "Save vehicle";
@@ -1832,6 +2217,11 @@
       setStatus("Pick a date and an officer.");
       return;
     }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      setStatus(fresh.error);
+      return;
+    }
     state.shifts.push({
       id: newId("sft"),
       date: date,
@@ -1841,7 +2231,9 @@
       end: val("shiftEnd") || "14:00",
       assignment: val("shiftAssignment") || "field"
     });
-    saveState();
+    if (!persistOrRollback()) {
+      return;
+    }
     paint();
     setStatus("Shift added.", true);
   }
@@ -1934,6 +2326,15 @@
       rememberVehicleSignature();
     }
     paint();
+  }
+
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("storage", function (event) {
+      if (event.key !== STORAGE_KEY) {
+        return;
+      }
+      adoptDisk();
+    });
   }
 
   if (document.readyState === "loading") {

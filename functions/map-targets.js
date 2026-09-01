@@ -421,13 +421,19 @@
         icon: markerIcon(row),
         title: row.subject + " — " + row.address
       });
-      marker.bindPopup(
-        "<strong>" +
-          row.subject +
-          "</strong><br>" +
-          row.address +
-          (row.association ? "<br>" + row.association : "")
-      );
+      var popup = document.createElement("div");
+      var name = document.createElement("strong");
+      name.textContent = row.subject || "";
+      popup.appendChild(name);
+      if (row.address) {
+        popup.appendChild(document.createElement("br"));
+        popup.appendChild(document.createTextNode(row.address));
+      }
+      if (row.association) {
+        popup.appendChild(document.createElement("br"));
+        popup.appendChild(document.createTextNode(row.association));
+      }
+      marker.bindPopup(popup);
       marker.on("click", function () {
         listId = key;
         selectRow(row.id, false);

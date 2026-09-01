@@ -591,6 +591,19 @@
       return;
     }
     var m = model();
+    if (m && m.store && typeof m.store.loadFromDisk === "function") {
+      m.store.loadFromDisk();
+    }
+    if (m && m.store && typeof m.store.diskError === "function" && m.store.diskError()) {
+      body.replaceChildren();
+      empty.hidden = false;
+      wrap.hidden = true;
+      empty.textContent = m.store.diskError();
+      if (window.COPDoc && COPDoc.setAppBarStatus) {
+        COPDoc.setAppBarStatus(m.store.diskError());
+      }
+      return;
+    }
     var all = snapshots();
     var rows = filtered();
     body.replaceChildren();
@@ -726,6 +739,11 @@
       return;
     }
     m.store.loadFromDisk();
+    if (typeof m.store.diskError === "function" && m.store.diskError()) {
+      if (window.COPDoc && COPDoc.setAppBarStatus) {
+        COPDoc.setAppBarStatus(m.store.diskError());
+      }
+    }
     var id = queryId();
     var issuedCard = byId("warrantsIssuedCard");
     var vehiclesCard = byId("leadVehiclesCard");
@@ -846,7 +864,14 @@
   }
 
   function csvEscape(value) {
+    var m = model();
+    if (m && typeof m.csvCell === "function") {
+      return m.csvCell(value);
+    }
     var text = String(value == null ? "" : value);
+    if (/^[=+\-@\t]/.test(text)) {
+      text = "'" + text;
+    }
     if (/[",\n\r]/.test(text)) {
       return '"' + text.replace(/"/g, '""') + '"';
     }

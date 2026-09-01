@@ -21,7 +21,10 @@
     if (!isFinite(teamNum) || teamNum < 1) {
       teamNum = 3;
     }
-    var when = opts.date instanceof Date ? opts.date : new Date();
+    var when = opts.date;
+    if (!when || typeof when.getFullYear !== "function") {
+      when = new Date();
+    }
     var stamp =
       String(when.getFullYear()) +
       padDay(when.getMonth() + 1) +
@@ -85,6 +88,7 @@
         vehicles: [],
         locations: [],
         subjects: [],
+        links: [],
         narratives: [],
         supervisorSummary: {
           text: "",
@@ -112,6 +116,9 @@
     }
     if (!Array.isArray(built.subjects)) {
       built.subjects = [];
+    }
+    if (!Array.isArray(built.links)) {
+      built.links = [];
     }
     if (!Array.isArray(built.narratives)) {
       built.narratives = [];

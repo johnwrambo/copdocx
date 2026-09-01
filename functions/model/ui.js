@@ -469,6 +469,9 @@
     }
     if (model.store) {
       model.store.loadFromDisk();
+      if (typeof model.store.diskError === "function" && model.store.diskError()) {
+        setStatus(model.store.diskError());
+      }
     }
     var qid = queryLeadId();
     if (qid && model.store) {

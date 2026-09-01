@@ -213,6 +213,25 @@ function run() {
       );
     })
     .then(function () {
+      return media.removeByOwner({ type: "VEHICLE", id: "veh_1" }).then(function () {
+        return media.list({ type: "VEHICLE", id: "veh_1" });
+      }).then(function (rows) {
+        check("removeByOwner clears vehicle media", rows.length === 0);
+      });
+    })
+    .then(function () {
+      return media.exportBundle().then(function (bundle) {
+        check("exportBundle has person media", bundle.length >= 1);
+        media._resetForTests();
+        return media.importBundle(bundle).then(function (stats) {
+          check("importBundle adds rows", stats.added >= 1, stats);
+          return media.list({ type: "PERSON", id: "p_1" });
+        });
+      }).then(function (rows) {
+        check("imported person media", rows.length >= 1);
+      });
+    })
+    .then(function () {
       if (fail) {
         console.log(fail + " failed");
         process.exit(1);

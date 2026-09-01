@@ -19,9 +19,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.18.9"
+          data-version="0.19.4"
         >
-          Version 0.18.9
+          Version 0.19.4
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -327,9 +327,27 @@
         <div class="row">
           <div class="field field-span-2 search-field">
             <label for="linkedPersonSearch">Linked subject</label>
-            <input type="text" id="linkedPersonSearch" data-field="linkedPersonSearch" autocomplete="off" />
+            <input
+              type="text"
+              id="linkedPersonSearch"
+              data-field="linkedPersonSearch"
+              autocomplete="off"
+              placeholder="Search saved subjects"
+            />
             <input type="hidden" id="linkedPersonId" data-field="linkedPersonId" />
             <ul class="search-results" role="listbox" hidden></ul>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <span class="field-caption">Why they are linked (one or more)</span>
+            <div class="link-reasons" data-field="linkReasons"></div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label for="linkNotes">Notes</label>
+            <textarea id="linkNotes" data-field="linkNotes" rows="2"></textarea>
           </div>
         </div>
       </fieldset>
@@ -349,11 +367,13 @@
     <script src="data/us-places.js"></script>
     <script src="data/vehicles.js"></script>
     <script src="functions/vehicles.js"></script>
+    <script src="data/link-reasons.js"></script>
     <script src="functions/model/util.js"></script>
     <script src="functions/model/location.js"></script>
     <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/person.js"></script>
     <script src="functions/model/lead.js"></script>
+    <script src="functions/model/link.js"></script>
     <script src="functions/model/encounter.js"></script>
     <script src="functions/model/store.js"></script>
     <script src="functions/model/autosave.js"></script>

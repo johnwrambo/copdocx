@@ -9,7 +9,15 @@
   var LEAD_KEY = "copdocx.store.v1";
   var ADMIN_KEY = "copdoc.admin.v1";
   var BOOKIN_KEY = "alien-book-in.saved-records.v1";
-  var MAX_BYTES = 10 * 1024 * 1024;
+  var MAX_BYTES = 32 * 1024 * 1024;
+  var SETTINGS_KEY = "copdocx.settings.v1";
+  var MAP_MARKUP_KEY = "copdocx.map.markup.v1";
+  var MAP_VIEWS_KEY = "copdocx.map.views.v1";
+  var MAP_LAYERS_KEY = "copdocx.map.layers.v1";
+  var MAP_ICONS_KEY = "copdocx.map.icons.v1";
+  var MAP_BASEMAP_KEY = "copdocx.location-map.basemap";
+  var TEMPLATE_KEY = "opdoc.narrative.templates.v2";
+  var TEMPLATE_LEGACY_KEY = "opdoc.narrative.templates.v1";
 
   var TYPE_META = [
     { key: "leads", label: "Leads" },
@@ -35,10 +43,10 @@
 
   function appVersion() {
     if (typeof document === "undefined") {
-      return "0.18.9";
+      return "0.19.4";
     }
     var el = document.getElementById("appVersion");
-    return (el && el.getAttribute("data-version")) || "0.18.9";
+    return (el && el.getAttribute("data-version")) || "0.19.4";
   }
 
   function todayStamp() {
@@ -52,19 +60,43 @@
     );
   }
 
-  function readJson(key, fallback) {
+  function readStored(key) {
     if (typeof localStorage === "undefined") {
-      return fallback;
+      return { ok: true, missing: true, value: null, error: "" };
+    }
+    var raw = "";
+    try {
+      raw = localStorage.getItem(key) || "";
+    } catch (error) {
+      return {
+        ok: false,
+        missing: false,
+        value: null,
+        error: "Cannot read localStorage."
+      };
+    }
+    if (!raw) {
+      return { ok: true, missing: true, value: null, error: "" };
     }
     try {
-      var raw = localStorage.getItem(key);
-      if (!raw) {
-        return fallback;
-      }
-      return JSON.parse(raw);
+      return { ok: true, missing: false, value: JSON.parse(raw), error: "" };
     } catch (error) {
+      return {
+        ok: false,
+        missing: false,
+        value: null,
+        error:
+          "Storage is damaged. Import stopped. Do not Save over it."
+      };
+    }
+  }
+
+  function readJson(key, fallback) {
+    var stored = readStored(key);
+    if (!stored.ok || stored.missing || stored.value == null) {
       return fallback;
     }
+    return stored.value;
   }
 
   function writeJson(key, value) {
@@ -157,6 +189,39 @@
     }
   }
 
+  function asRecordList(value) {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    if (value && typeof value === "object") {
+      return Object.keys(value).map(function (id) {
+        return value[id];
+      });
+    }
+    return [];
+  }
+
+  function rowUpdatedAt(row) {
+    if (!row) {
+      return "";
+    }
+    return String(
+      (row.meta && (row.meta.updatedAt || row.meta.committedAt || row.meta.createdAt)) ||
+        row.updatedAt ||
+        row.createdAt ||
+        ""
+    );
+  }
+
+  function incomingIsNewer(current, incoming) {
+    var localAt = rowUpdatedAt(current);
+    var nextAt = rowUpdatedAt(incoming);
+    if (localAt && nextAt && localAt > nextAt) {
+      return false;
+    }
+    return true;
+  }
+
   function emptyLeadStore() {
     return {
       schema: LEAD_KEY,
@@ -231,6 +296,62 @@
     });
   }
 
+  function collectSupportState() {
+    var templates =
+      readJson(TEMPLATE_KEY, null) || readJson(TEMPLATE_LEGACY_KEY, []);
+    var basemap = "";
+    if (typeof localStorage !== "undefined") {
+      try {
+        basemap = localStorage.getItem(MAP_BASEMAP_KEY) || "";
+      } catch (error) {
+        basemap = "";
+      }
+    }
+    return {
+      settings: readJson(SETTINGS_KEY, {}),
+      map: {
+        markup: readJson(MAP_MARKUP_KEY, null),
+        views: readJson(MAP_VIEWS_KEY, null),
+        layers: readJson(MAP_LAYERS_KEY, null),
+        icons: readJson(MAP_ICONS_KEY, null),
+        basemap: basemap
+      },
+      templates: Array.isArray(templates) ? templates : []
+    };
+  }
+
+  function applySupportState(parsed) {
+    if (
+      parsed.settings &&
+      typeof parsed.settings === "object" &&
+      Object.keys(parsed.settings).length
+    ) {
+      writeJson(SETTINGS_KEY, parsed.settings);
+    }
+    if (parsed.map && typeof parsed.map === "object") {
+      if (parsed.map.markup) {
+        writeJson(MAP_MARKUP_KEY, parsed.map.markup);
+      }
+      if (parsed.map.views) {
+        writeJson(MAP_VIEWS_KEY, parsed.map.views);
+      }
+      if (parsed.map.layers) {
+        writeJson(MAP_LAYERS_KEY, parsed.map.layers);
+      }
+      if (parsed.map.icons) {
+        writeJson(MAP_ICONS_KEY, parsed.map.icons);
+      }
+      if (parsed.map.basemap && typeof localStorage !== "undefined") {
+        try {
+          localStorage.setItem(MAP_BASEMAP_KEY, String(parsed.map.basemap));
+        } catch (error) {}
+      }
+    }
+    if (Array.isArray(parsed.templates) && parsed.templates.length) {
+      writeJson(TEMPLATE_KEY, parsed.templates);
+    }
+  }
+
   function collectExport(types, from, to) {
     var out = {
       format: FORMAT,
@@ -247,6 +368,33 @@
     types.forEach(function (type) {
       out[type] = filterRecords(listType(type), type, from, to);
     });
+    if (types.indexOf("encounters") !== -1) {
+      var encIds = {};
+      out.encounters.forEach(function (row) {
+        if (row && row.encounterId) {
+          encIds[row.encounterId] = true;
+        }
+      });
+      var extraBook = readBookin().filter(function (row) {
+        return row && row.encounterId && encIds[row.encounterId];
+      });
+      var haveBook = {};
+      out.bookin.forEach(function (row) {
+        if (row && row.id) {
+          haveBook[row.id] = true;
+        }
+      });
+      extraBook.forEach(function (row) {
+        if (row && row.id && !haveBook[row.id]) {
+          out.bookin.push(row);
+          haveBook[row.id] = true;
+        }
+      });
+    }
+    var support = collectSupportState();
+    out.settings = support.settings;
+    out.map = support.map;
+    out.templates = support.templates;
     return out;
   }
 
@@ -257,7 +405,13 @@
   }
 
   function csvEscape(value) {
+    if (global.COPDoc && COPDoc.model && typeof COPDoc.model.csvCell === "function") {
+      return COPDoc.model.csvCell(value);
+    }
     var text = String(value == null ? "" : value);
+    if (/^[=+\-@\t]/.test(text)) {
+      text = "'" + text;
+    }
     if (/[",\n\r]/.test(text)) {
       return '"' + text.replace(/"/g, '""') + '"';
     }
@@ -472,15 +626,41 @@
       empty.exportedAt = data.exportedAt || "";
       return empty;
     }
+    if (
+      data.format === "copdocx-demo-import" ||
+      data.schema === "copdocx.import.v1"
+    ) {
+      empty.officers = asRecordList((data.admin && data.admin.officers) || data.officers);
+      empty.vehicles = asRecordList((data.admin && data.admin.vehicles) || data.vehicles);
+      empty.shifts = asRecordList((data.admin && data.admin.shifts) || data.shifts);
+      empty.leads = asRecordList(data.leads);
+      empty.encounters = asRecordList(data.encounters);
+      empty.bookin = asRecordList(data.bookin || data.records);
+      empty.format = FORMAT;
+      empty.appVersion = data.appVersion || data.appStamp || "";
+      empty.exportedAt = data.exportedAt || "";
+      return empty;
+    }
+    if (data.leadId && data.schema === "copdocx.lead.v1") {
+      empty.leads = [data];
+      empty.format = FORMAT;
+      empty.appVersion = data.appVersion || "";
+      empty.exportedAt = data.exportedAt || "";
+      return empty;
+    }
     if (data.format && data.format !== FORMAT && data.format !== "leads-array") {
       throw new Error("Unknown export format: " + data.format);
     }
     TYPE_META.forEach(function (meta) {
-      empty[meta.key] = Array.isArray(data[meta.key]) ? data[meta.key] : [];
+      empty[meta.key] = asRecordList(data[meta.key]);
     });
     empty.format = data.format || FORMAT;
     empty.appVersion = data.appVersion || "";
     empty.exportedAt = data.exportedAt || "";
+    empty.settings = data.settings && typeof data.settings === "object" ? data.settings : null;
+    empty.map = data.map && typeof data.map === "object" ? data.map : null;
+    empty.templates = Array.isArray(data.templates) ? data.templates : null;
+    empty.media = Array.isArray(data.media) ? data.media : null;
     return empty;
   }
 
@@ -545,6 +725,10 @@
         skipped += 1;
         return;
       }
+      if (!incomingIsNewer(current, row)) {
+        skipped += 1;
+        return;
+      }
       byId[id] = row;
       updated += 1;
     });
@@ -586,69 +770,120 @@
   }
 
   function applyImport(parsed, types) {
-    var result = { added: 0, updated: 0, skipped: 0 };
+    var result = { added: 0, updated: 0, skipped: 0, error: "" };
     types.forEach(function (type) {
       var cleaned = cleanList(type, parsed[type]);
       result.skipped += cleaned.skipped;
-      if (type === "encounters") {
-        var encStore = readLeadStore();
-        encStore.encounters = encStore.encounters || {};
-        cleaned.rows.forEach(function (row) {
-          var id = row.encounterId;
-          var current = encStore.encounters[id];
-          if (!current) {
-            encStore.encounters[id] = row;
-            result.added += 1;
-            return;
-          }
-          if (jsonEqual(current, row)) {
-            result.skipped += 1;
-            return;
-          }
-          encStore.encounters[id] = row;
-          result.updated += 1;
-        });
-        writeJson(LEAD_KEY, encStore);
-        return;
-      }
-      if (type === "leads") {
-        var store = readLeadStore();
-        cleaned.rows.forEach(function (snap) {
-          var id = snap.leadId;
-          var current = store.leads[id];
-          if (!current) {
+      if (type === "encounters" || type === "leads") {
+        var stored = readStored(LEAD_KEY);
+        if (!stored.ok) {
+          result.error = result.error || stored.error;
+          return;
+        }
+        var store = stored.value || emptyLeadStore();
+        store.leads = store.leads || {};
+        store.people = store.people || {};
+        store.encounters = store.encounters || {};
+        var added = 0;
+        var updated = 0;
+        var skipped = 0;
+        if (type === "encounters") {
+          cleaned.rows.forEach(function (row) {
+            var id = row.encounterId;
+            var current = store.encounters[id];
+            if (!current) {
+              store.encounters[id] = row;
+              added += 1;
+              return;
+            }
+            if (jsonEqual(current, row)) {
+              skipped += 1;
+              return;
+            }
+            if (!incomingIsNewer(current, row)) {
+              skipped += 1;
+              return;
+            }
+            store.encounters[id] = row;
+            updated += 1;
+          });
+        } else {
+          cleaned.rows.forEach(function (snap) {
+            var id = snap.leadId;
+            var current = store.leads[id];
+            if (!current) {
+              store.leads[id] = snap;
+              rememberPeople(store, snap);
+              added += 1;
+              return;
+            }
+            if (jsonEqual(current, snap)) {
+              skipped += 1;
+              return;
+            }
+            if (!incomingIsNewer(current, snap)) {
+              skipped += 1;
+              return;
+            }
             store.leads[id] = snap;
             rememberPeople(store, snap);
-            result.added += 1;
-            return;
-          }
-          if (jsonEqual(current, snap)) {
-            result.skipped += 1;
-            return;
-          }
-          store.leads[id] = snap;
-          rememberPeople(store, snap);
-          result.updated += 1;
-        });
-        writeJson(LEAD_KEY, store);
+            updated += 1;
+          });
+        }
+        if (!writeJson(LEAD_KEY, store)) {
+          result.error =
+            result.error ||
+            "Could not write localStorage (quota or private mode).";
+          return;
+        }
+        result.added += added;
+        result.updated += updated;
+        result.skipped += skipped;
         return;
       }
       if (type === "bookin") {
-        var mergedBook = mergeById(readBookin(), cleaned.rows, "bookin");
-        writeJson(BOOKIN_KEY, mergedBook.rows);
+        var bookStored = readStored(BOOKIN_KEY);
+        if (!bookStored.ok) {
+          result.error = result.error || bookStored.error;
+          return;
+        }
+        var existingBook = Array.isArray(bookStored.value)
+          ? bookStored.value
+          : [];
+        var mergedBook = mergeById(existingBook, cleaned.rows, "bookin");
+        if (!writeJson(BOOKIN_KEY, mergedBook.rows)) {
+          result.error =
+            result.error ||
+            "Could not write localStorage (quota or private mode).";
+          return;
+        }
         result.added += mergedBook.added;
         result.updated += mergedBook.updated;
         result.skipped += mergedBook.skipped;
         return;
       }
-      var admin = readAdmin();
+      var adminStored = readStored(ADMIN_KEY);
+      if (!adminStored.ok) {
+        result.error = result.error || adminStored.error;
+        return;
+      }
+      var admin = adminStored.value || emptyAdmin();
+      admin.officers = admin.officers || [];
+      admin.vehicles = admin.vehicles || [];
+      admin.shifts = admin.shifts || [];
       var merged = mergeById(admin[type] || [], cleaned.rows, type);
       admin[type] = merged.rows;
-      writeJson(ADMIN_KEY, admin);
+      if (!writeJson(ADMIN_KEY, admin)) {
+        result.error =
+          result.error ||
+          "Could not write localStorage (quota or private mode).";
+        return;
+      }
       result.added += merged.added;
       result.updated += merged.updated;
       result.skipped += merged.skipped;
     });
+    applySupportState(parsed);
     return result;
   }
 
@@ -744,7 +979,7 @@
       '<label><input type="radio" name="fileImportMode" value="all" checked> Everything in the file</label>' +
       '<label><input type="radio" name="fileImportMode" value="selected"> Selected types</label>' +
       '<div id="fileImportTypes" class="check-grid"></div>' +
-      '<p class="section-note">Merges by id. Exact duplicates skip. Same id with different data is replaced by the file.</p>' +
+      '<p class="section-note">Merges by id. Exact duplicates skip. A newer local record is kept. JSON backups also restore settings, map, templates, and photos.</p>' +
       "</div>" +
       '<div class="dialog-actions">' +
       '<button type="button" class="action-button-secondary" id="fileImportCancel">Cancel</button>' +
@@ -832,28 +1067,54 @@
       return;
     }
     var day = todayStamp();
-    if (format === "json" || format === "both") {
-      downloadBlob(
-        "COPDoc_export_" + day + ".json",
-        "application/json",
-        JSON.stringify(bundle, null, 2)
-      );
-    }
-    if (format === "csv" || format === "both") {
-      types.forEach(function (type) {
-        var rows = bundle[type] || [];
-        if (!rows.length) {
-          return;
-        }
+    function finish(mediaNote) {
+      if (format === "json" || format === "both") {
         downloadBlob(
-          "COPDoc_" + type + "_" + day + ".csv",
-          "text/csv;charset=utf-8",
-          typeCsv(type, rows)
+          "COPDoc_export_" + day + ".json",
+          "application/json",
+          JSON.stringify(bundle, null, 2)
         );
-      });
+      }
+      if (format === "csv" || format === "both") {
+        types.forEach(function (type) {
+          var rows = bundle[type] || [];
+          if (!rows.length) {
+            return;
+          }
+          downloadBlob(
+            "COPDoc_" + type + "_" + day + ".csv",
+            "text/csv;charset=utf-8",
+            typeCsv(type, rows)
+          );
+        });
+      }
+      hideDialogs();
+      setStatus("Export downloaded." + (mediaNote || ""), true);
     }
-    hideDialogs();
-    setStatus("Export downloaded.", true);
+    if (
+      (format === "json" || format === "both") &&
+      global.COPDoc &&
+      COPDoc.media &&
+      typeof COPDoc.media.exportBundle === "function"
+    ) {
+      setStatus("Collecting photos and files…");
+      COPDoc.media.exportBundle().then(
+        function (rows) {
+          bundle.media = rows || [];
+          finish(
+            bundle.media.length
+              ? " " + bundle.media.length + " media file(s)."
+              : ""
+          );
+        },
+        function () {
+          bundle.media = [];
+          finish("");
+        }
+      );
+      return;
+    }
+    finish("");
   }
 
   function openFileImport() {
@@ -869,7 +1130,7 @@
       return;
     }
     if (file.size > MAX_BYTES) {
-      setStatus("That file is larger than 10 MB.");
+      setStatus("That file is larger than 32 MB.");
       return;
     }
     var reader = new FileReader();
@@ -963,22 +1224,64 @@
       setStatus("Pick at least one record type to import.");
       return;
     }
-    var result = applyImport(pendingParsed, types);
+    var parsed = pendingParsed;
+    var result = applyImport(parsed, types);
     hideDialogs();
     pendingParsed = null;
-    setStatus(
-      "Imported " +
-        result.added +
-        " new, updated " +
-        result.updated +
-        ", skipped " +
-        result.skipped +
-        ".",
-      true
-    );
-    window.setTimeout(function () {
-      window.location.reload();
-    }, 400);
+    function finish(mediaNote) {
+      var wrote = result.added > 0 || result.updated > 0 || Boolean(mediaNote);
+      if (result.error) {
+        setStatus(
+          result.error +
+            (wrote
+              ? " Some records were written (" +
+                result.added +
+                " new, " +
+                result.updated +
+                " updated)."
+              : "")
+        );
+      } else {
+        setStatus(
+          "Imported " +
+            result.added +
+            " new, updated " +
+            result.updated +
+            ", skipped " +
+            result.skipped +
+            "." +
+            (mediaNote || ""),
+          true
+        );
+      }
+      if (wrote || parsed.settings || parsed.map || parsed.templates) {
+        window.setTimeout(function () {
+          window.location.reload();
+        }, 400);
+      }
+    }
+    if (
+      parsed.media &&
+      parsed.media.length &&
+      global.COPDoc &&
+      COPDoc.media &&
+      typeof COPDoc.media.importBundle === "function"
+    ) {
+      COPDoc.media.importBundle(parsed.media).then(
+        function (mediaResult) {
+          finish(
+            mediaResult && mediaResult.added
+              ? " Media: " + mediaResult.added + " file(s)."
+              : ""
+          );
+        },
+        function () {
+          finish("");
+        }
+      );
+      return;
+    }
+    finish("");
   }
 
   var api = {

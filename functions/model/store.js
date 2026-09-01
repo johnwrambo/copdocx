@@ -28,27 +28,67 @@
   }
 
   var state = emptyState();
+  var diskError = "";
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
 
+  function normalizeState(next) {
+    next = next || emptyState();
+    next.schema = next.schema || model.STORE_SCHEMA || "copdocx.store.v1";
+    next.people = next.people || {};
+    next.leads = next.leads || {};
+    next.encounters = next.encounters || {};
+    next.currentLeadId = next.currentLeadId || "";
+    Object.keys(next.leads).forEach(function (id) {
+      if (typeof model.ensureRecordMeta === "function") {
+        model.ensureRecordMeta(next.leads[id]);
+      }
+    });
+    Object.keys(next.encounters).forEach(function (id) {
+      if (typeof model.ensureRecordMeta === "function") {
+        model.ensureRecordMeta(next.encounters[id]);
+      }
+    });
+    return next;
+  }
+
   function readDisk() {
     if (typeof localStorage === "undefined") {
-      return null;
+      return { ok: true, missing: true, data: null, error: "" };
+    }
+    var raw = "";
+    try {
+      raw = localStorage.getItem(STORAGE_KEY) || "";
+    } catch (err) {
+      return {
+        ok: false,
+        missing: false,
+        data: null,
+        error: "Cannot read localStorage."
+      };
+    }
+    if (!raw) {
+      return { ok: true, missing: true, data: null, error: "" };
     }
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        return null;
-      }
-      return JSON.parse(raw);
+      return { ok: true, missing: false, data: JSON.parse(raw), error: "" };
     } catch (err) {
-      return null;
+      return {
+        ok: false,
+        missing: false,
+        data: null,
+        error:
+          "Lead storage is damaged. Do not Save. Copy the site data out if you have a backup."
+      };
     }
   }
 
   function writeDisk() {
+    if (diskError) {
+      return false;
+    }
     if (typeof localStorage === "undefined") {
       return true;
     }
@@ -60,24 +100,21 @@
     }
   }
 
-  function loadFromDisk() {
+  function adoptDisk() {
     var disk = readDisk();
-    if (disk) {
-      state = disk;
-      state.people = state.people || {};
-      state.leads = state.leads || {};
-      state.encounters = state.encounters || {};
-      Object.keys(state.leads).forEach(function (id) {
-        if (typeof model.ensureRecordMeta === "function") {
-          model.ensureRecordMeta(state.leads[id]);
-        }
-      });
-      Object.keys(state.encounters).forEach(function (id) {
-        if (typeof model.ensureRecordMeta === "function") {
-          model.ensureRecordMeta(state.encounters[id]);
-        }
-      });
+    if (!disk.ok) {
+      diskError = disk.error;
+      return { ok: false, error: disk.error };
     }
+    diskError = "";
+    if (disk.data) {
+      state = normalizeState(disk.data);
+    }
+    return { ok: true, error: "" };
+  }
+
+  function loadFromDisk() {
+    adoptDisk();
     return state;
   }
 
@@ -102,6 +139,10 @@
     if (!snapshot || !snapshot.leadId) {
       return { ok: false, leadId: "", error: "Snapshot is missing a leadId." };
     }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return { ok: false, leadId: snapshot.leadId, error: fresh.error };
+    }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.leads[snapshot.leadId]
       ? clone(state.leads[snapshot.leadId])
@@ -122,6 +163,7 @@
       rememberPeople(record);
     }
     if (!writeDisk()) {
+      adoptDisk();
       return {
         ok: false,
         leadId: record.leadId,
@@ -168,9 +210,21 @@
 
   function upsertPerson(person) {
     if (!person || !person.personId) {
-      return;
+      return { ok: false, error: "Person is missing a personId." };
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return { ok: false, error: fresh.error };
     }
     state.people[person.personId] = clone(person);
+    if (!writeDisk()) {
+      adoptDisk();
+      return {
+        ok: false,
+        error: "Could not write localStorage (quota or private mode)."
+      };
+    }
+    return { ok: true, error: "" };
   }
 
   function saveEncounter(record, opts) {
@@ -179,6 +233,14 @@
         ok: false,
         encounterId: "",
         error: "Encounter is missing an encounterId."
+      };
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return {
+        ok: false,
+        encounterId: record.encounterId,
+        error: fresh.error
       };
     }
     var mode = (opts && opts.mode) || "commit";
@@ -204,6 +266,9 @@
     if (!Array.isArray(saved.subjects)) {
       saved.subjects = [];
     }
+    if (!Array.isArray(saved.links)) {
+      saved.links = [];
+    }
     if (!Array.isArray(saved.narratives)) {
       saved.narratives = [];
     }
@@ -212,6 +277,7 @@
     }
     state.encounters[saved.encounterId] = clone(saved);
     if (!writeDisk()) {
+      adoptDisk();
       return {
         ok: false,
         encounterId: saved.encounterId,
@@ -226,18 +292,50 @@
     return row ? clone(row) : null;
   }
 
+  function dropOwnedMedia(encounter) {
+    var media = root.media;
+    if (!media || typeof media.removeByOwner !== "function" || !encounter) {
+      return;
+    }
+    function forget(owner) {
+      media.removeByOwner(owner).then(function () {}, function () {});
+    }
+    forget({ type: "ENCOUNTER", id: encounter.encounterId });
+    (encounter.vehicles || []).forEach(function (vehicle) {
+      if (vehicle && vehicle.vehicleId) {
+        forget({ type: "VEHICLE", id: vehicle.vehicleId });
+      }
+    });
+    (encounter.locations || []).forEach(function (location) {
+      if (location && location.locationId) {
+        forget({ type: "LOCATION", id: location.locationId });
+      }
+    });
+  }
+
   function deleteEncounter(encounterId) {
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return {
+        ok: false,
+        encounterId: encounterId || "",
+        error: fresh.error
+      };
+    }
     if (!encounterId || !state.encounters[encounterId]) {
       return { ok: false, encounterId: encounterId || "", error: "Encounter not found." };
     }
+    var doomed = clone(state.encounters[encounterId]);
     delete state.encounters[encounterId];
     if (!writeDisk()) {
+      adoptDisk();
       return {
         ok: false,
         encounterId: encounterId,
         error: "Could not write localStorage (quota or private mode)."
       };
     }
+    dropOwnedMedia(doomed);
     return { ok: true, encounterId: encounterId, error: "" };
   }
 
@@ -277,11 +375,29 @@
       return state.currentLeadId || "";
     },
     setCurrentLeadId: function (leadId) {
+      var fresh = adoptDisk();
+      if (!fresh.ok) {
+        return;
+      }
       state.currentLeadId = leadId || "";
-      writeDisk();
+      if (!writeDisk()) {
+        adoptDisk();
+      }
     },
     getState: function () {
       return clone(state);
+    },
+    diskError: function () {
+      return diskError;
     }
   };
+
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("storage", function (event) {
+      if (event.key !== STORAGE_KEY) {
+        return;
+      }
+      adoptDisk();
+    });
+  }
 })(typeof window !== "undefined" ? window : globalThis);

@@ -3,7 +3,13 @@
  * Nested cards stay in the JSON download.
  */
 function csvEscape(value) {
+  if (window.COPDoc && COPDoc.model && typeof COPDoc.model.csvCell === "function") {
+    return COPDoc.model.csvCell(value);
+  }
   var text = String(value == null ? "" : value);
+  if (/^[=+\-@\t]/.test(text)) {
+    text = "'" + text;
+  }
   if (/[",\n\r]/.test(text)) {
     return '"' + text.replace(/"/g, '""') + '"';
   }

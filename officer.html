@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Officer</title>
     <link rel="stylesheet" href="style/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
   </head>
   <body data-page="officer" data-admin-page="officer-view">
     <header class="app-bar">
@@ -13,9 +19,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.18.9"
+          data-version="0.19.4"
         >
-          Version 0.18.9
+          Version 0.19.4
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -30,75 +36,54 @@
         <div id="officerMissing" class="records-empty" hidden>Officer not found.</div>
         <div id="officerSnapshot" class="media-view-layout">
           <div id="officerMedia" class="media-block"></div>
-          <div class="snapshot-grid">
-            <div class="snapshot-item">
-              <p class="snapshot-label">Name</p>
-              <p id="viewName" class="snapshot-value">—</p>
-            </div>
-            <div class="snapshot-item">
-              <p class="snapshot-label">Badge</p>
-              <p id="viewBadge" class="snapshot-value">—</p>
-            </div>
-            <div class="snapshot-item">
-              <p class="snapshot-label">Call sign</p>
-              <p id="viewCallSign" class="snapshot-value">—</p>
-            </div>
-            <div class="snapshot-item">
-              <p class="snapshot-label">Team</p>
-              <p id="viewTeam" class="snapshot-value">—</p>
-            </div>
-            <div class="snapshot-item">
-              <p class="snapshot-label">Duty</p>
-              <p id="viewDuty" class="snapshot-value">—</p>
-            </div>
-            <div class="snapshot-item">
-              <p class="snapshot-label">Role</p>
-              <p id="viewRole" class="snapshot-value">—</p>
-            </div>
-            <div class="snapshot-item">
-              <p class="snapshot-label">EOD</p>
-              <p id="viewEod" class="snapshot-value">—</p>
-            </div>
-            <div class="snapshot-item">
-              <p class="snapshot-label">Gov phone</p>
-              <p id="viewPhoneGov" class="snapshot-value">—</p>
-            </div>
-            <div class="snapshot-item">
-              <p class="snapshot-label">Private phone</p>
-              <p id="viewPhonePrivate" class="snapshot-value">—</p>
-            </div>
+          <div id="officerSnapshotSide" class="snapshot-side">
+            <div id="officerSnapshotFacts" class="snapshot-facts"></div>
+            <p id="officerPhotoGalleryWrap" hidden>
+              <button
+                type="button"
+                id="officerPhotoGalleryButton"
+                class="action-button-secondary"
+              >
+                Open photo gallery
+              </button>
+            </p>
+            <div id="officerSnapshotFiles" class="snapshot-files" hidden></div>
           </div>
         </div>
       </fieldset>
 
-      <fieldset class="card-static">
-        <legend>Location</legend>
-        <div class="snapshot-grid">
-          <div class="snapshot-item">
-            <p class="snapshot-label">Association</p>
-            <p id="viewAddrKind" class="snapshot-value">—</p>
-          </div>
-          <div class="snapshot-item">
-            <p class="snapshot-label">Target</p>
-            <p id="viewTarget" class="snapshot-value">—</p>
-          </div>
-          <div class="snapshot-item snapshot-span">
-            <p class="snapshot-label">Address</p>
-            <p id="viewAddress" class="snapshot-value">—</p>
-          </div>
-          <div class="snapshot-item">
-            <p class="snapshot-label">Lat / Long</p>
-            <p id="viewLatLong" class="snapshot-value">—</p>
+      <fieldset class="card-static" id="officerCaseMapCard">
+        <legend>Officer map</legend>
+        <p id="officerCaseMapEmpty" class="records-empty">
+          No mapped locations. Resolve an address on the form.
+        </p>
+        <div class="case-map-layout">
+          <div
+            id="officerCaseMap"
+            class="location-map lead-case-map"
+            data-location-map
+            hidden
+            role="img"
+            aria-label="Officer home and work locations"
+          ></div>
+          <div id="officerCaseMapLegend" class="case-map-legend" hidden>
+            <ul id="officerCaseMapList" class="case-map-list"></ul>
           </div>
         </div>
       </fieldset>
 
-      <fieldset class="card-static">
+      <fieldset class="card-static" id="officerLocationsCard">
+        <legend>Locations</legend>
+        <p id="officerLocationsEmpty" class="records-empty">No locations.</p>
+        <div id="officerLocations" class="case-object-list" hidden></div>
+      </fieldset>
+
+      <fieldset class="card-static" id="officerQualsCard">
         <legend>Qualifications</legend>
         <p id="viewQuals" class="snapshot-value">—</p>
       </fieldset>
 
-      <fieldset class="card-static">
+      <fieldset class="card-static" id="officerEquipCard">
         <legend>Equipment issued</legend>
         <p id="viewEquip" class="snapshot-value">—</p>
         <p id="viewEquipNotes" class="field-caption"></p>
@@ -116,6 +101,12 @@
     <script src="functions/model/autosave.js"></script>
     <script src="functions/model/media.js"></script>
     <script src="functions/media-card.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="functions/location-map.js"></script>
     <script src="functions/admin.js"></script>
   </body>
 </html>

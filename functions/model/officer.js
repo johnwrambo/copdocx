@@ -89,12 +89,15 @@
     if (!officer) {
       return officer;
     }
-    var loc = officer.locations && officer.locations[0];
-    if (placeHasData(officer.address) && !placeHasData(loc)) {
-      officer.locations = [locationFromAddress(officer.address)];
-    }
-    if (placeHasData(loc) && !placeHasData(officer.address)) {
-      officer.address = addressFromLocation(loc);
+    if (placeHasData(officer.address)) {
+      var next = locationFromAddress(officer.address);
+      var prev = officer.locations && officer.locations[0];
+      if (prev && prev.locationId && !next.locationId) {
+        next.locationId = prev.locationId;
+      }
+      officer.locations = [next];
+    } else if (officer.locations && placeHasData(officer.locations[0])) {
+      officer.address = addressFromLocation(officer.locations[0]);
     }
     if (!Array.isArray(officer.locations)) {
       officer.locations = [];
@@ -147,9 +150,6 @@
     if (!built.id) {
       built.id = built.officerId;
     }
-    if (placeHasData(built.address) && !(built.locations && built.locations.length)) {
-      built.locations = [locationFromAddress(built.address)];
-    }
     if (!Array.isArray(built.locations)) {
       built.locations = [];
     }
@@ -159,10 +159,7 @@
     if (!Array.isArray(built.equipment)) {
       built.equipment = [];
     }
-    if (placeHasData(built.locations[0]) && !placeHasData(built.address)) {
-      built.address = addressFromLocation(built.locations[0]);
-    }
-    return built;
+    return syncOfficerPlaces(built);
   }
 
   model.createOfficer = createOfficer;
