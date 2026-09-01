@@ -8,6 +8,12 @@
     />
     <title>Mobile Target sheet</title>
     <link rel="stylesheet" href="style/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
   </head>
   <body data-page="mobile-target-sheet">
     <header class="app-bar">
@@ -16,9 +22,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.19.5"
+          data-version="0.23.0"
         >
-          Version 0.19.5
+          Version 0.23.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -32,6 +38,13 @@
           <span>Mobile Target sheet</span>
           <small>Field target sheet</small>
         </div>
+        <button
+          type="button"
+          id="saveTargetSheetPageButton"
+          class="action-button"
+        >
+          Save Target sheet
+        </button>
       </nav>
 
       <div
@@ -157,6 +170,14 @@
           </div>
         </section>
 
+        <section id="targetWarrantsCard" class="fow-card fow-priority-card" hidden>
+          <header class="fow-card-header">
+            <span class="fow-card-tag fow-card-tag-warrant">Wnt</span>
+            <h3>Warrants</h3>
+          </header>
+          <div id="targetWarrantsList" class="fow-warrant-list"></div>
+        </section>
+
         <section class="fow-field-reference" aria-labelledby="fieldReferenceTitle">
           <h2 id="fieldReferenceTitle" class="fow-visually-hidden">
             Field reference
@@ -181,7 +202,7 @@
                 id="targetMapLink"
                 href="#"
                 class="fow-map-button"
-                data-not-built="Open target location in Maps"
+                hidden
               >
                 Open in Maps
               </a>
@@ -189,7 +210,7 @@
                 id="copyTargetPinButton"
                 type="button"
                 class="fow-map-button fow-map-button-secondary"
-                data-not-built="Copy target location pin"
+                hidden
               >
                 Copy pin
               </button>
@@ -224,6 +245,29 @@
               No vehicle photos loaded.
             </div>
           </section>
+
+          <section id="targetCaseMapCard" class="fow-card fow-priority-card" hidden>
+            <header class="fow-card-header">
+              <span class="fow-card-tag fow-card-tag-location">Map</span>
+              <h3>Case map</h3>
+            </header>
+            <p id="targetCaseMapEmpty" class="fow-inline-empty">
+              No mapped locations.
+            </p>
+            <div class="case-map-layout">
+              <div
+                id="targetCaseMap"
+                class="location-map lead-case-map"
+                data-location-map
+                hidden
+                role="img"
+                aria-label="Target home, work, and vehicle locations"
+              ></div>
+              <div id="targetCaseMapLegend" class="case-map-legend" hidden>
+                <ul id="targetCaseMapList" class="case-map-list"></ul>
+              </div>
+            </div>
+          </section>
         </section>
 
         <section class="fow-supporting-details" aria-labelledby="supportingDetailsTitle">
@@ -251,7 +295,7 @@
             </dl>
           </details>
 
-          <details class="fow-card fow-secondary-card">
+          <details id="targetOperationCard" class="fow-card fow-secondary-card">
             <summary>Operation assignment</summary>
             <dl class="fow-data-list">
               <dt>Team / arrest team</dt>
@@ -354,6 +398,13 @@
     <script src="functions/model/lead.js"></script>
     <script src="functions/model/store.js"></script>
     <script src="functions/model/media.js"></script>
+    <script src="data/countries.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="functions/location-map.js"></script>
     <script src="functions/leads.js"></script>
   </body>
 </html>

@@ -8,6 +8,7 @@ function fillSelect(select, items, placeholderText, getValue, getLabel) {
   if (!select) {
     return;
   }
+  var current = select.value;
   select.replaceChildren();
 
   const placeholderOption = document.createElement("option");
@@ -29,6 +30,26 @@ function fillSelect(select, items, placeholderText, getValue, getLabel) {
         : String(item);
     select.appendChild(option);
   });
+  if (current) {
+    var still = Array.prototype.some.call(select.options, function (option) {
+      return option.value === current;
+    });
+    if (still) {
+      select.value = current;
+    }
+  }
+}
+
+function setSelectValue(select, value) {
+  if (!select) {
+    return "";
+  }
+  var next = value == null ? "" : String(value);
+  var ok = Array.prototype.some.call(select.options, function (option) {
+    return option.value === next;
+  });
+  select.value = ok ? next : "";
+  return select.value;
 }
 
 function formatLicensePlate(el) {
@@ -95,9 +116,10 @@ function bindVehicleCard(card) {
     fillSelect(modelSelect, models, "Select a Model");
   }
 
-  function fillBodyStyleOptions() {
+  function fillBodyStyleOptions(forceSuggest) {
     const make = makeSelect ? makeSelect.value : "";
     const model = modelSelect ? modelSelect.value : "";
+    const current = bodySelect ? bodySelect.value : "";
     const styles =
       typeof bodyStylesForMakeModel === "function"
         ? bodyStylesForMakeModel(make, model)
@@ -105,6 +127,14 @@ function bindVehicleCard(card) {
           ? VEHICLE_BODY_STYLES
           : [];
     fillSelect(bodySelect, styles, "Select a Body Style");
+    var suggested =
+      typeof suggestBodyStyle === "function" ? suggestBodyStyle(make, model) : "";
+    if (!forceSuggest && current && setSelectValue(bodySelect, current)) {
+      return;
+    }
+    if (suggested) {
+      setSelectValue(bodySelect, suggested);
+    }
   }
 
   fillSelect(
@@ -123,7 +153,7 @@ function bindVehicleCard(card) {
       return state.code;
     },
     function (state) {
-      return state.code + " — " + state.label;
+      return state.code;
     }
   );
 
@@ -149,12 +179,12 @@ function bindVehicleCard(card) {
   if (makeSelect) {
     makeSelect.addEventListener("change", function () {
       fillModelOptions();
-      fillBodyStyleOptions();
+      fillBodyStyleOptions(true);
     });
   }
   if (modelSelect) {
     modelSelect.addEventListener("change", function () {
-      fillBodyStyleOptions();
+      fillBodyStyleOptions(true);
     });
   }
 

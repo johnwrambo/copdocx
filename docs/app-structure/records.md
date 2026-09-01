@@ -5,7 +5,7 @@ Every record type uses **list → view → form**. Admin dashboard is the hub: c
 ## Navigation (end state)
 
 - **List** — table. Primary: Add {record}.
-- **View** — snapshot. Primary: Edit. Lead view: Book-in, Issue I-200, Issue I-205 if **committed**.
+- **View** — snapshot. Primary: Edit. Case view (`case.html`): Book-in, Issue I-200, Issue I-205 if **committed**. `lead.html?id=` redirects to `case.html?id=`. Associations: a PERSON link jumps to `case.html?id=` when that person is the subject of another **committed** lead. A **Linked cases** line lists this subject’s other committed cases and committed cases that link this person. Drafts do not jump.
 - **Form** — add (no id) or edit (`?id=`). Primary: Save (commit). Secondary: **Back to {origin}** (`committedAt` → view, else list).
 - **Add** skips view.
 - After **Save**, go to the view (**except** leads until the triad exists — see Interim).
@@ -72,7 +72,7 @@ On **committed** views that have an owner id, paint the shared media widgets fro
 
 | View | Owner passed to the widget |
 | --- | --- |
-| `lead.html` | **One widget per object:** subject `PERSON`, each case `VEHICLE`, each `LOCATION`. Photos attach to the object they depict, not the lead. |
+| `case.html` (alias `lead.html`) | **One widget per object:** subject `PERSON` on the folder card, each case `VEHICLE`, each `LOCATION`. Photos attach to the object they depict, not the lead. |
 | `officer.html` | `OFFICER` (portrait of that officer) |
 | `vehicle.html` | `VEHICLE` (photos of that unit) |
 | `encounter.html` (view, when it exists) / encounter form snapshot | Scene files on `ENCOUNTER`; people/cars/places use their own owners |

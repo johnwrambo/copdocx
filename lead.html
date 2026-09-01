@@ -3,117 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Lead</title>
-    <link rel="stylesheet" href="style/style.css" />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
+    <title>Case</title>
+    <script>
+      (function () {
+        var q = window.location.search || "";
+        window.location.replace("case.html" + q);
+      })();
+    </script>
   </head>
-  <body data-page="lead">
-    <header class="app-bar">
-      <div class="app-bar-info">
-        <span class="app-bar-product">COPDoc</span>
-        <span
-          id="appVersion"
-          class="app-version"
-          data-version="0.19.5"
-        >
-          Version 0.19.5
-        </span>
-        <span id="currentDate" class="app-bar-date"></span>
-      </div>
-      <div class="app-bar-navrow" id="appBarNavRow"></div>
-      <p id="appBarStatus" class="app-bar-status" hidden></p>
-    </header>
-
-    <div class="page page-wide">
-      <fieldset class="card-static">
-        <legend id="leadViewTitle">Lead</legend>
-        <p class="section-note">Current snapshot. Edit to change the record.</p>
-        <div id="leadMissing" class="records-empty" hidden>Lead not found.</div>
-        <div id="leadSnapshot" class="media-view-layout">
-          <div id="leadSubjectMedia" class="media-block"></div>
-          <div id="leadSnapshotSide" class="snapshot-side">
-            <div id="leadSnapshotFacts" class="snapshot-facts"></div>
-            <div id="leadSnapshotFiles" class="snapshot-files" hidden></div>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset class="card-static" id="leadCaseMapCard">
-        <legend>Case map</legend>
-        <p id="leadCaseMapEmpty" class="records-empty">
-          No mapped locations. Resolve an address on the form.
-        </p>
-        <div class="case-map-layout">
-          <div
-            id="leadCaseMap"
-            class="location-map lead-case-map"
-            data-location-map
-            hidden
-            role="img"
-            aria-label="Subject home, work, and vehicle locations"
-          ></div>
-          <div id="leadCaseMapLegend" class="case-map-legend" hidden>
-            <ul id="leadCaseMapList" class="case-map-list"></ul>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset class="card-static" id="leadVehiclesCard">
-        <legend>Vehicles</legend>
-        <p id="leadVehiclesEmpty" class="records-empty">No vehicles.</p>
-        <div id="leadVehicles" class="case-object-list" hidden></div>
-      </fieldset>
-
-      <fieldset class="card-static" id="leadLocationsCard">
-        <legend>Locations</legend>
-        <p id="leadLocationsEmpty" class="records-empty">No locations.</p>
-        <div id="leadLocations" class="case-object-list" hidden></div>
-      </fieldset>
-
-      <fieldset class="card-static" id="warrantsIssuedCard">
-        <legend>Warrants issued</legend>
-        <p id="warrantsIssuedEmpty" class="records-empty">
-          No I-200 or I-205 issued yet.
-        </p>
-        <div id="warrantsIssuedTableWrap" hidden>
-          <table class="records-table">
-            <thead>
-              <tr>
-                <th>Form</th>
-                <th>Date</th>
-                <th>File no</th>
-                <th>Officer</th>
-                <th>File</th>
-              </tr>
-            </thead>
-            <tbody id="warrantsIssuedBody"></tbody>
-          </table>
-        </div>
-      </fieldset>
-    </div>
-
-    <script src="functions/app-bar.js"></script>
-    <script src="functions/date.js"></script>
-    <script src="functions/lead-source.js"></script>
-    <script src="functions/model/util.js"></script>
-    <script src="functions/model/lead.js"></script>
-    <script src="functions/model/person.js"></script>
-    <script src="functions/model/location.js"></script>
-    <script src="functions/model/store.js"></script>
-    <script src="functions/model/media.js"></script>
-    <script src="functions/media-card.js"></script>
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
-    <script src="functions/location-map.js"></script>
-    <script src="functions/leads.js"></script>
-    <script src="functions/lead-csv.js"></script>
+  <body>
+    <p>
+      <a id="caseRedirectLink" href="case.html">Open Case view</a>
+    </p>
+    <script>
+      document.getElementById("caseRedirectLink").href =
+        "case.html" + (window.location.search || "");
+    </script>
   </body>
 </html>

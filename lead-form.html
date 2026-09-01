@@ -41,22 +41,23 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.19.5"
+          data-version="0.23.0"
         >
-          Version 0.19.5
+          Version 0.23.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
       <div class="app-bar-navrow" id="appBarNavRow"></div>
       <p id="appBarStatus" class="app-bar-status" hidden></p>
     </header>
-    <div id="followUpPanel" class="follow-up-panel" hidden>
-      <div id="followUpList" class="follow-up-list"></div>
-    </div>
+    <nav id="pageJumpBar" class="page-jump-bar" aria-label="On this page">
+      <span class="page-jump-label">On this page</span>
+      <div id="pageJumpList" class="page-jump-list"></div>
+    </nav>
 
     <div class="page">
       <form id="leadForm" class="lead-form" novalidate>
-        <section class="stage" data-stage="source">
+        <section class="stage" data-stage="source" id="lead-stage-source">
           <header class="stage-head">
             <button type="button" class="stage-toggle" aria-expanded="true">Source</button>
           </header>
@@ -113,13 +114,21 @@
           </div>
         </section>
 
-        <section class="stage" data-stage="subject">
+        <section class="stage" data-stage="subject" id="lead-stage-subject">
           <header class="stage-head">
             <button type="button" class="stage-toggle" aria-expanded="true">Subject</button>
           </header>
           <div class="stage-body">
         <fieldset data-card="lead" data-name-card>
           <legend>Subject</legend>
+          <div class="section-note card-media-row" id="leadFormMediaLinks" hidden>
+            <div id="leadFormPhoto" class="card-media-thumb" data-card-photo></div>
+            <p class="card-media-actions">
+              <a id="leadFormAddPhoto" href="photo-picker.html">Add photo</a>
+              ·
+              <a id="leadFormAddFile" href="file-upload.html">Add file</a>
+            </p>
+          </div>
           <div class="row row-3">
             <div class="field">
               <label for="lastName">Last Name</label>
@@ -227,11 +236,6 @@
               <input type="text" id="lexId" name="lexId" data-field="lexId" autocomplete="off" />
             </div>
           </div>
-          <p class="section-note" id="leadFormMediaLinks" hidden>
-            <a id="leadFormAddPhoto" href="photo-picker.html">Add photo</a>
-            ·
-            <a id="leadFormAddFile" href="file-upload.html">Add file</a>
-          </p>
         </fieldset>
 
         <div id="aliasList" class="card-list"></div>
@@ -252,7 +256,7 @@
           </div>
         </section>
 
-        <section class="stage" data-stage="people">
+        <section class="stage" data-stage="people" id="lead-stage-people">
           <header class="stage-head">
             <button type="button" class="stage-toggle" aria-expanded="true">People around them</button>
             <button type="button" id="stageAddRelationship" class="action-button-secondary stage-add">Add relationship</button>
@@ -268,7 +272,7 @@
           </div>
         </section>
 
-        <section class="stage" data-stage="vehicles">
+        <section class="stage" data-stage="vehicles" id="lead-stage-vehicles">
           <header class="stage-head">
             <button type="button" class="stage-toggle" aria-expanded="true">Vehicles</button>
             <button type="button" id="stageAddVehicle" class="action-button-secondary stage-add">Add vehicle</button>
@@ -284,7 +288,7 @@
           </div>
         </section>
 
-        <section class="stage" data-stage="places">
+        <section class="stage" data-stage="places" id="lead-stage-places">
           <header class="stage-head">
             <button type="button" class="stage-toggle" aria-expanded="true">Places</button>
             <button type="button" id="stageAddLocation" class="action-button-secondary stage-add">Add location</button>
@@ -300,7 +304,7 @@
           </div>
         </section>
 
-        <section class="stage" data-stage="criminal">
+        <section class="stage" data-stage="criminal" id="lead-stage-criminal">
           <header class="stage-head">
             <button type="button" class="stage-toggle" aria-expanded="true">Criminal / immigration</button>
           </header>
@@ -464,16 +468,6 @@
           </div>
         </section>
 
-        <section class="stage" data-stage="followups">
-          <header class="stage-head">
-            <button type="button" class="stage-toggle" aria-expanded="true">Come back later</button>
-          </header>
-          <div class="stage-body">
-            <p class="field-caption">Park a person, vehicle, or location from the header (+ Person / + Vehicle / + Location) without filling a full card.</p>
-            <div id="followUpStageList" class="follow-up-list"></div>
-          </div>
-        </section>
-
         <div id="baseballOutputPanel" class="baseball-output" hidden>
           <label for="baseballCardOutput" class="baseball-output-label">
             Baseball card
@@ -556,6 +550,14 @@
     <template id="vehicleCardTemplate">
       <fieldset data-card="vehicle">
         <legend>Vehicle</legend>
+        <div class="section-note card-media-row" data-card-media hidden>
+          <div class="card-media-thumb" data-card-photo></div>
+          <p class="card-media-actions">
+            <a data-card-add-photo href="photo-picker.html">Add photo</a>
+            ·
+            <a data-card-add-file href="file-upload.html">Add file</a>
+          </p>
+        </div>
         <div class="row row-4">
           <div class="field">
             <label for="licensePlate">Plate</label>
@@ -592,11 +594,6 @@
             <input type="text" id="vin" name="vin" data-field="vin" autocomplete="off" />
           </div>
         </div>
-        <p class="section-note" data-card-media hidden>
-          <a data-card-add-photo href="photo-picker.html">Add photo</a>
-          ·
-          <a data-card-add-file href="file-upload.html">Add file</a>
-        </p>
         <div class="row">
           <div class="field field-span-2">
             <label for="registeredOwner">Registered Owner</label>
@@ -634,6 +631,15 @@
     <template id="locationCardTemplate">
       <fieldset data-card="location">
         <legend>Location</legend>
+        <input type="hidden" id="pinColor" name="pinColor" data-field="pinColor" />
+        <div class="section-note card-media-row" data-card-media hidden>
+          <div class="card-media-thumb" data-card-photo></div>
+          <p class="card-media-actions">
+            <a data-card-add-photo href="photo-picker.html">Add photo</a>
+            ·
+            <a data-card-add-file href="file-upload.html">Add file</a>
+          </p>
+        </div>
         <div class="row">
           <div class="field">
             <label for="locationAssociation">Association</label>
@@ -725,11 +731,6 @@
         <div class="location-map" data-location-map hidden></div>
         <p class="section-note location-map-hint" data-location-map-hint hidden>
           Drag the pin or click the map to correct the location.
-        </p>
-        <p class="section-note" data-card-media hidden>
-          <a data-card-add-photo href="photo-picker.html">Add photo</a>
-          ·
-          <a data-card-add-file href="file-upload.html">Add file</a>
         </p>
       </fieldset>
     </template>
@@ -1170,9 +1171,11 @@
     <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/link.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/model/media.js"></script>
     <script src="functions/model/collect.js"></script>
     <script src="functions/model/hydrate.js"></script>
     <script src="functions/model/autosave.js"></script>
+    <script src="functions/media-card.js"></script>
     <script src="functions/cards.js"></script>
     <script src="functions/workflow.js"></script>
     <script src="functions/baseballcard.js"></script>

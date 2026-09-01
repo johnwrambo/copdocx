@@ -321,6 +321,11 @@
 
       var compact = !!options.compact;
       var pickerHref = String(options.pickerHref || "").trim();
+      if (compact && !photos.length) {
+        host.hidden = true;
+        return;
+      }
+      host.hidden = false;
       var photoBox = document.createElement("fieldset");
       photoBox.className = "card-static media-photo-card" + (compact ? " is-compact" : "");
       if (options.photoTitle !== "") {

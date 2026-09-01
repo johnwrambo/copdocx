@@ -61,6 +61,7 @@
     return (
       page === "leads" ||
       page === "lead" ||
+      page === "case" ||
       page === "lead-form" ||
       page === "mobile-target-sheet" ||
       page === "i200-form" ||
@@ -183,8 +184,8 @@
           backLabel = "Back to officer";
         } else if (returnTo.indexOf("vehicle-form") === 0) {
           backLabel = "Back to vehicle";
-        } else if (returnTo.indexOf("lead.html") === 0) {
-          backLabel = "Back to lead";
+        } else if (returnTo.indexOf("lead.html") === 0 || returnTo.indexOf("case.html") === 0) {
+          backLabel = "Back to case";
         } else if (returnTo.indexOf("officer.html") === 0) {
           backLabel = "Back to officer";
         } else if (returnTo.indexOf("vehicle.html") === 0) {
@@ -192,7 +193,7 @@
         }
         actions.push(backAction(backLabel, returnTo));
       } else if (leadId) {
-        actions.push(backAction("Back to lead", recordIdHref("lead.html", leadId)));
+        actions.push(backAction("Back to case", recordIdHref("case.html", leadId)));
       } else if (encounterId || ownerType === "ENCOUNTER") {
         actions.push(
           backAction(
@@ -311,7 +312,7 @@
         ]
       };
     }
-    if (page === "lead") {
+    if (page === "lead" || page === "case") {
       var actions = [
         {
           label: "Edit",
@@ -345,6 +346,22 @@
           href: "i205-form.html?id=" + encodeURIComponent(id)
         });
       }
+      if (page === "case") {
+        actions.push({
+          id: "caseArrangeButton",
+          label: "Arrange layout"
+        });
+        actions.push({
+          id: "caseArrangeDoneButton",
+          label: "Done",
+          hidden: true
+        });
+        actions.push({
+          id: "caseLayoutResetButton",
+          label: "Reset layout",
+          hidden: true
+        });
+      }
       return {
         tab: "leads",
         file: [
@@ -363,7 +380,7 @@
           primary: true,
           chromeAction: "edit"
         });
-        targetSheetActions.push(backAction("Back to lead", recordIdHref("lead.html", id)));
+        targetSheetActions.push(backAction("Back to case", recordIdHref("case.html", id)));
       } else {
         targetSheetActions.push(backAction("Back to leads", "leads.html"));
       }
@@ -372,11 +389,17 @@
         file: [
           {
             id: "downloadTargetSheetButton",
-            label: "Download Target sheet",
-            notBuilt: "Download Target sheet"
+            label: "Save Target sheet",
+            call: "saveTargetSheet"
           }
         ],
-        actions: targetSheetActions
+        actions: targetSheetActions.concat([
+          {
+            id: "saveTargetSheetButton",
+            label: "Save Target sheet",
+            call: "saveTargetSheet"
+          }
+        ])
       };
     }
     if (page === "i200-form" || page === "i205-form") {
@@ -397,7 +420,7 @@
             call: "issueWarrant"
           },
           id
-            ? backAction("Back to lead", recordIdHref("lead.html", id))
+            ? backAction("Back to case", recordIdHref("case.html", id))
             : backAction("Back to leads", "leads.html")
         ]
       };
@@ -412,12 +435,8 @@
         actions: [
           { label: "Save", primary: true, chromeAction: "save" },
           leadHasCommittedAt(id)
-            ? backAction("Back to lead", recordIdHref("lead.html", id))
-            : backAction("Back to leads", "leads.html"),
-          { id: "stubPersonButton", label: "+ Person" },
-          { id: "stubVehicleButton", label: "+ Vehicle" },
-          { id: "stubLocationButton", label: "+ Location" },
-          { id: "followUpsToggle", label: "Follow-ups", followUp: true }
+            ? backAction("Back to case", recordIdHref("case.html", id))
+            : backAction("Back to leads", "leads.html")
         ]
       };
     }
@@ -447,7 +466,7 @@
         });
       } else if (bookinLeadId) {
         bookinActions.push(
-          backAction("Back to lead", recordIdHref("lead.html", bookinLeadId))
+          backAction("Back to case", recordIdHref("case.html", bookinLeadId))
         );
       }
       bookinActions.push({
@@ -735,6 +754,9 @@
     }
     if (item.chromeAction) {
       el.setAttribute("data-chrome-action", item.chromeAction);
+    }
+    if (item.hidden) {
+      el.hidden = true;
     }
     if (item.followUp) {
       el.appendChild(document.createTextNode("Follow-ups "));

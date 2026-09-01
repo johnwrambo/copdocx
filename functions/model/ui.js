@@ -275,7 +275,7 @@
       setStatus("Draft saved.", true);
       return snapshot;
     }
-    window.location.href = "lead.html?id=" + encodeURIComponent(result.leadId);
+    window.location.href = "case.html?id=" + encodeURIComponent(result.leadId);
     return snapshot;
   }
 
@@ -436,6 +436,11 @@
     }
     if (wrap) {
       wrap.hidden = false;
+      var legend = card && card.querySelector(":scope > legend");
+      if (legend && wrap.previousElementSibling !== legend) {
+        legend.after(wrap);
+      }
+      wrap.classList.add("card-media-row");
     }
     var ret = "lead-form.html?id=" + encodeURIComponent(leadId);
     var q =
@@ -447,6 +452,24 @@
       encodeURIComponent(ret);
     photo.href = "photo-picker.html?" + q;
     file.href = "file-upload.html?" + q;
+    var host = byId("leadFormPhoto");
+    if (!host && wrap) {
+      host = document.createElement("div");
+      host.id = "leadFormPhoto";
+      host.className = "card-media-thumb";
+      host.setAttribute("data-card-photo", "");
+      wrap.insertBefore(host, wrap.firstChild);
+      wrap.classList.add("card-media-row");
+    }
+    if (host && root.mediaCard) {
+      root.mediaCard.mount(host, {
+        owner: { type: "PERSON", id: personId },
+        compact: true,
+        pickerHref: photo.href,
+        photoTitle: "",
+        committedOnly: false
+      });
+    }
   }
 
   function updateCancelHref(snapshot) {
@@ -455,8 +478,8 @@
       return;
     }
     if (snapshot && snapshot.leadId && snapshot.meta && snapshot.meta.committedAt) {
-      a.href = "lead.html?id=" + encodeURIComponent(snapshot.leadId);
-      a.textContent = "Back to lead";
+      a.href = "case.html?id=" + encodeURIComponent(snapshot.leadId);
+      a.textContent = "Back to case";
     } else {
       a.href = "leads.html";
       a.textContent = "Back to leads";

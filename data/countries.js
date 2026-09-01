@@ -54,6 +54,29 @@ var NATIONALITIES = [{ "code": "MX", "label": "Mexican", "country_code": "MX", "
 function nationalityLabels() {
   return NATIONALITIES.map((n) => n.label);
 }
+function countryLabel(code) {
+  var key = String(code || "").trim();
+  if (!key) {
+    return "";
+  }
+  var list = typeof COUNTRIES !== "undefined" ? COUNTRIES : [];
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var row = list[i];
+    if (!row) {
+      continue;
+    }
+    if (
+      row.code === key ||
+      String(row.alpha3 || "") === key ||
+      String(row.label || "").toLowerCase() === key.toLowerCase()
+    ) {
+      return row.label || key;
+    }
+  }
+  return key;
+}
+
 function countryLabels() {
   return COUNTRIES.map((c) => c.label);
 }

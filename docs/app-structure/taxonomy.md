@@ -14,7 +14,7 @@ Always `?id=` in the URL even when the model field is `leadId` / `officerId` / `
 
 | Type | List | View | Form |
 | --- | --- | --- | --- |
-| Lead | `leads.html` | `lead.html` | `lead-form.html` |
+| Lead | `leads.html` | `case.html` (alias `lead.html` redirects) | `lead-form.html` |
 | Officer | `officers.html` | `officer.html` | `officer-form.html` |
 | Vehicle | `vehicles.html` | `vehicle.html` | `vehicle-form.html` |
 | Encounter | `encounter.html` | not split yet | `encounter-form.html` |
@@ -79,7 +79,8 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | --- | --- | --- |
 | `lead.html` **until split** | `lead-form` | — (none today; do not invent) |
 | `leads.html` | `leads` | — |
-| `lead.html` **after split** | `lead` | — |
+| `lead.html` **after split** | `lead` | — (redirects to `case.html`) |
+| `case.html` | `case` | — |
 | `lead-form.html` | `lead-form` | — |
 | `officers.html` | `officers` | `officers` |
 | `officer.html` | `officer` | **`officer-view`** |
@@ -101,7 +102,7 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | `encounter.html` | `encounter` | — |
 | `encounter-form.html` | `encounter-form` | — |
 
-`aria-current="page"`: Home tab for `home`; Leads tab for `leads|lead|lead-form|i200-form|i205-form`; Encounters tab for `encounter|encounter-form`; Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
+`aria-current="page"`: Home tab for `home`; Leads tab for `leads|lead|case|lead-form|i200-form|i205-form|mobile-target-sheet`; Encounters tab for `encounter|encounter-form`; Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
 
 ## Interim: `lead.html` before the triad
 

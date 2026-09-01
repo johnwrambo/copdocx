@@ -425,6 +425,7 @@
       locationAssociation: cardField("locationAssociation"),
       targetPriority: cardField("targetPriority"),
       parksHere: cardField("parksHere"),
+      pinColor: cardField("pinColor"),
       street: cardField("street"),
       street2: cardField("street2"),
       city: cardField("city"),
@@ -447,6 +448,7 @@
     setCardField("locationAssociation", assoc);
     setCardField("targetPriority", address.targetPriority);
     setCardField("parksHere", address.parksHere);
+    setCardField("pinColor", address.pinColor);
     setCardField("street", address.street);
     setCardField("street2", address.street2);
     setCardField("city", address.city);
@@ -1229,7 +1231,8 @@
         lat: pair ? pair[0] : "",
         lng: pair ? pair[1] : "",
         mapped: !!pair,
-        loc: loc
+        loc: loc,
+        pinColor: loc.pinColor || ""
       });
     }
     (row.locations || []).forEach(pushLoc);
@@ -1391,7 +1394,16 @@
           item.classList.add("is-mapped");
         }
         var kind = document.createElement("span");
-        kind.className = "case-map-key-dot is-" + place.kind;
+        var mapApi = window.COPDoc && COPDoc.locationMap;
+        var key =
+          mapApi && mapApi.safeKind ? mapApi.safeKind(place.kind) : place.kind;
+        kind.className = "case-map-key-icon is-" + key;
+        if (mapApi && typeof mapApi.pinColorFor === "function") {
+          kind.style.color = mapApi.pinColorFor(key, place);
+        }
+        if (mapApi && typeof mapApi.kindIconHtml === "function") {
+          kind.innerHTML = mapApi.kindIconHtml(key);
+        }
         var body = document.createElement("div");
         var label = document.createElement("strong");
         label.textContent = place.title;
@@ -1587,12 +1599,16 @@
     var wrap = byId(isOfficer ? "officerFormMediaLinks" : "vehicleFormMediaLinks");
     var photo = byId(isOfficer ? "officerFormAddPhoto" : "vehicleFormAddPhoto");
     var file = byId(isOfficer ? "officerFormAddFile" : "vehicleFormAddFile");
+    var host = byId(isOfficer ? "officerFormPhoto" : "vehicleFormPhoto");
     if (!photo || !file) {
       return;
     }
     if (!id) {
       if (wrap) {
         wrap.hidden = true;
+      }
+      if (host && window.COPDoc && COPDoc.mediaCard) {
+        COPDoc.mediaCard.unmount(host);
       }
       return;
     }
@@ -1601,15 +1617,38 @@
     }
     var page = isOfficer ? "officer-form.html" : "vehicle-form.html";
     var ret = page + "?id=" + encodeURIComponent(id);
+    var ownerType = isOfficer ? "OFFICER" : "VEHICLE";
     var q =
       "ownerType=" +
-      (isOfficer ? "OFFICER" : "VEHICLE") +
+      ownerType +
       "&id=" +
       encodeURIComponent(id) +
       "&return=" +
       encodeURIComponent(ret);
     photo.href = "photo-picker.html?" + q;
     file.href = "file-upload.html?" + q;
+    if (!host && wrap) {
+      host = document.createElement("div");
+      host.id = isOfficer ? "officerFormPhoto" : "vehicleFormPhoto";
+      host.className = "card-media-thumb";
+      host.setAttribute("data-card-photo", "");
+      wrap.insertBefore(host, wrap.firstChild);
+      wrap.classList.add("card-media-row");
+      var formCard = wrap.closest("fieldset");
+      var legend = formCard && formCard.querySelector(":scope > legend");
+      if (legend && wrap.previousElementSibling !== legend) {
+        legend.after(wrap);
+      }
+    }
+    if (host && window.COPDoc && COPDoc.mediaCard) {
+      COPDoc.mediaCard.mount(host, {
+        owner: { type: ownerType, id: id },
+        compact: true,
+        pickerHref: photo.href,
+        photoTitle: "",
+        committedOnly: false
+      });
+    }
   }
 
   function fillOfficerForm(id) {

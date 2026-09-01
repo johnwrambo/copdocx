@@ -58,6 +58,7 @@ check("empty name ok", blank.person.name.lastName === "");
 check("person owns locations", Array.isArray(blank.person.locations));
 check("empty vehicles", blank.vehicles.length === 0);
 check("empty links", blank.links.length === 0);
+check("empty history", Array.isArray(blank.history) && blank.history.length === 0);
 check("not marked complete", blank.meta.markedComplete === false);
 check("new lead is draft", blank.meta.status === "draft");
 
@@ -748,6 +749,87 @@ check(
 check(
   "pdf is not markup",
   model.isActiveMarkupFile("scan.pdf", "application/pdf") === false
+);
+
+var caseAlpha = model.createLeadSnapshot();
+caseAlpha.person.name.lastName = "ALPHA";
+caseAlpha.person.name.firstName = "CASE";
+model.store.saveLead(caseAlpha, { mode: "commit" });
+var caseBravo = model.createLeadSnapshot();
+caseBravo.person.name.lastName = "BRAVO";
+caseBravo.person.name.firstName = "CASE";
+caseBravo.links = [
+  model.createLink({
+    from: { type: "PERSON", id: caseBravo.subjectPersonId },
+    to: { type: "PERSON", id: caseAlpha.subjectPersonId },
+    reasons: ["ASSOCIATE"]
+  })
+];
+model.store.saveLead(caseBravo, { mode: "commit" });
+var caseAlphaTwin = model.createLeadSnapshot();
+caseAlphaTwin.subjectPersonId = caseAlpha.subjectPersonId;
+caseAlphaTwin.person = model.store.getPerson(caseAlpha.subjectPersonId);
+model.store.saveLead(caseAlphaTwin, { mode: "commit" });
+var caseAlphaDraft = model.createLeadSnapshot();
+caseAlphaDraft.subjectPersonId = caseAlpha.subjectPersonId;
+caseAlphaDraft.person = model.store.getPerson(caseAlpha.subjectPersonId);
+model.store.saveLead(caseAlphaDraft, { mode: "draft" });
+var emptyRelated = model.store.relatedCommittedCases("", caseAlpha.leadId);
+check(
+  "related cases empty person",
+  emptyRelated.asSubject.length === 0 && emptyRelated.asAssociate.length === 0
+);
+var relatedAlpha = model.store.relatedCommittedCases(
+  caseAlpha.subjectPersonId,
+  caseAlpha.leadId
+);
+check(
+  "same subject other committed case",
+  relatedAlpha.asSubject.some(function (row) {
+    return row.leadId === caseAlphaTwin.leadId;
+  })
+);
+check(
+  "draft twin is not a jump",
+  !relatedAlpha.asSubject.some(function (row) {
+    return row.leadId === caseAlphaDraft.leadId;
+  })
+);
+check(
+  "inbound person link is an associate case",
+  relatedAlpha.asAssociate.some(function (row) {
+    return row.leadId === caseBravo.leadId;
+  })
+);
+check(
+  "related cases exclude self",
+  !relatedAlpha.asSubject.some(function (row) {
+    return row.leadId === caseAlpha.leadId;
+  }) &&
+    !relatedAlpha.asAssociate.some(function (row) {
+      return row.leadId === caseAlpha.leadId;
+    })
+);
+var relatedFromBravo = model.store.relatedCommittedCases(
+  caseAlpha.subjectPersonId,
+  caseBravo.leadId
+);
+check(
+  "linked person is subject of committed case",
+  relatedFromBravo.asSubject.some(function (row) {
+    return row.leadId === caseAlpha.leadId;
+  })
+);
+var relatedBravo = model.store.relatedCommittedCases(
+  caseBravo.subjectPersonId,
+  caseBravo.leadId
+);
+check("bravo has no other subject case", relatedBravo.asSubject.length === 0);
+check(
+  "bravo is not an associate on alpha",
+  !relatedBravo.asAssociate.some(function (row) {
+    return row.leadId === caseAlpha.leadId;
+  })
 );
 
 if (fail) {

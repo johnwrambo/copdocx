@@ -13,9 +13,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.19.5"
+          data-version="0.23.0"
         >
-          Version 0.19.5
+          Version 0.23.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -26,6 +26,14 @@
     <div class="page page-wide">
       <fieldset class="card-static" id="vehicleCard" data-card="vehicle">
         <legend id="vehicleFormLegend">Vehicle</legend>
+        <div class="section-note card-media-row" id="vehicleFormMediaLinks" hidden>
+          <div id="vehicleFormPhoto" class="card-media-thumb" data-card-photo></div>
+          <p class="card-media-actions">
+            <a id="vehicleFormAddPhoto" href="photo-picker.html">Add photo</a>
+            ·
+            <a id="vehicleFormAddFile" href="file-upload.html">Add file</a>
+          </p>
+        </div>
         <div class="row row-4">
           <div class="field">
             <label for="licensePlate">Plate</label>
@@ -62,11 +70,6 @@
             <input type="text" id="vin" name="vin" data-field="vin" autocomplete="off" />
           </div>
         </div>
-        <p class="section-note" id="vehicleFormMediaLinks" hidden>
-          <a id="vehicleFormAddPhoto" href="photo-picker.html">Add photo</a>
-          ·
-          <a id="vehicleFormAddFile" href="file-upload.html">Add file</a>
-        </p>
       </fieldset>
 
       <fieldset class="card-static">
@@ -145,7 +148,9 @@
     <script src="functions/model/location.js"></script>
     <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/officer.js"></script>
+    <script src="functions/model/media.js"></script>
     <script src="functions/model/autosave.js"></script>
+    <script src="functions/media-card.js"></script>
     <script src="functions/admin.js"></script>
   </body>
 </html>

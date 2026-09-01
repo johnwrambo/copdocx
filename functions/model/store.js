@@ -197,6 +197,49 @@
       });
   }
 
+  /**
+   * Other committed leads for a person: as the subject, or as a PERSON
+   * endpoint on a person-to-person link. Case view uses this to jump.
+   */
+  function relatedCommittedCases(personId, excludeLeadId) {
+    var id = String(personId || "");
+    var skip = String(excludeLeadId || "");
+    var asSubject = [];
+    var asAssociate = [];
+    if (!id) {
+      return { asSubject: asSubject, asAssociate: asAssociate };
+    }
+    listLeads().forEach(function (row) {
+      if (!row || row.leadId === skip || row.metaStatus !== "committed") {
+        return;
+      }
+      if (row.subjectPersonId === id) {
+        asSubject.push(row);
+        return;
+      }
+      var snap = state.leads[row.leadId];
+      var links = (snap && snap.links) || [];
+      var i;
+      for (i = 0; i < links.length; i++) {
+        var link = links[i];
+        if (!link) {
+          continue;
+        }
+        var from = link.from || {};
+        var to = link.to || {};
+        if (
+          from.type === "PERSON" &&
+          to.type === "PERSON" &&
+          (from.id === id || to.id === id)
+        ) {
+          asAssociate.push(row);
+          return;
+        }
+      }
+    });
+    return { asSubject: asSubject, asAssociate: asAssociate };
+  }
+
   function allPeople() {
     return Object.keys(state.people).map(function (id) {
       return clone(state.people[id]);
@@ -364,6 +407,7 @@
     saveLead: saveLead,
     getLead: getLead,
     listLeads: listLeads,
+    relatedCommittedCases: relatedCommittedCases,
     allPeople: allPeople,
     getPerson: getPerson,
     upsertPerson: upsertPerson,

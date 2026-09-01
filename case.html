@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Case</title>
+    <link rel="stylesheet" href="style/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+  </head>
+  <body data-page="case">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.23.0"
+        >
+          Version 0.23.0
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <div id="leadMissing" class="records-empty" hidden>Case not found.</div>
+
+      <div id="caseViewBoard" class="case-view-board" hidden>
+        <article
+          class="case-tile case-folder"
+          data-tile="folder"
+          data-size="l"
+          id="caseFolderTile"
+        >
+          <header class="case-folder-tab">
+            <h1 id="caseFolderName">Case</h1>
+            <span id="caseFolderRole" class="case-folder-role">Lead</span>
+          </header>
+          <div class="case-folder-body">
+            <div id="caseFolderPhoto" class="case-folder-photo media-block"></div>
+            <div id="caseFolderFacts" class="snapshot-facts"></div>
+            <div id="caseFolderFiles" class="snapshot-files" hidden></div>
+          </div>
+        </article>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="status"
+          data-size="s"
+          id="caseStatusTile"
+        >
+          <legend>Status</legend>
+          <div id="caseStatusFacts" class="snapshot-facts"></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="map"
+          data-size="m"
+          id="leadCaseMapCard"
+        >
+          <legend>
+            Case map
+            <button
+              type="button"
+              id="caseMapPopoutButton"
+              class="action-button-secondary compact case-tile-legend-action"
+            >
+              Pop out
+            </button>
+          </legend>
+          <p id="leadCaseMapEmpty" class="records-empty">
+            No mapped locations. Resolve an address on the form.
+          </p>
+          <div class="case-map-layout">
+            <div
+              id="leadCaseMap"
+              class="location-map lead-case-map"
+              data-location-map
+              hidden
+              role="img"
+              aria-label="Subject home, work, and vehicle locations"
+            ></div>
+            <div id="leadCaseMapLegend" class="case-map-legend" hidden>
+              <ul id="leadCaseMapList" class="case-map-list"></ul>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="vehicles"
+          data-size="m"
+          id="leadVehiclesCard"
+        >
+          <legend>Vehicles</legend>
+          <p id="leadVehiclesEmpty" class="records-empty">No vehicles.</p>
+          <div id="leadVehicles" class="case-object-list" hidden></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="places"
+          data-size="m"
+          id="leadLocationsCard"
+        >
+          <legend>Places</legend>
+          <p id="leadLocationsEmpty" class="records-empty">No locations.</p>
+          <div id="leadLocations" class="case-object-list" hidden></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="warrants"
+          data-size="s"
+          id="warrantsIssuedCard"
+        >
+          <legend>Warrants issued</legend>
+          <p id="warrantsIssuedEmpty" class="records-empty">
+            No I-200 or I-205 issued yet.
+          </p>
+          <div id="caseWarrantsList" class="fow-warrant-list" hidden></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="history"
+          data-size="l"
+          id="caseHistoryTile"
+        >
+          <legend>Case history</legend>
+          <div class="case-history-compose">
+            <label for="caseHistoryNote">Add a note</label>
+            <textarea
+              id="caseHistoryNote"
+              rows="2"
+              placeholder="What happened, what you learned, what to check next"
+            ></textarea>
+            <button type="button" id="caseHistoryAddNote" class="action-button-secondary">
+              Add note
+            </button>
+          </div>
+          <p id="caseHistoryEmpty" class="records-empty">
+            No history yet.
+          </p>
+          <div id="caseHistoryList" class="case-history-list" hidden></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="associations"
+          data-size="m"
+          id="caseAssociationsTile"
+        >
+          <legend>Associations</legend>
+          <p id="caseAssociationsEmpty" class="records-empty">
+            No associations or linked cases.
+          </p>
+          <div id="caseAssociationsList" class="case-plain-list" hidden></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="criminal"
+          data-size="m"
+          id="caseCriminalTile"
+        >
+          <legend>Criminal</legend>
+          <div id="caseCriminalFacts" class="snapshot-facts"></div>
+          <div id="caseCriminalList" class="case-plain-list"></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="immigration"
+          data-size="m"
+          id="caseImmigrationTile"
+        >
+          <legend>Immigration</legend>
+          <div id="caseImmigrationFacts" class="snapshot-facts"></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="documents"
+          data-size="s"
+          id="caseDocumentsTile"
+        >
+          <legend>Documents</legend>
+          <p id="caseDocumentsEmpty" class="records-empty">No documents.</p>
+          <div id="caseDocumentsList" class="case-plain-list" hidden></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile"
+          data-tile="source"
+          data-size="m"
+          id="caseSourceTile"
+        >
+          <legend>Source</legend>
+          <div id="caseSourceFacts" class="snapshot-facts"></div>
+          <p id="caseSourceBackground" class="section-note" hidden></p>
+        </fieldset>
+      </div>
+    </div>
+
+    <div id="caseMapPopout" class="case-map-popout" hidden>
+      <div class="case-map-popout-bar">
+        <strong>Case map</strong>
+        <button
+          type="button"
+          id="caseMapPopoutClose"
+          class="action-button-secondary"
+        >
+          Close
+        </button>
+      </div>
+      <div class="case-map-popout-body">
+        <p id="caseMapPopoutEmpty" class="records-empty" hidden>
+          No mapped locations.
+        </p>
+        <div class="case-map-layout">
+          <div
+            id="caseMapPopoutMap"
+            class="location-map lead-case-map"
+            data-location-map
+            hidden
+            role="img"
+            aria-label="Case map"
+          ></div>
+          <div id="caseMapPopoutLegend" class="case-map-legend" hidden>
+            <ul id="caseMapPopoutList" class="case-map-list"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="caseEditBackdrop" class="case-edit-backdrop" hidden></div>
+    <aside id="caseEditPanel" class="case-edit-panel" hidden>
+      <header class="case-edit-bar">
+        <h2 id="caseEditTitle">Edit</h2>
+        <button type="button" id="caseEditCancel" class="action-button-secondary">
+          Cancel
+        </button>
+        <button type="button" id="caseEditSave" class="action-button">Save</button>
+      </header>
+      <div id="caseEditHost" class="case-edit-host"></div>
+    </aside>
+
+    <template id="caseIdentityTemplate">
+      <fieldset data-card="identity" data-name-card>
+        <legend>Identity</legend>
+        <div class="row row-3">
+          <div class="field">
+            <label>Last Name</label>
+            <input type="text" data-field="lastName" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>First Name</label>
+            <input type="text" data-field="firstName" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>Middle Name</label>
+            <input type="text" data-field="middleName" autocomplete="off" />
+          </div>
+        </div>
+        <div class="row row-3">
+          <div class="field">
+            <span class="field-caption">Sex</span>
+            <div class="radio-row">
+              <label class="radio-field">
+                <input type="radio" name="caseEditSex" data-field="sex" value="male" />
+                Male
+              </label>
+              <label class="radio-field">
+                <input type="radio" name="caseEditSex" data-field="sex" value="female" />
+                Female
+              </label>
+            </div>
+          </div>
+          <div class="field">
+            <label>
+              Date of Birth
+              <input type="hidden" data-field="age" />
+              <span class="age-display" data-field="ageDisplay"></span>
+            </label>
+            <input type="date" data-field="dateOfBirth" />
+          </div>
+          <div class="field">
+            <label>Country of Citizenship</label>
+            <select data-field="citizenship"></select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Social Security Number</label>
+            <input type="text" data-field="ssn" inputmode="numeric" maxlength="11" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>LexID</label>
+            <input type="text" data-field="lexId" autocomplete="off" />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="caseSourceTemplate">
+      <fieldset data-card="source">
+        <legend>Source</legend>
+        <div class="row">
+          <div class="field">
+            <label>Lead Source</label>
+            <select data-field="leadSource">
+              <option value="">Select an Option</option>
+              <option value="tag">Plate Check</option>
+              <option value="otherLe">Other Law Enforcement Agency</option>
+              <option value="elite">Elite</option>
+              <option value="other">Other</option>
+              <option value="discovered">Discovered in case</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Case / file number</label>
+            <input type="text" data-field="caseNumber" autocomplete="off" />
+          </div>
+        </div>
+        <div class="row" data-source="otherLe" hidden>
+          <div class="field">
+            <label>Referring Agency</label>
+            <input type="text" data-field="refAgency" autocomplete="off" />
+            <input type="hidden" data-field="refAgencyCode" />
+          </div>
+        </div>
+        <div class="row" data-source="otherLe" hidden>
+          <div class="field checkbox-field">
+            <input type="checkbox" data-field="probationCheck" />
+            <label>Probation</label>
+          </div>
+        </div>
+        <div class="row" data-source="tag elite other otherLe discovered" hidden>
+          <div class="field field-span-2">
+            <label>Background Information</label>
+            <textarea data-field="leadInfo" rows="3"></textarea>
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="caseImmigrationTemplate">
+      <fieldset data-card="immigration">
+        <legend>Immigration</legend>
+        <div class="row">
+          <div class="field">
+            <label>Alien Number</label>
+            <input type="text" data-field="alienNumber" />
+          </div>
+          <div class="field">
+            <label>FIN</label>
+            <input type="text" data-field="finNumber" />
+          </div>
+          <div class="field">
+            <label>Disposition</label>
+            <select data-field="immigrationDisposition"></select>
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select data-field="immigrationStatus"></select>
+          </div>
+          <div class="field">
+            <label>First Deportation Date</label>
+            <input type="date" data-field="firstDeportationDate" />
+          </div>
+          <div class="field">
+            <label>Last Deportation Date</label>
+            <input type="date" data-field="lastDeportationDate" />
+          </div>
+          <div class="field">
+            <label>Final Order Date</label>
+            <input type="date" data-field="finalOrderDate" />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="caseCriminalIdsTemplate">
+      <fieldset data-card="criminal">
+        <legend>Criminal identifiers</legend>
+        <p class="section-note">Arrests, convictions, and RAP paste stay on the full form.</p>
+        <div class="row">
+          <div class="field">
+            <label>FBI Number</label>
+            <input type="text" data-field="fbiNumber" />
+          </div>
+          <div class="field">
+            <label>NCIC</label>
+            <input type="text" data-field="ncicNumber" />
+          </div>
+          <div class="field">
+            <label>SID</label>
+            <input type="text" data-field="stateId" />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <!-- Keep vehicle/location/document/relationship markup in sync with lead-form.html -->
+    <template id="vehicleCardTemplate">
+      <fieldset data-card="vehicle">
+        <legend>Vehicle</legend>
+        <div class="section-note card-media-row" data-card-media hidden>
+          <div class="card-media-thumb" data-card-photo></div>
+          <p class="card-media-actions">
+            <a data-card-add-photo href="photo-picker.html">Add photo</a>
+            ·
+            <a data-card-add-file href="file-upload.html">Add file</a>
+          </p>
+        </div>
+        <div class="row row-4">
+          <div class="field">
+            <label>Plate</label>
+            <input type="text" data-field="licensePlate" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label>Plate State</label>
+            <select data-field="plateState"></select>
+          </div>
+          <div class="field">
+            <label>Year</label>
+            <select data-field="vehicleYear"></select>
+          </div>
+          <div class="field">
+            <label>Color</label>
+            <select data-field="vehicleColor"></select>
+          </div>
+        </div>
+        <div class="row row-4">
+          <div class="field">
+            <label>Make</label>
+            <select data-field="vehicleMake"></select>
+          </div>
+          <div class="field">
+            <label>Model</label>
+            <select data-field="vehicleModel"></select>
+          </div>
+          <div class="field">
+            <label>Body Style</label>
+            <select data-field="vehicleBodyStyle"></select>
+          </div>
+          <div class="field">
+            <label>VIN</label>
+            <input type="text" data-field="vin" autocomplete="off" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Registered Owner</label>
+            <input type="text" data-field="registeredOwner" autocomplete="off" />
+          </div>
+        </div>
+        <div class="nested-block">
+          <div class="card-list" data-nested-list="location" data-location-owner="vehicle"></div>
+          <div class="card-list-actions">
+            <button type="button" class="add-card-btn" data-add-nested="location">
+              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+              Add location
+            </button>
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="locationCardTemplate">
+      <fieldset data-card="location">
+        <legend>Location</legend>
+        <input type="hidden" data-field="pinColor" />
+        <div class="section-note card-media-row" data-card-media hidden>
+          <div class="card-media-thumb" data-card-photo></div>
+          <p class="card-media-actions">
+            <a data-card-add-photo href="photo-picker.html">Add photo</a>
+            ·
+            <a data-card-add-file href="file-upload.html">Add file</a>
+          </p>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Association</label>
+            <select data-field="locationAssociation">
+              <option value="">Select an Option</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Target Address</label>
+            <select data-field="targetPriority">
+              <option value="">Not a target address</option>
+              <option value="1">Primary target</option>
+              <option value="2">Secondary</option>
+              <option value="3">Tertiary</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Street</label>
+            <input type="text" data-field="street" />
+          </div>
+          <div class="field field-span-2">
+            <label>Street 2</label>
+            <input type="text" data-field="street2" />
+          </div>
+        </div>
+        <div class="row row-3">
+          <div class="field">
+            <label>City</label>
+            <input type="text" data-field="city" />
+          </div>
+          <div class="field">
+            <label>State</label>
+            <input type="text" data-field="state" />
+          </div>
+          <div class="field">
+            <label>Zip Code</label>
+            <input type="text" data-field="zip" inputmode="numeric" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Lat / Long</label>
+            <input type="text" data-field="latLong" autocomplete="off" inputmode="decimal" placeholder="32.744582, -97.816176" />
+            <input type="hidden" data-field="latitude" />
+            <input type="hidden" data-field="longitude" />
+          </div>
+          <div class="field">
+            <label class="field-label-spacer">Resolve address</label>
+            <button type="button" class="action-button" data-field="resolveAddressButton">
+              Resolve address
+            </button>
+          </div>
+          <div class="field">
+            <label class="field-label-spacer">Map it</label>
+            <button type="button" class="action-button" data-field="mapAddressButton">
+              Map it
+            </button>
+          </div>
+        </div>
+        <p class="field-status" data-field="addressStatus" hidden></p>
+        <div class="location-map" data-location-map hidden></div>
+        <p class="section-note location-map-hint" data-location-map-hint hidden>
+          Drag the pin or click the map to correct the location.
+        </p>
+      </fieldset>
+    </template>
+
+    <template id="documentCardTemplate">
+      <fieldset data-card="document">
+        <legend>Document</legend>
+        <div class="row">
+          <div class="field">
+            <label>Document Type</label>
+            <select data-field="documentType"></select>
+          </div>
+          <div class="field">
+            <label>Document Number</label>
+            <input type="text" data-field="documentNumber" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>Issuing State</label>
+            <select data-field="issuingState"></select>
+          </div>
+          <div class="field">
+            <label>Issuing Country</label>
+            <select data-field="issuingCountry"></select>
+          </div>
+          <div class="field">
+            <label>Issue Date</label>
+            <input type="date" data-field="documentIssueDate" />
+          </div>
+          <div class="field">
+            <label>Expiration Date</label>
+            <input type="date" data-field="documentExpiration" />
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="relationshipCardTemplate">
+      <fieldset data-card="relationship">
+        <legend>Relationship</legend>
+        <div class="row">
+          <div class="field">
+            <label>Person</label>
+            <select data-field="relatedPersonId">
+              <option value="">Select a person</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Relationship to</label>
+            <select data-field="relationshipType"></select>
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/lead-source.js"></script>
+    <script src="functions/age.js"></script>
+    <script src="functions/names.js"></script>
+    <script src="functions/ssn.js"></script>
+    <script src="functions/alien-number.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/lead.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/location.js"></script>
+    <script src="functions/model/vehicle.js"></script>
+    <script src="functions/model/link.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="data/countries.js"></script>
+    <script src="data/immigration.js"></script>
+    <script src="data/vehicles.js"></script>
+    <script src="data/us-places.js"></script>
+    <script src="data/identity-document-types.js"></script>
+    <script src="data/vehicle-association-reasons.js"></script>
+    <script src="data/association-matrix.js"></script>
+    <script src="data/link-reasons.js"></script>
+    <script src="functions/address.js"></script>
+    <script src="functions/vehicles.js"></script>
+    <script src="functions/model/media.js"></script>
+    <script src="functions/model/collect.js"></script>
+    <script src="functions/media-card.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="functions/location-map.js"></script>
+    <script src="functions/cards.js"></script>
+    <script src="functions/leads.js"></script>
+    <script src="functions/lead-csv.js"></script>
+    <script src="functions/case-edit.js"></script>
+  </body>
+</html>
+

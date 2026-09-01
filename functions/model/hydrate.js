@@ -265,9 +265,17 @@
           make.dispatchEvent(new Event("change"));
         }
         fillCard(card, {
-          vehicleModel: vehicle.vehicleModel,
-          vehicleBodyStyle: vehicle.vehicleBodyStyle
+          vehicleModel: vehicle.vehicleModel
         });
+        var model = card.querySelector('[data-field="vehicleModel"]');
+        if (model) {
+          model.dispatchEvent(new Event("change"));
+        }
+        if (vehicle.vehicleBodyStyle) {
+          fillCard(card, {
+            vehicleBodyStyle: vehicle.vehicleBodyStyle
+          });
+        }
         if (root.cards && typeof root.cards.paintMedia === "function") {
           root.cards.paintMedia(card, "VEHICLE");
         }

@@ -51,7 +51,9 @@
         // Only for registration: yes | no | "". Not a "verified" flag.
         parksHere: "",
         // "1" Primary, "2" Secondary, "3" Tertiary, then "4"…  Empty = not a target.
-        targetPriority: ""
+        targetPriority: "",
+        // Optional #rrggbb pin override. Empty = auto (type, or vehicle color).
+        pinColor: ""
       },
       extra
     );

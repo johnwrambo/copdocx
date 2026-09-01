@@ -1,8 +1,8 @@
 /**
- * Lead-entry workflow: source lane, stage collapse, follow-up stubs.
+ * Lead-entry workflow: source lane, stage collapse, on-page jump nav.
  *
  * Plate Check → vehicle first. LE / Elite / Other → subject first.
- * Header +Person / +Vehicle / +Location parks a stub you can open later.
+ * Stages (and cards) that already have data stay open.
  */
 
 function laneFromSource(source) {
@@ -26,6 +26,60 @@ function setStageCollapsed(stage, collapsed) {
   }
 }
 
+function controlHasValue(el) {
+  if (!el) {
+    return false;
+  }
+  var type = (el.type || "").toLowerCase();
+  if (type === "hidden" || type === "button" || type === "submit") {
+    return false;
+  }
+  if (type === "checkbox" || type === "radio") {
+    return !!el.checked;
+  }
+  return String(el.value || "").trim() !== "";
+}
+
+function stageHasData(stage) {
+  if (!stage) {
+    return false;
+  }
+  var controls = stage.querySelectorAll("input, select, textarea");
+  var i;
+  for (i = 0; i < controls.length; i++) {
+    if (controlHasValue(controls[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function setCardCollapsed(card, collapsed) {
+  if (!card) {
+    return;
+  }
+  card.classList.toggle("is-collapsed", !!collapsed);
+  var toggle = card.querySelector(":scope > legend .card-toggle");
+  var chevron = card.querySelector(":scope > legend .card-chevron");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    toggle.setAttribute("title", collapsed ? "Expand card" : "Collapse card");
+  }
+  if (chevron) {
+    chevron.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    chevron.setAttribute("aria-label", collapsed ? "Expand card" : "Collapse card");
+    chevron.setAttribute("title", collapsed ? "Expand card" : "Collapse card");
+  }
+}
+
+function expandFilledCards() {
+  document.querySelectorAll("fieldset.card").forEach(function (card) {
+    if (typeof cardHasData === "function" && cardHasData(card)) {
+      setCardCollapsed(card, false);
+    }
+  });
+}
+
 function applyLeadLane() {
   var form = document.getElementById("leadForm");
   var source = document.getElementById("leadSource");
@@ -44,11 +98,12 @@ function applyLeadLane() {
     if (lane === "name" && key === "subject") {
       open = true;
     }
-    if (key === "followups" && followUpItems().length) {
+    if (stageHasData(stage)) {
       open = true;
     }
     setStageCollapsed(stage, !open);
   });
+  expandFilledCards();
 }
 
 function bindStageToggles() {
@@ -70,7 +125,20 @@ function bindStageToggles() {
     }
     btn.addEventListener("click", function () {
       var stage = document.querySelector('.stage[data-stage="' + stageName + '"]');
-      setStageCollapsed(stage, false);
+      if (!stage) {
+        return;
+      }
+      if (stage.classList.contains("is-collapsed")) {
+        setStageCollapsed(stage, false);
+        var first = stage.querySelector(".card-list > fieldset");
+        if (first) {
+          setCardCollapsed(first, false);
+        }
+        if (typeof stage.scrollIntoView === "function") {
+          stage.scrollIntoView({ block: "start", behavior: "smooth" });
+        }
+        return;
+      }
       add.click();
     });
   }
@@ -230,37 +298,62 @@ function openFollowUp(record) {
   }
 }
 
+function jumpToStage(stage) {
+  if (!stage) {
+    return;
+  }
+  setStageCollapsed(stage, false);
+  if (typeof stageHasData === "function" && stageHasData(stage)) {
+    expandFilledCards();
+  }
+  if (typeof stage.scrollIntoView === "function") {
+    stage.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+  stage.classList.add("is-jump-target");
+  window.setTimeout(function () {
+    stage.classList.remove("is-jump-target");
+  }, 1200);
+}
+
+var JUMP_LABELS = {
+  source: "Source",
+  subject: "Subject",
+  people: "People",
+  vehicles: "Vehicles",
+  places: "Places",
+  criminal: "Criminal"
+};
+
+function bindPageJump() {
+  var list = document.getElementById("pageJumpList");
+  if (!list) {
+    return;
+  }
+  list.replaceChildren();
+  document.querySelectorAll("#leadForm .stage").forEach(function (stage) {
+    var key = stage.getAttribute("data-stage") || "";
+    if (key === "followups") {
+      return;
+    }
+    var toggle = stage.querySelector(".stage-toggle");
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "page-jump-btn";
+    btn.textContent = JUMP_LABELS[key] || (toggle && toggle.textContent.trim()) || key;
+    btn.addEventListener("click", function () {
+      jumpToStage(stage);
+    });
+    list.appendChild(btn);
+  });
+}
+
 function bindFollowUps() {
-  var person = document.getElementById("stubPersonButton");
-  var vehicle = document.getElementById("stubVehicleButton");
-  var location = document.getElementById("stubLocationButton");
-  var toggle = document.getElementById("followUpsToggle");
-  var panel = document.getElementById("followUpPanel");
-  if (person) {
-    person.addEventListener("click", function () {
-      addFollowUp("person");
-    });
-  }
-  if (vehicle) {
-    vehicle.addEventListener("click", function () {
-      addFollowUp("vehicle");
-    });
-  }
-  if (location) {
-    location.addEventListener("click", function () {
-      addFollowUp("location");
-    });
-  }
-  if (toggle && panel) {
-    toggle.addEventListener("click", function () {
-      panel.hidden = !panel.hidden;
-    });
-  }
+  bindPageJump();
 }
 
 function bindWorkflow() {
   bindStageToggles();
-  bindFollowUps();
+  bindPageJump();
   applyLeadLane();
 }
 

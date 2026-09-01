@@ -169,7 +169,8 @@
         inaLaw: "",
         entryPlace: "",
         entryDate: "",
-        issuedAt: ""
+        issuedAt: "",
+        mediaId: ""
       },
       extra
     );

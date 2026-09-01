@@ -59,6 +59,7 @@
         vehicles: [],
         links: [],
         followUps: [],
+        history: [],
         meta: {
           createdAt: created,
           updatedAt: created,
@@ -88,8 +89,22 @@
     return people[0] || null;
   }
 
+  function createHistoryEvent(extra) {
+    return assign(
+      {
+        eventId: newId("evt"),
+        at: nowIso(),
+        type: "note",
+        text: "",
+        source: "operator"
+      },
+      extra
+    );
+  }
+
   model.createSource = createSource;
   model.createLead = createLead;
   model.createLeadSnapshot = createLead;
+  model.createHistoryEvent = createHistoryEvent;
   model.subjectOf = subjectOf;
 })(typeof window !== "undefined" ? window : globalThis);

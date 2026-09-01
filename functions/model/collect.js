@@ -145,7 +145,8 @@
       longitude: f.longitude || "",
       association: f.locationAssociation || f.addressAssociation || "",
       parksHere: f.parksHere || "",
-      targetPriority: f.targetPriority || ""
+      targetPriority: f.targetPriority || "",
+      pinColor: f.pinColor || ""
     });
   }
 
@@ -392,6 +393,7 @@
       );
     });
 
+    var preservedHistory = [];
     var leadId = (leadCard && leadCard.dataset.leadId) || "";
     if (!leadId) {
       leadId = model.newId("lead");
@@ -411,6 +413,35 @@
           person.warrants.push(row);
         }
       });
+      function mergePinColors(nextList, prevList) {
+        var byId = {};
+        (prevList || []).forEach(function (loc) {
+          if (loc && loc.locationId && loc.pinColor) {
+            byId[loc.locationId] = loc.pinColor;
+          }
+        });
+        (nextList || []).forEach(function (loc) {
+          if (loc && loc.locationId && !loc.pinColor && byId[loc.locationId]) {
+            loc.pinColor = byId[loc.locationId];
+          }
+        });
+      }
+      mergePinColors(person.locations, prevSubject && prevSubject.locations);
+      (previous.vehicles || []).forEach(function (prevVeh) {
+        (vehicles || []).forEach(function (nextVeh) {
+          if (
+            prevVeh &&
+            nextVeh &&
+            prevVeh.vehicleId &&
+            prevVeh.vehicleId === nextVeh.vehicleId
+          ) {
+            mergePinColors(nextVeh.locations, prevVeh.locations);
+          }
+        });
+      });
+      if (previous && Array.isArray(previous.history)) {
+        preservedHistory = previous.history.slice();
+      }
       var prevImm = (prevSubject && prevSubject.immigration) || {};
       if (Array.isArray(prevImm.baseballCards) && prevImm.baseballCards.length) {
         person.immigration.baseballCards = prevImm.baseballCards.slice();
@@ -441,6 +472,7 @@
       person: person,
       vehicles: vehicles,
       links: links,
+      history: preservedHistory,
       followUps:
         typeof window.followUpRecords === "function"
           ? window.followUpRecords()
@@ -455,4 +487,5 @@
 
   model.collectLead = collectLead;
   model.readFields = readFields;
+  model.collectLocation = collectLocation;
 })(typeof window !== "undefined" ? window : globalThis);

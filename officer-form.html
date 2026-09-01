@@ -19,9 +19,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.19.5"
+          data-version="0.23.0"
         >
-          Version 0.19.5
+          Version 0.23.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -33,6 +33,14 @@
       <fieldset class="card-static" data-name-card>
         <legend id="officerFormLegend">Add officer</legend>
         <input type="hidden" id="officerMiddleName" data-field="middleName" />
+        <div class="section-note card-media-row" id="officerFormMediaLinks" hidden>
+          <div id="officerFormPhoto" class="card-media-thumb" data-card-photo></div>
+          <p class="card-media-actions">
+            <a id="officerFormAddPhoto" href="photo-picker.html">Add photo</a>
+            ·
+            <a id="officerFormAddFile" href="file-upload.html">Add file</a>
+          </p>
+        </div>
         <div class="row row-4">
           <div class="field">
             <label for="officerLastName">Last name</label>
@@ -112,15 +120,19 @@
             <p class="field-status" hidden></p>
           </div>
         </div>
-        <p class="section-note" id="officerFormMediaLinks" hidden>
-          <a id="officerFormAddPhoto" href="photo-picker.html">Add photo</a>
-          ·
-          <a id="officerFormAddFile" href="file-upload.html">Add file</a>
-        </p>
 
         <div data-location-owner="person">
         <fieldset class="card-static" id="officerAddressCard" data-card="location">
           <legend>Location</legend>
+          <input type="hidden" id="pinColor" name="pinColor" data-field="pinColor" />
+          <div class="section-note card-media-row" data-card-media hidden>
+            <div class="card-media-thumb" data-card-photo></div>
+            <p class="card-media-actions">
+              <a data-card-add-photo href="photo-picker.html">Add photo</a>
+              ·
+              <a data-card-add-file href="file-upload.html">Add file</a>
+            </p>
+          </div>
           <div class="row">
             <div class="field">
               <label for="locationAssociation">Association</label>
@@ -209,11 +221,6 @@
           <p class="section-note location-map-hint" data-location-map-hint hidden>
             Drag the pin or click the map to correct the location.
           </p>
-          <p class="section-note" data-card-media hidden>
-            <a data-card-add-photo href="photo-picker.html">Add photo</a>
-            ·
-            <a data-card-add-file href="file-upload.html">Add file</a>
-          </p>
         </fieldset>
         </div>
 
@@ -269,7 +276,9 @@
     <script src="functions/model/location.js"></script>
     <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/officer.js"></script>
+    <script src="functions/model/media.js"></script>
     <script src="functions/model/autosave.js"></script>
+    <script src="functions/media-card.js"></script>
     <script src="functions/admin.js"></script>
   </body>
 </html>

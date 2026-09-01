@@ -1088,7 +1088,7 @@
       return "";
     }
     if (owner.leadId) {
-      return "lead.html?id=" + encodeURIComponent(owner.leadId);
+      return "case.html?id=" + encodeURIComponent(owner.leadId);
     }
     if (owner.encounterId || owner.type === "ENCOUNTER") {
       return "encounter-form.html?id=" + encodeURIComponent(owner.encounterId || owner.id);

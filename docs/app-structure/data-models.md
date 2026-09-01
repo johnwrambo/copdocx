@@ -15,6 +15,10 @@ Factories live in `functions/model/`. Reuse Location and Vehicle; add Officer. O
 
 File Import/Export writes leads, encounters, admin, and book-in. Encounters live in `copdocx.store.v1` next to leads — not a fourth store. The JSON bundle format is `copdocx.transfer.v1` (`functions/transfer.js`). CSV export is not imported.
 
+Lead snapshots may include `history[]`: `{ eventId, at, type, text, source }`. Operator notes (`type: "note"`) are stored here. `collectLead` re-appends previous `history` so a form Save does not wipe Case view notes.
+
+`store.relatedCommittedCases(personId, excludeLeadId)` returns `{ asSubject, asAssociate }` from committed leads (`listLeads` `subjectPersonId` + person-to-person `links[]`). Case view uses it for association jumps. No new lead fields.
+
 Cross-store **reads** OK (dashboard arrest counts; book-in prefill). Cross-store **writes** only when the user Saves on the destination form.
 
 Admin roster **stays** in `copdoc.admin.v1`.

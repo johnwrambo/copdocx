@@ -467,6 +467,7 @@
       warrantId: payload.warrantId,
       formType: payload.formType,
       fileNo: payload.fileNo,
+      mediaId: payload.mediaId || "",
       pdfFileName: filename,
       office: payload.office,
       officerName: payload.officerName,
@@ -537,44 +538,78 @@
       existingNames: existingFileNames(payload.person)
     });
     hideActions(false);
-    if (writeRecord) {
-      payload.warrantId = warrantId;
-      var saved = appendWarrant(snap, payload, filename);
-      if (!saved || !saved.ok) {
-        setStatus(
-          (saved && saved.error) || "Could not save the warrant on the lead."
-        );
-        return Promise.resolve();
-      }
-    }
+    payload.warrantId = warrantId;
     setStatus("Filling " + payload.formType + "…");
     var folderPromise = pickFolder
       ? getFolderOnGesture()
       : Promise.resolve(null);
+    var subject = model().subjectOf ? model().subjectOf(snap) : snap.person;
     return folderPromise
       .then(function (dirHandle) {
         return fillPdf(payload).then(function (bytes) {
-          var wroteFolder = Promise.resolve(false);
-          if (dirHandle) {
-            wroteFolder = writeToFolder(dirHandle, filename, bytes)
-              .then(function () {
-                return true;
+          var blob = new Blob([bytes], { type: "application/pdf" });
+          var mediaPromise = Promise.resolve(null);
+          if (
+            writeRecord &&
+            subject &&
+            subject.personId &&
+            window.COPDoc &&
+            COPDoc.media &&
+            typeof COPDoc.media.save === "function"
+          ) {
+            mediaPromise = COPDoc.media
+              .save({
+                owner: { type: "PERSON", id: subject.personId },
+                mediaClass: "file",
+                mime: "application/pdf",
+                originalName: filename,
+                documentType: payload.formType,
+                kind: "document",
+                caption:
+                  payload.formType === "I-205"
+                    ? "I-205 Warrant of Removal/Deportation"
+                    : "I-200 Warrant for Arrest of Alien",
+                original: blob
               })
               .catch(function (error) {
-                console.warn("Could not write warrants folder", error);
-                return false;
+                console.warn("Could not store warrant PDF", error);
+                return null;
               });
           }
-          return wroteFolder.then(function (savedToFolder) {
-            pdf.downloadBytes(filename, bytes);
-            if (!writeRecord) {
-              setStatus("Downloaded " + filename + ".", true);
-              return;
+          return mediaPromise.then(function (mediaRow) {
+            if (writeRecord) {
+              payload.mediaId = mediaRow && mediaRow.mediaId;
+              var saved = appendWarrant(snap, payload, filename);
+              if (!saved || !saved.ok) {
+                setStatus(
+                  (saved && saved.error) ||
+                    "Could not save the warrant on the lead."
+                );
+                return;
+              }
             }
-            var extra = savedToFolder ? " Saved to the warrants folder." : "";
-            window.location.href =
-              "lead.html?id=" + encodeURIComponent(snap.leadId);
-            setStatus("Issued " + payload.formType + "." + extra, true);
+            var wroteFolder = Promise.resolve(false);
+            if (dirHandle) {
+              wroteFolder = writeToFolder(dirHandle, filename, bytes)
+                .then(function () {
+                  return true;
+                })
+                .catch(function (error) {
+                  console.warn("Could not write warrants folder", error);
+                  return false;
+                });
+            }
+            return wroteFolder.then(function (savedToFolder) {
+              pdf.downloadBytes(filename, bytes);
+              if (!writeRecord) {
+                setStatus("Downloaded " + filename + ".", true);
+                return;
+              }
+              var extra = savedToFolder ? " Saved to the warrants folder." : "";
+              window.location.href =
+                "case.html?id=" + encodeURIComponent(snap.leadId);
+              setStatus("Issued " + payload.formType + "." + extra, true);
+            });
           });
         });
       })
@@ -583,7 +618,7 @@
         if (writeRecord) {
           setStatus(
             (error && error.message) ||
-              "Warrant is saved on the lead, but the PDF could not be filled."
+              "Could not fill the warrant PDF. Nothing was saved."
           );
           return;
         }

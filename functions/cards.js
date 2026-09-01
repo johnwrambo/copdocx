@@ -1,6 +1,6 @@
 /**
  * Repeatable cards (alias / vehicle / address) and minimize on every fieldset.
- * Legend: down-arrow collapses, + adds, x removes (warns if the card has data).
+ * Legend: chevron collapses, + adds, x removes (warns if the card has data).
  */
 
 var cardSerial = 0;
@@ -29,20 +29,33 @@ function enhanceFieldset(fieldset) {
   var titleText = legend.textContent.trim();
   legend.textContent = "";
 
+  var chevron = document.createElement("button");
+  chevron.type = "button";
+  chevron.className = "card-chevron";
+  chevron.setAttribute("aria-expanded", "true");
+  chevron.setAttribute("aria-label", "Collapse card");
+  chevron.setAttribute("title", "Collapse card");
+
   var toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "card-toggle";
   toggle.setAttribute("aria-expanded", "true");
   toggle.setAttribute("title", "Collapse card");
   toggle.textContent = titleText;
+  legend.appendChild(chevron);
   legend.appendChild(toggle);
 
-  toggle.addEventListener("click", function (event) {
+  function onToggle(event) {
     event.preventDefault();
     var collapsed = fieldset.classList.toggle("is-collapsed");
     toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
     toggle.setAttribute("title", collapsed ? "Expand card" : "Collapse card");
-  });
+    chevron.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    chevron.setAttribute("aria-label", collapsed ? "Expand card" : "Collapse card");
+    chevron.setAttribute("title", collapsed ? "Expand card" : "Collapse card");
+  }
+  chevron.addEventListener("click", onToggle);
+  toggle.addEventListener("click", onToggle);
 }
 
 function enhanceAllFieldsets(root) {
@@ -275,6 +288,9 @@ function formMediaReturn() {
     id = (lead && lead.dataset.leadId) || id;
     return id ? "lead-form.html?id=" + encodeURIComponent(id) : "";
   }
+  if (page === "case") {
+    return id ? "case.html?id=" + encodeURIComponent(id) : "";
+  }
   if (page === "encounter-form") {
     var enc = document.getElementById("encounterId");
     id = (enc && enc.value) || id;
@@ -296,6 +312,15 @@ function formMediaQueryExtra() {
     var leadId = lead && lead.dataset.leadId;
     return leadId ? "&leadId=" + encodeURIComponent(leadId) : "";
   }
+  if (page === "case") {
+    var caseId = "";
+    try {
+      caseId = new URLSearchParams(window.location.search).get("id") || "";
+    } catch (error) {
+      caseId = "";
+    }
+    return caseId ? "&leadId=" + encodeURIComponent(caseId) : "";
+  }
   if (page === "encounter-form") {
     var enc = document.getElementById("encounterId");
     var encounterId = enc && enc.value;
@@ -304,6 +329,46 @@ function formMediaQueryExtra() {
       : "";
   }
   return "";
+}
+
+function placeCardMediaAtTop(card, wrap) {
+  if (!card || !wrap) {
+    return;
+  }
+  var legend = card.querySelector(":scope > legend");
+  wrap.classList.add("card-media-row");
+  if (legend && wrap.previousElementSibling !== legend) {
+    legend.after(wrap);
+  }
+}
+
+function cardPhotoHost(wrap) {
+  if (!wrap) {
+    return null;
+  }
+  var host = wrap.querySelector("[data-card-photo]");
+  if (host) {
+    return host;
+  }
+  host = document.createElement("div");
+  host.setAttribute("data-card-photo", "");
+  host.className = "card-media-thumb";
+  wrap.insertBefore(host, wrap.firstChild);
+  wrap.classList.add("card-media-row");
+  return host;
+}
+
+function mountCardPhoto(host, ownerType, ownerId, pickerHref) {
+  if (!host || !window.COPDoc || !COPDoc.mediaCard) {
+    return;
+  }
+  COPDoc.mediaCard.mount(host, {
+    owner: { type: ownerType, id: ownerId },
+    compact: true,
+    pickerHref: pickerHref || "",
+    photoTitle: "",
+    committedOnly: false
+  });
 }
 
 function paintCardMediaLinks(card, ownerType) {
@@ -316,7 +381,8 @@ function paintCardMediaLinks(card, ownerType) {
   if (!photo && !file) {
     return;
   }
-  var prefix = ownerType === "VEHICLE" ? "veh" : "loc";
+  var prefix =
+    ownerType === "VEHICLE" ? "veh" : ownerType === "OFFICER" ? "off" : "loc";
   var ownerId = ensureCardEntityId(card, prefix);
   var ret = formMediaReturn();
   if (!ownerId || !ret) {
@@ -327,6 +393,7 @@ function paintCardMediaLinks(card, ownerType) {
   }
   if (wrap) {
     wrap.hidden = false;
+    placeCardMediaAtTop(card, wrap);
   }
   var q =
     "ownerType=" +
@@ -342,6 +409,12 @@ function paintCardMediaLinks(card, ownerType) {
   if (file) {
     file.href = "file-upload.html?" + q;
   }
+  mountCardPhoto(
+    cardPhotoHost(wrap),
+    ownerType,
+    ownerId,
+    photo ? photo.href : ""
+  );
 }
 
 function paintAllCardMediaLinks() {

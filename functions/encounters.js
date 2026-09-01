@@ -247,7 +247,8 @@
       longitude: f.longitude || "",
       association: f.locationAssociation || f.association || "",
       parksHere: f.parksHere || "",
-      targetPriority: f.targetPriority || ""
+      targetPriority: f.targetPriority || "",
+      pinColor: f.pinColor || ""
     });
     if (!loc.locationId && model().newId) {
       loc.locationId = model().newId("loc");
@@ -435,13 +436,23 @@
           "plateState",
           "vehicleYear",
           "vehicleMake",
-          "vehicleModel",
           "vehicleColor",
-          "vehicleBodyStyle",
           "vin"
         ].forEach(function (key) {
           setCardValue(card, key, vehicle[key] || "");
         });
+        var make = card.querySelector('[data-field="vehicleMake"]');
+        if (make) {
+          make.dispatchEvent(new Event("change"));
+        }
+        setCardValue(card, "vehicleModel", vehicle.vehicleModel || "");
+        var model = card.querySelector('[data-field="vehicleModel"]');
+        if (model) {
+          model.dispatchEvent(new Event("change"));
+        }
+        if (vehicle.vehicleBodyStyle) {
+          setCardValue(card, "vehicleBodyStyle", vehicle.vehicleBodyStyle);
+        }
         setCardValue(card, "registeredOwner", vehicle.registeredOwnerName || "");
         if (window.COPDoc && COPDoc.cards && COPDoc.cards.paintMedia) {
           COPDoc.cards.paintMedia(card, "VEHICLE");
