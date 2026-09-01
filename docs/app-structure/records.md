@@ -77,9 +77,9 @@ On **committed** views that have an owner id, paint the shared media widgets fro
 | `vehicle.html` | `VEHICLE` (photos of that unit) |
 | `encounter.html` (view, when it exists) / encounter form snapshot | Scene files on `ENCOUNTER`; people/cars/places use their own owners |
 | `bookin.html` (until split) | Detainee photo → linked `PERSON` |
-| `mobile-fow.html` | `#targetPhoto` from PERSON; location/vehicle strips from those owners |
+| `mobile-target-sheet.html` | `#targetPhoto` = person’s **primary** photo; left/right (click or swipe) walks that person’s photos. Location/vehicle strips from those owners. |
 
-No location view page — location photos sit on that location’s card on the parent snapshot.
+No location view page — location photos sit on that location’s card on the parent snapshot. Form **Add photo** on the vehicle card and on each location card writes `ownerType=VEHICLE|LOCATION&id=` (mint `dataset.entityId` on add). Lead view: click the photo (or empty card) to add/edit. No extra Add photo text on the view. One **Case map** shows every mapped person and vehicle location.
 
 ## List UX
 

@@ -1482,7 +1482,31 @@
         });
     }
 
+    function showPin(geo) {
+      if (
+        !geo ||
+        !global.COPDoc ||
+        !COPDoc.locationMap ||
+        typeof COPDoc.locationMap.show !== "function"
+      ) {
+        return;
+      }
+      COPDoc.locationMap.show(card, geo.latitude, geo.longitude);
+    }
+
     function resolveAddress() {
+      const result = completeAddressOrExplain();
+      if (!result) {
+        return;
+      }
+      lookupCoordinates(
+        result,
+        field("resolveAddressButton"),
+        "Looking up coordinates…"
+      ).then(showPin);
+    }
+
+    function mapThisCard() {
       const result = completeAddressOrExplain();
       if (!result) {
         return;
@@ -1491,23 +1515,6 @@
       if (typeof window !== "undefined" && window.open) {
         window.open(url, "_blank", "noopener");
       }
-      lookupCoordinates(
-        result,
-        field("resolveAddressButton"),
-        "Maps opened. Looking up coordinates…"
-      );
-    }
-
-    function mapThisCard() {
-      const result = completeAddressOrExplain();
-      if (!result) {
-        return;
-      }
-      lookupCoordinates(
-        result,
-        field("mapAddressButton"),
-        "Looking up coordinates…"
-      );
     }
 
     const street = field("street");
@@ -1628,6 +1635,10 @@
       mapButton.addEventListener("click", function () {
         mapThisCard();
       });
+    }
+
+    if (global.COPDoc && COPDoc.locationMap && typeof COPDoc.locationMap.bind === "function") {
+      COPDoc.locationMap.bind(card);
     }
   }
 

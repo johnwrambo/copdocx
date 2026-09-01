@@ -12,6 +12,7 @@
     address = address || {};
     var assoc = address.association || address.locationAssociation || "";
     var loc = {
+      locationId: address.locationId || "",
       association: assoc,
       locationAssociation: assoc,
       targetPriority: address.targetPriority || "",
@@ -35,6 +36,7 @@
     loc = loc || {};
     var assoc = loc.association || loc.locationAssociation || "";
     return {
+      locationId: loc.locationId || "",
       locationAssociation: assoc,
       association: assoc,
       targetPriority: loc.targetPriority || "",

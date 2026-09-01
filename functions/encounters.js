@@ -348,6 +348,9 @@
           setCardValue(card, key, vehicle[key] || "");
         });
         setCardValue(card, "registeredOwner", vehicle.registeredOwnerName || "");
+        if (window.COPDoc && COPDoc.cards && COPDoc.cards.paintMedia) {
+          COPDoc.cards.paintMedia(card, "VEHICLE");
+        }
       });
     }
     var locList = byId("encounterLocationList");
@@ -374,6 +377,12 @@
             "latLong",
             location.latitude + ", " + location.longitude
           );
+        }
+        if (window.COPDoc && COPDoc.cards && COPDoc.cards.paintMedia) {
+          COPDoc.cards.paintMedia(card, "LOCATION");
+        }
+        if (window.COPDoc && COPDoc.locationMap && COPDoc.locationMap.sync) {
+          COPDoc.locationMap.sync(card);
         }
         if (typeof fillLocationAssociationSelect === "function") {
           fillLocationAssociationSelect(

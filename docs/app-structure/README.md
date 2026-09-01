@@ -24,6 +24,8 @@ If a PR disagrees with these files, change the files in that PR and say why.
 | [implementation-plan.md](implementation-plan.md) | Ordered PRs (index). File lists: [design.md](design.md). |
 | [design.md](design.md) | Decisions, alternatives, risks, detailed PR file lists |
 | [media-plan.md](media-plan.md) | Proposed: attach photos/files to the object they depict. Comment on D# / PR# / Q# before 0.17.x. |
+| [operations-plan.md](operations-plan.md) | Proposed: Operation record (planning form + issued order view). Comment on D# / PR# / Q# before coding. |
+| [map-layout-plan.md](map-layout-plan.md) | Map-first layout (0.19.0): overlay tools, one layer dock, Brief/Print in the app bar. Comment on D# / Q# to change it. |
 
 ## Constraints that do not move
 

@@ -6,6 +6,12 @@
     <title>Lead Entry</title>
     
     <link rel="stylesheet" href="style/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
     
   </head>
   <body data-page="lead-form">
@@ -35,9 +41,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.16.1"
+          data-version="0.18.9"
         >
-          Version 0.16.1
+          Version 0.18.9
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -221,6 +227,11 @@
               <input type="text" id="lexId" name="lexId" data-field="lexId" autocomplete="off" />
             </div>
           </div>
+          <p class="section-note" id="leadFormMediaLinks" hidden>
+            <a id="leadFormAddPhoto" href="photo-picker.html">Add photo</a>
+            ·
+            <a id="leadFormAddFile" href="file-upload.html">Add file</a>
+          </p>
         </fieldset>
 
         <div id="aliasList" class="card-list"></div>
@@ -581,6 +592,11 @@
             <input type="text" id="vin" name="vin" data-field="vin" autocomplete="off" />
           </div>
         </div>
+        <p class="section-note" data-card-media hidden>
+          <a data-card-add-photo href="photo-picker.html">Add photo</a>
+          ·
+          <a data-card-add-file href="file-upload.html">Add file</a>
+        </p>
         <div class="row">
           <div class="field field-span-2">
             <label for="registeredOwner">Registered Owner</label>
@@ -706,6 +722,15 @@
           </div>
         </div>
         <p class="field-status" data-field="addressStatus" hidden></p>
+        <div class="location-map" data-location-map hidden></div>
+        <p class="section-note location-map-hint" data-location-map-hint hidden>
+          Drag the pin or click the map to correct the location.
+        </p>
+        <p class="section-note" data-card-media hidden>
+          <a data-card-add-photo href="photo-picker.html">Add photo</a>
+          ·
+          <a data-card-add-file href="file-upload.html">Add file</a>
+        </p>
       </fieldset>
     </template>
 
@@ -1116,6 +1141,12 @@
     <script src="data/us-places.js"></script>
     <script src="data/identity-document-types.js"></script>
     <script src="functions/address.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="functions/location-map.js"></script>
     <script src="data/vehicle-association-reasons.js"></script>
     <script src="data/association-matrix.js"></script>
     <script src="data/encounter-catalogs.js"></script>

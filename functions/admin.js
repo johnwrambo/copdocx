@@ -354,7 +354,9 @@
   }
 
   function readOfficerAddress() {
+    var card = officerAddressCard();
     return {
+      locationId: (card && card.dataset.entityId) || "",
       locationAssociation: cardField("locationAssociation"),
       targetPriority: cardField("targetPriority"),
       parksHere: cardField("parksHere"),
@@ -397,6 +399,16 @@
     }
     if (typeof syncParksHere === "function" && officerAddressCard()) {
       syncParksHere(officerAddressCard());
+    }
+    var locCard = officerAddressCard();
+    if (locCard && address.locationId) {
+      locCard.dataset.entityId = address.locationId;
+    }
+    if (window.COPDoc && COPDoc.cards && typeof COPDoc.cards.paintMedia === "function") {
+      COPDoc.cards.paintMedia(locCard, "LOCATION");
+    }
+    if (window.COPDoc && COPDoc.locationMap && typeof COPDoc.locationMap.sync === "function") {
+      COPDoc.locationMap.sync(locCard);
     }
   }
 
@@ -1091,6 +1103,11 @@
     }
     setViewText("viewPhoneGov", row.phoneGov);
     setViewText("viewPhonePrivate", row.phonePrivate);
+    if (window.COPDoc && COPDoc.mediaCard && row.id) {
+      COPDoc.mediaCard.mount(byId("officerMedia"), {
+        owner: { type: "OFFICER", id: row.id }
+      });
+    }
     var address =
       window.COPDoc && COPDoc.model && COPDoc.model.officerAddress
         ? COPDoc.model.officerAddress(row)
@@ -1189,6 +1206,41 @@
       "viewVehicleEquip",
       labeledList(row.equipment, VEHICLE_EQUIP_LABELS)
     );
+    if (window.COPDoc && COPDoc.mediaCard && row.id) {
+      COPDoc.mediaCard.mount(byId("vehicleMedia"), {
+        owner: { type: "VEHICLE", id: row.id }
+      });
+    }
+  }
+
+  function paintAdminFormMediaLinks(kind, id) {
+    var isOfficer = kind === "officer";
+    var wrap = byId(isOfficer ? "officerFormMediaLinks" : "vehicleFormMediaLinks");
+    var photo = byId(isOfficer ? "officerFormAddPhoto" : "vehicleFormAddPhoto");
+    var file = byId(isOfficer ? "officerFormAddFile" : "vehicleFormAddFile");
+    if (!photo || !file) {
+      return;
+    }
+    if (!id) {
+      if (wrap) {
+        wrap.hidden = true;
+      }
+      return;
+    }
+    if (wrap) {
+      wrap.hidden = false;
+    }
+    var page = isOfficer ? "officer-form.html" : "vehicle-form.html";
+    var ret = page + "?id=" + encodeURIComponent(id);
+    var q =
+      "ownerType=" +
+      (isOfficer ? "OFFICER" : "VEHICLE") +
+      "&id=" +
+      encodeURIComponent(id) +
+      "&return=" +
+      encodeURIComponent(ret);
+    photo.href = "photo-picker.html?" + q;
+    file.href = "file-upload.html?" + q;
   }
 
   function fillOfficerForm(id) {
@@ -1228,6 +1280,7 @@
       setVal("officerPhonePrivate", formatPhone(row.phonePrivate));
     }
     rememberOfficerSignature();
+    paintAdminFormMediaLinks("officer", id);
     byId("officerLastName").focus();
   }
 
@@ -1262,6 +1315,7 @@
     if (byId("vehicleFormLegend")) {
       byId("vehicleFormLegend").textContent = "Edit vehicle";
     }
+    paintAdminFormMediaLinks("vehicle", id);
     var focusEl = byId("licensePlate") || byId("vehicleUnit");
     if (focusEl) {
       focusEl.focus();
@@ -1270,6 +1324,7 @@
 
   function clearOfficerForm() {
     editingOfficerId = "";
+    paintAdminFormMediaLinks("officer", "");
     [
       "officerLastName",
       "officerFirstName",
@@ -1296,6 +1351,7 @@
 
   function clearVehicleForm() {
     editingVehicleId = "";
+    paintAdminFormMediaLinks("vehicle", "");
     [
       "licensePlate",
       "plateState",
@@ -1530,6 +1586,7 @@
     }
     editingOfficerId = record.id;
     saveState();
+    paintAdminFormMediaLinks("officer", record.id);
     rememberOfficerSignature();
     if (byId("addOfficerButton")) {
       byId("addOfficerButton").textContent = "Save officer";
@@ -1625,6 +1682,7 @@
     }
     editingVehicleId = record.id;
     saveState();
+    paintAdminFormMediaLinks("vehicle", record.id);
     if (byId("addVehicleButton")) {
       byId("addVehicleButton").textContent = "Save vehicle";
     }

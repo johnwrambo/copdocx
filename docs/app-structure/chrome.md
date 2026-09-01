@@ -41,12 +41,13 @@ Unimplemented items use `data-not-built`. Do not pretend they work.
 | Officer / vehicle **view** | no extra items; inherit roster export | `data-not-built` |
 | **Vehicle form only** | in-app **Save** (`#adminSaveButton` → `addVehicle({ quiet: true })`) | **exception:** keep until shared autosave ships; then delete |
 | Other admin File Save | remove when chrome ships | officer already focusout-autosaves; dashboard `saveState()` is redundant |
-| Map | Save PDF, Export KMZ (iTAK), Export JSON, Export CSV | already `data-not-built` |
+| Map | Print brief (working), Export KMZ / JSON / CSV `data-not-built` | Print brief = ops snapshot via browser print |
 | Narrative | Download JSON (`#downloadNarrativeJsonButton`), Download text (`#downloadNarrativeTextButton`) | Active I-213 or training draft |
 | Book-in | Export JSON, Import JSON (**merge**), Restore backup (**replace**, confirm) | already in the records **toolbar** (`#exportRecordsButton`, `#importRecordsButton`, `#restoreRecordsButton`). File-cleanup PR **moves** them into File and **removes the toolbar duplicates**. Not New/Save/Open. |
 | Baseball card | Export `data-not-built` only | Generate saves the card on the lead subject when `?leadId=` is present |
-| Photo picker (test) | Download JSON (`#downloadPhotoLibraryButton`), Clear library (`#clearPhotoLibraryButton`) | Own key `copdocx.photo-picker.v1`. Not a chrome tab. |
-| File upload (test) | Download JSON (`#downloadFileLibraryButton`), Clear library (`#clearFileLibraryButton`) | Own key `copdocx.file-upload.v1`. Not a chrome tab. |
+| Photo picker | Download JSON / Clear library (lab only) | With `?ownerType=` / `?leadId=`: **Save photo** writes IDB. Lab library unchanged. |
+| File upload | Download JSON / Clear library (lab only) | With owner query: **Save file** writes IDB. |
+| Mobile Target sheet | Download Target sheet `data-not-built` | Live paint of the filed lead. Chrome: **Edit lead**, **Back to lead**. |
 
 **Exceptions (only these):**
 
@@ -75,13 +76,14 @@ Chrome **paints** the control. It does **not** call `saveLead` / `addOfficer` / 
 | Page kind | Primary | Secondaries |
 | --- | --- | --- |
 | Collection | **Add {record}** (`<a>`) | Encounter list: **Add encounter** → `encounter-form.html`. No Back (tabs leave lists). |
-| View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}**. Lead view then Book-in / Issue I-200 / Issue I-205. |
+| View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}**. Lead view then **Generate Target sheet** (new window, `mobile-target-sheet.html?id=`), Book-in / Issue I-200 / Issue I-205. |
 | Form | **Save** (`<button>`) | First secondary: **Back to {origin}**. `committedAt` → view; else list. Not `history.back()`. |
 | Encounter form | **Save** (`call: commitEncounter`) | **Back to encounters**; **Add subjects** → `bookin.html?encounterId=`; **Generate I-213** → `narrative.html?encounterId=` |
 | I-200 / I-205 form | **Issue** (`#appBarPrimaryAction`, `data-chrome-action="save"`) | **Back to lead** (`lead.html?id=`) |
-| Home, Dashboard, Map, Schedule | empty | Home is not +Person. Map tools stay in `.map-toolbar`, not the slot |
-| Photo picker (test) | **Add photos**; with owner query **Save photo** | File: Download JSON / Clear library. Not a chrome tab. |
-| File upload (test) | **Add files**; with owner query **Save file** | File: Download JSON / Clear library. Not a chrome tab. |
+| Home, Dashboard, Schedule | empty | Home is not +Person. |
+| Map | **Print brief** (`#appBarPrimaryAction`, `call: printMapBrief`) | **Brief view** (`#mapBriefButton`). Drawing tools stay overlays on the map, not the slot. File also has Print brief. |
+| Photo picker | **Add photos**; with owner query **Save photo** + Back | File: Download JSON / Clear lab library. Not a chrome tab. |
+| File upload | **Add files**; with owner query **Save file** + Back | Same. |
 | I-213 (`narrative.html`, Encounter sub-page, not a tab) | **Save I-213** when `?encounterId=`; else **Update draft** | With `?encounterId=`: **Back to encounter**. Then **Copy**. Encounters tab current. |
 | Book-in (until split) | **Generate** | **Load from leads** always (committed leads only). With `?encounterId=`: **Back to encounter**, Add subject. With `?leadId=` only: **Back to lead**. Tab (no query): no Back. Then Clear, Baseball card. File: New / Save / Open. Encounter ID banner is display-only (no in-page Back). |
 | Baseball card | **Generate** (`persistBaseballCard`) | **Back to book-in** (keep `encounterId` / `leadId`) |

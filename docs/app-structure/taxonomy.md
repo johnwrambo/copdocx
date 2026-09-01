@@ -36,9 +36,9 @@ Until book-in is split, `bookin.html` is the working form. Prefill uses **`booki
 
 ### Non-record pages
 
-`home.html` (`data-page="home"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`).
+`home.html` (`data-page="home"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`), `mobile-target-sheet.html` (`data-page="mobile-target-sheet"`).
 `i200-form.html` (`data-page="i200-form"`) and `i205-form.html` (`data-page="i205-form"`) are lead-view issuance forms (`?id=` is the **leadId**). Leads tab stays current. They are not a warrant triad.
-`operation.html` is still empty — leave it. `encounter.html` is the 0.11.0 list.
+`operation.html` is still empty. Do not flesh it out until [operations-plan.md](operations-plan.md) is agreed. Proposed triad: `operations.html` / `operation.html` / `operation-form.html`. `encounter.html` is the 0.11.0 list.
 
 Home is a briefing hub, not a record triad. Action slot empty. Counts and lists are placeholders until a later painter (cross-store **reads** of committed leads, admin roster, book-in). Do not write any store from `home.html`.
 
@@ -48,19 +48,19 @@ Home is a briefing hub, not a record triad. Action slot empty. Counts and lists 
 
 **Product Save (planned):** both pickers accept `?ownerType=&id=` (see [data-models.md](data-models.md) Media). Primary becomes **Save photo** / **Save file** and writes IndexedDB `copdocx.media.v1`. No query → lab library only. Views show a **Photo** card (hero + thumbs) and a **Documents** list via `functions/media-card.js`.
 
-Map is a planning board, not a record triad. Action slot empty. The only write is `copdocx.map.views.v1`. File PDF/KMZ/JSON/CSV stay `data-not-built`.
+Map is a planning board, not a record triad. Action slot: **Brief view** + primary **Print brief**. Writes: `copdocx.map.views.v1` (home/presets), `copdocx.map.layers.v1` (layer visibility), `copdocx.map.icons.v1` (assigned icons), `copdocx.map.markup.v1` (labels/arrows). Does not write leads/admin/book-in.
 
-**Map layers (planned, not built).** Three independent toggles on the map toolbar. A location may appear on more than one layer. Discriminator is existing fields — do not add a fourth “layer” field until a gap is proven.
+**Map layers (0.18.0 / layout 0.19.0).** One dock row per layer: eye = visibility, name = list, icon = category glyph. A place may appear on more than one layer.
 
-| Toggle | Question | v1 rule | Why it matters |
-| --- | --- | --- | --- |
-| **Active targets** | Where do we look next? | `createLocation` with `targetPriority` set (`"1"` Primary …). Plot if lat/long exist. | Hit order. Today’s map. |
-| **Arrest locations** | Where did custody happen? | `person.arrests[].arrestLocation` (and later a geocoded Location if one is attached). | Outcome, not the hunt. |
-| **Past / origin** | Where did we *find* them? | v1: vehicle `association === "plate-check"`. Other find-types TBD (see below). | Intake geography — plate checks and similar — not the jail or the current hide. |
+| Layer | Rule | Default |
+| --- | --- | --- |
+| Active targets | `targetPriority` set | on |
+| Arrests | `person.arrests[]` (plot only if lat/long on the row or `lat, lng` in the location string) | on |
+| Officer homes | committed officer `residence` / `home` location | on |
+| Origin / finds | vehicle/person `association === "plate-check"` | off |
+| Markup | labels and arrows | on |
 
-`association` is why we know the place (`residence` / `work` / `registration` / `known-parking` / `plate-check`). `targetPriority` is whether it is an active hit. Arrest is a different object, not a location association. A plate-check can also be ranked; then it is both origin and active.
-
-**Open (do not invent yet):** what else is origin besides plate-check (LE referral scene, encounter location, demoted former targets); arrest rows are a free-text string today with no lat/long; toggles are independent checkboxes (default Active on), not a single-select radio.
+Icon library (Lucide set on the page, `<details>` closed by default) assigns a glyph to a **category** (click a layer icon/name while a swatch is picked) or a **row**. Overlay tools: Label, Arrow, Delete. **Brief view** hides chrome, overlays, and the dock; **Print brief** / File **Print brief** uses the browser print dialog (Save as PDF).
 
 `narrative.html` (`data-page="narrative"`) is the I-213 / Build 9 workspace, not
 a chrome tab. Open it from the encounter form (**Generate I-213**). The Encounters
@@ -171,7 +171,7 @@ List tables: `#{records}Body`, `#{records}Empty`, `#{records}TableWrap`.
 | Draft badge / chips | `.record-status.record-status-draft`, `.record-filter-chips` |
 | Narrative shell / engine scope | `.narrative-*`, `.narrative-engine-host` |
 | Home briefing hub | `.page-home`, `.home-modules`, `.home-module`, `.home-split` |
-| Map planning board | `.page-map`, `.map-layout`, `.map-card`, `.map-toolbar`, `.targets-card` |
+| Map planning board | `.map-shell`, `.map-stage`, `.map-overlay`, `.map-dock`, `.map-layer-list` |
 | Photo picker (test) | `.page-photo-picker`, `.photo-library`, `.photo-crop-stage`, `.photo-tag-list` |
 | File upload (test) | `.file-library`, `.file-row`, `.file-preview` |
 | Object view media | `.media-photo-card`, `.media-doc-list` (planned) |
@@ -184,7 +184,7 @@ Do not add per-page stylesheets unless print/PDF requires it.
 | --- | --- |
 | repo root | HTML pages (lowercase, hyphenated form suffix) |
 | `functions/` | Page/behavior JS |
-| `functions/model/` | Factories, store, collect/hydrate, `util.js`, `autosave.js` — **singular** names |
+| `functions/model/` | Factories, store, `media.js` (IDB photos/files), collect/hydrate, `util.js`, `autosave.js` — **singular** names |
 | `functions/leads.js` | Lead list + view painter (after split) |
 | `functions/app-bar.js` | `COPDoc.chrome` + menus + status |
 | `functions/transfer.js` | File Import / Export dialogs; reads the three stores directly |
@@ -211,33 +211,33 @@ app-bar.js → transfer.js → date.js → assets/icons/copdoc-icons.js → func
 
 Do **not** load `store.js`, `admin.js`, `collect.js`, `hydrate.js`, `workflow.js`, or `cards.js`. Skeleton does not write storage. A later painter may **read** committed leads / roster / book-in.
 
-**Photo picker test** (`photo-picker.html`):
+**Photo picker** (`photo-picker.html`):
 
 ```
-app-bar.js → date.js → model/util.js → photo-picker.js
+app-bar.js → date.js → model/util.js → model/store.js → model/media.js → photo-picker.js
 ```
 
-Not a chrome tab. Isolated key `copdocx.photo-picker.v1`. Do **not** write leads, admin, or book-in.
+Not a chrome tab. Lab key `copdocx.photo-picker.v1`. Owner query **Save photo** writes IndexedDB. Do **not** write leads, admin, or book-in JSON.
 
-**File upload test** (`file-upload.html`):
+**File upload** (`file-upload.html`):
 
 ```
-app-bar.js → date.js → model/util.js → data/identity-document-types.js → file-upload.js
+app-bar.js → date.js → model/util.js → model/store.js → model/media.js → data/identity-document-types.js → file-upload.js
 ```
 
-Not a chrome tab. Isolated key `copdocx.file-upload.v1`. Same kind/tags as photos, plus `documentType`. Do **not** write leads, admin, or book-in.
+Not a chrome tab. Lab key `copdocx.file-upload.v1`. Owner query **Save file** writes IndexedDB.
 
-**Media (planned):** `functions/model/media.js` (IndexedDB). Views load `media.js` then `functions/media-card.js`. Pickers with `?ownerType=&id=` call `COPDoc.media.save`. Do not load media into `collect.js` / `hydrate.js`.
+**Media (0.17.0+):** `functions/model/media.js` (IndexedDB). Views will load `media.js` then `functions/media-card.js`. Do not load media into `collect.js` / `hydrate.js`.
 
 **Map** (`map.html`):
 
 ```
 app-bar.js → date.js
 → model/util.js → model/person.js → model/store.js
-→ Leaflet (CDN) → map-views.js → map.js → map-targets.js
+→ Leaflet (CDN) → assets/icons/copdoc-icons.js → map-views.js → map.js → map-targets.js → map-markup.js
 ```
 
-Do **not** load `cards.js`, `collect.js`, `hydrate.js`, `admin.js`, or `workflow.js`. Cross-store **read** of leads for ranked locations. The only write is `copdocx.map.views.v1` (home view / presets). File PDF/KMZ/JSON/CSV stay `data-not-built`. Empty action slot.
+Do **not** load `cards.js`, `collect.js`, `hydrate.js`, `admin.js`, or `workflow.js`. Cross-store **read** of leads for ranked locations and admin officer homes. Writes: `copdocx.map.views.v1`, `copdocx.map.layers.v1`, `copdocx.map.icons.v1`, `copdocx.map.markup.v1`. File **Print brief** works; KMZ/JSON/CSV stay `data-not-built`. Action slot: Brief view + Print brief.
 
 **Admin pages** (officer/vehicle/dashboard/schedule/list/view):
 

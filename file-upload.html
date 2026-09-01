@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>File upload</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="file-upload">
+    <!--
+      Development workspace for general files (PDF, images, scans).
+      Same tagging as photo-picker, plus document type.
+      Own storage key. Does not write leads, admin, or book-in.
+    -->
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.18.9"
+        >
+          Version 0.18.9
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide page-photo-picker">
+      <header class="page-header">
+        <h1>File upload</h1>
+        <div class="page-meta">
+          <p>
+            Test workspace. Any file, same tags as photos, plus document type.
+            Opened from a person, officer, vehicle, or location, Save file
+            stores it on that object.
+          </p>
+        </div>
+      </header>
+
+      <input id="fileUploadInput" type="file" multiple hidden />
+
+      <div class="photo-picker-layout">
+        <fieldset class="card-static">
+          <legend>Library</legend>
+          <div
+            id="fileDropZone"
+            class="photo-drop-zone"
+            tabindex="0"
+            role="button"
+            aria-label="Add files. Drop files here or click to choose."
+          >
+            <strong>Drop files here</strong>
+            <span>or click to choose. PDF, images, office files, anything.</span>
+          </div>
+          <div
+            class="record-filter-chips"
+            role="group"
+            aria-label="Filter files"
+          >
+            <button type="button" data-file-filter="all" aria-pressed="true">
+              All
+            </button>
+            <button type="button" data-file-filter="subject" aria-pressed="false">
+              Subject
+            </button>
+            <button type="button" data-file-filter="vehicle" aria-pressed="false">
+              Vehicle
+            </button>
+            <button type="button" data-file-filter="location" aria-pressed="false">
+              Location
+            </button>
+            <button type="button" data-file-filter="document" aria-pressed="false">
+              Document
+            </button>
+            <button type="button" data-file-filter="evidence" aria-pressed="false">
+              Evidence
+            </button>
+          </div>
+          <p id="fileLibraryEmpty" class="section-note">No files yet.</p>
+          <ul id="fileLibrary" class="file-library" hidden></ul>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Selected file</legend>
+          <p id="fileInspectorEmpty" class="section-note">
+            Select a file to assign type and tags.
+          </p>
+          <div id="fileInspector" hidden>
+            <div id="filePreview" class="file-preview"></div>
+            <div class="row">
+              <div class="field">
+                <label for="fileKind">Kind</label>
+                <select id="fileKind">
+                  <option value="subject">Subject</option>
+                  <option value="vehicle">Vehicle</option>
+                  <option value="location">Location</option>
+                  <option value="document">Document</option>
+                  <option value="evidence">Evidence</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fileDocumentType">Document type</label>
+                <select id="fileDocumentType"></select>
+              </div>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="fileTakenAt">Taken / issued</label>
+                <input id="fileTakenAt" type="datetime-local" />
+              </div>
+              <div class="field">
+                <label for="fileCaption">Caption</label>
+                <input id="fileCaption" type="text" autocomplete="off" />
+              </div>
+            </div>
+            <div class="row">
+              <div class="field field-span-2">
+                <label for="filePlace">Place</label>
+                <input
+                  id="filePlace"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="Street, city, or how the place is known"
+                />
+              </div>
+            </div>
+            <div class="row">
+              <div class="field field-span-2">
+                <label for="fileTagInput">Tags</label>
+                <div class="photo-tag-row">
+                  <input
+                    id="fileTagInput"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="Add a tag and press Enter"
+                  />
+                  <button
+                    type="button"
+                    id="fileAddTag"
+                    class="action-button-secondary"
+                  >
+                    Add tag
+                  </button>
+                </div>
+                <ul id="fileTagList" class="photo-tag-list"></ul>
+              </div>
+            </div>
+            <div class="row">
+              <div class="field field-span-2">
+                <label for="fileNotes">Notes</label>
+                <textarea id="fileNotes" rows="3"></textarea>
+              </div>
+            </div>
+            <p id="fileMeta" class="photo-file-meta"></p>
+            <div class="form-actions">
+              <a
+                id="fileOpenLink"
+                class="action-button-secondary"
+                href="#"
+                target="_blank"
+                rel="noopener"
+                hidden
+              >
+                Open file
+              </a>
+              <button
+                type="button"
+                id="fileRemove"
+                class="action-button-danger"
+              >
+                Remove file
+              </button>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/model/media.js"></script>
+    <script src="data/identity-document-types.js"></script>
+    <script src="functions/file-upload.js"></script>
+  </body>
+</html>

@@ -122,7 +122,7 @@
     var start =
       typeof api.getHomeView === "function" ? api.getHomeView() : null;
     var map = global.L.map(el, {
-      zoomControl: true,
+      zoomControl: false,
       attributionControl: true
     }).setView(
       start ? [start.lat, start.lng] : api.DEFAULT_CENTER,
@@ -142,6 +142,7 @@
 
     var layers = makeLayers(global.L);
     api.layers = layers;
+    global.L.control.zoom({ position: "bottomleft" }).addTo(map);
     applyBasemap(map, layers, "map");
     bindToolbar();
 

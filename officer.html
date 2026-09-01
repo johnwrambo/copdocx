@@ -13,9 +13,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.16.1"
+          data-version="0.18.9"
         >
-          Version 0.16.1
+          Version 0.18.9
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -28,7 +28,8 @@
         <legend id="officerViewTitle">Officer</legend>
         <p class="section-note">Current snapshot. Edit to change the record.</p>
         <div id="officerMissing" class="records-empty" hidden>Officer not found.</div>
-        <div id="officerSnapshot">
+        <div id="officerSnapshot" class="media-view-layout">
+          <div id="officerMedia" class="media-block"></div>
           <div class="snapshot-grid">
             <div class="snapshot-item">
               <p class="snapshot-label">Name</p>
@@ -113,6 +114,8 @@
     <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/officer.js"></script>
     <script src="functions/model/autosave.js"></script>
+    <script src="functions/model/media.js"></script>
+    <script src="functions/media-card.js"></script>
     <script src="functions/admin.js"></script>
   </body>
 </html>

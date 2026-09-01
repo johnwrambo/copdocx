@@ -26,12 +26,26 @@ Do not edit `data/immigration.js`. Do not rewrite PDF layout. Do not merge book-
 | 18 | Live I-213 field map | 17 | **0.13.0** | Thicken `bundleFromEncounter` from Book-in/lead/encounter. No demo narrativeFacts on `?encounterId=`. Do not rewrite the engine. |
 | 19 | Per-subject I-213 persist | 18 | **0.14.0** | Narratives + supervisor summary on the encounter. Section 10 **Include all other arrested**. Seed final disposition from Book-in. |
 | 20 | Encounter ID DAL+team | 12 | **0.14.1** | IDs mint as `DAL{team}-{YYYYMMDD}-{seq}`. Remint on team change only if draft and no Book-in subjects. |
-| 21 | Media store + `createMedia` | 6 | **0.17.0** | See [media-plan.md](media-plan.md) PR-A. Comment there before coding. |
-| 22 | Save photo / Save file | 21 | **0.17.1** | media-plan PR-B. Owner query. Lab path unchanged. |
-| 23 | View photo card + document list | 22 | **0.17.2** | media-plan PR-C. Lead / officer / vehicle views. |
-| 24 | Encounter + Book-in + FOW media | 23, 12, 7 | **0.17.3** | media-plan PR-D. |
+| 21 | Media store + `createMedia` | 6 | **0.17.0** | IDB `copdocx.media.v1`. `primary` photo per owner. `list(owner)` meta only. |
+| 22 | Save photo / Save file | 21 | **0.17.1** | Owner query → IDB. Lead/officer/vehicle views get Add photo/file links. Lab path unchanged. |
+| 23 | View photo card + document list | 22 | **0.17.2** | Add photo/file on **forms**. Views show primary photo + thumbs + files. |
+| 24 | Encounter + Book-in + FOW media | 23, 12, 7 | **0.17.3** | Planned FOW media; shipped as Mobile Target sheet in **0.18.2**. |
 | 25 | Transfer media index | 21, 11 | later | media-plan PR-E. Index only, no blobs. |
 | 26 | Product I-213 workspace | 19 | **0.16.0** | Live vs training layout. No demo fallback. **Save I-213**. Drop supplement/inspect chrome. Hide embedded Data/Template toolbars. |
 | 27 | I-213 is not a tab | 26 | **0.16.1** | Drop Narrative from chrome nav. `narrative.html` is an Encounter sub-page (`tab: "encounter"`). |
+| 28 | Lead case view body | 23 | **0.18.0** | Click photo on lead view to add/edit. List every vehicle and location with photos. |
+| 28a | Generate Target sheet | 28, 24 | **0.18.2** | Lead view chrome opens `mobile-target-sheet.html?id=` in a new window. Live paint of the filed lead; primary photo swipe. |
+| 28b | Card photos + location pin | 23, 28 | **0.18.3** | Add photo on vehicle/location form cards. Resolve drops a Leaflet pin on every location card; drag/click to correct. |
+| 28c | Lead view location maps | 28b | **0.18.4** | Filed lead location tiles show a read-only Leaflet pin when lat/long exist. |
+| 28d | Combined case map | 28c | **0.18.5** | One square case map of all person + vehicle locations. Hide empty identity facts. View photo click is the picker (no extra Add photo link). |
+| 28e | Square photos, 4:3 map | 28d | **0.18.6** | Subject photo stages are square (cover). Case/form location maps are 4×3. |
+| 28f | Case map legend + side files | 28e | **0.18.7** | Map = subject home/work/vehicle only, with side list. Files + gallery in the facts column. |
+| 28g | Location map basemaps | 28f | **0.18.9** | Map / Satellite / Hybrid on case map and form location maps. |
+
+| 28 | Operation skeleton | 6 | **0.18.0** | See [operations-plan.md](operations-plan.md) PR-A. Comment there before coding. |
+| 29 | Import targets + map | 28 | **0.18.1** | operations-plan PR-B. |
+| 30 | Teams, roles, availability | 29 | **0.18.2** | operations-plan PR-C. Reads roster/shifts; does not write duty. |
+| 31 | Pins, heading, rally, medevac | 30 | **0.18.3** | operations-plan PR-D. |
+| 32 | Generate / print order | 31 | **0.18.4** | operations-plan PR-E. |
 
 Vehicle autosave is **#3**. Lead New/Open die in **#6**, never “PR 5”.

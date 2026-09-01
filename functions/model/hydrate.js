@@ -73,6 +73,12 @@
     if (priority) {
       priority.value = location.targetPriority || "";
     }
+    if (root.cards && typeof root.cards.paintMedia === "function") {
+      root.cards.paintMedia(card, "LOCATION");
+    }
+    if (root.locationMap && typeof root.locationMap.sync === "function") {
+      root.locationMap.sync(card);
+    }
   }
 
   function clearList(listId) {
@@ -262,6 +268,9 @@
           vehicleModel: vehicle.vehicleModel,
           vehicleBodyStyle: vehicle.vehicleBodyStyle
         });
+        if (root.cards && typeof root.cards.paintMedia === "function") {
+          root.cards.paintMedia(card, "VEHICLE");
+        }
         (vehicle.locations || []).forEach(function (location) {
           var locCard = addNested(card, "location");
           if (locCard) {

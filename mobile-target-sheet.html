@@ -6,19 +6,19 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <title>Mobile FOW</title>
+    <title>Mobile Target sheet</title>
     <link rel="stylesheet" href="style/style.css" />
   </head>
-  <body data-page="mobile-fow">
+  <body data-page="mobile-target-sheet">
     <header class="app-bar">
       <div class="app-bar-info">
         <span class="app-bar-product">COPDoc</span>
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.16.1"
+          data-version="0.18.9"
         >
-          Version 0.16.1
+          Version 0.18.9
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -29,7 +29,7 @@
     <main class="mobile-fow-page">
       <nav class="mobile-fow-pagebar" aria-label="Target sheet navigation">
         <div class="mobile-fow-pagebar-title">
-          <span>Mobile FOW</span>
+          <span>Mobile Target sheet</span>
           <small>Field target sheet</small>
         </div>
       </nav>
@@ -42,7 +42,7 @@
         hidden
       >
         <strong>Target sheet unavailable</strong>
-        <span>The requested committed target record could not be loaded.</span>
+        <span>The requested lead could not be loaded.</span>
       </div>
 
       <article
@@ -70,7 +70,7 @@
         </div>
 
         <section class="fow-pid-stack" aria-label="Positive identification">
-          <figure class="fow-photo-card">
+          <figure class="fow-photo-card" id="targetPhotoCard">
             <img id="targetPhoto" alt="Target photograph" hidden />
             <div
               id="targetPhotoPlaceholder"
@@ -82,8 +82,26 @@
               <strong>No subject photo</strong>
               <span>Target photograph will display here</span>
             </div>
+            <button
+              type="button"
+              id="targetPhotoPrev"
+              class="fow-photo-nav fow-photo-nav-prev"
+              hidden
+              aria-label="Previous photo"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              id="targetPhotoNext"
+              class="fow-photo-nav fow-photo-nav-next"
+              hidden
+              aria-label="Next photo"
+            >
+              ›
+            </button>
             <figcaption id="targetPhotoMeta" class="fow-photo-meta">
-              Photo date and source not loaded
+              No subject photo
             </figcaption>
           </figure>
 
@@ -329,10 +347,13 @@
 
     <script src="functions/app-bar.js"></script>
     <script src="functions/date.js"></script>
+    <script src="functions/lead-source.js"></script>
     <script src="functions/model/util.js"></script>
     <script src="functions/model/person.js"></script>
+    <script src="functions/model/location.js"></script>
     <script src="functions/model/lead.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/model/media.js"></script>
     <script src="functions/leads.js"></script>
   </body>
 </html>

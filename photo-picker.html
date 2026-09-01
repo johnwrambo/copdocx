@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Photo picker</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="photo-picker">
+    <!--
+      Development workspace for subject / vehicle / location photos.
+      Own storage key. Does not write leads, admin, or book-in.
+    -->
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.18.9"
+        >
+          Version 0.18.9
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide page-photo-picker">
+      <header class="page-header">
+        <h1>Photo picker</h1>
+        <div class="page-meta">
+          <p>
+            Test workspace. Upload, tag, and crop. Opened from a person, officer,
+            vehicle, or location, Save photo stores the picture on that object.
+          </p>
+        </div>
+      </header>
+
+      <input
+        id="photoFileInput"
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+      />
+
+      <div class="photo-picker-layout">
+        <fieldset class="card-static photo-library-card">
+          <legend>Library</legend>
+          <div
+            id="photoDropZone"
+            class="photo-drop-zone"
+            tabindex="0"
+            role="button"
+            aria-label="Add photos. Drop images here or click to choose files."
+          >
+            <strong>Drop images here</strong>
+            <span>or click to choose files. Paste also works.</span>
+          </div>
+          <div
+            class="record-filter-chips photo-kind-filters"
+            role="group"
+            aria-label="Filter photos"
+          >
+            <button type="button" data-photo-filter="all" aria-pressed="true">
+              All
+            </button>
+            <button type="button" data-photo-filter="subject" aria-pressed="false">
+              Subject
+            </button>
+            <button type="button" data-photo-filter="vehicle" aria-pressed="false">
+              Vehicle
+            </button>
+            <button type="button" data-photo-filter="location" aria-pressed="false">
+              Location
+            </button>
+            <button type="button" data-photo-filter="document" aria-pressed="false">
+              Document
+            </button>
+            <button type="button" data-photo-filter="evidence" aria-pressed="false">
+              Evidence
+            </button>
+          </div>
+          <p id="photoLibraryEmpty" class="section-note">No photos yet.</p>
+          <ul id="photoLibrary" class="photo-library" hidden></ul>
+        </fieldset>
+
+        <fieldset class="card-static photo-inspector-card">
+          <legend>Selected photo</legend>
+          <p id="photoInspectorEmpty" class="section-note">
+            Select a photo to crop and tag.
+          </p>
+          <div id="photoInspector" hidden>
+            <div id="photoCropStage" class="photo-crop-stage">
+              <img id="photoCropImage" alt="Selected photograph" />
+              <div id="photoCropOverlay" class="photo-crop-overlay">
+                <div id="photoCropBox" class="photo-crop-box">
+                  <span data-handle="nw"></span>
+                  <span data-handle="ne"></span>
+                  <span data-handle="sw"></span>
+                  <span data-handle="se"></span>
+                </div>
+              </div>
+            </div>
+            <div class="photo-crop-tools">
+              <div class="field">
+                <label for="photoCropAspect">Crop aspect</label>
+                <select id="photoCropAspect">
+                  <option value="free">Free</option>
+                  <option value="1">1:1 mugshot</option>
+                  <option value="0.75">3:4 portrait</option>
+                  <option value="1.333">4:3</option>
+                </select>
+              </div>
+              <button type="button" id="photoApplyCrop" class="action-button">
+                Apply crop
+              </button>
+              <button
+                type="button"
+                id="photoResetCrop"
+                class="action-button-secondary"
+              >
+                Reset original
+              </button>
+            </div>
+
+            <div class="row">
+              <div class="field checkbox-field">
+                <input type="checkbox" id="photoPrimary" />
+                <label for="photoPrimary">Primary photo</label>
+              </div>
+              <div class="field">
+                <label for="photoTakenAt">Taken at</label>
+                <input id="photoTakenAt" type="datetime-local" />
+              </div>
+            </div>
+            <div class="row photo-lab-fields">
+              <div class="field">
+                <label for="photoKind">Kind</label>
+                <select id="photoKind">
+                  <option value="subject">Subject</option>
+                  <option value="vehicle">Vehicle</option>
+                  <option value="location">Location</option>
+                  <option value="document">Document</option>
+                  <option value="evidence">Evidence</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <div class="field field-span-2">
+                <label for="photoCaption">Caption</label>
+                <input id="photoCaption" type="text" autocomplete="off" />
+              </div>
+            </div>
+            <div class="row photo-lab-fields">
+              <div class="field field-span-2">
+                <label for="photoPlace">Place</label>
+                <input
+                  id="photoPlace"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="Street, city, or how the place is known"
+                />
+              </div>
+            </div>
+            <div class="row photo-lab-fields">
+              <div class="field field-span-2">
+                <label for="photoTagInput">Tags</label>
+                <div class="photo-tag-row">
+                  <input
+                    id="photoTagInput"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="Add a tag and press Enter"
+                  />
+                  <button
+                    type="button"
+                    id="photoAddTag"
+                    class="action-button-secondary"
+                  >
+                    Add tag
+                  </button>
+                </div>
+                <ul id="photoTagList" class="photo-tag-list"></ul>
+              </div>
+            </div>
+            <div class="row photo-lab-fields">
+              <div class="field field-span-2">
+                <label for="photoNotes">Notes</label>
+                <textarea id="photoNotes" rows="3"></textarea>
+              </div>
+            </div>
+            <p id="photoFileMeta" class="photo-file-meta"></p>
+            <div class="form-actions">
+              <button
+                type="button"
+                id="photoRemove"
+                class="action-button-danger"
+              >
+                Remove photo
+              </button>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/model/media.js"></script>
+    <script src="functions/photo-picker.js"></script>
+  </body>
+</html>

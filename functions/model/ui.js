@@ -418,6 +418,37 @@
     setStatus("Downloaded JSON snapshot.", true);
   }
 
+  function paintLeadFormMediaLinks() {
+    var wrap = byId("leadFormMediaLinks");
+    var photo = byId("leadFormAddPhoto");
+    var file = byId("leadFormAddFile");
+    if (!photo || !file) {
+      return;
+    }
+    var personId = subjectId();
+    var card = subjectCard();
+    var leadId = (card && card.dataset.leadId) || queryLeadId();
+    if (!personId || !leadId) {
+      if (wrap) {
+        wrap.hidden = true;
+      }
+      return;
+    }
+    if (wrap) {
+      wrap.hidden = false;
+    }
+    var ret = "lead-form.html?id=" + encodeURIComponent(leadId);
+    var q =
+      "ownerType=PERSON&id=" +
+      encodeURIComponent(personId) +
+      "&leadId=" +
+      encodeURIComponent(leadId) +
+      "&return=" +
+      encodeURIComponent(ret);
+    photo.href = "photo-picker.html?" + q;
+    file.href = "file-upload.html?" + q;
+  }
+
   function updateCancelHref(snapshot) {
     var a = byId("appBarBack") || byId("appBarCancel");
     if (!a) {
@@ -460,6 +491,10 @@
     var saveBtn = document.querySelector(
       '#appBarPrimaryAction[data-chrome-action="save"]'
     );
+    paintLeadFormMediaLinks();
+    if (root.cards && typeof root.cards.paintAllMedia === "function") {
+      root.cards.paintAllMedia();
+    }
     if (saveBtn) {
       saveBtn.addEventListener("click", saveCurrentLead);
     }

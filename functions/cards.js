@@ -247,6 +247,118 @@ function syncParksHere(card) {
   wrap.hidden = !(assoc && assoc.value === "registration");
 }
 
+function ensureCardEntityId(card, prefix) {
+  if (!card) {
+    return "";
+  }
+  if (card.dataset.entityId) {
+    return card.dataset.entityId;
+  }
+  var model = window.COPDoc && COPDoc.model;
+  card.dataset.entityId =
+    model && typeof model.newId === "function"
+      ? model.newId(prefix)
+      : prefix + "_" + Date.now().toString(36);
+  return card.dataset.entityId;
+}
+
+function formMediaReturn() {
+  var page = document.body.getAttribute("data-page") || "";
+  var id = "";
+  try {
+    id = new URLSearchParams(window.location.search).get("id") || "";
+  } catch (error) {
+    id = "";
+  }
+  if (page === "lead-form") {
+    var lead = document.querySelector('[data-card="lead"]');
+    id = (lead && lead.dataset.leadId) || id;
+    return id ? "lead-form.html?id=" + encodeURIComponent(id) : "";
+  }
+  if (page === "encounter-form") {
+    var enc = document.getElementById("encounterId");
+    id = (enc && enc.value) || id;
+    return id ? "encounter-form.html?id=" + encodeURIComponent(id) : "";
+  }
+  if (page === "officer-form") {
+    return id ? "officer-form.html?id=" + encodeURIComponent(id) : "";
+  }
+  if (page === "vehicle-form") {
+    return id ? "vehicle-form.html?id=" + encodeURIComponent(id) : "";
+  }
+  return "";
+}
+
+function formMediaQueryExtra() {
+  var page = document.body.getAttribute("data-page") || "";
+  if (page === "lead-form") {
+    var lead = document.querySelector('[data-card="lead"]');
+    var leadId = lead && lead.dataset.leadId;
+    return leadId ? "&leadId=" + encodeURIComponent(leadId) : "";
+  }
+  if (page === "encounter-form") {
+    var enc = document.getElementById("encounterId");
+    var encounterId = enc && enc.value;
+    return encounterId
+      ? "&encounterId=" + encodeURIComponent(encounterId)
+      : "";
+  }
+  return "";
+}
+
+function paintCardMediaLinks(card, ownerType) {
+  if (!card) {
+    return;
+  }
+  var photo = card.querySelector("[data-card-add-photo]");
+  var file = card.querySelector("[data-card-add-file]");
+  var wrap = card.querySelector("[data-card-media]");
+  if (!photo && !file) {
+    return;
+  }
+  var prefix = ownerType === "VEHICLE" ? "veh" : "loc";
+  var ownerId = ensureCardEntityId(card, prefix);
+  var ret = formMediaReturn();
+  if (!ownerId || !ret) {
+    if (wrap) {
+      wrap.hidden = true;
+    }
+    return;
+  }
+  if (wrap) {
+    wrap.hidden = false;
+  }
+  var q =
+    "ownerType=" +
+    encodeURIComponent(ownerType) +
+    "&id=" +
+    encodeURIComponent(ownerId) +
+    formMediaQueryExtra() +
+    "&return=" +
+    encodeURIComponent(ret);
+  if (photo) {
+    photo.href = "photo-picker.html?" + q;
+  }
+  if (file) {
+    file.href = "file-upload.html?" + q;
+  }
+}
+
+function paintAllCardMediaLinks() {
+  document.querySelectorAll('[data-card="vehicle"]').forEach(function (card) {
+    if (card.closest("template")) {
+      return;
+    }
+    paintCardMediaLinks(card, "VEHICLE");
+  });
+  document.querySelectorAll('[data-card="location"]').forEach(function (card) {
+    if (card.closest("template")) {
+      return;
+    }
+    paintCardMediaLinks(card, "LOCATION");
+  });
+}
+
 function bindAddressCardFull(card) {
   fillLocationAssociationSelect(
     card.querySelector('[data-field="locationAssociation"]')
@@ -264,6 +376,7 @@ function bindAddressCardFull(card) {
       syncParksHere(card);
     });
   }
+  paintCardMediaLinks(card, "LOCATION");
   ["licensePlate", "plateState", "street", "city", "lastName", "firstName"].forEach(
     function (name) {
       var el = card.querySelector('[data-field="' + name + '"]');
@@ -319,6 +432,7 @@ function bindVehicleCardFull(card) {
   if (typeof bindVehicleCard === "function") {
     bindVehicleCard(card);
   }
+  paintCardMediaLinks(card, "VEHICLE");
   ["licensePlate", "plateState"].forEach(function (name) {
     var el = card.querySelector('[data-field="' + name + '"]');
     if (!el || el.dataset.summaryBound === "true") {
@@ -1030,3 +1144,6 @@ window.COPDoc.cards.addLocation = function addLocationCard() {
   return window.COPDoc.cards.add("location");
 };
 window.COPDoc.cards.addAddress = window.COPDoc.cards.addLocation;
+window.COPDoc.cards.paintMedia = paintCardMediaLinks;
+window.COPDoc.cards.paintAllMedia = paintAllCardMediaLinks;
+window.COPDoc.cards.ensureEntityId = ensureCardEntityId;

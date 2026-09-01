@@ -1,21 +1,176 @@
 /**
- * Targets card on Maps and Planning.
- *
- * Reads saved leads from COPDoc.store, lists locations that have a
- * targetPriority (Primary / Secondary / Tertiary / 4th…), and drops
- * numbered markers on the Leaflet map when lat/long exist.
- *
- * Row click flies to that marker. Map click / right-click are not
- * wired yet — those are planning gestures, not table gestures.
+ * Map location layers: active targets, arrests, officer homes, origin finds.
+ * Icon library assigns a glyph to a category or a single pin.
+ * Writes only copdocx.map.layers.v1 and copdocx.map.icons.v1.
  */
 (function (global) {
   "use strict";
 
   var root = (global.COPDoc = global.COPDoc || {});
   var api = (root.map = root.map || {});
-  var markersById = {};
-  var markerLayer = null;
+  var LAYER_KEY = "copdocx.map.layers.v1";
+  var ICON_KEY = "copdocx.map.icons.v1";
+  var ADMIN_KEY = "copdoc.admin.v1";
+  var PALETTE = [
+    "Crosshair",
+    "MapPin",
+    "MapPinned",
+    "Shield",
+    "Users",
+    "Car",
+    "Star",
+    "Navigation",
+    "Radio",
+    "Focus",
+    "Archive"
+  ];
+  var DEFAULT_ICONS = {
+    targets: "Crosshair",
+    arrests: "Shield",
+    officers: "MapPinned",
+    origin: "MapPin"
+  };
+  var DEFAULT_VISIBLE = {
+    targets: true,
+    arrests: true,
+    officers: true,
+    origin: false,
+    markup: true
+  };
+  var HEADERS = {
+    targets: ["Rank", "Subject", "Address", "Association"],
+    arrests: ["Date", "Subject", "Charge", "Location"],
+    officers: ["Officer", "Address", "Duty"],
+    origin: ["Subject", "Address", "Association"],
+    markup: ["Type", "Text"]
+  };
+  var EMPTY = {
+    targets: "No ranked target locations.",
+    arrests: "No arrest locations on committed leads.",
+    officers: "No officer home addresses with coordinates.",
+    origin: "No plate-check / origin locations.",
+    markup: "No labels or arrows yet."
+  };
+  var LAYER_ORDER = [
+    ["targets", "Active targets"],
+    ["arrests", "Arrests"],
+    ["officers", "Officer homes"],
+    ["origin", "Origin / finds"],
+    ["markup", "Markup"]
+  ];
+
+  var catalog = {
+    targets: [],
+    arrests: [],
+    officers: [],
+    origin: []
+  };
+  var visible = Object.assign({}, DEFAULT_VISIBLE);
+  var icons = {
+    category: Object.assign({}, DEFAULT_ICONS),
+    pins: {}
+  };
+  var listId = "targets";
+  var pendingIcon = "";
   var selectedId = "";
+  var groups = {};
+  var markersById = {};
+  var fitted = false;
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function loadJson(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (err) {
+      return fallback;
+    }
+  }
+
+  function saveJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (err) {}
+  }
+
+  function loadPrefs() {
+    var layers = loadJson(LAYER_KEY, null);
+    if (layers && layers.visible) {
+      Object.keys(DEFAULT_VISIBLE).forEach(function (k) {
+        if (typeof layers.visible[k] === "boolean") {
+          visible[k] = layers.visible[k];
+        }
+      });
+    }
+    var stored = loadJson(ICON_KEY, null);
+    if (stored && stored.category) {
+      Object.keys(DEFAULT_ICONS).forEach(function (k) {
+        if (stored.category[k]) {
+          icons.category[k] = stored.category[k];
+        }
+      });
+    }
+    if (stored && stored.pins && typeof stored.pins === "object") {
+      icons.pins = stored.pins;
+    }
+  }
+
+  function saveLayers() {
+    saveJson(LAYER_KEY, { visible: visible });
+  }
+
+  function saveIcons() {
+    saveJson(ICON_KEY, icons);
+  }
+
+  function committed(row) {
+    return !row || !row.meta || row.meta.status !== "draft";
+  }
+
+  function formatAddress(location) {
+    if (!location) {
+      return "";
+    }
+    var line1 = [location.street, location.street2].filter(Boolean).join(" ");
+    var line2 = [location.city, location.state, location.zip]
+      .filter(Boolean)
+      .join(" ");
+    return [line1, line2].filter(Boolean).join(", ");
+  }
+
+  function hasCoords(lat, lng) {
+    var a = Number(lat);
+    var b = Number(lng);
+    return isFinite(a) && isFinite(b) && !(a === 0 && b === 0);
+  }
+
+  function parseCoords(text) {
+    var m = String(text || "").match(
+      /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/
+    );
+    if (!m) {
+      return null;
+    }
+    if (!hasCoords(m[1], m[2])) {
+      return null;
+    }
+    return { latitude: m[1], longitude: m[2] };
+  }
+
+  function associationLabel(code) {
+    var labels = {
+      residence: "Residence",
+      home: "Home",
+      work: "Work",
+      "plate-check": "Plate check",
+      registration: "Registration",
+      "known-parking": "Known parking"
+    };
+    return labels[code] || code || "";
+  }
 
   function priorityLabel(rank) {
     var n = Number(rank);
@@ -28,234 +183,327 @@
     if (n === 3) {
       return "Tertiary";
     }
-    if (!n) {
-      return "";
-    }
-    return String(n);
-  }
-
-  function associationLabel(code) {
-    var labels = {
-      residence: "Residence",
-      work: "Work",
-      "plate-check": "Plate check",
-      "plate-check-location": "Plate check",
-      registration: "Vehicle registration",
-      "known-parking": "Known parking",
-      "vehicle-registration": "Vehicle registration",
-      "vehicle-location": "Vehicle location"
-    };
-    return labels[code] || code || "";
-  }
-
-  function walkLocations(snapshot) {
-    var rows = [];
-    var subject = subjectFor(snapshot);
-    if (subject && subject.locations) {
-      subject.locations.forEach(function (location) {
-        rows.push({ location: location, owner: "subject" });
-      });
-    }
-    (snapshot.vehicles || []).forEach(function (vehicle) {
-      (vehicle.locations || []).forEach(function (location) {
-        rows.push({
-          location: location,
-          owner: "vehicle",
-          plate: vehicle.licensePlate || ""
-        });
-      });
-    });
-    (snapshot.locations || []).forEach(function (location) {
-      rows.push({ location: location, owner: "legacy" });
-    });
-    return rows;
-  }
-
-  function formatAddress(location) {
-    var line1 = [location.street, location.street2].filter(Boolean).join(" ");
-    var line2 = [location.city, location.state, location.zip]
-      .filter(Boolean)
-      .join(" ");
-    return [line1, line2].filter(Boolean).join(", ");
-  }
-
-  function hasCoords(location) {
-    var lat = Number(location.latitude);
-    var lng = Number(location.longitude);
-    return isFinite(lat) && isFinite(lng) && !(lat === 0 && lng === 0);
+    return n ? String(n) : "";
   }
 
   function subjectFor(snapshot) {
     if (snapshot.person && snapshot.person.personId) {
       return snapshot.person;
     }
-    var people = snapshot.people || [];
-    var i;
-    for (i = 0; i < people.length; i++) {
-      if (people[i].personId === snapshot.subjectPersonId) {
-        return people[i];
-      }
-    }
-    return people[0] || null;
+    return null;
   }
 
-  function listTargets() {
+  function walkLeadLocations(snapshot) {
+    var rows = [];
+    var subject = subjectFor(snapshot);
+    if (subject && subject.locations) {
+      subject.locations.forEach(function (location) {
+        rows.push({ location: location });
+      });
+    }
+    (snapshot.vehicles || []).forEach(function (vehicle) {
+      (vehicle.locations || []).forEach(function (location) {
+        rows.push({ location: location, plate: vehicle.licensePlate || "" });
+      });
+    });
+    (snapshot.locations || []).forEach(function (location) {
+      rows.push({ location: location });
+    });
+    return rows;
+  }
+
+  function personLabel(person) {
+    if (root.model && root.model.formatPersonLabel) {
+      return root.model.formatPersonLabel(person) || "Untitled";
+    }
+    return "Untitled";
+  }
+
+  function collectLeads() {
+    catalog.targets = [];
+    catalog.arrests = [];
+    catalog.origin = [];
     var model = root.model;
     if (!model || !model.store) {
-      return [];
+      return;
     }
     model.store.loadFromDisk();
-    var state = model.store.getState();
-    var leads = state.leads || {};
-    var rows = [];
+    var leads = (model.store.getState() || {}).leads || {};
     Object.keys(leads).forEach(function (leadId) {
       var snap = leads[leadId];
+      if (!committed(snap)) {
+        return;
+      }
       var subject = subjectFor(snap);
-      var name =
-        (model.formatPersonLabel && model.formatPersonLabel(subject)) ||
-        "Untitled";
-      walkLocations(snap).forEach(function (row) {
-        var location = row.location;
-        if (!location || !location.targetPriority) {
+      var name = personLabel(subject);
+      walkLeadLocations(snap).forEach(function (row) {
+        var loc = row.location;
+        if (!loc) {
           return;
         }
-        var assoc =
-          location.association || location.formAssociation || "";
-        rows.push({
+        var assoc = loc.association || loc.locationAssociation || "";
+        var base = {
           leadId: leadId,
-          locationId: location.locationId,
-          priority: Number(location.targetPriority) || 99,
-          priorityLabel: priorityLabel(location.targetPriority),
-          subject: name || "Untitled",
-          address: formatAddress(location) || "(no street)",
+          locationId: loc.locationId || "",
+          subject: name,
+          address: formatAddress(loc) || "(no street)",
           association: associationLabel(assoc),
-          latitude: location.latitude,
-          longitude: location.longitude,
-          hasCoords: hasCoords(location)
+          associationCode: assoc,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          hasCoords: hasCoords(loc.latitude, loc.longitude)
+        };
+        if (loc.targetPriority) {
+          catalog.targets.push(
+            Object.assign({}, base, {
+              category: "targets",
+              id: "targets:" + (loc.locationId || leadId),
+              priority: Number(loc.targetPriority) || 99,
+              priorityLabel: priorityLabel(loc.targetPriority),
+              cols: [
+                priorityLabel(loc.targetPriority),
+                name,
+                base.address,
+                base.association
+              ]
+            })
+          );
+        }
+        if (assoc === "plate-check") {
+          catalog.origin.push(
+            Object.assign({}, base, {
+              category: "origin",
+              id: "origin:" + (loc.locationId || leadId),
+              cols: [name, base.address, base.association]
+            })
+          );
+        }
+      });
+      (subject && subject.arrests ? subject.arrests : []).forEach(function (arr) {
+        var parsed = parseCoords(arr.arrestLocation);
+        var lat = arr.latitude || (parsed && parsed.latitude) || "";
+        var lng = arr.longitude || (parsed && parsed.longitude) || "";
+        catalog.arrests.push({
+          category: "arrests",
+          id: "arrests:" + (arr.arrestId || leadId),
+          leadId: leadId,
+          subject: name,
+          address: arr.arrestLocation || "(no location)",
+          latitude: lat,
+          longitude: lng,
+          hasCoords: hasCoords(lat, lng),
+          cols: [
+            arr.arrestDate || "—",
+            name,
+            arr.arrestCharge || "—",
+            arr.arrestLocation || "(no location)"
+          ]
         });
       });
     });
-    rows.sort(function (a, b) {
+    catalog.targets.sort(function (a, b) {
       if (a.priority !== b.priority) {
         return a.priority - b.priority;
       }
       return String(a.subject).localeCompare(String(b.subject));
     });
-    return rows;
   }
 
-  function bindCollapse(fieldset) {
-    if (!fieldset || fieldset.dataset.collapseReady === "true") {
-      return;
-    }
-    fieldset.dataset.collapseReady = "true";
-    fieldset.classList.add("card");
-    var legend = fieldset.querySelector(":scope > legend");
-    if (!legend) {
-      return;
-    }
-    var titleText = legend.textContent.trim();
-    legend.textContent = "";
-    var toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "card-toggle";
-    toggle.setAttribute("aria-expanded", "true");
-    toggle.setAttribute("title", "Collapse card");
-    toggle.textContent = titleText;
-    legend.appendChild(toggle);
-
-    toggle.addEventListener("click", function (event) {
-      event.preventDefault();
-      var collapsed = fieldset.classList.toggle("is-collapsed");
-      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-      toggle.setAttribute("title", collapsed ? "Expand card" : "Collapse card");
-      var layout = document.querySelector(".map-layout");
-      if (layout) {
-        layout.classList.toggle("is-targets-collapsed", collapsed);
+  function collectOfficers() {
+    catalog.officers = [];
+    var parsed = loadJson(ADMIN_KEY, { officers: [] });
+    (parsed.officers || []).forEach(function (officer) {
+      if (!committed(officer)) {
+        return;
       }
-      if (api.resize) {
-        global.setTimeout(api.resize, 0);
+      var locs = officer.locations || [];
+      var home = null;
+      locs.forEach(function (loc) {
+        var assoc = loc.association || loc.locationAssociation || "";
+        if (assoc === "residence" || assoc === "home") {
+          home = loc;
+        }
+      });
+      if (!home && officer.address) {
+        var a =
+          officer.address.association ||
+          officer.address.locationAssociation ||
+          "";
+        if (a === "residence" || a === "home") {
+          home = officer.address;
+        }
       }
+      if (!home) {
+        return;
+      }
+      var name = [officer.lastName, officer.firstName].filter(Boolean).join(", ");
+      if (officer.lastName && officer.firstName) {
+        name = officer.lastName + ", " + officer.firstName;
+      }
+      catalog.officers.push({
+        category: "officers",
+        id: "officers:" + (officer.officerId || officer.id),
+        subject: name || "Officer",
+        address: formatAddress(home) || "(no street)",
+        latitude: home.latitude,
+        longitude: home.longitude,
+        hasCoords: hasCoords(home.latitude, home.longitude),
+        cols: [name || "Officer", formatAddress(home) || "(no street)", officer.duty || ""]
+      });
     });
   }
 
-  function clearMarkers() {
-    markersById = {};
-    if (markerLayer && api.leaflet) {
-      markerLayer.clearLayers();
+  function iconNameFor(row) {
+    if (row && icons.pins[row.id]) {
+      return icons.pins[row.id];
     }
+    return icons.category[row.category] || DEFAULT_ICONS[row.category] || "MapPin";
   }
 
-  function markerIcon(priority) {
+  function pinHtml(row) {
+    var name = iconNameFor(row);
+    var glyph =
+      global.COPDoc && COPDoc.icon ? COPDoc.icon(name, 14) : "";
+    var badge = "";
+    if (row.category === "targets" && row.priority) {
+      badge = "<i>" + String(row.priority) + "</i>";
+    }
+    return (
+      '<span class="map-pin-glyph map-pin-' +
+      row.category +
+      '">' +
+      glyph +
+      badge +
+      "</span>"
+    );
+  }
+
+  function markerIcon(row) {
     return global.L.divIcon({
-      className: "target-marker",
-      html: "<span>" + String(priority) + "</span>",
-      iconSize: [26, 26],
-      iconAnchor: [13, 13]
+      className: "map-pin",
+      html: pinHtml(row),
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
     });
   }
 
-  function plotMarkers(rows) {
+  function ensureGroups() {
     if (!api.leaflet || !global.L) {
+      return false;
+    }
+    ["targets", "arrests", "officers", "origin"].forEach(function (key) {
+      if (!groups[key]) {
+        groups[key] = global.L.layerGroup();
+      }
+    });
+    return true;
+  }
+
+  function plotCategory(key) {
+    if (!ensureGroups()) {
       return;
     }
-    if (!markerLayer) {
-      markerLayer = global.L.layerGroup().addTo(api.leaflet);
+    var group = groups[key];
+    group.clearLayers();
+    if (api.leaflet.hasLayer(group)) {
+      api.leaflet.removeLayer(group);
     }
-    clearMarkers();
+    if (!visible[key]) {
+      return;
+    }
     var bounds = [];
-    rows.forEach(function (row) {
+    catalog[key].forEach(function (row) {
       if (!row.hasCoords) {
         return;
       }
       var latlng = [Number(row.latitude), Number(row.longitude)];
       var marker = global.L.marker(latlng, {
-        icon: markerIcon(row.priority),
-        title: row.priorityLabel + " — " + row.subject
+        icon: markerIcon(row),
+        title: row.subject + " — " + row.address
       });
       marker.bindPopup(
         "<strong>" +
-          row.priorityLabel +
-          "</strong><br>" +
           row.subject +
-          "<br>" +
-          row.address
+          "</strong><br>" +
+          row.address +
+          (row.association ? "<br>" + row.association : "")
       );
       marker.on("click", function () {
-        selectTarget(row.locationId, false);
+        listId = key;
+        selectRow(row.id, false);
+        renderList();
       });
-      marker.addTo(markerLayer);
-      markersById[row.locationId] = marker;
+      marker.addTo(group);
+      markersById[row.id] = marker;
       bounds.push(latlng);
     });
-    if (bounds.length) {
-      api.leaflet.fitBounds(bounds, { padding: [28, 28], maxZoom: 16 });
-    }
+    group.addTo(api.leaflet);
+    return bounds;
   }
 
-  function selectTarget(locationId, fly) {
-    selectedId = locationId || "";
-    var body = document.getElementById("targetsTableBody");
+  function plotAll() {
+    markersById = {};
+    var bounds = [];
+    ["targets", "arrests", "officers", "origin"].forEach(function (key) {
+      var part = plotCategory(key);
+      if (part && part.length) {
+        bounds = bounds.concat(part);
+      }
+    });
+    if (!fitted && bounds.length && api.leaflet) {
+      api.leaflet.fitBounds(bounds, { padding: [28, 28], maxZoom: 16 });
+      fitted = true;
+    }
+    if (typeof api.syncMarkupVisibility === "function") {
+      api.syncMarkupVisibility(visible.markup);
+    }
+    paintLegend();
+  }
+
+  function selectRow(id, fly) {
+    selectedId = id || "";
+    var body = byId("targetsTableBody");
     if (body) {
       Array.prototype.forEach.call(body.querySelectorAll("tr"), function (tr) {
-        tr.classList.toggle(
-          "is-selected",
-          tr.getAttribute("data-location-id") === selectedId
-        );
+        tr.classList.toggle("is-selected", tr.getAttribute("data-row-id") === selectedId);
       });
     }
     var marker = markersById[selectedId];
     if (marker && fly !== false && api.leaflet) {
-      api.leaflet.flyTo(marker.getLatLng(), Math.max(api.leaflet.getZoom(), 16), {
-        duration: 0.6
+      api.leaflet.flyTo(marker.getLatLng(), Math.max(api.leaflet.getZoom(), 14), {
+        duration: 0.5
       });
       marker.openPopup();
     }
   }
 
-  function renderTable(rows) {
-    var body = document.getElementById("targetsTableBody");
-    var empty = document.getElementById("targetsEmpty");
+  function renderHead() {
+    var head = byId("mapListHead");
+    if (!head) {
+      return;
+    }
+    var tr = document.createElement("tr");
+    (HEADERS[listId] || []).forEach(function (label) {
+      var th = document.createElement("th");
+      th.textContent = label;
+      tr.appendChild(th);
+    });
+    head.replaceChildren(tr);
+  }
+
+  function currentRows() {
+    if (listId === "markup" && typeof api.listMarkup === "function") {
+      return api.listMarkup();
+    }
+    return catalog[listId] || [];
+  }
+
+  function renderList() {
+    renderHead();
+    var body = byId("targetsTableBody");
+    var empty = byId("targetsEmpty");
+    var rows = currentRows();
+    paintLayerList();
     if (!body) {
       return;
     }
@@ -263,6 +511,7 @@
     if (!rows.length) {
       if (empty) {
         empty.hidden = false;
+        empty.textContent = EMPTY[listId] || "Nothing in this list.";
       }
       return;
     }
@@ -271,44 +520,272 @@
     }
     rows.forEach(function (row) {
       var tr = document.createElement("tr");
-      tr.setAttribute("data-location-id", row.locationId);
-      tr.setAttribute("data-lead-id", row.leadId);
-      if (!row.hasCoords) {
+      tr.setAttribute("data-row-id", row.id);
+      if (row.hasCoords === false) {
         tr.classList.add("is-ungeocoded");
       }
-      [row.priorityLabel, row.subject, row.address, row.association].forEach(
-        function (text) {
-          var td = document.createElement("td");
-          td.textContent = text;
-          tr.appendChild(td);
-        }
-      );
+      if (row.id === selectedId) {
+        tr.classList.add("is-selected");
+      }
+      (row.cols || []).forEach(function (text) {
+        var td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+      });
       tr.addEventListener("click", function () {
-        selectTarget(row.locationId, true);
+        if (pendingIcon && row.category && row.category !== "markup") {
+          icons.pins[row.id] = pendingIcon;
+          saveIcons();
+          pendingIcon = "";
+          paintPalette();
+          plotAll();
+          setHint("Icon assigned to this pin.");
+        }
+        selectedId = row.id;
+        if (row.category === "markup" && typeof api.selectMarkup === "function") {
+          api.selectMarkup(row.id);
+        } else {
+          selectRow(row.id, true);
+        }
+        renderList();
       });
       body.appendChild(tr);
     });
   }
 
+  function paintPalette() {
+    var host = byId("mapIconPalette");
+    if (!host) {
+      return;
+    }
+    if (global.COPDoc && COPDoc.icons && COPDoc.icons.inject) {
+      COPDoc.icons.inject();
+    }
+    host.replaceChildren();
+    PALETTE.forEach(function (name) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "map-icon-swatch";
+      if (name === pendingIcon) {
+        btn.classList.add("is-active");
+      }
+      btn.setAttribute("title", name);
+      btn.setAttribute("aria-label", name);
+      btn.innerHTML = global.COPDoc && COPDoc.icon ? COPDoc.icon(name, 16) : name;
+      btn.addEventListener("click", function () {
+        pendingIcon = pendingIcon === name ? "" : name;
+        paintPalette();
+        setHint(
+          pendingIcon
+            ? pendingIcon + " selected — click a layer or a row."
+            : "Select an icon, then a layer or a row."
+        );
+      });
+      host.appendChild(btn);
+    });
+  }
+
+  function setHint(text) {
+    var el = byId("mapIconHint");
+    if (el) {
+      el.textContent = text;
+    }
+  }
+
+  function paintLegend() {
+    var el = byId("mapBriefLegend");
+    if (!el) {
+      return;
+    }
+    var parts = [];
+    LAYER_ORDER.forEach(function (pair) {
+      if (!visible[pair[0]]) {
+        return;
+      }
+      var icon = "";
+      if (pair[0] !== "markup" && global.COPDoc && COPDoc.icon) {
+        icon = COPDoc.icon(icons.category[pair[0]] || "MapPin", 14);
+      }
+      parts.push(
+        '<span class="map-legend-item">' + icon + " " + pair[1] + "</span>"
+      );
+    });
+    el.innerHTML = parts.join("");
+  }
+
+  function layerCount(key) {
+    if (key === "markup" && typeof api.listMarkup === "function") {
+      return (api.listMarkup() || []).length;
+    }
+    return (catalog[key] || []).length;
+  }
+
+  function assignCategoryIcon(key) {
+    if (!pendingIcon || !DEFAULT_ICONS[key]) {
+      return false;
+    }
+    icons.category[key] = pendingIcon;
+    saveIcons();
+    pendingIcon = "";
+    paintPalette();
+    setHint("Default icon set for " + key + ".");
+    return true;
+  }
+
+  function showList(key) {
+    var assigned = assignCategoryIcon(key);
+    var turnedOn = !visible[key];
+    listId = key;
+    if (turnedOn) {
+      visible[key] = true;
+      saveLayers();
+    }
+    if (assigned || turnedOn) {
+      plotAll();
+    }
+    renderList();
+  }
+
+  function toggleLayer(key) {
+    visible[key] = !visible[key];
+    saveLayers();
+    plotAll();
+    paintLayerList();
+  }
+
+  function paintLayerList() {
+    var host = byId("mapLayerList");
+    if (!host) {
+      return;
+    }
+    if (global.COPDoc && COPDoc.icons && COPDoc.icons.inject) {
+      COPDoc.icons.inject();
+    }
+    host.replaceChildren();
+    LAYER_ORDER.forEach(function (pair) {
+      var key = pair[0];
+      var label = pair[1];
+      var row = document.createElement("div");
+      row.className = "map-layer-row";
+      row.setAttribute("role", "listitem");
+      row.setAttribute("data-layer", key);
+      if (listId === key) {
+        row.classList.add("is-active");
+      }
+      if (!visible[key]) {
+        row.classList.add("is-off");
+      }
+
+      var eye = document.createElement("button");
+      eye.type = "button";
+      eye.className = "map-layer-eye";
+      eye.setAttribute("aria-pressed", visible[key] ? "true" : "false");
+      eye.setAttribute(
+        "title",
+        (visible[key] ? "Hide " : "Show ") + label
+      );
+      eye.setAttribute("aria-label", (visible[key] ? "Hide " : "Show ") + label);
+      eye.innerHTML =
+        global.COPDoc && COPDoc.icon
+          ? COPDoc.icon(visible[key] ? "Eye" : "EyeOff", 14)
+          : visible[key]
+            ? "on"
+            : "off";
+      eye.addEventListener("click", function (event) {
+        event.stopPropagation();
+        toggleLayer(key);
+      });
+
+      var iconBtn = document.createElement("button");
+      iconBtn.type = "button";
+      iconBtn.className = "map-layer-icon";
+      if (DEFAULT_ICONS[key]) {
+        iconBtn.setAttribute("title", "Assign icon to " + label);
+        iconBtn.setAttribute("aria-label", "Icon for " + label);
+        iconBtn.innerHTML =
+          global.COPDoc && COPDoc.icon
+            ? COPDoc.icon(icons.category[key] || DEFAULT_ICONS[key], 14)
+            : icons.category[key] || DEFAULT_ICONS[key];
+        iconBtn.addEventListener("click", function (event) {
+          event.stopPropagation();
+          if (assignCategoryIcon(key)) {
+            plotAll();
+            paintLayerList();
+            return;
+          }
+          showList(key);
+        });
+      } else {
+        iconBtn.disabled = true;
+        iconBtn.setAttribute("aria-hidden", "true");
+        iconBtn.tabIndex = -1;
+      }
+
+      var nameBtn = document.createElement("button");
+      nameBtn.type = "button";
+      nameBtn.className = "map-layer-name";
+      nameBtn.textContent = label;
+      nameBtn.addEventListener("click", function () {
+        showList(key);
+      });
+
+      var count = document.createElement("span");
+      count.className = "map-layer-count";
+      count.textContent = String(layerCount(key));
+
+      row.appendChild(eye);
+      row.appendChild(iconBtn);
+      row.appendChild(nameBtn);
+      row.appendChild(count);
+      host.appendChild(row);
+    });
+  }
+
   function refresh() {
-    var rows = listTargets();
-    api.targets = rows;
-    renderTable(rows);
-    plotMarkers(rows);
+    collectLeads();
+    collectOfficers();
+    api.catalog = catalog;
+    plotAll();
+    renderList();
+  }
+
+  function bindDock() {
+    var shell = document.querySelector(".map-shell");
+    var toggle = byId("mapDockToggle");
+    if (!shell || !toggle || toggle.dataset.bound === "true") {
+      return;
+    }
+    toggle.dataset.bound = "true";
+    toggle.addEventListener("click", function () {
+      var collapsed = shell.classList.toggle("is-dock-collapsed");
+      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      if (api.resize) {
+        global.setTimeout(api.resize, 0);
+      }
+    });
   }
 
   function init() {
-    var card = document.querySelector(".targets-card");
-    if (!card) {
+    if (!byId("mapDock") && !document.querySelector(".map-shell")) {
       return;
     }
-    bindCollapse(card);
+    loadPrefs();
+    bindDock();
+    paintPalette();
     refresh();
   }
 
-  api.listTargets = listTargets;
+  api.listTargets = function () {
+    return catalog.targets;
+  };
   api.refreshTargets = refresh;
-  api.selectTarget = selectTarget;
+  api.selectTarget = function (id) {
+    selectRow(id, true);
+  };
+  api.layerVisible = function (key) {
+    return !!visible[key];
+  };
+  api.refreshLocationLists = refresh;
 
   if (typeof document !== "undefined") {
     if (document.readyState === "loading") {

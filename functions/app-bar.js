@@ -62,7 +62,7 @@
       page === "leads" ||
       page === "lead" ||
       page === "lead-form" ||
-      page === "mobile-fow" ||
+      page === "mobile-target-sheet" ||
       page === "i200-form" ||
       page === "i205-form"
     );
@@ -139,6 +139,100 @@
       id: "appBarBack",
       label: label,
       href: href
+    };
+  }
+
+  function mediaPickerChrome(kind) {
+    var ownerType = String(queryParam("ownerType") || "").toUpperCase();
+    var ownerId = queryParam("id") || queryParam("recordId");
+    var leadId = queryParam("leadId");
+    var encounterId = queryParam("encounterId");
+    var hasOwner = !!(ownerType || leadId);
+    var returnTo = queryParam("return");
+    if (returnTo && !/^[a-z0-9._-]+\.html(?:\?.*)?$/i.test(returnTo)) {
+      returnTo = "";
+    }
+    var tab = "";
+    if (leadId || ownerType === "PERSON" || ownerType === "LEAD") {
+      tab = "leads";
+    } else if (ownerType === "ENCOUNTER" || encounterId) {
+      tab = "encounter";
+    } else if (ownerType === "BOOKIN") {
+      tab = "bookin";
+    } else if (ownerType === "OFFICER" || ownerType === "VEHICLE") {
+      tab = "admin";
+    }
+    var actions = [];
+    if (hasOwner) {
+      actions.push({
+        id: kind === "file" ? "saveFileButton" : "savePhotoButton",
+        label: kind === "file" ? "Save file" : "Save photo",
+        primary: true,
+        chromeAction: "save",
+        call: kind === "file" ? "saveFilesToOwner" : "savePhotosToOwner"
+      });
+      actions.push({
+        label: kind === "file" ? "Add files" : "Add photos",
+        call: kind === "file" ? "openFileUpload" : "openPhotoPicker"
+      });
+      if (returnTo) {
+        var backLabel = "Back";
+        if (returnTo.indexOf("lead-form") === 0) {
+          backLabel = "Back to lead";
+        } else if (returnTo.indexOf("officer-form") === 0) {
+          backLabel = "Back to officer";
+        } else if (returnTo.indexOf("vehicle-form") === 0) {
+          backLabel = "Back to vehicle";
+        } else if (returnTo.indexOf("lead.html") === 0) {
+          backLabel = "Back to lead";
+        } else if (returnTo.indexOf("officer.html") === 0) {
+          backLabel = "Back to officer";
+        } else if (returnTo.indexOf("vehicle.html") === 0) {
+          backLabel = "Back to vehicle";
+        }
+        actions.push(backAction(backLabel, returnTo));
+      } else if (leadId) {
+        actions.push(backAction("Back to lead", recordIdHref("lead.html", leadId)));
+      } else if (encounterId || ownerType === "ENCOUNTER") {
+        actions.push(
+          backAction(
+            "Back to encounter",
+            recordIdHref("encounter-form.html", encounterId || ownerId)
+          )
+        );
+      } else if (ownerType === "OFFICER") {
+        actions.push(backAction("Back to officer", recordIdHref("officer.html", ownerId)));
+      } else if (ownerType === "VEHICLE") {
+        actions.push(backAction("Back to vehicle", recordIdHref("vehicle.html", ownerId)));
+      } else if (ownerType === "BOOKIN") {
+        actions.push(
+          backAction(
+            "Back to book-in",
+            "bookin.html?recordId=" + encodeURIComponent(ownerId)
+          )
+        );
+      }
+    } else {
+      actions.push({
+        label: kind === "file" ? "Add files" : "Add photos",
+        primary: true,
+        chromeAction: "add",
+        call: kind === "file" ? "openFileUpload" : "openPhotoPicker"
+      });
+    }
+    return {
+      tab: tab,
+      file:
+        kind === "file"
+          ? [
+              { id: "downloadFileLibraryButton", label: "Download JSON" },
+              { id: "clearFileLibraryButton", label: "Clear library" }
+            ]
+          : [
+              { id: "downloadPhotoLibraryButton", label: "Download JSON" },
+              { id: "clearPhotoLibraryButton", label: "Clear library" }
+            ],
+      actions: actions
     };
   }
 
@@ -229,6 +323,13 @@
       ];
       if (id) {
         actions.push({
+          id: "generateTargetSheetButton",
+          label: "Generate Target sheet",
+          href: recordIdHref("mobile-target-sheet.html", id),
+          target: "_blank",
+          rel: "noopener"
+        });
+        actions.push({
           id: "bookInLeadButton",
           label: "Book-in",
           href: "bookin.html?leadId=" + encodeURIComponent(id)
@@ -253,29 +354,29 @@
         actions: actions
       };
     }
-    if (page === "mobile-fow") {
-      var mobileFowActions = [];
+    if (page === "mobile-target-sheet") {
+      var targetSheetActions = [];
       if (id) {
-        mobileFowActions.push({
+        targetSheetActions.push({
           label: "Edit lead",
           href: recordIdHref("lead-form.html", id),
           primary: true,
           chromeAction: "edit"
         });
-        mobileFowActions.push(backAction("Back to lead", recordIdHref("lead.html", id)));
+        targetSheetActions.push(backAction("Back to lead", recordIdHref("lead.html", id)));
       } else {
-        mobileFowActions.push(backAction("Back to leads", "leads.html"));
+        targetSheetActions.push(backAction("Back to leads", "leads.html"));
       }
       return {
         tab: "leads",
         file: [
           {
-            id: "downloadMobileFowButton",
-            label: "Download FOW",
-            notBuilt: "Download FOW"
+            id: "downloadTargetSheetButton",
+            label: "Download Target sheet",
+            notBuilt: "Download Target sheet"
           }
         ],
-        actions: mobileFowActions
+        actions: targetSheetActions
       };
     }
     if (page === "i200-form" || page === "i205-form") {
@@ -382,12 +483,21 @@
       return {
         tab: "map",
         file: [
-          { label: "Save PDF", notBuilt: "Save PDF" },
+          { id: "printMapBriefFile", label: "Print brief", call: "printMapBrief" },
           { label: "Export KMZ (iTAK)", notBuilt: "Export KMZ (iTAK)" },
           { label: "Export JSON", notBuilt: "Export JSON" },
           { label: "Export CSV", notBuilt: "Export CSV" }
         ],
-        actions: []
+        actions: [
+          { id: "mapBriefButton", label: "Brief view" },
+          {
+            id: "mapPrintBriefButton",
+            label: "Print brief",
+            primary: true,
+            chromeAction: "save",
+            call: "printMapBrief"
+          }
+        ]
       };
     }
     if (page === "narrative") {
@@ -417,39 +527,8 @@
         actions: narrativeActions
       };
     }
-    if (page === "file-upload") {
-      return {
-        tab: "",
-        file: [
-          { id: "downloadFileLibraryButton", label: "Download JSON" },
-          { id: "clearFileLibraryButton", label: "Clear library" }
-        ],
-        actions: [
-          {
-            label: "Add files",
-            primary: true,
-            chromeAction: "add",
-            call: "openFileUpload"
-          }
-        ]
-      };
-    }
-    if (page === "photo-picker") {
-      return {
-        tab: "",
-        file: [
-          { id: "downloadPhotoLibraryButton", label: "Download JSON" },
-          { id: "clearPhotoLibraryButton", label: "Clear library" }
-        ],
-        actions: [
-          {
-            label: "Add photos",
-            primary: true,
-            chromeAction: "add",
-            call: "openPhotoPicker"
-          }
-        ]
-      };
+    if (page === "file-upload" || page === "photo-picker") {
+      return mediaPickerChrome(page === "file-upload" ? "file" : "photo");
     }
     if (page === "baseballcard") {
       return {
@@ -640,6 +719,10 @@
       el.type = "button";
     } else {
       el.href = item.href;
+      if (item.target) {
+        el.target = item.target;
+        el.rel = item.rel || "noopener";
+      }
     }
     if (item.primary) {
       el.id = "appBarPrimaryAction";

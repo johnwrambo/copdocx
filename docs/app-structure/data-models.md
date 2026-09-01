@@ -116,7 +116,9 @@ meta
 
 Unchanged. Officer uses the lead location card (`data-location-owner="person"`). **Non-goal:** fleet parking.
 
-## Media — planned (`functions/model/media.js`)
+Every `[data-card="location"]` (lead form, nested vehicle locations, encounter form, officer residence) has **Resolve address** and **Map it**. Resolve geocodes (Census, then Nominatim) into `latitude` / `longitude` and drops a Leaflet pin on that card (`functions/location-map.js`). Drag the pin or click the map to correct; the pair field updates. Map it opens Google Maps. The **lead view** paints **one** read-only 4×3 **Case map** of this subject’s home, work, and vehicle places (`locationMap.displayMany`). A side legend lists those addresses (Home / Work / Vehicle). Files sit with the identity facts (hyperlinks). Multiple subject photos get **Open photo gallery**. Click the photo to add/edit. This is **not** `COPDoc.map.leaflet` (the planning board). Tiles are OSM; same Leaflet 1.9.4 as `map.html`. Geocode/tiles need http(s). Maps use `aspect-ratio: 4 / 3`. Basemap on each location map: Map / Satellite / Hybrid (OSM + Esri, same as `map.html`). Subject photos on views are square (`object-fit: cover`).
+
+## Media — `functions/model/media.js` (**0.17.0** store)
 
 Photos and files are **one Media object**. They do not live as data-URLs on the lead/officer JSON and they do not rewrite the owner snapshot on save.
 
@@ -144,6 +146,7 @@ Indexes on `meta`:
 | `ownerKey` | `owner.type + ":" + owner.id` | `forOwner` — the view query |
 | `mediaClass` | `photo` \| `file` | split photo card vs document list |
 | `sha256` | hex digest of original | skip duplicate save to the same owner |
+| `ownerSha` | `ownerKey + ":" + sha256` | one-get duplicate check |
 
 Warrants already use IndexedDB (`copdocx.warrants` for a directory handle). This is a second IDB database, not a store bolted onto that one.
 
@@ -162,9 +165,14 @@ mime, bytes, width, height, originalName
 sha256              hex of original bytes
 roles               ["original","display","thumb"]   // which blob keys exist
 crop                { x, y, w, h } or null
+primary             boolean (photos only). One primary photo per owner.
 documentId          optional → person.documents[].documentId
 meta                draft | committed  (same records.md rules)
 ```
+
+**Primary photo:** the picture that object’s view shows large. Many photos per PERSON / OFFICER / VEHICLE / LOCATION. Setting a new primary clears the previous one on that owner. First saved photo on an object is primary. Documents are never primary. If the primary is removed, the next remaining photo (by `takenAt`) becomes primary.
+
+**Scale (thousands of photos in the DB):** a view never scans the whole library. `list(owner)` uses the `ownerKey` index (one person/car/place — usually tens of rows of JSON, no bytes). Thumbnails load `thumb` only. The large picture and Mobile Target sheet load **one** `display` blob at a time and revoke the previous object URL. Originals are only fetched for Open / recrop. Duplicate files on the same owner are skipped (`ownerSha`). Do not put bytes on lead JSON; do not create object URLs for every photo up front. Mobile Target sheet: show primary first; left/right (click or swipe) walks that owner’s photos in list order and fetches the neighbor `display` only.
 
 v1: **one owner**. The owner **is the object the media is of** (the person in the mugshot, the vehicle in the plate shot, the house in the location shot). Source of truth is the media row. No `mediaIds[]` on person/vehicle. No join table. **Photos never use `LEAD` as owner.** A lead is a case file, not a face or a car. Add photo on that object’s card; the card supplies `ownerType` + `id`. Do not dump leftovers on the lead.
 
@@ -208,8 +216,8 @@ Remove: one transaction deletes `meta` + all `blobs` for that `mediaId`. Does no
 ```
 meta.index("ownerKey").getAll("PERSON:" + personId)
   → split mediaClass photo vs file; hide draft on committed views
-photos: for each row, blobs.get([mediaId, "thumb"]) → URL.createObjectURL
-        hero = first kind=subject, else first photo; load role "display"
+photos: thumbs → blobs.get([mediaId, "thumb"]) for visible strip only
+        large picture = the primary photo’s "display" (one URL; revoke on change)
 files:  paint type / caption / bytes from meta only
         Open → blobs.get([mediaId, "original"]) → object URL (revoke on leave / next open)
 ```
@@ -230,13 +238,13 @@ Revoke object URLs when the view unmounts or the selection changes. Do not keep 
 
 `file-upload.html` uses the same query. Primary with an owner: **Save photo** / **Save file**. Without: **Add photos** / **Add files** only (lab).
 
-API (all Promise): `COPDoc.media.save({ owner, file, mediaClass, fields })`, `.list(owner)`, `.blob(mediaId, role)`, `.remove(mediaId)`.
+API (all Promise): `COPDoc.media.save({ owner, file, mediaClass, fields })`, `.list(owner)`, `.blob(mediaId, role)`, `.setPrimary(mediaId)`, `.remove(mediaId)`. `list` returns meta only, photos first with `primary` first, then `takenAt`.
 
 ### Owners (which object gets which card)
 
 | Owner | Photo card (view) | Document list (view) | Notes |
 | --- | --- | --- | --- |
-| **PERSON** | Hero mugshot = first committed `kind=subject` photo; thumbs under it | Identity + packet files | Lead view uses the subject. FOW `#targetPhoto` reads this. |
+| **PERSON** | Primary photo large; other photos as thumbs | Identity + packet files | Lead view uses the subject. Mobile Target sheet `#targetPhoto` shows primary; left/right walks this owner’s photos. |
 | **VEHICLE** | Vehicle shots (`kind=vehicle` or evidence of that unit) | Title / registration / other files | Case and fleet; same `vehicleId`. |
 | **LOCATION** | Location shots | Rare; show if any | No `location.html`. Render on the parent person/vehicle/encounter view, grouped by `locationId`. |
 | **OFFICER** | Portrait | Creds / certs scans | Admin officer view. |
@@ -254,7 +262,7 @@ One painter, `functions/media-card.js`, used on every view that has an owner id:
 
 ```
 ┌ Photo                         ┐  ┌ Documents                    ┐
-│ [hero]                        │  │ Type · caption · Open        │
+│ [primary photo]               │  │ Type · caption · Open        │
 │ caption · takenAt             │  │ …                            │
 │ thumbs                        │  │ empty: No files uploaded.    │
 │ Add photo → picker?owner=     │  │ Add file → file-upload.html  │
