@@ -832,6 +832,262 @@ check(
   })
 );
 
+var fullCase = model.createLeadSnapshot();
+fullCase.person.name.lastName = "FULL";
+fullCase.person.name.firstName = "AUDIT";
+fullCase.person.lexId = "LEX-9";
+fullCase.person.citizenship = "MX";
+fullCase.person.locations = [
+  model.createLocation({
+    street: "10 Oak",
+    city: "Dallas",
+    state: "TX",
+    association: "residence",
+    targetPriority: "1",
+    pinColor: "#112233"
+  })
+];
+fullCase.person.warrants = [
+  model.createWarrant({ charge: "Theft", warrantStatus: "active" }),
+  model.createWarrant({
+    formType: "I-200",
+    charge: "Immigration",
+    warrantStatus: "active",
+    fileNo: "A123456789",
+    pdfFileName: "I-200_FULL_AUDIT.pdf",
+    issuedAt: "2026-08-01T00:00:00.000Z"
+  })
+];
+fullCase.person.immigration.alienNumber = "A123456789";
+fullCase.person.immigration.baseballCards = [
+  model.createBaseballCard({ text: "card", disposition: "removed" })
+];
+fullCase.person.immigration.firstDeportationDate = "2019-01-01";
+fullCase.person.criminal.fbiNumber = "123456A";
+fullCase.person.convictions.push(
+  model.createConviction({ crime: "Theft", convictionClass: "misdemeanor" })
+);
+model.deriveCriminalProfile(fullCase.person);
+var auditVehicle = model.createVehicle({
+  licensePlate: "AUDIT1",
+  plateState: "TX",
+  governmentVehicle: false
+});
+auditVehicle.locations = [
+  model.createLocation({
+    street: "Lot 4",
+    city: "Dallas",
+    state: "TX",
+    association: "known-parking",
+    pinColor: "#abcdef"
+  })
+];
+fullCase.vehicles = [auditVehicle];
+fullCase.links = [
+  model.createLink({
+    from: { type: "VEHICLE", id: auditVehicle.vehicleId },
+    to: { type: "PERSON", id: fullCase.subjectPersonId },
+    reasons: ["REGISTERED_OWNER"],
+    notes: "Title name differs"
+  }),
+  model.createLink({
+    from: { type: "PERSON", id: fullCase.subjectPersonId },
+    to: { type: "PERSON", id: caseBravo.subjectPersonId },
+    reasons: ["ASSOCIATE"],
+    notes: "From Accurint"
+  })
+];
+fullCase.history = [
+  model.createHistoryEvent({ text: "Opened from RAP", type: "note" })
+];
+fullCase.followUps = [{ followUpId: "fu_1", text: "Call analyst" }];
+fullCase.source.caseNumber = "DAL-88";
+model.store.saveLead(fullCase, { mode: "commit" });
+
+function casePatch(leadId, mutator) {
+  var snap = model.store.getLead(leadId);
+  mutator(snap, model);
+  return model.store.saveLead(snap, { mode: "commit" });
+}
+
+var beforeLookup = JSON.stringify(model.store.getLead(fullCase.leadId).links);
+model.store.relatedCommittedCases(fullCase.subjectPersonId, fullCase.leadId);
+check(
+  "related lookup does not mutate links",
+  JSON.stringify(model.store.getLead(fullCase.leadId).links) === beforeLookup
+);
+
+casePatch(fullCase.leadId, function (snap) {
+  snap.person.name.middleName = "Q";
+  snap.person.immigration.disposition = "removed";
+  snap.person.criminal.ncicNumber = "NCIC-1";
+  snap.history.push(
+    model.createHistoryEvent({ text: "Case view note", type: "note" })
+  );
+  snap.links.push(
+    model.createLink({
+      from: { type: "PERSON", id: snap.subjectPersonId },
+      to: { type: "PERSON", id: caseAlpha.subjectPersonId },
+      reasons: ["KNOWN_ASSOCIATE"]
+    })
+  );
+});
+
+var afterPatch = model.store.getLead(fullCase.leadId);
+var afterPerson = model.subjectOf(afterPatch);
+check("case patch keeps subjectPersonId", afterPatch.subjectPersonId === fullCase.subjectPersonId);
+check("case patch keeps schema", afterPatch.schema === model.SCHEMA);
+check(
+  "case patch keeps issued I-200",
+  afterPerson.warrants.some(function (row) {
+    return row.formType === "I-200" && row.fileNo === "A123456789";
+  })
+);
+check(
+  "case patch keeps RAP warrant",
+  afterPerson.warrants.some(function (row) {
+    return !row.formType && row.charge === "Theft";
+  })
+);
+check(
+  "case patch keeps baseballCards",
+  afterPerson.immigration.baseballCards[0] &&
+    afterPerson.immigration.baseballCards[0].text === "card"
+);
+check(
+  "case patch keeps deportation date",
+  afterPerson.immigration.firstDeportationDate === "2019-01-01"
+);
+check("case patch keeps lexId", afterPerson.lexId === "LEX-9");
+check("case patch keeps fbiNumber", afterPerson.criminal.fbiNumber === "123456A");
+check("case patch keeps derived criminal", afterPerson.criminal.isCriminal === true);
+check(
+  "case patch keeps residence pinColor",
+  afterPerson.locations[0] && afterPerson.locations[0].pinColor === "#112233"
+);
+check(
+  "case patch keeps vehicle parking pinColor",
+  afterPatch.vehicles[0].locations[0].pinColor === "#abcdef"
+);
+check(
+  "case patch keeps vehicle-person link notes",
+  afterPatch.links.some(function (row) {
+    return (
+      row.from &&
+      row.from.type === "VEHICLE" &&
+      row.notes === "Title name differs"
+    );
+  })
+);
+check(
+  "case patch keeps person-person notes",
+  afterPatch.links.some(function (row) {
+    return row.notes === "From Accurint" && row.to.id === caseBravo.subjectPersonId;
+  })
+);
+check("case patch keeps followUps", afterPatch.followUps[0].followUpId === "fu_1");
+check("case patch keeps source caseNumber", afterPatch.source.caseNumber === "DAL-88");
+check(
+  "case patch keeps history and appends",
+  afterPatch.history.length === 2 &&
+    afterPatch.history[0].text === "Opened from RAP" &&
+    afterPatch.history[1].text === "Case view note"
+);
+check("case patch writes identity", afterPerson.name.middleName === "Q");
+check(
+  "people registry matches subject after commit",
+  model.store.getPerson(fullCase.subjectPersonId).name.middleName === "Q"
+);
+
+var preservedHistory = afterPatch.history.slice();
+var rebuilt = model.createLeadSnapshot();
+rebuilt.leadId = afterPatch.leadId;
+rebuilt.subjectPersonId = afterPatch.subjectPersonId;
+rebuilt.person = model.createPerson({
+  personId: afterPatch.subjectPersonId,
+  caseRole: "LEAD",
+  name: afterPerson.name,
+  lexId: afterPerson.lexId,
+  citizenship: afterPerson.citizenship,
+  locations: afterPerson.locations.map(function (loc) {
+    var copy = model.createLocation(loc);
+    copy.pinColor = "";
+    return copy;
+  }),
+  warrants: afterPerson.warrants.filter(function (row) {
+    return !model.isIssuedWarrant(row);
+  }),
+  immigration: {
+    alienNumber: afterPerson.immigration.alienNumber,
+    finNumber: "",
+    disposition: afterPerson.immigration.disposition,
+    status: "",
+    finalOrder: false,
+    finalOrderDate: "",
+    firstDeportationDate: afterPerson.immigration.firstDeportationDate,
+    lastDeportationDate: "",
+    baseballCards: []
+  },
+  criminal: {
+    fbiNumber: afterPerson.criminal.fbiNumber,
+    ncicNumber: afterPerson.criminal.ncicNumber,
+    stateId: "",
+    rapSheet: ""
+  }
+});
+rebuilt.vehicles = afterPatch.vehicles;
+rebuilt.links = afterPatch.links;
+rebuilt.history = preservedHistory;
+rebuilt.followUps = afterPatch.followUps;
+rebuilt.source = afterPatch.source;
+((model.store.getLead(afterPatch.leadId).person.warrants || [])
+  .filter(function (row) {
+    return model.isIssuedWarrant(row);
+  }))
+  .forEach(function (row) {
+    rebuilt.person.warrants.push(row);
+  });
+var prevLocs = model.store.getLead(afterPatch.leadId).person.locations;
+rebuilt.person.locations.forEach(function (loc) {
+  prevLocs.forEach(function (prev) {
+    if (loc.locationId === prev.locationId && !loc.pinColor && prev.pinColor) {
+      loc.pinColor = prev.pinColor;
+    }
+  });
+});
+var prevImm = model.store.getLead(afterPatch.leadId).person.immigration;
+if (prevImm.baseballCards && prevImm.baseballCards.length) {
+  rebuilt.person.immigration.baseballCards = prevImm.baseballCards.slice();
+}
+model.deriveCriminalProfile(rebuilt.person);
+model.store.saveLead(rebuilt, { mode: "commit" });
+var afterForm = model.store.getLead(fullCase.leadId);
+check(
+  "form-style rebuild keeps issued I-200",
+  afterForm.person.warrants.some(function (row) {
+    return row.formType === "I-200" && row.pdfFileName === "I-200_FULL_AUDIT.pdf";
+  })
+);
+check(
+  "form-style rebuild keeps baseballCards",
+  afterForm.person.immigration.baseballCards[0].text === "card"
+);
+check(
+  "form-style rebuild keeps history notes",
+  afterForm.history.length === 2
+);
+check(
+  "form-style rebuild restores pinColor",
+  afterForm.person.locations[0].pinColor === "#112233"
+);
+check(
+  "form-style rebuild keeps person links",
+  afterForm.links.filter(function (row) {
+    return row.from.type === "PERSON" && row.to.type === "PERSON";
+  }).length === 2
+);
+check("stores stay split", !afterForm.bookin && !afterForm.media);
+
 if (fail) {
   process.exit(1);
 }

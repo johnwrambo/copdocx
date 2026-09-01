@@ -506,11 +506,22 @@
       var i;
       var found = false;
       for (i = 0; i < snap.vehicles.length; i++) {
-        if (snap.vehicles[i] && snap.vehicles[i].vehicleId === next.vehicleId) {
-          next.locations = next.locations.length
-            ? next.locations
-            : snap.vehicles[i].locations || [];
-          snap.vehicles[i] = next;
+        var prev = snap.vehicles[i];
+        if (prev && prev.vehicleId === next.vehicleId) {
+          prev.licensePlate = next.licensePlate;
+          prev.plate = next.licensePlate || prev.plate;
+          prev.plateState = next.plateState;
+          prev.vehicleYear = next.vehicleYear;
+          prev.vehicleMake = next.vehicleMake;
+          prev.vehicleModel = next.vehicleModel;
+          prev.vehicleColor = next.vehicleColor;
+          prev.vehicleBodyStyle = next.vehicleBodyStyle;
+          prev.vin = next.vin;
+          prev.registeredOwnerName = next.registeredOwnerName;
+          prev.governmentVehicle = false;
+          if (next.locations.length) {
+            prev.locations = next.locations;
+          }
           found = true;
           break;
         }
@@ -543,6 +554,18 @@
       var person = subjectOf(snap);
       person.locations = person.locations || [];
       if (state.id && findLocation(snap, state.id)) {
+        var prev = findLocation(snap, state.id);
+        if (prev) {
+          if (!next.pinColor && prev.pinColor) {
+            next.pinColor = prev.pinColor;
+          }
+          if (!next.targetPriority && prev.targetPriority) {
+            next.targetPriority = prev.targetPriority;
+          }
+          if (!next.parksHere && prev.parksHere) {
+            next.parksHere = prev.parksHere;
+          }
+        }
         replaceLocation(snap, next);
       } else {
         if (!next.locationId) {
@@ -657,15 +680,31 @@
     }
     commit(function (snap) {
       var person = subjectOf(snap);
+      snap.links = snap.links || [];
+      var linkId = card.dataset.entityId || "";
+      var existing = null;
+      var i;
+      for (i = 0; i < snap.links.length; i++) {
+        if (snap.links[i] && snap.links[i].linkId === linkId) {
+          existing = snap.links[i];
+          break;
+        }
+      }
+      if (
+        existing &&
+        existing.from &&
+        existing.from.type === "VEHICLE"
+      ) {
+        existing = null;
+        linkId = "";
+      }
       var row = m.createLink({
-        linkId: card.dataset.entityId || m.newId("link"),
+        linkId: (existing && existing.linkId) || linkId || m.newId("link"),
         from: { type: "PERSON", id: person.personId },
         to: { type: "PERSON", id: f.relatedPersonId },
         reasons: [f.relationshipType],
-        notes: ""
+        notes: (existing && existing.notes) || ""
       });
-      snap.links = snap.links || [];
-      var i;
       var found = false;
       for (i = 0; i < snap.links.length; i++) {
         if (snap.links[i] && snap.links[i].linkId === row.linkId) {
