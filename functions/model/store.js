@@ -1248,6 +1248,9 @@
         return next;
       });
     }
+    if (mode === "commit" && model.generateOperationOrder) {
+      saved.order = model.generateOperationOrder(saved);
+    }
     state.operations[saved.operationId] = clone(saved);
     if (!writeDisk()) {
       adoptDisk();
@@ -1692,6 +1695,230 @@
       blank.error = "Cell not found.";
       return blank;
     }
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return { ok: true, operationId: op.operationId, error: "" };
+  }
+
+  function findOperationMember(op, teamId, officerId) {
+    var found = null;
+    ((op && op.teams) || []).forEach(function (team) {
+      if (!team || team.teamId !== teamId) {
+        return;
+      }
+      (team.members || []).forEach(function (member) {
+        if (member && member.officerId === officerId) {
+          found = member;
+        }
+      });
+    });
+    return found;
+  }
+
+  function setOperationMemberStart(operationId, teamId, officerId, coords) {
+    var blank = { ok: false, operationId: operationId || "", error: "" };
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var member = findOperationMember(op, teamId, officerId);
+    if (!member) {
+      blank.error = "Officer not on that cell.";
+      return blank;
+    }
+    var lat = coords && coords.latitude;
+    var lng = coords && coords.longitude;
+    if (lat === "" || lng === "" || lat == null || lng == null) {
+      blank.error = "Click the map to set a start.";
+      return blank;
+    }
+    member.start = { latitude: String(lat), longitude: String(lng) };
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return { ok: true, operationId: op.operationId, error: "" };
+  }
+
+  function setOperationMemberHeading(operationId, teamId, officerId, heading) {
+    var blank = { ok: false, operationId: operationId || "", error: "" };
+    var value = String(heading === 0 ? "0" : heading || "").trim();
+    if (value) {
+      var num = Number(value);
+      if (!isFinite(num) || num < 0 || num > 359) {
+        blank.error = "Heading is 0 to 359.";
+        return blank;
+      }
+      value = String(Math.round(num));
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var member = findOperationMember(op, teamId, officerId);
+    if (!member) {
+      blank.error = "Officer not on that cell.";
+      return blank;
+    }
+    member.heading = value;
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return { ok: true, operationId: op.operationId, error: "" };
+  }
+
+  function setOperationMemberField(operationId, teamId, officerId, field, value) {
+    var blank = { ok: false, operationId: operationId || "", error: "" };
+    if (field !== "sector" && field !== "scans") {
+      blank.error = "Unknown field.";
+      return blank;
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var member = findOperationMember(op, teamId, officerId);
+    if (!member) {
+      blank.error = "Officer not on that cell.";
+      return blank;
+    }
+    member[field] = String(value || "").trim();
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return { ok: true, operationId: op.operationId, error: "" };
+  }
+
+  function addOperationLocation(operationId, input) {
+    input = input || {};
+    var blank = { ok: false, operationId: operationId || "", locationId: "", error: "" };
+    var kind = String(input.opAssociation || "").toLowerCase();
+    if ((model.OPERATION_LOCATION_KINDS || []).indexOf(kind) === -1) {
+      blank.error = "Pick rally, cleanup, medevac, hospital, or landmark.";
+      return blank;
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var loc = model.createLocation
+      ? model.createLocation({
+          latitude: input.latitude || "",
+          longitude: input.longitude || "",
+          notes: input.label || input.notes || "",
+          opAssociation: kind,
+          association: kind
+        })
+      : {
+          locationId: model.newId("loc"),
+          latitude: input.latitude || "",
+          longitude: input.longitude || "",
+          opAssociation: kind,
+          association: kind
+        };
+    op.opLocations = Array.isArray(op.opLocations) ? op.opLocations : [];
+    op.opLocations.push(loc);
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return {
+      ok: true,
+      operationId: op.operationId,
+      locationId: loc.locationId,
+      error: ""
+    };
+  }
+
+  function removeOperationLocation(operationId, locationId) {
+    var blank = { ok: false, operationId: operationId || "", removed: false, error: "" };
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var before = (op.opLocations || []).length;
+    op.opLocations = (op.opLocations || []).filter(function (row) {
+      return !row || row.locationId !== locationId;
+    });
+    if (op.opLocations.length === before) {
+      return { ok: true, operationId: op.operationId, removed: false, error: "" };
+    }
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return { ok: true, operationId: op.operationId, removed: true, error: "" };
+  }
+
+  function addMedevacRoutePoint(operationId, latitude, longitude) {
+    var blank = { ok: false, operationId: operationId || "", error: "" };
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    op.medevacRoute = Array.isArray(op.medevacRoute) ? op.medevacRoute : [];
+    op.medevacRoute.push({
+      latitude: String(latitude || ""),
+      longitude: String(longitude || "")
+    });
     var saved = saveOperation(op, { mode: "draft" });
     if (!saved.ok) {
       blank.error = saved.error || "Could not save.";
@@ -5735,6 +5962,12 @@
     assignOperationTargetTeam: assignOperationTargetTeam,
     removeOperationTeam: removeOperationTeam,
     setOperationTeamVehicle: setOperationTeamVehicle,
+    setOperationMemberStart: setOperationMemberStart,
+    setOperationMemberHeading: setOperationMemberHeading,
+    setOperationMemberField: setOperationMemberField,
+    addOperationLocation: addOperationLocation,
+    removeOperationLocation: removeOperationLocation,
+    addMedevacRoutePoint: addMedevacRoutePoint,
     saveVehicleRecord: saveVehicleRecord,
     getVehicleRecord: getVehicleRecord,
     findVehicleByPlate: findVehicleByPlate,

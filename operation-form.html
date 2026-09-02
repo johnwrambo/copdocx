@@ -19,9 +19,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.64.0"
+          data-version="0.66.0"
         >
-          Version 0.64.0
+          Version 0.66.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -135,6 +135,32 @@
               </button>
             </div>
           </div>
+          <div class="operation-place-tools" role="group" aria-label="Map pins">
+            <button type="button" class="action-button-secondary compact" data-place-mode="rally">
+              Rally
+            </button>
+            <button type="button" class="action-button-secondary compact" data-place-mode="cleanup">
+              Cleanup
+            </button>
+            <button type="button" class="action-button-secondary compact" data-place-mode="medevac">
+              Medevac
+            </button>
+            <button type="button" class="action-button-secondary compact" data-place-mode="hospital">
+              Hospital
+            </button>
+            <button type="button" class="action-button-secondary compact" data-place-mode="landmark">
+              Landmark
+            </button>
+            <button type="button" class="action-button-secondary compact" data-place-mode="route">
+              Route
+            </button>
+            <button type="button" id="operationCommitStart" class="action-button compact" hidden>
+              Commit start
+            </button>
+          </div>
+          <p class="section-note">
+            Click an officer name, then the map, then Commit start. Rally and medevac drop on click.
+          </p>
           <div class="case-map-layout operation-map-layout">
             <p id="operationMapEmpty" class="records-empty">No mapped places yet.</p>
             <div
@@ -187,6 +213,7 @@
                   <th>Quals</th>
                   <th>Duty</th>
                   <th>Available</th>
+                  <th>Start</th>
                 </tr>
               </thead>
               <tbody id="operationSaBody"></tbody>

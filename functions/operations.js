@@ -1,11 +1,13 @@
 /**
- * Operation list, planning form, and issued-order view.
+ * Operation list, planning form, issued-order view, and pocket brief.
  */
 (function () {
   "use strict";
 
   var recordFilter = "all";
   var draftRecord = null;
+  var placeMode = { kind: "", teamId: "", officerId: "" };
+  var pendingStart = null;
 
   function byId(id) {
     return document.getElementById(id);
@@ -344,6 +346,99 @@
         });
       });
     });
+    ((record && record.teams) || []).forEach(function (team) {
+      (team.members || []).forEach(function (member) {
+        var start = member && member.start;
+        if (!start || !start.latitude || !start.longitude) {
+          return;
+        }
+        points.push({
+          lat: start.latitude,
+          lng: start.longitude,
+          title: officerLabel(member.officerId),
+          extra: member.heading !== "" && member.heading != null
+            ? "HDG " + member.heading
+            : "Start",
+          address: "",
+          meta: "Officer start",
+          kind: "officer",
+          placeKey: "start:" + team.teamId + ":" + member.officerId
+        });
+      });
+    });
+    if (
+      pendingStart &&
+      pendingStart.latitude &&
+      pendingStart.longitude
+    ) {
+      points.push({
+        lat: pendingStart.latitude,
+        lng: pendingStart.longitude,
+        title: "Pending start",
+        extra: "Commit to save",
+        kind: "officer",
+        placeKey: "pending-start"
+      });
+    }
+    ((record && record.opLocations) || []).forEach(function (loc, index) {
+      if (!loc || !loc.latitude || !loc.longitude) {
+        return;
+      }
+      var kind = String(loc.opAssociation || loc.association || "landmark");
+      points.push({
+        lat: loc.latitude,
+        lng: loc.longitude,
+        title: kind.charAt(0).toUpperCase() + kind.slice(1),
+        extra: loc.notes || "",
+        kind: kind,
+        placeKey: "op:" + (loc.locationId || index)
+      });
+      legend.push({
+        title: kind,
+        extra: loc.notes || "",
+        address: "",
+        mapped: true
+      });
+    });
+    var lines = [];
+    ((record && record.teams) || []).forEach(function (team) {
+      (team.members || []).forEach(function (member) {
+        if (!member || !member.start || member.heading === "" || member.heading == null) {
+          return;
+        }
+        var lat = Number(member.start.latitude);
+        var lng = Number(member.start.longitude);
+        var hdg = Number(member.heading);
+        if (!isFinite(lat) || !isFinite(lng) || !isFinite(hdg)) {
+          return;
+        }
+        var rad = (hdg * Math.PI) / 180;
+        var dLat = 0.001 * Math.cos(rad);
+        var dLng =
+          (0.001 * Math.sin(rad)) /
+          Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+        lines.push({
+          points: [
+            [lat, lng],
+            [lat + dLat, lng + dLng]
+          ],
+          color: "#e8b86d"
+        });
+      });
+    });
+    var route = ((record && record.medevacRoute) || [])
+      .map(function (pt) {
+        if (!pt || !pt.latitude || !pt.longitude) {
+          return null;
+        }
+        return [Number(pt.latitude), Number(pt.longitude)];
+      })
+      .filter(function (pt) {
+        return pt && isFinite(pt[0]) && isFinite(pt[1]);
+      });
+    if (route.length > 1) {
+      lines.push({ points: route, color: "#f87171" });
+    }
     if (list) {
       list.replaceChildren();
       legend.forEach(function (row) {
@@ -359,13 +454,133 @@
       list.hidden = !legend.length;
     }
     if (empty) {
-      empty.hidden = legend.length > 0;
+      empty.hidden = points.length > 0 || legend.length > 0;
     }
     if (window.COPDoc && COPDoc.locationMap && COPDoc.locationMap.displayMany) {
-      COPDoc.locationMap.displayMany(host, points);
+      COPDoc.locationMap.displayMany(host, points, {
+        keepMap: pageKey() === "operation-form",
+        lines: lines,
+        onClick: pageKey() === "operation-form" ? onOperationMapClick : null
+      });
     } else if (!points.length) {
       host.hidden = true;
     }
+  }
+
+  function setPlaceMode(kind, teamId, officerId) {
+    placeMode = {
+      kind: kind || "",
+      teamId: teamId || "",
+      officerId: officerId || ""
+    };
+    pendingStart = null;
+    document.querySelectorAll("[data-place-mode]").forEach(function (btn) {
+      btn.setAttribute(
+        "aria-pressed",
+        btn.getAttribute("data-place-mode") === placeMode.kind ? "true" : "false"
+      );
+    });
+    var commit = byId("operationCommitStart");
+    if (commit) {
+      commit.hidden = true;
+    }
+    if (kind === "officer") {
+      setStatus("Click the map to set that officer’s start, then Commit start.");
+    } else if (kind === "route") {
+      setStatus("Click the map to add medevac route points.");
+    } else if (kind) {
+      setStatus("Click the map to drop a " + kind + " pin.");
+    }
+  }
+
+  function onOperationMapClick(lat, lng) {
+    if (pageKey() !== "operation-form") {
+      return;
+    }
+    var kind = placeMode.kind;
+    if (!kind) {
+      setStatus("Pick Place start, rally, or another pin first.");
+      return;
+    }
+    if (kind === "officer") {
+      if (!placeMode.officerId || !placeMode.teamId) {
+        setStatus("Select an officer in a cell first.");
+        return;
+      }
+      pendingStart = {
+        teamId: placeMode.teamId,
+        officerId: placeMode.officerId,
+        latitude: lat,
+        longitude: lng
+      };
+      var commit = byId("operationCommitStart");
+      if (commit) {
+        commit.hidden = false;
+      }
+      paintOperationMap(draftRecord);
+      setStatus("Pending start. Commit start to save it.");
+      return;
+    }
+    var saved = persistDraftQuiet(true);
+    if (!saved || !saved.ok) {
+      setStatus((saved && saved.error) || "Save the operation first.");
+      return;
+    }
+    var m = model();
+    if (kind === "route") {
+      var routed = m.store.addMedevacRoutePoint(saved.operationId, lat, lng);
+      if (!routed || !routed.ok) {
+        setStatus((routed && routed.error) || "Could not add that route point.");
+        return;
+      }
+      draftRecord = m.store.getOperation(saved.operationId);
+      paintOperationMap(draftRecord);
+      setStatus("Added medevac route point.", true);
+      return;
+    }
+    var placed = m.store.addOperationLocation(saved.operationId, {
+      opAssociation: kind,
+      latitude: lat,
+      longitude: lng
+    });
+    if (!placed || !placed.ok) {
+      setStatus((placed && placed.error) || "Could not drop that pin.");
+      return;
+    }
+    draftRecord = m.store.getOperation(saved.operationId);
+    paintOperationMap(draftRecord);
+    setStatus("Dropped " + kind + " pin.", true);
+  }
+
+  function commitPendingStart() {
+    if (!pendingStart) {
+      setStatus("Click the map to set a start first.");
+      return;
+    }
+    var saved = persistDraftQuiet(true);
+    if (!saved || !saved.ok) {
+      setStatus((saved && saved.error) || "Save the operation first.");
+      return;
+    }
+    var result = model().store.setOperationMemberStart(
+      saved.operationId,
+      pendingStart.teamId,
+      pendingStart.officerId,
+      pendingStart
+    );
+    if (!result || !result.ok) {
+      setStatus((result && result.error) || "Could not save that start.");
+      return;
+    }
+    pendingStart = null;
+    var commit = byId("operationCommitStart");
+    if (commit) {
+      commit.hidden = true;
+    }
+    draftRecord = model().store.getOperation(saved.operationId);
+    paintCells(draftRecord);
+    paintOperationMap(draftRecord);
+    setStatus("Start saved.", true);
   }
 
   function paintTargets(record) {
@@ -652,8 +867,15 @@
       (team.members || []).forEach(function (member) {
         var row = document.createElement("div");
         row.className = "operation-cell-member";
-        var name = document.createElement("span");
+        var name = document.createElement("button");
+        name.type = "button";
+        name.className = "investigation-associate-name";
+        name.setAttribute("data-place-start", member.officerId);
+        name.setAttribute("data-place-cell", team.teamId);
         name.textContent = officerLabel(member.officerId);
+        if (!member.start || !member.start.latitude) {
+          name.className += " is-missing-start";
+        }
         row.appendChild(name);
         if (pageKey() === "operation-form") {
           var role = document.createElement("select");
@@ -670,6 +892,30 @@
           });
           role.value = member.assignmentRole || "";
           row.appendChild(role);
+          var hdg = document.createElement("input");
+          hdg.type = "number";
+          hdg.min = "0";
+          hdg.max = "359";
+          hdg.placeholder = "HDG";
+          hdg.title = "Heading 0–359";
+          hdg.setAttribute("data-member-heading", member.officerId);
+          hdg.setAttribute("data-member-cell", team.teamId);
+          hdg.value = member.heading === 0 || member.heading ? member.heading : "";
+          row.appendChild(hdg);
+          var sector = document.createElement("input");
+          sector.type = "text";
+          sector.placeholder = "Sector";
+          sector.setAttribute("data-member-sector", member.officerId);
+          sector.setAttribute("data-member-cell", team.teamId);
+          sector.value = member.sector || "";
+          row.appendChild(sector);
+          var scans = document.createElement("input");
+          scans.type = "text";
+          scans.placeholder = "Scans";
+          scans.setAttribute("data-member-scans", member.officerId);
+          scans.setAttribute("data-member-cell", team.teamId);
+          scans.value = member.scans || "";
+          row.appendChild(scans);
         } else {
           var roleBit = document.createElement("span");
           roleBit.textContent =
@@ -706,8 +952,18 @@
           td(((officer && officer.qualifications) || []).join(", ") || "—");
           td((officer && officer.duty) || "—");
           td(avail.available ? "Yes" : avail.reason || "No");
+          td(
+            member.start && member.start.latitude
+              ? member.heading !== "" && member.heading != null
+                ? "Set · " + member.heading + "°"
+                : "Set"
+              : "Missing"
+          );
           if (!avail.available) {
             tr.className = "is-unavailable";
+          }
+          if (!member.start || !member.start.latitude) {
+            tr.classList.add("is-missing-start");
           }
           sa.appendChild(tr);
         });
@@ -846,7 +1102,7 @@
       if (
         event.target.closest &&
         event.target.closest(
-          "[data-assign-target], [data-member-role], [data-cell-vehicle]"
+          "[data-assign-target], [data-member-role], [data-cell-vehicle], [data-member-heading], [data-member-sector], [data-member-scans]"
         )
       ) {
         return;
@@ -918,6 +1174,12 @@
     );
     setText("operationViewTargets", String((record.targets || []).length));
     setText("operationViewCells", String((record.teams || []).length));
+    var narrative = byId("operationViewNarrative");
+    if (narrative) {
+      narrative.textContent =
+        (record.order && record.order.narrative) ||
+        "Issue this operation to generate the order text.";
+    }
     paintTargets(record);
     paintCells(record);
   }
@@ -938,6 +1200,228 @@
       return;
     }
     window.open("operation-brief.html?id=" + encodeURIComponent(id), "_blank");
+  }
+
+  function fillTargetPhoto(img, personId) {
+    if (!img || !personId || !window.COPDoc || !COPDoc.media) {
+      return;
+    }
+    var list = COPDoc.media.list;
+    var blob = COPDoc.media.blob || COPDoc.media.getBlob;
+    if (typeof list !== "function" || typeof blob !== "function") {
+      return;
+    }
+    list({ type: "PERSON", id: personId })
+      .then(function (rows) {
+        var photos = (rows || []).filter(function (row) {
+          return row && row.mediaClass === "photo";
+        });
+        var primary =
+          photos.filter(function (row) {
+            return row.primary;
+          })[0] || photos[0];
+        if (!primary) {
+          return null;
+        }
+        return blob(primary.mediaId, "display").catch(function () {
+          return blob(primary.mediaId, "original");
+        });
+      })
+      .then(function (rec) {
+        if (!rec || !rec.blob) {
+          return;
+        }
+        img.src = URL.createObjectURL(rec.blob);
+        img.hidden = false;
+      })
+      .catch(function () {});
+  }
+
+  function paintBrief() {
+    var missing = byId("operationBriefMissing");
+    var sheet = byId("operationBriefSheet");
+    var m = model();
+    if (!m || !m.store) {
+      return;
+    }
+    m.store.loadFromDisk();
+    var id = queryId();
+    var record = id ? m.store.getOperation(id) : null;
+    if (!record || !isCommitted(record)) {
+      if (missing) {
+        missing.hidden = false;
+      }
+      if (sheet) {
+        sheet.hidden = true;
+      }
+      document.title = "Operation sheet";
+      return;
+    }
+    if (missing) {
+      missing.hidden = true;
+    }
+    if (sheet) {
+      sheet.hidden = false;
+    }
+    document.title =
+      (record.name || record.operationNumber || "Operation") + " — Operation sheet";
+    function setText(elId, text) {
+      var el = byId(elId);
+      if (el) {
+        el.textContent = text || "—";
+      }
+    }
+    setText("briefNumber", record.operationNumber || record.operationId);
+    setText("briefName", record.name || "Untitled operation");
+    setText(
+      "briefWindow",
+      [formatWhen(record.plannedStart), formatWhen(record.plannedEnd)]
+        .filter(function (part) {
+          return part && part !== "—";
+        })
+        .join(" – ")
+    );
+    setText(
+      "briefNarrative",
+      (record.order && record.order.narrative) || ""
+    );
+    paintOperationMap(record);
+    var nest = byId("briefTargetSheets");
+    if (nest) {
+      nest.replaceChildren();
+      (record.targets || []).forEach(function (target) {
+        var article = document.createElement("article");
+        article.className = "operation-nested-sheet";
+        var team = (record.teams || []).filter(function (row) {
+          var link = (record.targetAssignments || []).filter(function (item) {
+            return item && item.targetId === target.targetId && item.teamId === row.teamId;
+          })[0];
+          return !!link;
+        })[0];
+        var img = document.createElement("img");
+        img.alt = "";
+        img.hidden = true;
+        img.className = "operation-nested-photo";
+        article.appendChild(img);
+        fillTargetPhoto(img, target.personId);
+        var h = document.createElement("h2");
+        h.textContent =
+          (target.freeze && target.freeze.subjectLabel) ||
+          targetLabel(target);
+        article.appendChild(h);
+        var places = placesForTarget(target);
+        var ul = document.createElement("ul");
+        ul.className = "operation-nested-places";
+        places.forEach(function (place) {
+          var li = document.createElement("li");
+          li.textContent = [
+            place.association,
+            [place.street, place.city, place.state].filter(Boolean).join(", "),
+            [place.plateState, place.plate].filter(Boolean).join(" "),
+            place.ymm
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          ul.appendChild(li);
+        });
+        if (!places.length) {
+          var empty = document.createElement("li");
+          empty.textContent = "No places frozen.";
+          ul.appendChild(empty);
+        }
+        article.appendChild(ul);
+        var cell = document.createElement("p");
+        cell.className = "operation-nested-cell";
+        if (team) {
+          cell.textContent =
+            (team.name || "Cell") +
+            ": " +
+            (team.members || [])
+              .map(function (member) {
+                var role =
+                  (m.OPERATION_ASSIGNMENT_LABELS &&
+                    m.OPERATION_ASSIGNMENT_LABELS[member.assignmentRole]) ||
+                  member.assignmentRole;
+                return officerLabel(member.officerId) + " (" + role + ")";
+              })
+              .join("; ");
+        } else {
+          cell.textContent = "No cell assigned.";
+        }
+        article.appendChild(cell);
+        nest.appendChild(article);
+      });
+    }
+    var briefs = byId("briefOfficerCards");
+    if (briefs) {
+      briefs.replaceChildren();
+      (((record.order && record.order.officerBriefs) || [])).forEach(function (row) {
+        var card = document.createElement("article");
+        card.className = "operation-officer-brief";
+        var title = document.createElement("h3");
+        title.textContent =
+          officerLabel(row.officerId) +
+          " · " +
+          ((m.OPERATION_ASSIGNMENT_LABELS &&
+            m.OPERATION_ASSIGNMENT_LABELS[row.role]) ||
+            row.role);
+        card.appendChild(title);
+        [
+          row.primary,
+          row.secondary,
+          row.address ? "Place: " + row.address : "",
+          row.heading ? "Heading " + row.heading : "",
+          row.sector ? "Sector: " + row.sector : "",
+          row.scans ? "Scans: " + row.scans : "",
+          row.rally ? "Rally: " + row.rally : "",
+          row.medevac ? "Medevac: " + row.medevac : "",
+          row.teammates && row.teammates.length
+            ? "Team: " + row.teammates.join(", ")
+            : ""
+        ]
+          .filter(Boolean)
+          .forEach(function (line) {
+            var p = document.createElement("p");
+            p.textContent = line;
+            card.appendChild(p);
+          });
+        briefs.appendChild(card);
+      });
+    }
+  }
+
+  function printBrief() {
+    window.print();
+  }
+
+  function saveOperationBrief() {
+    var sheet = byId("operationBriefSheet");
+    if (!sheet || sheet.hidden) {
+      setStatus("Open an issued operation brief first.");
+      return;
+    }
+    var title =
+      (byId("briefName") && byId("briefName").textContent) || "operation";
+    var slug = String(title)
+      .replace(/[^a-z0-9]+/gi, "_")
+      .replace(/^_|_$/g, "");
+    var html =
+      "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">" +
+      "<title>" +
+      title +
+      "</title><link rel=\"stylesheet\" href=\"style/style.css\"></head><body data-page=\"operation-brief\">" +
+      sheet.outerHTML +
+      "</body></html>";
+    var blob = new Blob([html], { type: "text/html" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "Operation_" + slug + ".html";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setStatus("Downloaded operation sheet.", true);
   }
 
   function bind() {
@@ -1074,6 +1558,17 @@
             event.target.closest && event.target.closest("[data-member-role]");
           var vehSel =
             event.target.closest && event.target.closest("[data-cell-vehicle]");
+          var hdgSel =
+            event.target.closest && event.target.closest("[data-member-heading]");
+          var sectorSel =
+            event.target.closest && event.target.closest("[data-member-sector]");
+          var scansSel =
+            event.target.closest && event.target.closest("[data-member-scans]");
+          var startBtn =
+            event.target.closest && event.target.closest("[data-place-start]");
+          if (startBtn) {
+            return;
+          }
           var saved = persistDraftQuiet(true);
           if (!saved || !saved.ok) {
             return;
@@ -1101,8 +1596,71 @@
               return;
             }
           }
+          if (hdgSel) {
+            var hdg = model().store.setOperationMemberHeading(
+              saved.operationId,
+              hdgSel.getAttribute("data-member-cell"),
+              hdgSel.getAttribute("data-member-heading"),
+              hdgSel.value
+            );
+            if (!hdg || !hdg.ok) {
+              setStatus((hdg && hdg.error) || "Could not set that heading.");
+              return;
+            }
+          }
+          if (sectorSel) {
+            model().store.setOperationMemberField(
+              saved.operationId,
+              sectorSel.getAttribute("data-member-cell"),
+              sectorSel.getAttribute("data-member-sector"),
+              "sector",
+              sectorSel.value
+            );
+          }
+          if (scansSel) {
+            model().store.setOperationMemberField(
+              saved.operationId,
+              scansSel.getAttribute("data-member-cell"),
+              scansSel.getAttribute("data-member-scans"),
+              "scans",
+              scansSel.value
+            );
+          }
           draftRecord = model().store.getOperation(saved.operationId);
           paintCells(draftRecord);
+          paintOperationMap(draftRecord);
+        });
+        cellsHost.addEventListener("click", function (event) {
+          var startBtn =
+            event.target.closest && event.target.closest("[data-place-start]");
+          if (!startBtn) {
+            return;
+          }
+          event.preventDefault();
+          setPlaceMode(
+            "officer",
+            startBtn.getAttribute("data-place-cell"),
+            startBtn.getAttribute("data-place-start")
+          );
+        }, true);
+      }
+      document.querySelectorAll("[data-place-mode]").forEach(function (btn) {
+        if (btn.dataset.bound === "true") {
+          return;
+        }
+        btn.dataset.bound = "true";
+        btn.addEventListener("click", function (event) {
+          event.preventDefault();
+          var kind = btn.getAttribute("data-place-mode") || "";
+          setPlaceMode(kind === placeMode.kind ? "" : kind);
+        });
+      });
+      var commitStart = byId("operationCommitStart");
+      if (commitStart && commitStart.dataset.bound !== "true") {
+        commitStart.dataset.bound = "true";
+        commitStart.addEventListener("click", function (event) {
+          event.preventDefault();
+          commitPendingStart();
         });
       }
       return;
@@ -1110,10 +1668,15 @@
     if (page === "operation") {
       paintView();
     }
+    if (page === "operation-brief") {
+      paintBrief();
+    }
   }
 
   window.commitOperation = commitOperation;
   window.generateOperationBrief = generateBrief;
+  window.printOperationBrief = printBrief;
+  window.saveOperationBrief = saveOperationBrief;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bind);

@@ -7181,6 +7181,63 @@ tr.is-unavailable {
   padding: 0.35rem 0.5rem 0.5rem;
 }
 
+.operation-place-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.55rem 0 0.35rem;
+}
+
+.operation-place-tools button[aria-pressed="true"] {
+  background: var(--ns-teal-deep);
+  color: var(--ns-teal-bright);
+}
+
+.is-missing-start {
+  color: #e8b86d;
+}
+
+.operation-brief-sheet {
+  padding: 0.75rem 1rem 1.5rem;
+}
+
+.operation-brief-head {
+  margin-bottom: 0.85rem;
+}
+
+.operation-nested-sheet {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--ns-line-strong);
+  background: var(--ns-panel);
+}
+
+.operation-nested-photo {
+  width: 6rem;
+  height: 6rem;
+  object-fit: cover;
+  display: block;
+  margin-bottom: 0.45rem;
+}
+
+.operation-nested-places {
+  margin: 0.35rem 0;
+  padding-left: 1.1rem;
+}
+
+.operation-officer-brief {
+  margin: 0.7rem 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--ns-line);
+}
+
+@media print {
+  body[data-page="operation-brief"] .app-bar,
+  body[data-page="operation-brief"] .mobile-fow-pagebar {
+    display: none !important;
+  }
+}
+
 .location-map-frame:has(.lead-case-map) {
   width: 100%;
   max-width: none;

@@ -1,6 +1,6 @@
 # Operations — implementation plan (proposed)
 
-**Status:** Approved for build. PR-A skeleton **0.62.0**.  
+**Status:** Approved for build. PR-A–E shipped through **0.66.0**.  
 **Comment (brief):** the issued packet is an **operation sheet** that **nests Target sheets** — one Target-sheet block per target inside `operation-brief.html`.
 
 How to comment: under any **D#**, **PR#**, or **Q#**, add:
@@ -47,10 +47,11 @@ When **date/time** is set, the form reads the **schedule** and other committed o
 | Kind | File | `data-page` | Query |
 | --- | --- | --- | --- |
 | List | `operations.html` | `operations` | — |
-| View (order / brief) | `operation.html` | `operation` | `?id=` |
+| View (issued order) | `operation.html` | `operation` | `?id=` |
 | Form (planning) | `operation-form.html` | `operation-form` | none = add; `?id=` = edit |
+| Pocket brief | `operation-brief.html` | `operation-brief` | `?id=` (new window) |
 
-Chrome tab **Operations** after Encounters. List primary **Add operation**. View: **Edit**, **Generate brief**. Form: **Save** (commit), **Back**. Quiet draft on form change (does not write on Add until name or dates exist).
+Chrome tab **Operations** after Encounters. List primary **Add operation**. View: **Edit**, **Generate brief**. Brief: **Print**, **Save brief**, **Back**. Form: **Save** (commit), **Back**. Quiet draft on form change (does not write on Add until name or dates exist).
 
 Draft row → form. Committed row → view.
 
@@ -302,15 +303,15 @@ Import by `officer.team`. 2–4 members. Assignment roles. Date window greys una
 
 > Comment (PR-C):
 
-### PR-D — Pins, heading, rally, medevac (0.18.3)
+### PR-D — Pins, heading, rally, medevac (**0.65.0**)
 
-Select officer → drop/commit start. Heading/sector/scans. Rally/cleanup/medevac pins + route. Icon library + markup on the operation map.
+Select officer name → map click → **Commit start**. Heading 0–359, sector/scans. Rally / cleanup / medevac / hospital / landmark pins. Medevac route points. Overlay state on the operation, not `copdocx.map.*`.
 
 > Comment (PR-D):
 
-### PR-E — Generate order + view + print (0.18.4)
+### PR-E — Generate order + nested Target sheets (**0.66.0**)
 
-Templates in `data/operations/`. `order` freeze on commit. View: narrative, filterable map, per-officer cards. Print order.
+Commit stores `order { generatedAt, narrative, officerBriefs[] }`. **Generate brief** opens `operation-brief.html?id=` — operation sheet nesting one Target-sheet block per target (photo, places, vehicles, assigned cell) plus officer cards. Print / Save HTML.
 
 > Comment (PR-E):
 

@@ -97,7 +97,7 @@ Do not edit `data/immigration.js`. Do not rewrite PDF layout. Do not merge book-
 | 28 | Operation skeleton | 6 | **0.62.0** | Tab, `operations{}`, list + name/dates form, issued view shell. Brief nests Target sheets in a later PR. |
 | 29 | Import targets + map | 28 | **0.63.0** | Filed cases with a place/vehicle. Plot on the operation map. Freeze on issue. |
 | 30 | Teams, roles, availability | 29 | **0.64.0** | Import 2–4 officer cells. Assignment roles. Availability from duty/shifts/other ops. Assign one cell per target. |
-| 31 | Pins, heading, rally, medevac | 30 | **0.18.3** | operations-plan PR-D. |
-| 32 | Generate / print order | 31 | **0.18.4** | operations-plan PR-E. |
+| 31 | Pins, heading, rally, medevac | 30 | **0.65.0** | Officer start + heading. Rally/cleanup/medevac pins and route on the operation map. |
+| 32 | Generate / print order | 31 | **0.66.0** | Commit writes `order`. Pocket brief nests Target sheets. Print / Save HTML. |
 
 Vehicle autosave is **#3**. Lead New/Open die in **#6**, never “PR 5”.

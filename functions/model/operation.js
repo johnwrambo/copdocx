@@ -434,6 +434,151 @@
     return built;
   }
 
+  var ROLE_PRIMARY = {
+    eye: "Primary surveillance on ",
+    contact: "Primary contact on ",
+    "primary-backup": "Primary backup on ",
+    backup: "Backup on "
+  };
+  var ROLE_SECONDARY = {
+    eye: "Call contact if compromised.",
+    contact: "Coordinate with eye and backup.",
+    "primary-backup": "Cover contact and eye.",
+    backup: "Support the cell as directed."
+  };
+
+  function teamForTarget(op, targetId) {
+    var link = ((op && op.targetAssignments) || []).filter(function (row) {
+      return row && row.targetId === targetId;
+    })[0];
+    if (!link) {
+      return null;
+    }
+    var found = null;
+    ((op && op.teams) || []).forEach(function (team) {
+      if (team && team.teamId === link.teamId) {
+        found = team;
+      }
+    });
+    return found;
+  }
+
+  function targetForTeam(op, teamId) {
+    var link = ((op && op.targetAssignments) || []).filter(function (row) {
+      return row && row.teamId === teamId;
+    })[0];
+    if (!link) {
+      return null;
+    }
+    var found = null;
+    ((op && op.targets) || []).forEach(function (row) {
+      if (row && row.targetId === link.targetId) {
+        found = row;
+      }
+    });
+    return found;
+  }
+
+  function primaryPlaceLine(target) {
+    var places = (target && target.freeze && target.freeze.places) || [];
+    var first = places[0];
+    if (!first) {
+      return "";
+    }
+    return (
+      [first.street, first.city, first.state].filter(Boolean).join(", ") ||
+      [first.plateState, first.plate].filter(Boolean).join(" ")
+    );
+  }
+
+  function opLocationLine(op, kind) {
+    var hit = ((op && op.opLocations) || []).filter(function (row) {
+      return row && (row.opAssociation || row.association) === kind;
+    })[0];
+    if (!hit) {
+      return "";
+    }
+    return (
+      hit.notes ||
+      [hit.street, hit.city].filter(Boolean).join(", ") ||
+      (hit.latitude && hit.longitude ? hit.latitude + ", " + hit.longitude : kind)
+    );
+  }
+
+  function generateOperationOrder(op, opts) {
+    opts = opts || {};
+    op = op || {};
+    function officerName(id) {
+      return (opts.officerLabel && opts.officerLabel(id)) || id || "";
+    }
+    var targets = op.targets || [];
+    var teams = op.teams || [];
+    var narrative =
+      "Operation " +
+      (op.name || "Untitled") +
+      " (" +
+      (op.operationNumber || op.operationId || "") +
+      "). " +
+      targets.length +
+      " target" +
+      (targets.length === 1 ? "" : "s") +
+      ", " +
+      teams.length +
+      " cell" +
+      (teams.length === 1 ? "" : "s") +
+      ".";
+    if (op.plannedStart || op.plannedEnd) {
+      narrative +=
+        " Window " +
+        (op.plannedStart || "—") +
+        " to " +
+        (op.plannedEnd || "—") +
+        ".";
+    }
+    var rally = opLocationLine(op, "rally");
+    var medevac = opLocationLine(op, "medevac");
+    var briefs = [];
+    teams.forEach(function (team) {
+      var target = targetForTeam(op, team.teamId);
+      var targetName =
+        (target && target.freeze && target.freeze.subjectLabel) ||
+        (target && target.leadId) ||
+        "unassigned target";
+      var address = primaryPlaceLine(target);
+      var others = (team.members || []).map(function (member) {
+        return officerName(member.officerId);
+      });
+      (team.members || []).forEach(function (member) {
+        var role = member.assignmentRole || "backup";
+        briefs.push({
+          officerId: member.officerId,
+          teamId: team.teamId,
+          teamName: team.name || "Cell",
+          role: role,
+          primary:
+            (ROLE_PRIMARY[role] || "Assigned to ") + targetName,
+          secondary: ROLE_SECONDARY[role] || "",
+          targetLabel: targetName,
+          address: address,
+          start: member.start || null,
+          heading: member.heading || "",
+          sector: member.sector || "",
+          scans: member.scans || "",
+          rally: rally,
+          medevac: medevac,
+          teammates: others.filter(function (name) {
+            return name !== officerName(member.officerId);
+          })
+        });
+      });
+    });
+    return {
+      generatedAt: model.nowIso ? model.nowIso() : "",
+      narrative: narrative,
+      officerBriefs: briefs
+    };
+  }
+
   model.nextOperationId = nextOperationId;
   model.createOperation = createOperation;
   model.createOperationTarget = createOperationTarget;
@@ -445,4 +590,5 @@
   model.operationPlacesFromLead = operationPlacesFromLead;
   model.leadIsImportableOperationTarget = leadIsImportableOperationTarget;
   model.freezeOperationTarget = freezeOperationTarget;
+  model.generateOperationOrder = generateOperationOrder;
 })(typeof window !== "undefined" ? window : globalThis);

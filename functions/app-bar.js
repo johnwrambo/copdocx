@@ -357,6 +357,24 @@
         ]
       };
     }
+    if (page === "operation-brief") {
+      return {
+        tab: "operations",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            label: "Print",
+            primary: true,
+            call: "printOperationBrief"
+          },
+          {
+            label: "Save brief",
+            call: "saveOperationBrief"
+          },
+          backAction("Back to operation", recordIdHref("operation.html", id))
+        ]
+      };
+    }
     if (page === "investigations") {
       return {
         tab: "investigate",

@@ -3368,6 +3368,75 @@ check(
   ).reason === "shift"
 );
 
+var startSet = model.store.setOperationMemberStart(
+  opA.operationId,
+  cell.teamId,
+  "o1",
+  { latitude: "32.78", longitude: "-96.8" }
+);
+check("setOperationMemberStart ok", startSet.ok);
+var hdgBad = model.store.setOperationMemberHeading(
+  opA.operationId,
+  cell.teamId,
+  "o1",
+  "400"
+);
+check("heading over 359 rejected", !hdgBad.ok);
+var hdgOk = model.store.setOperationMemberHeading(
+  opA.operationId,
+  cell.teamId,
+  "o1",
+  "45"
+);
+check("setOperationMemberHeading ok", hdgOk.ok);
+var rally = model.store.addOperationLocation(opA.operationId, {
+  opAssociation: "rally",
+  latitude: "32.79",
+  longitude: "-96.81"
+});
+check("addOperationLocation rally ok", rally.ok && rally.locationId);
+var routePt = model.store.addMedevacRoutePoint(opA.operationId, "32.80", "-96.82");
+check("addMedevacRoutePoint ok", routePt.ok);
+var pinned = model.store.getOperation(opA.operationId);
+check(
+  "start heading and rally persist",
+  pinned.teams[0].members[0].start &&
+    pinned.teams[0].members[0].start.latitude === "32.78" &&
+    pinned.teams[0].members[0].heading === "45" &&
+    (pinned.opLocations || []).some(function (row) {
+      return row && row.opAssociation === "rally";
+    }) &&
+    (pinned.medevacRoute || []).length === 1
+);
+
+pinned.name = "Lot sweep";
+model.store.saveOperation(pinned, { mode: "commit" });
+var issued = model.store.getOperation(opA.operationId);
+check(
+  "commit writes operation order",
+  issued.order &&
+    issued.order.narrative &&
+    issued.order.officerBriefs &&
+    issued.order.officerBriefs.length === 2
+);
+check(
+  "officer brief names the target",
+  issued.order.officerBriefs.some(function (row) {
+    return row && String(row.primary || "").indexOf("TARGET") !== -1;
+  })
+);
+var built = model.generateOperationOrder(issued);
+check(
+  "generateOperationOrder is stable",
+  built.officerBriefs.length === issued.order.officerBriefs.length
+);
+check(
+  "officer brief includes rally",
+  issued.order.officerBriefs.some(function (row) {
+    return row && String(row.rally || "").indexOf("32.79") !== -1;
+  })
+);
+
 if (fail) {
   process.exit(1);
 }

@@ -19,9 +19,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.64.0"
+          data-version="0.66.0"
         >
-          Version 0.64.0
+          Version 0.66.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -35,9 +35,9 @@
         <fieldset class="card-static">
           <legend>Issued order</legend>
           <p class="section-note">
-            The operation sheet nested Target sheets will open from Generate brief
-            once targets are on this job.
+            Generate brief opens the operation sheet with a nested Target sheet per target.
           </p>
+          <p id="operationViewNarrative" class="section-note"></p>
           <p>
             <strong id="operationViewNumber"></strong>
             ·
@@ -86,6 +86,7 @@
                   <th>Quals</th>
                   <th>Duty</th>
                   <th>Available</th>
+                  <th>Start</th>
                 </tr>
               </thead>
               <tbody id="operationSaBody"></tbody>

@@ -17,13 +17,25 @@
     home: "#55c7bd",
     work: "#48a89f",
     vehicle: "#8b6bb8",
-    parking: "#a78bfa"
+    parking: "#a78bfa",
+    officer: "#e8b86d",
+    rally: "#4ade80",
+    cleanup: "#94a3b8",
+    medevac: "#f87171",
+    hospital: "#fb7185",
+    landmark: "#fbbf24"
   };
   var KIND_ICON_IDS = {
     home: "Residence",
     work: "Worksite",
     vehicle: "Vehicle",
-    parking: "Parking"
+    parking: "Parking",
+    officer: "Officer",
+    rally: "Star",
+    cleanup: "Location",
+    medevac: "Hospital",
+    hospital: "Hospital",
+    landmark: "Location"
   };
 
   var VEHICLE_COLOR_HEX = {
@@ -733,7 +745,8 @@
     return null;
   }
 
-  function displayMany(host, points) {
+  function displayMany(host, points, opts) {
+    opts = opts || {};
     if (!global.L || !host) {
       return displayFallback(host);
     }
@@ -763,7 +776,7 @@
         vehicleId: point.vehicleId || ""
       });
     });
-    if (!host || !pins.length) {
+    if (!host || (!pins.length && !opts.keepMap)) {
       if (host) {
         host.hidden = true;
       }
@@ -775,7 +788,7 @@
     try {
       state = ensureHostMap(host, {
         readonly: true,
-        latlng: pins[0].latlng
+        latlng: (pins[0] && pins[0].latlng) || opts.center || [32.7767, -96.797]
       });
     } catch (err) {
       return displayFallback(host);
@@ -823,6 +836,35 @@
       marker._kind = pin.kind;
       state.markers.push(marker);
     });
+    if (typeof opts.onClick === "function") {
+      state._opClick = opts.onClick;
+      if (!state._opClickBound) {
+        state._opClickBound = true;
+        state.map.on("click", function (event) {
+          if (event && event.latlng && typeof state._opClick === "function") {
+            state._opClick(event.latlng.lat, event.latlng.lng);
+          }
+        });
+      }
+    }
+    (state.lines || []).forEach(function (line) {
+      state.map.removeLayer(line);
+    });
+    state.lines = [];
+    (opts.lines || []).forEach(function (line) {
+      if (!line || !line.points || line.points.length < 2) {
+        return;
+      }
+      var layer = global.L.polyline(line.points, {
+        color: line.color || "#f87171",
+        weight: 3
+      }).addTo(state.map);
+      state.lines.push(layer);
+    });
+    if (!pins.length) {
+      invalidate(state);
+      return state;
+    }
     if (pins.length === 1) {
       state.map.setView(pins[0].latlng, PIN_ZOOM);
     } else {

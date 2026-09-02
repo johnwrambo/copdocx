@@ -21,7 +21,7 @@ Always `?id=` in the URL even when the model field is `leadId` / `officerId` / `
 | Investigation | `investigations.html` | `investigate.html` (workspace is the form) | — |
 | Operation | `operations.html` | `operation.html` | `operation-form.html` |
 
-Officer pocket brief: `operation-brief.html?id=` (not a tab). Nested Target sheets, PR-E.
+Officer pocket brief: `operation-brief.html?id=` (not a tab). Nested Target sheets (**0.66.0**).
 
 `index.html` must change **all three**: `http-equiv` refresh, `<link rel="canonical">`, and the fallback `<a>` — to **`home.html`**. The Home tab is the briefing hub; **Cases** is the records tab (`leads.html`, store still `leads{}`).
 
@@ -41,7 +41,7 @@ Until book-in is split, `bookin.html` is the working form. Prefill uses **`booki
 
 `home.html` (`data-page="home"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`), `mobile-target-sheet.html` (`data-page="mobile-target-sheet"`).
 `i200-form.html` (`data-page="i200-form"`) and `i205-form.html` (`data-page="i205-form"`) are case-view issuance forms (`?id=` is the **leadId**). Cases tab stays current. They are not a warrant triad.
-Operations tab: `operations.html` / `operation.html` / `operation-form.html` (**0.62.0**). Pocket brief `operation-brief.html` is later. `encounter.html` is the 0.11.0 list.
+Operations tab: `operations.html` / `operation.html` / `operation-form.html` (**0.62.0**). Pocket brief `operation-brief.html` (**0.66.0**). `encounter.html` is the 0.11.0 list.
 
 Home is a briefing hub, not a record triad. Action slot empty. Counts and lists are placeholders until a later painter (cross-store **reads** of committed leads, admin roster, book-in). Do not write any store from `home.html`.
 
