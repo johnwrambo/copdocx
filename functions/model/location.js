@@ -53,11 +53,21 @@
         // "1" Primary, "2" Secondary, "3" Tertiary, then "4"…  Empty = not a target.
         targetPriority: "",
         // Optional #rrggbb pin override. Empty = auto (type, or vehicle color).
-        pinColor: ""
+        pinColor: "",
+        occupancy: "current",
+        occupiedFrom: "",
+        occupiedTo: "",
+        notes: "",
+        otherResidents: ""
       },
       extra
     );
   }
 
+  function isHistoricalOccupancy(row) {
+    return String((row && row.occupancy) || "").toLowerCase() === "historical";
+  }
+
   model.createLocation = createLocation;
+  model.isHistoricalOccupancy = isHistoricalOccupancy;
 })(typeof window !== "undefined" ? window : globalThis);

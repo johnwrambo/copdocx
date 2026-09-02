@@ -76,7 +76,7 @@ Chrome **paints** the control. It does **not** call `saveLead` / `addOfficer` / 
 | Page kind | Primary | Secondaries |
 | --- | --- | --- |
 | Collection | **Add {record}** (`<a>`) | Encounter list: **Add encounter** → `encounter-form.html`. No Back (tabs leave lists). |
-| View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}**. Case view (`case.html`) then **Generate Target sheet** (new window, `mobile-target-sheet.html?id=`), Book-in / Issue I-200 / Issue I-205. Case view also **Arrange layout** / **Done** / **Reset layout**. |
+| View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}**. Case view (`case.html`) then **Generate Target sheet** (new window, `mobile-target-sheet.html?id=`), Book-in / Issue I-200 / Issue I-205. Case board layout is static. |
 | Form | **Save** (`<button>`) | First secondary: **Back to {origin}**. `committedAt` → view; else list. Not `history.back()`. |
 | Encounter form | **Save** (`call: commitEncounter`) | **Back to encounters**; **Add subjects** → `bookin.html?encounterId=`; **Generate I-213** → `narrative.html?encounterId=` |
 | I-200 / I-205 form | **Issue** (`#appBarPrimaryAction`, `data-chrome-action="save"`) | **Back to case** (`case.html?id=`) |

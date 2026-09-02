@@ -485,7 +485,9 @@
       warrantIssuerCode: ""
     });
     subject.warrants.push(warrant);
+    subject.caseRole = "TARGET";
     snap.person = subject;
+    snap.caseRole = "TARGET";
     return m.store.saveLead(snap, { mode: "commit" });
   }
 

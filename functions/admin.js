@@ -1304,6 +1304,7 @@
       COPDoc.mediaCard.mount(photo, {
         owner: options.owner,
         compact: true,
+        hideWhenEmpty: false,
         photoTitle: "",
         pickerHref: options.pickerHref || ""
       });

@@ -8,7 +8,7 @@ function alienNumberDigits(value) {
   return String(value || "").replace(/\D/g, "").slice(0, 9);
 }
 
-function formatAlienNumber(value) {
+function formatAlienNumberGroups(value) {
   var digits = alienNumberDigits(value);
   if (!digits) {
     return "";
@@ -20,7 +20,12 @@ function formatAlienNumber(value) {
   if (digits.length > 6) {
     groups.push(digits.slice(6, 9));
   }
-  return "A" + groups.join(" ");
+  return groups.join(" ");
+}
+
+function formatAlienNumber(value) {
+  var groups = formatAlienNumberGroups(value);
+  return groups ? "A" + groups : "";
 }
 
 function bindAlienNumberInput(input) {

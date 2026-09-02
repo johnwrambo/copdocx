@@ -146,7 +146,12 @@
       association: f.locationAssociation || f.addressAssociation || "",
       parksHere: f.parksHere || "",
       targetPriority: f.targetPriority || "",
-      pinColor: f.pinColor || ""
+      pinColor: f.pinColor || "",
+      occupancy: f.occupancy || "current",
+      occupiedFrom: f.occupiedFrom || "",
+      occupiedTo: f.occupiedTo || "",
+      notes: f.notes || "",
+      otherResidents: f.otherResidents || ""
     });
   }
 
@@ -175,6 +180,16 @@
     var leadCard = document.querySelector('[data-card="lead"]');
     var leadFields = readFields(leadCard);
     var subjectId = entityId(leadCard, "p");
+    var leadId = (leadCard && leadCard.dataset.leadId) || "";
+    var previous =
+      leadId && model.store && typeof model.store.getLead === "function"
+        ? model.store.getLead(leadId)
+        : null;
+    var prevSubject = previous
+      ? model.subjectOf
+        ? model.subjectOf(previous)
+        : previous.person
+      : null;
 
     var person = model.createPerson({
       personId: subjectId,
@@ -330,7 +345,13 @@
     };
 
     cardsIn("locationList").forEach(function (card) {
-      if (!cardHasData(card)) {
+      var keepLoc =
+        card.dataset.entityId &&
+        prevSubject &&
+        (prevSubject.locations || []).some(function (row) {
+          return row && row.locationId === card.dataset.entityId;
+        });
+      if (!cardHasData(card) && !keepLoc) {
         return;
       }
       person.locations.push(collectLocation(card));
@@ -343,7 +364,14 @@
       var ownHas = cardHasData(card);
       var nestedLocs = nestedCards(card, "location").filter(cardHasData);
       var nestedLinks = nestedCards(card, "link").filter(cardHasData);
-      if (!ownHas && !nestedLocs.length && !nestedLinks.length) {
+      var keepId = card.dataset.entityId;
+      var keepExisting =
+        keepId &&
+        previous &&
+        (previous.vehicles || []).some(function (row) {
+          return row && row.vehicleId === keepId;
+        });
+      if (!ownHas && !nestedLocs.length && !nestedLinks.length && !keepExisting) {
         return;
       }
       var f = readFields(card);
@@ -359,7 +387,12 @@
         vehicleBodyStyle: f.vehicleBodyStyle || "",
         vin: f.vin || "",
         registeredOwnerName: f.registeredOwner || f.registeredOwnerName || "",
-        governmentVehicle: false
+        governmentVehicle: false,
+        occupancy: f.occupancy || "current",
+        occupiedFrom: f.occupiedFrom || "",
+        occupiedTo: f.occupiedTo || "",
+        notes: f.notes || "",
+        otherResidents: f.otherResidents || ""
       });
       nestedLocs.forEach(function (locCard) {
         vehicle.locations.push(collectLocation(locCard));
@@ -379,35 +412,32 @@
       }
       var f = readFields(card);
       var otherId = f.relatedPersonId || "";
-      if (!otherId || !f.relationshipType) {
+      var label = f.associationLabel || "";
+      var otherType = f.otherType || (otherId ? "PERSON" : "");
+      if (!label && !otherId) {
         return;
       }
       links.push(
         model.createLink({
           linkId: entityId(card, "link"),
+          label: label,
+          otherType: otherType || "PERSON",
           from: { type: "PERSON", id: subjectId },
-          to: { type: "PERSON", id: otherId },
-          reasons: [f.relationshipType],
-          notes: ""
+          to: { type: otherType || "PERSON", id: otherId },
+          reasons: f.relationshipType ? [f.relationshipType] : [],
+          notes: f.notes || ""
         })
       );
     });
 
     var preservedHistory = [];
-    var leadId = (leadCard && leadCard.dataset.leadId) || "";
     if (!leadId) {
       leadId = model.newId("lead");
       if (leadCard) {
         leadCard.dataset.leadId = leadId;
       }
     }
-    if (model.store && typeof model.store.getLead === "function") {
-      var previous = model.store.getLead(leadId);
-      var prevSubject = previous
-        ? model.subjectOf
-          ? model.subjectOf(previous)
-          : previous.person
-        : null;
+    if (previous) {
       ((prevSubject && prevSubject.warrants) || []).forEach(function (row) {
         if (model.isIssuedWarrant && model.isIssuedWarrant(row)) {
           person.warrants.push(row);
@@ -447,6 +477,9 @@
         person.immigration.baseballCards = prevImm.baseballCards.slice();
       }
     }
+    if (prevSubject && prevSubject.caseRole) {
+      person.caseRole = prevSubject.caseRole;
+    }
     if (typeof model.deriveCriminalProfile === "function") {
       model.deriveCriminalProfile(person);
     }
@@ -460,7 +493,7 @@
       schema: model.SCHEMA,
       leadId: leadId,
       subjectPersonId: subjectId,
-      caseRole: "LEAD",
+      caseRole: (previous && previous.caseRole) || person.caseRole || "LEAD",
       source: model.createSource({
         leadSource: textValue(byId("leadSource")),
         caseNumber: textValue(byId("caseNumber")),

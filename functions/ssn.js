@@ -193,7 +193,9 @@ function paintSSNStatus(input, result, showStatus) {
   if (!input) {
     return;
   }
+  var wrap = input.closest ? input.closest(".field") : input.parentNode;
   var status =
+    (wrap && wrap.querySelector(".ssn-status")) ||
     (input.id && document.getElementById(input.id + "Status")) ||
     document.getElementById("ssnStatus");
   var invalid = showStatus && result && !result.valid;

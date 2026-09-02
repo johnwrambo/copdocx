@@ -323,9 +323,48 @@
     };
   }
 
+  function applyPlainBasemap(state) {
+    if (!state || !state.map || !state.layers) {
+      return;
+    }
+    var layers = state.layers;
+    [layers.streets, layers.imagery, layers.labels, layers.roads].forEach(
+      function (layer) {
+        if (layer && state.map.hasLayer(layer)) {
+          state.map.removeLayer(layer);
+        }
+      }
+    );
+    state.plain = true;
+    if (state.host) {
+      state.host.classList.add("is-plain-basemap");
+    }
+  }
+
+  function watchTiles(state) {
+    if (!state || !state.map || state._tileWatch) {
+      return;
+    }
+    state._tileWatch = true;
+    var fails = 0;
+    state.map.on("tileerror", function () {
+      fails += 1;
+      if (fails >= 8 && !state.plain) {
+        applyPlainBasemap(state);
+      }
+    });
+    state.map.on("tileload", function () {
+      fails = 0;
+    });
+  }
+
   function applyBasemap(state, name) {
     if (!state || !state.map || !state.layers) {
       return "map";
+    }
+    state.plain = false;
+    if (state.host) {
+      state.host.classList.remove("is-plain-basemap");
     }
     var layers = state.layers;
     [layers.streets, layers.imagery, layers.labels, layers.roads].forEach(
@@ -400,6 +439,13 @@
     if (!host) {
       return;
     }
+    if (
+      host.getAttribute("data-map-fit") === "css" ||
+      host.classList.contains("lead-case-map")
+    ) {
+      host.style.height = "";
+      return;
+    }
     var width = host.clientWidth;
     if (width) {
       host.style.height = Math.round((width * 3) / 4) + "px";
@@ -413,8 +459,33 @@
     sizeFrame(state.host);
     global.setTimeout(function () {
       sizeFrame(state.host);
-      state.map.invalidateSize();
+      try {
+        state.map.invalidateSize();
+      } catch (err) {}
     }, 0);
+  }
+
+  function bindHostResize(host) {
+    if (!host || host._mapResizeBound) {
+      return;
+    }
+    host._mapResizeBound = true;
+    function bump() {
+      var state = host._locationMap;
+      if (state) {
+        invalidate(state);
+      }
+    }
+    global.addEventListener("resize", bump);
+    global.addEventListener("orientationchange", bump);
+    if (global.visualViewport) {
+      global.visualViewport.addEventListener("resize", bump);
+    }
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) {
+        bump();
+      }
+    });
   }
 
   function ensureHostMap(host, options) {
@@ -424,15 +495,24 @@
     }
     if (host._locationMap && host._locationMap.map) {
       host.hidden = false;
+      bindHostResize(host);
       return host._locationMap;
     }
     host.hidden = false;
     var start = options.latlng || [31, -99.9];
     var zoom = options.latlng ? PIN_ZOOM : 6;
-    var map = global.L.map(host, {
-      zoomControl: true,
-      attributionControl: true
-    }).setView(start, zoom);
+    var map;
+    try {
+      map = global.L.map(host, {
+        zoomControl: true,
+        attributionControl: true,
+        tap: true,
+        tapTolerance: 22,
+        bounceAtZoomLimits: false
+      }).setView(start, zoom);
+    } catch (err) {
+      return null;
+    }
     host.addEventListener("contextmenu", function (event) {
       event.preventDefault();
     });
@@ -452,6 +532,7 @@
     }
     bindToolbar(state);
     applyBasemap(state, state.basemap);
+    watchTiles(state);
     if (!state.readonly) {
       map.on("click", function (event) {
         if (state.card) {
@@ -459,6 +540,7 @@
         }
       });
     }
+    bindHostResize(host);
     invalidate(state);
     return state;
   }
@@ -517,10 +599,22 @@
     return state;
   }
 
+  function revokePopupUrls(state) {
+    (state && state.popupUrls ? state.popupUrls : []).forEach(function (url) {
+      if (url && String(url).indexOf("blob:") === 0) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    if (state) {
+      state.popupUrls = [];
+    }
+  }
+
   function clearMarkers(state) {
     if (!state || !state.map) {
       return;
     }
+    revokePopupUrls(state);
     if (state.marker) {
       state.map.removeLayer(state.marker);
       state.marker = null;
@@ -531,22 +625,158 @@
     state.markers = [];
   }
 
-  function popupNode(title, meta) {
+  function popupCard(pin) {
     var wrap = document.createElement("div");
-    if (title) {
+    wrap.className = "case-map-popup";
+    var photo = document.createElement("div");
+    photo.className = "case-map-popup-photo";
+    photo.hidden = true;
+    var img = document.createElement("img");
+    img.alt = pin.title || "Location photo";
+    photo.appendChild(img);
+    wrap.appendChild(photo);
+    var body = document.createElement("div");
+    body.className = "case-map-popup-body";
+    if (pin.title) {
       var strong = document.createElement("strong");
-      strong.textContent = title;
-      wrap.appendChild(strong);
+      strong.textContent = pin.title + (pin.isPrimary ? " · Primary" : "");
+      body.appendChild(strong);
     }
-    if (meta) {
-      var line = document.createElement("div");
-      line.textContent = meta;
-      wrap.appendChild(line);
+    if (pin.extra) {
+      var extra = document.createElement("div");
+      extra.className = "case-map-popup-extra";
+      extra.textContent = pin.extra;
+      body.appendChild(extra);
+    }
+    if (pin.address) {
+      var addr = document.createElement("div");
+      addr.className = "case-map-popup-address";
+      addr.textContent = pin.address;
+      body.appendChild(addr);
+    } else if (pin.meta && pin.meta !== pin.title && pin.meta !== pin.extra) {
+      var meta = document.createElement("div");
+      meta.className = "case-map-popup-address";
+      meta.textContent = pin.meta;
+      body.appendChild(meta);
+    }
+    if (pin.occupancy) {
+      var occ = document.createElement("div");
+      occ.className = "case-map-popup-meta";
+      occ.textContent = pin.occupancy;
+      body.appendChild(occ);
+    }
+    wrap.appendChild(body);
+    wrap._photoBox = photo;
+    wrap._photoImg = img;
+    if (pin.photoDataUrl) {
+      img.src = pin.photoDataUrl;
+      photo.hidden = false;
+      wrap._photoLoaded = true;
     }
     return wrap;
   }
 
+  function asPopupBlob(payload) {
+    if (!payload) {
+      return null;
+    }
+    if (typeof Blob !== "undefined" && payload instanceof Blob) {
+      return payload;
+    }
+    if (payload.buffer && payload.byteLength != null) {
+      return new Blob([payload]);
+    }
+    return payload;
+  }
+
+  function fillPopupPhoto(card, pin, urlBag) {
+    if (!card || card._photoLoaded) {
+      return;
+    }
+    if (pin.photoDataUrl && card._photoImg) {
+      card._photoImg.src = pin.photoDataUrl;
+      card._photoBox.hidden = false;
+      card._photoLoaded = true;
+      return;
+    }
+    var api = root.media;
+    var owners = pin.photoOwners || [];
+    if (!api || !owners.length) {
+      return;
+    }
+    function tryOwner(index) {
+      if (index >= owners.length) {
+        return;
+      }
+      var owner = owners[index];
+      if (!owner || !owner.id) {
+        tryOwner(index + 1);
+        return;
+      }
+      api
+        .list(owner)
+        .catch(function () {
+          return [];
+        })
+        .then(function (rows) {
+          var photos = (rows || []).filter(function (row) {
+            return (
+              row &&
+              row.mediaClass === "photo" &&
+              (!row.meta || row.meta.status !== "draft")
+            );
+          });
+          var primary =
+            photos.filter(function (row) {
+              return row.primary;
+            })[0] || photos[0];
+          if (!primary) {
+            tryOwner(index + 1);
+            return;
+          }
+          return api
+            .blob(primary.mediaId, "thumb")
+            .catch(function () {
+              return api.blob(primary.mediaId, "display");
+            })
+            .then(function (rec) {
+              var blob = rec && asPopupBlob(rec.blob);
+              if (!blob) {
+                tryOwner(index + 1);
+                return;
+              }
+              var url = URL.createObjectURL(blob);
+              urlBag.push(url);
+              card._photoImg.src = url;
+              card._photoBox.hidden = false;
+              card._photoLoaded = true;
+            });
+        })
+        .catch(function () {
+          tryOwner(index + 1);
+        });
+    }
+    tryOwner(0);
+  }
+
+  function displayFallback(host) {
+    if (!host) {
+      return null;
+    }
+    host.hidden = false;
+    host.classList.add("is-map-unavailable");
+    host.replaceChildren();
+    var note = document.createElement("p");
+    note.className = "records-empty";
+    note.textContent = "Interactive map unavailable. Use the list.";
+    host.appendChild(note);
+    return null;
+  }
+
   function displayMany(host, points) {
+    if (!global.L || !host) {
+      return displayFallback(host);
+    }
     var pins = [];
     (points || []).forEach(function (point) {
       if (!point) {
@@ -560,10 +790,17 @@
         latlng: pair,
         title: point.title || "",
         meta: point.meta || "",
+        extra: point.extra || "",
+        address: point.address || "",
+        occupancy: point.occupancy || "",
+        photoOwners: point.photoOwners || [],
+        photoDataUrl: point.photoDataUrl || "",
+        navigateUrl: point.navigateUrl || "",
         kind: safeKind(point.kind),
         isPrimary: !!point.isPrimary,
         color: pinColorFor(point.kind, point),
-        id: point.id || ""
+        id: point.placeKey || point.id || "pin-" + pins.length,
+        vehicleId: point.vehicleId || ""
       });
     });
     if (!host || !pins.length) {
@@ -573,23 +810,57 @@
       return null;
     }
     host.hidden = false;
-    var state = ensureHostMap(host, {
-      readonly: true,
-      latlng: pins[0].latlng
-    });
-    if (!state) {
-      return null;
+    host.classList.remove("is-map-unavailable");
+    var state;
+    try {
+      state = ensureHostMap(host, {
+        readonly: true,
+        latlng: pins[0].latlng
+      });
+    } catch (err) {
+      return displayFallback(host);
     }
+    if (!state) {
+      return displayFallback(host);
+    }
+    try {
     clearMarkers(state);
+    state.popupUrls = [];
     pins.forEach(function (pin) {
       var marker = global.L.marker(pin.latlng, {
         draggable: false,
-        icon: pinIcon(pin.kind, pin.isPrimary, pin.color)
+        icon: pinIcon(pin.kind, pin.isPrimary, pin.color),
+        zIndexOffset:
+          pin.kind === "vehicle" || pin.kind === "parking" ? 250 : 0
       }).addTo(state.map);
-      if (pin.title || pin.meta) {
-        marker.bindPopup(popupNode(pin.title, pin.meta));
-      }
+      var card = popupCard(pin);
+      marker.bindPopup(card, {
+        className: "case-map-popup-wrap",
+        maxWidth: 240,
+        minWidth: 168,
+        closeButton: true,
+        autoPan: true
+      });
+      marker.on("popupopen", function () {
+        fillPopupPhoto(card, pin, state.popupUrls);
+      });
+      marker.on("click", function () {
+        if (marker.setZIndexOffset) {
+          state.markers.forEach(function (row) {
+            if (row.setZIndexOffset) {
+              row.setZIndexOffset(0);
+            }
+          });
+          marker.setZIndexOffset(1000);
+        }
+        state.map.setView(
+          marker.getLatLng(),
+          Math.max(state.map.getZoom() || 0, PIN_ZOOM)
+        );
+      });
       marker._placeId = pin.id;
+      marker._vehicleId = pin.vehicleId || "";
+      marker._kind = pin.kind;
       state.markers.push(marker);
     });
     if (pins.length === 1) {
@@ -604,23 +875,55 @@
     }
     invalidate(state);
     return state;
+    } catch (err) {
+      return displayFallback(host);
+    }
   }
 
-  function focus(host, placeId) {
+  function focus(host, placeId, hint) {
     var state = host && host._locationMap;
-    if (!state || !state.markers) {
+    hint = hint || {};
+    if (!state || !state.markers || !state.markers.length) {
       return;
     }
-    var marker = state.markers.filter(function (row) {
-      return row._placeId === placeId;
-    })[0];
+    var want = String(placeId || "");
+    var marker = want
+      ? state.markers.filter(function (row) {
+          return row._placeId === want;
+        })[0]
+      : null;
+    if (!marker && hint.vehicleId) {
+      marker = state.markers.filter(function (row) {
+        return row._vehicleId === hint.vehicleId;
+      })[0];
+    }
+    if (!marker && (hint.kind === "vehicle" || hint.kind === "parking")) {
+      marker = state.markers.filter(function (row) {
+        return row._kind === "vehicle" || row._kind === "parking";
+      })[0];
+    }
     if (!marker) {
       return;
     }
-    state.map.setView(marker.getLatLng(), Math.max(state.map.getZoom(), PIN_ZOOM));
-    if (marker.openPopup) {
-      marker.openPopup();
+    if (marker.setZIndexOffset) {
+      state.markers.forEach(function (row) {
+        if (row.setZIndexOffset) {
+          row.setZIndexOffset(0);
+        }
+      });
+      marker.setZIndexOffset(1000);
     }
+    var zoom = Math.max(state.map.getZoom() || 0, PIN_ZOOM);
+    try {
+      if (state.map.flyTo) {
+        state.map.flyTo(marker.getLatLng(), zoom, { duration: 0.35 });
+      } else {
+        state.map.setView(marker.getLatLng(), zoom);
+      }
+      if (marker.openPopup) {
+        marker.openPopup();
+      }
+    } catch (err) {}
   }
 
   function sync(card) {

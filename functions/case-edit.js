@@ -161,7 +161,12 @@
       association: f.locationAssociation || "",
       parksHere: f.parksHere || "",
       targetPriority: f.targetPriority || "",
-      pinColor: f.pinColor || ""
+      pinColor: f.pinColor || "",
+      occupancy: f.occupancy || "current",
+      occupiedFrom: f.occupiedFrom || "",
+      occupiedTo: f.occupiedTo || "",
+      notes: f.notes || "",
+      otherResidents: f.otherResidents || ""
     });
   }
 
@@ -181,7 +186,12 @@
       vehicleBodyStyle: f.vehicleBodyStyle || "",
       vin: f.vin || "",
       registeredOwnerName: f.registeredOwner || "",
-      governmentVehicle: false
+      governmentVehicle: false,
+      occupancy: f.occupancy || "current",
+      occupiedFrom: f.occupiedFrom || "",
+      occupiedTo: f.occupiedTo || "",
+      notes: f.notes || "",
+      otherResidents: f.otherResidents || ""
     });
     var nested = card.querySelectorAll(
       '[data-nested-list="location"] > [data-card="location"]'
@@ -300,11 +310,19 @@
 
   function openIdentity(snap) {
     var card = cloneTemplate("caseIdentityTemplate");
+    var imm = cloneTemplate("caseImmigrationTemplate");
+    var crim = cloneTemplate("caseCriminalIdsTemplate");
     var h = host();
     if (!card || !h) {
       return;
     }
     h.appendChild(card);
+    if (imm) {
+      h.appendChild(imm);
+    }
+    if (crim) {
+      h.appendChild(crim);
+    }
     var subject = subjectOf(snap) || {};
     var name = subject.name || {};
     fillFields(card, {
@@ -330,13 +348,71 @@
     if (typeof bindAgeCard === "function") {
       bindAgeCard(card);
     }
-    showPanel("Edit identity");
+    var ssnInput = card.querySelector('[data-field="ssn"]');
+    if (typeof bindSSNInput === "function" && ssnInput) {
+      bindSSNInput(ssnInput);
+      if (typeof applySSNToInput === "function" && subject.ssn) {
+        applySSNToInput(ssnInput, { showStatus: true });
+      }
+    }
+    if (imm) {
+      openImmigrationFields(imm, subject);
+    }
+    if (crim) {
+      var ids = (subject && subject.criminal) || {};
+      fillFields(crim, {
+        fbiNumber: ids.fbiNumber,
+        ncicNumber: ids.ncicNumber,
+        stateId: ids.stateId
+      });
+    }
+    showPanel("Edit biographics");
+  }
+
+  function openImmigrationFields(card, subject) {
+    var immigration = (subject && subject.immigration) || {};
+    var disp = card.querySelector('[data-field="immigrationDisposition"]');
+    var status = card.querySelector('[data-field="immigrationStatus"]');
+    if (typeof buildSelectOptions === "function") {
+      if (typeof IMMIGRATION_DISPOSITIONS !== "undefined") {
+        buildSelectOptions(disp, IMMIGRATION_DISPOSITIONS, "Select a Disposition");
+      }
+      if (typeof IMMIGRATION_STATUS !== "undefined") {
+        buildSelectOptions(status, IMMIGRATION_STATUS, "Select a Status");
+      }
+    }
+    fillFields(card, {
+      alienNumber: immigration.alienNumber,
+      finNumber: immigration.finNumber,
+      immigrationDisposition: immigration.disposition,
+      immigrationStatus: immigration.status,
+      firstDeportationDate: immigration.firstDeportationDate,
+      lastDeportationDate: immigration.lastDeportationDate,
+      finalOrderDate: immigration.finalOrderDate
+    });
+    if (typeof bindAlienNumberInput === "function" && card.querySelector('[data-field="alienNumber"]')) {
+      bindAlienNumberInput(card.querySelector('[data-field="alienNumber"]'));
+    }
   }
 
   function saveIdentity() {
-    var card = host() && host().querySelector("[data-card]");
+    var h = host();
+    var card = h && h.querySelector('[data-card="identity"]');
+    var immCard = h && h.querySelector('[data-card="immigration"]');
+    var crimCard = h && h.querySelector('[data-card="criminal"]');
     var m = model();
     var f = m.readFields(card);
+    var ssnInput = card && card.querySelector('[data-field="ssn"]');
+    if (ssnInput && typeof validateSSN === "function") {
+      var ssn = validateSSN(ssnInput.value);
+      if (!ssn.valid) {
+        setStatus(ssn.reason || "Enter a valid SSN.");
+        return;
+      }
+      f.ssn = ssn.formatted || f.ssn;
+    }
+    var imm = immCard ? m.readFields(immCard) : {};
+    var crim = crimCard ? m.readFields(crimCard) : {};
     commit(function (snap) {
       var person = subjectOf(snap);
       person.name = person.name || {};
@@ -351,8 +427,25 @@
       if (typeof updateAgeDisplay === "function") {
         person.age = f.age || person.age;
       }
+      person.immigration = person.immigration || {};
+      if (immCard) {
+        person.immigration.alienNumber = imm.alienNumber || "";
+        person.immigration.finNumber = imm.finNumber || "";
+        person.immigration.disposition = imm.immigrationDisposition || "";
+        person.immigration.status = imm.immigrationStatus || "";
+        person.immigration.firstDeportationDate = imm.firstDeportationDate || "";
+        person.immigration.lastDeportationDate = imm.lastDeportationDate || "";
+        person.immigration.finalOrderDate = imm.finalOrderDate || "";
+        person.immigration.finalOrder = !!imm.finalOrderDate;
+      }
+      person.criminal = person.criminal || {};
+      if (crimCard) {
+        person.criminal.fbiNumber = crim.fbiNumber || "";
+        person.criminal.ncicNumber = crim.ncicNumber || "";
+        person.criminal.stateId = crim.stateId || "";
+      }
       snap.person = person;
-    }, "Identity saved.");
+    }, "Biographics saved.");
   }
 
   function openSource(snap) {
@@ -408,29 +501,7 @@
       return;
     }
     h.appendChild(card);
-    var immigration = (subjectOf(snap) && subjectOf(snap).immigration) || {};
-    var disp = card.querySelector('[data-field="immigrationDisposition"]');
-    var status = card.querySelector('[data-field="immigrationStatus"]');
-    if (typeof buildSelectOptions === "function") {
-      if (typeof IMMIGRATION_DISPOSITIONS !== "undefined") {
-        buildSelectOptions(disp, IMMIGRATION_DISPOSITIONS, "Select a Disposition");
-      }
-      if (typeof IMMIGRATION_STATUS !== "undefined") {
-        buildSelectOptions(status, IMMIGRATION_STATUS, "Select a Status");
-      }
-    }
-    fillFields(card, {
-      alienNumber: immigration.alienNumber,
-      finNumber: immigration.finNumber,
-      immigrationDisposition: immigration.disposition,
-      immigrationStatus: immigration.status,
-      firstDeportationDate: immigration.firstDeportationDate,
-      lastDeportationDate: immigration.lastDeportationDate,
-      finalOrderDate: immigration.finalOrderDate
-    });
-    if (typeof bindAlienNumberInput === "function" && card.querySelector('[data-field="alienNumber"]')) {
-      bindAlienNumberInput(card.querySelector('[data-field="alienNumber"]'));
-    }
+    openImmigrationFields(card, subjectOf(snap));
     showPanel("Edit immigration");
   }
 
@@ -519,6 +590,11 @@
           prev.vin = next.vin;
           prev.registeredOwnerName = next.registeredOwnerName;
           prev.governmentVehicle = false;
+          prev.occupancy = next.occupancy || "current";
+          prev.occupiedFrom = next.occupiedFrom || "";
+          prev.occupiedTo = next.occupiedTo || "";
+          prev.notes = next.notes || "";
+          prev.otherResidents = next.otherResidents || "";
           if (next.locations.length) {
             prev.locations = next.locations;
           }
@@ -663,8 +739,11 @@
     if (link) {
       card.dataset.entityId = link.linkId;
       fillFields(card, {
+        associationLabel: link.label || "",
+        otherType: link.otherType || (link.to && link.to.type) || "PERSON",
         relatedPersonId: link.to && link.to.id,
-        relationshipType: (link.reasons && link.reasons[0]) || ""
+        relationshipType: (link.reasons && link.reasons[0]) || "",
+        notes: link.notes || ""
       });
     }
     showPanel(link ? "Edit association" : "Add association");
@@ -674,8 +753,18 @@
     var card = host() && host().querySelector('[data-card="relationship"]');
     var m = model();
     var f = m.readFields(card);
-    if (!f.relatedPersonId || !f.relationshipType) {
-      setStatus("Select a person and a relationship.");
+    var label = String(f.associationLabel || "").trim();
+    var otherType = f.otherType || "";
+    var otherId = f.relatedPersonId || "";
+    if (!label && !otherId) {
+      setStatus("Enter a name, or link an existing person.");
+      return;
+    }
+    if (!otherType) {
+      otherType = otherId ? "PERSON" : "";
+    }
+    if (!otherType) {
+      setStatus("Pick a type.");
       return;
     }
     commit(function (snap) {
@@ -698,12 +787,20 @@
         existing = null;
         linkId = "";
       }
+      if (!label && otherId && m.formatPersonLabel && m.store && m.store.getPerson) {
+        var linked = m.store.getPerson(otherId);
+        label = (linked && m.formatPersonLabel(linked)) || "";
+      }
       var row = m.createLink({
         linkId: (existing && existing.linkId) || linkId || m.newId("link"),
+        label: label,
+        otherType: otherType,
         from: { type: "PERSON", id: person.personId },
-        to: { type: "PERSON", id: f.relatedPersonId },
-        reasons: [f.relationshipType],
-        notes: (existing && existing.notes) || ""
+        to: { type: otherType, id: otherId },
+        reasons: f.relationshipType
+          ? [f.relationshipType]
+          : (existing && existing.reasons) || [],
+        notes: f.notes || ""
       });
       var found = false;
       for (i = 0; i < snap.links.length; i++) {
@@ -774,6 +871,46 @@
     }
   }
 
+  function addStubThenOpen(kind) {
+    var m = model();
+    var snap = loadSnap();
+    if (!snap || !m.isCommitted(snap)) {
+      setStatus("Open a filed case to edit.");
+      return;
+    }
+    if (kind === "vehicle") {
+      var vehicle = m.createVehicle({ governmentVehicle: false });
+      snap.vehicles = snap.vehicles || [];
+      snap.vehicles.push(vehicle);
+      var savedVeh = m.store.saveLead(snap, { mode: "commit" });
+      if (!savedVeh || !savedVeh.ok) {
+        setStatus((savedVeh && savedVeh.error) || "Could not save.");
+        return;
+      }
+      if (typeof window.paintCaseView === "function") {
+        window.paintCaseView();
+      }
+      open("vehicle", vehicle.vehicleId);
+      return;
+    }
+    if (kind === "location") {
+      var person = subjectOf(snap);
+      var location = m.createLocation({});
+      person.locations = person.locations || [];
+      person.locations.push(location);
+      snap.person = person;
+      var savedLoc = m.store.saveLead(snap, { mode: "commit" });
+      if (!savedLoc || !savedLoc.ok) {
+        setStatus((savedLoc && savedLoc.error) || "Could not save.");
+        return;
+      }
+      if (typeof window.paintCaseView === "function") {
+        window.paintCaseView();
+      }
+      open("location", location.locationId);
+    }
+  }
+
   function addTileButton(tile, label, kind, add) {
     if (!tile) {
       return;
@@ -796,6 +933,10 @@
     btn.addEventListener("click", function (event) {
       event.preventDefault();
       event.stopPropagation();
+      if (add && (kind === "vehicle" || kind === "location")) {
+        addStubThenOpen(kind);
+        return;
+      }
       open(kind, "");
     });
     legend.appendChild(btn);
@@ -806,9 +947,6 @@
       return;
     }
     addTileButton(byId("caseFolderTile"), "Edit", "identity", false);
-    addTileButton(byId("caseSourceTile"), "Edit", "source", false);
-    addTileButton(byId("caseImmigrationTile"), "Edit", "immigration", false);
-    addTileButton(byId("caseCriminalTile"), "Edit", "criminal", false);
     addTileButton(byId("leadVehiclesCard"), "Add", "vehicle", true);
     addTileButton(byId("leadLocationsCard"), "Add", "location", true);
     addTileButton(byId("caseDocumentsTile"), "Add", "document", true);

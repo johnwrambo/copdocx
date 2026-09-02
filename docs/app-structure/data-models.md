@@ -19,6 +19,10 @@ Lead snapshots may include `history[]`: `{ eventId, at, type, text, source }`. O
 
 `store.relatedCommittedCases(personId, excludeLeadId)` returns `{ asSubject, asAssociate }` from committed leads (`listLeads` `subjectPersonId` + person-to-person `links[]`). Case view uses it for association jumps. No new lead fields.
 
+Person associations may start unresolved: `label` (typed name), `otherType` (`PERSON` | `VEHICLE` | `BUSINESS` | `OTHER`), `to.id` empty, `notes`. Resolve later by setting `to.id`. Vehicle→person links still require `to.id`.
+
+Case view layout is static in `case.html` (`data-size` grid). Do not write `copdocx.case-view.layout.v1`; Case view boot deletes that leftover key.
+
 Cross-store **reads** OK (dashboard arrest counts; book-in prefill). Cross-store **writes** only when the user Saves on the destination form.
 
 Admin roster **stays** in `copdoc.admin.v1`.
@@ -118,9 +122,9 @@ meta
 
 ## Location — `functions/model/location.js`
 
-Unchanged. Officer uses the lead location card (`data-location-owner="person"`). **Non-goal:** fleet parking.
+Location and case vehicle also store occupancy: `occupancy` (`current` | `historical`, default current), `occupiedFrom` / `occupiedTo` (ISO dates), `notes`, `otherResidents` (free text). Case map plots **current** places only. Officer uses the lead location card (`data-location-owner="person"`). **Non-goal:** fleet parking.
 
-Every `[data-card="location"]` (lead form, nested vehicle locations, encounter form, officer residence) has **Resolve address** and **Map it**. Resolve geocodes (Census, then Nominatim) into `latitude` / `longitude` and drops a Leaflet pin on that card (`functions/location-map.js`). Drag the pin or click the map to correct; the pair field updates. Map it opens Google Maps. The **lead view** paints **one** read-only 4×3 **Case map** of this subject’s home, work, and vehicle places (`locationMap.displayMany`). A side legend lists those addresses (Home / Work / Vehicle). Files sit with the identity facts (hyperlinks). Multiple subject photos get **Open photo gallery**. Click the photo to add/edit. This is **not** `COPDoc.map.leaflet` (the planning board). Tiles are OSM; same Leaflet 1.9.4 as `map.html`. Geocode/tiles need http(s). Maps use `aspect-ratio: 4 / 3`. Basemap on each location map: Map / Satellite / Hybrid (OSM + Esri, same as `map.html`). Subject photos on views are square (`object-fit: cover`).
+Every `[data-card="location"]` (lead form, nested vehicle locations, encounter form, officer residence) has **Resolve address** and **Map it**. Resolve geocodes (Census, then Nominatim) into `latitude` / `longitude` and drops a Leaflet pin on that card (`functions/location-map.js`). Drag the pin or click the map to correct; the pair field updates. Map it opens Google Maps. The **lead view** paints **one** read-only **Case map** of this subject’s home, work, and vehicle places (`locationMap.displayMany`). Vehicle **registration** / parking / plate-check pins stay vehicle (or parking) icons — they are not drawn as residences. A side legend lists association, plate/YMM for vehicles, and the full address. Click a pin (or legend row) for a small floating card: location photo when one exists, then title, vehicle line, and address. A vehicle location with an address but no lat/long reuses the matching person-place coordinates so it still plots. Files sit with the identity facts (hyperlinks). Multiple subject photos get **Open photo gallery**. Click the photo to add/edit. This is **not** `COPDoc.map.leaflet` (the planning board). Leaflet 1.9.4 is vendored at `vendor/leaflet/` (Target sheet uses it; tiles are still OSM / Esri and need a network when the phone is online). If tiles or Leaflet fail, pins stay on a plain basemap or the list — the sheet does not blank. Saved Target sheet HTML inlines Leaflet + `location-map.js` so a connected phone still gets live tiles; an offline open still shows pins and the legend. Maps use `aspect-ratio: 16 / 9` on the case board; the Target sheet map uses viewport-relative height. Basemap on each location map: Map / Satellite / Hybrid (OSM + Esri, same as `map.html`). Subject photos on views are square (`object-fit: cover`).
 
 ## Media — `functions/model/media.js` (**0.17.0** store)
 

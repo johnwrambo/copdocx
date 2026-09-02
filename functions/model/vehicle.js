@@ -43,6 +43,11 @@
         driverNumber: "",
         assignedOfficerIds: [],
         equipment: [],
+        occupancy: "current",
+        occupiedFrom: "",
+        occupiedTo: "",
+        notes: "",
+        otherResidents: "",
         meta: {
           createdAt: now,
           updatedAt: now,

@@ -346,22 +346,6 @@
           href: "i205-form.html?id=" + encodeURIComponent(id)
         });
       }
-      if (page === "case") {
-        actions.push({
-          id: "caseArrangeButton",
-          label: "Arrange layout"
-        });
-        actions.push({
-          id: "caseArrangeDoneButton",
-          label: "Done",
-          hidden: true
-        });
-        actions.push({
-          id: "caseLayoutResetButton",
-          label: "Reset layout",
-          hidden: true
-        });
-      }
       return {
         tab: "leads",
         file: [

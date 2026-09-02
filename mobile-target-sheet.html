@@ -8,12 +8,7 @@
     />
     <title>Mobile Target sheet</title>
     <link rel="stylesheet" href="style/style.css" />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   </head>
   <body data-page="mobile-target-sheet">
     <header class="app-bar">
@@ -22,9 +17,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.23.0"
+          data-version="0.25.0"
         >
-          Version 0.23.0
+          Version 0.25.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -204,7 +199,7 @@
                 class="fow-map-button"
                 hidden
               >
-                Open in Maps
+                Navigate
               </a>
               <button
                 id="copyTargetPinButton"
@@ -257,8 +252,9 @@
             <div class="case-map-layout">
               <div
                 id="targetCaseMap"
-                class="location-map lead-case-map"
+                class="location-map lead-case-map target-case-map"
                 data-location-map
+                data-map-fit="css"
                 hidden
                 role="img"
                 aria-label="Target home, work, and vehicle locations"
@@ -399,11 +395,14 @@
     <script src="functions/model/store.js"></script>
     <script src="functions/model/media.js"></script>
     <script src="data/countries.js"></script>
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script>
+      if (!window.L) {
+        document.write(
+          '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>'
+        );
+      }
+    </script>
     <script src="functions/location-map.js"></script>
     <script src="functions/leads.js"></script>
   </body>

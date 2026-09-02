@@ -321,7 +321,7 @@
 
       var compact = !!options.compact;
       var pickerHref = String(options.pickerHref || "").trim();
-      if (compact && !photos.length) {
+      if (compact && !photos.length && options.hideWhenEmpty !== false) {
         host.hidden = true;
         return;
       }

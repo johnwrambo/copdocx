@@ -41,9 +41,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.23.0"
+          data-version="0.25.0"
         >
-          Version 0.23.0
+          Version 0.25.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -523,25 +523,39 @@
 
     <template id="relationshipCardTemplate">
       <fieldset data-card="relationship">
-        <legend>Relationship</legend>
+        <legend>Association</legend>
         <div class="row">
           <div class="field">
-            <label for="relatedPersonId">Person</label>
-            <select
-              id="relatedPersonId"
-              name="relatedPersonId"
-              data-field="relatedPersonId"
-            >
-              <option value="">Select a person</option>
-            </select>
+            <label>Name</label>
+            <input type="text" data-field="associationLabel" autocomplete="off" />
           </div>
           <div class="field">
-            <label for="relationshipType">Relationship to</label>
-            <select
-              id="relationshipType"
-              name="relationshipType"
-              data-field="relationshipType"
-            ></select>
+            <label>Type</label>
+            <select data-field="otherType">
+              <option value="">Select a type</option>
+              <option value="PERSON">Person</option>
+              <option value="VEHICLE">Vehicle</option>
+              <option value="BUSINESS">Business</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Relationship</label>
+            <select data-field="relationshipType"></select>
+          </div>
+          <div class="field">
+            <label>Existing person (optional)</label>
+            <select data-field="relatedPersonId">
+              <option value="">Not linked yet</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Notes</label>
+            <textarea data-field="notes" rows="2"></textarea>
           </div>
         </div>
       </fieldset>
@@ -605,6 +619,35 @@
               placeholder="Name as it appears on the title"
               autocomplete="off"
             />
+          </div>
+        </div>
+        <div class="row row-3">
+          <div class="field">
+            <label>Occupancy</label>
+            <select data-field="occupancy">
+              <option value="current">Current</option>
+              <option value="historical">Historical</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>From</label>
+            <input type="date" data-field="occupiedFrom" />
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input type="date" data-field="occupiedTo" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Notes</label>
+            <textarea data-field="notes" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Other residents</label>
+            <textarea data-field="otherResidents" rows="2"></textarea>
           </div>
         </div>
         <div class="nested-block">
@@ -691,6 +734,35 @@
           <div class="field">
             <label for="zip">Zip Code</label>
             <input type="text" id="zip" name="zip" data-field="zip" inputmode="numeric" />
+          </div>
+        </div>
+        <div class="row row-3">
+          <div class="field">
+            <label>Occupancy</label>
+            <select data-field="occupancy">
+              <option value="current">Current</option>
+              <option value="historical">Historical</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>From</label>
+            <input type="date" data-field="occupiedFrom" />
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input type="date" data-field="occupiedTo" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Notes</label>
+            <textarea data-field="notes" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Other residents</label>
+            <textarea data-field="otherResidents" rows="2"></textarea>
           </div>
         </div>
         <div class="row">

@@ -19,9 +19,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.23.0"
+          data-version="0.25.0"
         >
-          Version 0.23.0
+          Version 0.25.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -33,66 +33,118 @@
       <div id="leadMissing" class="records-empty" hidden>Case not found.</div>
 
       <div id="caseViewBoard" class="case-view-board" hidden>
-        <article
-          class="case-tile case-folder"
-          data-tile="folder"
-          data-size="l"
-          id="caseFolderTile"
-        >
-          <header class="case-folder-tab">
-            <h1 id="caseFolderName">Case</h1>
-            <span id="caseFolderRole" class="case-folder-role">Lead</span>
-          </header>
-          <div class="case-folder-body">
-            <div id="caseFolderPhoto" class="case-folder-photo media-block"></div>
-            <div id="caseFolderFacts" class="snapshot-facts"></div>
-            <div id="caseFolderFiles" class="snapshot-files" hidden></div>
-          </div>
-        </article>
+        <div id="caseWarrantBanner" class="case-warrant-banner" hidden>
+          <div id="caseWarrantsList" class="case-warrant-banner-list"></div>
+        </div>
 
-        <fieldset
-          class="card-static case-tile"
-          data-tile="status"
-          data-size="s"
-          id="caseStatusTile"
-        >
-          <legend>Status</legend>
-          <div id="caseStatusFacts" class="snapshot-facts"></div>
-        </fieldset>
-
-        <fieldset
-          class="card-static case-tile"
-          data-tile="map"
-          data-size="m"
-          id="leadCaseMapCard"
-        >
-          <legend>
-            Case map
-            <button
-              type="button"
-              id="caseMapPopoutButton"
-              class="action-button-secondary compact case-tile-legend-action"
-            >
-              Pop out
-            </button>
-          </legend>
-          <p id="leadCaseMapEmpty" class="records-empty">
-            No mapped locations. Resolve an address on the form.
-          </p>
-          <div class="case-map-layout">
-            <div
-              id="leadCaseMap"
-              class="location-map lead-case-map"
-              data-location-map
-              hidden
-              role="img"
-              aria-label="Subject home, work, and vehicle locations"
-            ></div>
-            <div id="leadCaseMapLegend" class="case-map-legend" hidden>
-              <ul id="leadCaseMapList" class="case-map-list"></ul>
+        <div class="case-hero">
+          <article
+            class="case-tile case-folder"
+            data-tile="folder"
+            id="caseFolderTile"
+          >
+            <header class="case-folder-tab">
+              <h1 id="caseFolderName">Case</h1>
+              <span id="caseFolderRole" class="case-folder-role">Lead</span>
+            </header>
+            <div class="case-folder-body">
+              <div id="caseFolderPhoto" class="case-folder-photo media-block"></div>
+              <div class="case-bio-columns">
+                <section class="case-bio-group" data-bio="identity">
+                  <h3>Identity</h3>
+                  <div id="caseFolderFacts" class="snapshot-facts"></div>
+                </section>
+                <section class="case-bio-group" data-bio="status">
+                  <h3>Case</h3>
+                  <div id="caseStatusFacts" class="snapshot-facts"></div>
+                </section>
+                <section class="case-bio-group" data-bio="immigration">
+                  <h3>Immigration</h3>
+                  <div id="caseImmigrationFacts" class="snapshot-facts"></div>
+                </section>
+                <section class="case-bio-group" data-bio="criminal">
+                  <h3>Criminal</h3>
+                  <div id="caseCriminalFacts" class="snapshot-facts"></div>
+                  <div id="caseCriminalList" class="case-plain-list"></div>
+                </section>
+                <div id="caseFolderFiles" class="snapshot-files" hidden></div>
+              </div>
             </div>
+          </article>
+
+          <fieldset
+            class="card-static case-tile"
+            data-tile="map"
+            id="leadCaseMapCard"
+          >
+            <legend>
+              Case map
+              <button
+                type="button"
+                id="caseMapPopoutButton"
+                class="action-button-secondary compact case-tile-legend-action"
+              >
+                Pop out
+              </button>
+            </legend>
+            <p id="leadCaseMapEmpty" class="records-empty">
+              No mapped locations. Resolve an address on the form.
+            </p>
+            <div class="case-map-layout">
+              <div
+                id="leadCaseMap"
+                class="location-map lead-case-map"
+                data-location-map
+                hidden
+                role="img"
+                aria-label="Subject home, work, and vehicle locations"
+              ></div>
+              <div id="leadCaseMapLegend" class="case-map-legend" hidden>
+                <ul id="leadCaseMapList" class="case-map-list"></ul>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="case-hero-side">
+            <fieldset
+              class="card-static case-tile case-documents-tile"
+              data-tile="documents"
+              id="caseDocumentsTile"
+            >
+              <legend>Documents</legend>
+              <p id="caseDocumentsEmpty" class="records-empty">No documents.</p>
+              <div id="caseDocumentsList" class="case-plain-list" hidden></div>
+            </fieldset>
+
+            <fieldset
+              class="card-static case-tile case-history-tile"
+              data-tile="history"
+              id="caseHistoryTile"
+            >
+              <legend>
+                Case history
+                <span class="case-history-actions">
+                  <button
+                    type="button"
+                    id="caseHistorySort"
+                    class="action-button-secondary compact"
+                  >
+                    Sort
+                  </button>
+                  <button
+                    type="button"
+                    id="caseHistoryOpenNote"
+                    class="action-button-secondary compact"
+                  >
+                    Add note
+                  </button>
+                </span>
+              </legend>
+              <p id="caseHistoryEmpty" class="records-empty">No history yet.</p>
+              <div id="caseHistoryList" class="case-history-list" hidden></div>
+            </fieldset>
           </div>
-        </fieldset>
+        </div>
 
         <fieldset
           class="card-static case-tile"
@@ -118,43 +170,6 @@
 
         <fieldset
           class="card-static case-tile"
-          data-tile="warrants"
-          data-size="s"
-          id="warrantsIssuedCard"
-        >
-          <legend>Warrants issued</legend>
-          <p id="warrantsIssuedEmpty" class="records-empty">
-            No I-200 or I-205 issued yet.
-          </p>
-          <div id="caseWarrantsList" class="fow-warrant-list" hidden></div>
-        </fieldset>
-
-        <fieldset
-          class="card-static case-tile"
-          data-tile="history"
-          data-size="l"
-          id="caseHistoryTile"
-        >
-          <legend>Case history</legend>
-          <div class="case-history-compose">
-            <label for="caseHistoryNote">Add a note</label>
-            <textarea
-              id="caseHistoryNote"
-              rows="2"
-              placeholder="What happened, what you learned, what to check next"
-            ></textarea>
-            <button type="button" id="caseHistoryAddNote" class="action-button-secondary">
-              Add note
-            </button>
-          </div>
-          <p id="caseHistoryEmpty" class="records-empty">
-            No history yet.
-          </p>
-          <div id="caseHistoryList" class="case-history-list" hidden></div>
-        </fieldset>
-
-        <fieldset
-          class="card-static case-tile"
           data-tile="associations"
           data-size="m"
           id="caseAssociationsTile"
@@ -164,49 +179,6 @@
             No associations or linked cases.
           </p>
           <div id="caseAssociationsList" class="case-plain-list" hidden></div>
-        </fieldset>
-
-        <fieldset
-          class="card-static case-tile"
-          data-tile="criminal"
-          data-size="m"
-          id="caseCriminalTile"
-        >
-          <legend>Criminal</legend>
-          <div id="caseCriminalFacts" class="snapshot-facts"></div>
-          <div id="caseCriminalList" class="case-plain-list"></div>
-        </fieldset>
-
-        <fieldset
-          class="card-static case-tile"
-          data-tile="immigration"
-          data-size="m"
-          id="caseImmigrationTile"
-        >
-          <legend>Immigration</legend>
-          <div id="caseImmigrationFacts" class="snapshot-facts"></div>
-        </fieldset>
-
-        <fieldset
-          class="card-static case-tile"
-          data-tile="documents"
-          data-size="s"
-          id="caseDocumentsTile"
-        >
-          <legend>Documents</legend>
-          <p id="caseDocumentsEmpty" class="records-empty">No documents.</p>
-          <div id="caseDocumentsList" class="case-plain-list" hidden></div>
-        </fieldset>
-
-        <fieldset
-          class="card-static case-tile"
-          data-tile="source"
-          data-size="m"
-          id="caseSourceTile"
-        >
-          <legend>Source</legend>
-          <div id="caseSourceFacts" class="snapshot-facts"></div>
-          <p id="caseSourceBackground" class="section-note" hidden></p>
         </fieldset>
       </div>
     </div>
@@ -238,6 +210,26 @@
           <div id="caseMapPopoutLegend" class="case-map-legend" hidden>
             <ul id="caseMapPopoutList" class="case-map-list"></ul>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="caseHistoryDialog" class="case-note-dialog" hidden>
+      <div class="case-note-dialog-card">
+        <h2>Add a note</h2>
+        <label for="caseHistoryNote">Note</label>
+        <textarea
+          id="caseHistoryNote"
+          rows="4"
+          placeholder="What happened, what you learned, what to check next"
+        ></textarea>
+        <div class="case-note-dialog-actions">
+          <button type="button" id="caseHistoryCancelNote" class="action-button-secondary">
+            Cancel
+          </button>
+          <button type="button" id="caseHistoryAddNote" class="action-button">
+            Save note
+          </button>
         </div>
       </div>
     </div>
@@ -302,6 +294,7 @@
           <div class="field">
             <label>Social Security Number</label>
             <input type="text" data-field="ssn" inputmode="numeric" maxlength="11" autocomplete="off" />
+            <p class="field-status ssn-status" hidden></p>
           </div>
           <div class="field">
             <label>LexID</label>
@@ -464,6 +457,35 @@
             <input type="text" data-field="registeredOwner" autocomplete="off" />
           </div>
         </div>
+        <div class="row row-3">
+          <div class="field">
+            <label>Occupancy</label>
+            <select data-field="occupancy">
+              <option value="current">Current</option>
+              <option value="historical">Historical</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>From</label>
+            <input type="date" data-field="occupiedFrom" />
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input type="date" data-field="occupiedTo" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Notes</label>
+            <textarea data-field="notes" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Other residents</label>
+            <textarea data-field="otherResidents" rows="2"></textarea>
+          </div>
+        </div>
         <div class="nested-block">
           <div class="card-list" data-nested-list="location" data-location-owner="vehicle"></div>
           <div class="card-list-actions">
@@ -529,6 +551,35 @@
             <input type="text" data-field="zip" inputmode="numeric" />
           </div>
         </div>
+        <div class="row row-3">
+          <div class="field">
+            <label>Occupancy</label>
+            <select data-field="occupancy">
+              <option value="current">Current</option>
+              <option value="historical">Historical</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>From</label>
+            <input type="date" data-field="occupiedFrom" />
+          </div>
+          <div class="field">
+            <label>To</label>
+            <input type="date" data-field="occupiedTo" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Notes</label>
+            <textarea data-field="notes" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Other residents</label>
+            <textarea data-field="otherResidents" rows="2"></textarea>
+          </div>
+        </div>
         <div class="row">
           <div class="field">
             <label>Lat / Long</label>
@@ -591,19 +642,46 @@
 
     <template id="relationshipCardTemplate">
       <fieldset data-card="relationship">
-        <legend>Relationship</legend>
+        <legend>Association</legend>
         <div class="row">
           <div class="field">
-            <label>Person</label>
-            <select data-field="relatedPersonId">
-              <option value="">Select a person</option>
-            </select>
+            <label>Name</label>
+            <input type="text" data-field="associationLabel" autocomplete="off" />
           </div>
           <div class="field">
-            <label>Relationship to</label>
-            <select data-field="relationshipType"></select>
+            <label>Type</label>
+            <select data-field="otherType">
+              <option value="">Select a type</option>
+              <option value="PERSON">Person</option>
+              <option value="VEHICLE">Vehicle</option>
+              <option value="BUSINESS">Business</option>
+              <option value="OTHER">Other</option>
+            </select>
           </div>
         </div>
+        <div class="row">
+          <div class="field">
+            <label>Relationship</label>
+            <select data-field="relationshipType"></select>
+          </div>
+          <div class="field">
+            <label>Existing person (optional)</label>
+            <select data-field="relatedPersonId">
+              <option value="">Not linked yet</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Notes</label>
+            <textarea data-field="notes" rows="2"></textarea>
+          </div>
+        </div>
+        <p class="section-note">
+          <button type="button" class="action-button-secondary compact" data-not-built>
+            Open as new case
+          </button>
+        </p>
       </fieldset>
     </template>
 

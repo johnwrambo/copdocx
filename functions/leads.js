@@ -54,15 +54,77 @@
     return key;
   }
 
+  function formatDateMdY(value) {
+    var text = String(value == null ? "" : value).trim();
+    if (!text) {
+      return "";
+    }
+    var day = text.slice(0, 10);
+    var iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+    if (iso) {
+      return iso[2] + "/" + iso[3] + "/" + iso[1];
+    }
+    return text;
+  }
+
   function formatWhen(iso) {
     if (!iso) {
       return "—";
     }
-    var day = String(iso).slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-      return day;
+    return formatDateMdY(iso) || displayOrDash(iso);
+  }
+
+  function formatSexLabel(value) {
+    var key = String(value || "").trim().toLowerCase();
+    if (key === "male" || key === "m") {
+      return "Male";
     }
-    return displayOrDash(iso);
+    if (key === "female" || key === "f") {
+      return "Female";
+    }
+    return "";
+  }
+
+  function formatCaseAlienNumber(value) {
+    if (typeof formatAlienNumberGroups === "function") {
+      return formatAlienNumberGroups(value);
+    }
+    var digits = String(value || "").replace(/\D/g, "").slice(0, 9);
+    if (!digits) {
+      return "";
+    }
+    return [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 9)]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function formatCaseSsn(value) {
+    if (typeof formatSSN === "function") {
+      return formatSSN(value);
+    }
+    return String(value || "").trim();
+  }
+
+  function occupancyLine(row) {
+    if (!row) {
+      return "";
+    }
+    var historical =
+      model().isHistoricalOccupancy && model().isHistoricalOccupancy(row);
+    if (!historical && !row.occupiedFrom && !row.occupiedTo && !row.notes && !row.otherResidents) {
+      return "";
+    }
+    var range = [formatDateMdY(row.occupiedFrom), formatDateMdY(row.occupiedTo)]
+      .filter(Boolean)
+      .join("–");
+    return [
+      historical ? "Historical" : "",
+      range,
+      row.notes,
+      row.otherResidents ? "Residents " + row.otherResidents : ""
+    ]
+      .filter(Boolean)
+      .join(" · ");
   }
 
   function sourceLine(snapshot) {
@@ -145,13 +207,40 @@
     return plate || ymm || "Vehicle";
   }
 
-  function parseLocationPair(lat, lng) {
+  function vehicleSummary(vehicle) {
+    if (!vehicle) {
+      return "";
+    }
+    var plate = [vehicle.licensePlate || vehicle.plate, vehicle.plateState]
+      .filter(Boolean)
+      .join(" · ");
+    var ymm = [vehicle.vehicleYear, vehicle.vehicleColor, vehicle.vehicleMake, vehicle.vehicleModel]
+      .filter(Boolean)
+      .join(" ");
+    return [plate, ymm].filter(Boolean).join(" · ");
+  }
+
+  function parseLocationPair(lat, lng, loc) {
     var y = parseFloat(lat);
     var x = parseFloat(lng);
-    if (!isFinite(y) || !isFinite(x)) {
+    if (isFinite(y) && isFinite(x)) {
+      return [y, x];
+    }
+    if (!loc) {
       return null;
     }
-    return [y, x];
+    y = parseFloat(loc.lat);
+    x = parseFloat(loc.lng != null ? loc.lng : loc.long);
+    if (isFinite(y) && isFinite(x)) {
+      return [y, x];
+    }
+    if (loc.latLong && typeof parseLatLong === "function") {
+      var parsed = parseLatLong(loc.latLong);
+      if (parsed && parsed.latitude && parsed.longitude && !parsed.error) {
+        return parseLocationPair(parsed.latitude, parsed.longitude);
+      }
+    }
+    return null;
   }
 
   function paintCaseObjectCard(list, options) {
@@ -188,6 +277,7 @@
       COPDoc.mediaCard.mount(photo, {
         owner: options.owner,
         compact: true,
+        hideWhenEmpty: false,
         photoTitle: "",
         pickerHref: options.pickerHref || ""
       });
@@ -220,13 +310,50 @@
     }
     list.hidden = false;
     rows.forEach(function (vehicle) {
-      var loc = (vehicle.locations && vehicle.locations[0]) || null;
+      var locBits = (vehicle.locations || [])
+        .map(function (loc) {
+          if (!loc) {
+            return "";
+          }
+          return [associationLabel(loc.association), formatAddress(loc)]
+            .filter(Boolean)
+            .join(" ");
+        })
+        .filter(Boolean);
+      var linkBits = ((snapshot && snapshot.links) || [])
+        .filter(function (link) {
+          return (
+            link &&
+            ((link.from &&
+              link.from.type === "VEHICLE" &&
+              link.from.id === vehicle.vehicleId) ||
+              (link.to &&
+                link.to.type === "VEHICLE" &&
+                link.to.id === vehicle.vehicleId))
+          );
+        })
+        .map(function (link) {
+          var other =
+            link.from && link.from.type === "PERSON"
+              ? personLabelById(link.from.id)
+              : link.to && link.to.type === "PERSON"
+                ? personLabelById(link.to.id)
+                : "";
+          return [other, (link.reasons || []).join(", ")].filter(Boolean).join(" · ");
+        })
+        .filter(Boolean);
       var bits = [
         [vehicle.vehicleYear, vehicle.vehicleColor, vehicle.vehicleMake, vehicle.vehicleModel]
           .filter(Boolean)
           .join(" "),
-        loc ? associationLabel(loc.association) : "",
-        loc ? formatAddress(loc) : ""
+        vehicle.vehicleBodyStyle,
+        vehicle.vin ? "VIN " + vehicle.vin : "",
+        vehicle.registeredOwnerName
+          ? "Owner " + vehicle.registeredOwnerName
+          : "",
+        occupancyLine(vehicle),
+        locBits.join(" · "),
+        linkBits.join(" · ")
       ].filter(Boolean);
       var id = vehicle.vehicleId || vehicle.id || "";
       paintCaseObjectCard(list, {
@@ -276,7 +403,14 @@
       var assoc = associationLabel(loc.association);
       paintCaseObjectCard(list, {
         title: formatAddress(loc),
-        meta: [assoc, loc.targetPriority ? "Priority " + loc.targetPriority : ""]
+        meta: [
+          assoc,
+          loc.targetPriority ? "Priority " + loc.targetPriority : "",
+          occupancyLine(loc),
+          loc.latitude && loc.longitude
+            ? loc.latitude + ", " + loc.longitude
+            : ""
+        ]
           .filter(Boolean)
           .join(" · "),
         owner: id ? { type: "LOCATION", id: id } : null,
@@ -292,19 +426,74 @@
 
   function subjectPlaceKind(loc, fromVehicle) {
     var assoc = String((loc && loc.association) || "").toLowerCase();
+    if (fromVehicle) {
+      if (assoc === "known-parking") {
+        return "parking";
+      }
+      return "vehicle";
+    }
     if (assoc === "work" || assoc === "office") {
       return "work";
     }
-    if (assoc === "residence" || assoc === "registration") {
-      return "home";
-    }
-    if (assoc === "known-parking") {
-      return "parking";
-    }
-    if (fromVehicle || assoc === "plate-check") {
-      return "vehicle";
-    }
     return "home";
+  }
+
+  function subjectPlaceAddressKey(loc) {
+    var line = formatAddress(loc);
+    if (!line || line === "—") {
+      return "";
+    }
+    return line.toLowerCase().replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function subjectPlaceStreetKey(loc) {
+    var street = String((loc && loc.street) || "")
+      .toLowerCase()
+      .replace(/[.,#]/g, " ")
+      .replace(
+        /\b(drive|dr|street|st|boulevard|blvd|road|rd|avenue|ave|lane|ln|court|ct|way|circle|cir)\b/g,
+        ""
+      )
+      .replace(/\s+/g, " ")
+      .trim();
+    var zip = String((loc && loc.zip) || "").replace(/\s+/g, "");
+    if (!street) {
+      return "";
+    }
+    return zip ? street + " " + zip : street;
+  }
+
+  function separateOverlappingPins(places) {
+    var groups = {};
+    (places || []).forEach(function (place) {
+      if (!place || !place.mapped) {
+        return;
+      }
+      var key =
+        Number(place.lat).toFixed(5) + "," + Number(place.lng).toFixed(5);
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(place);
+    });
+    Object.keys(groups).forEach(function (key) {
+      var group = groups[key];
+      if (group.length < 2) {
+        return;
+      }
+      var move = group.filter(function (place) {
+        return place.kind === "vehicle" || place.kind === "parking";
+      });
+      if (!move.length) {
+        move = group.slice(1);
+      }
+      move.forEach(function (place, i) {
+        var angle = ((i + 1) * 2 * Math.PI) / (move.length + 1);
+        var delta = 0.00022;
+        place.lat = Number(place.lat) + Math.cos(angle) * delta;
+        place.lng = Number(place.lng) + Math.sin(angle) * delta;
+      });
+    });
   }
 
   function subjectPlaceKindLabel(kind) {
@@ -322,13 +511,53 @@
 
   function collectSubjectPlaces(snapshot, subject) {
     var places = [];
+    var personAddrIndex = {};
+    function rememberPersonPair(loc, pair) {
+      if (!pair) {
+        return;
+      }
+      var full = subjectPlaceAddressKey(loc);
+      var street = subjectPlaceStreetKey(loc);
+      if (full) {
+        personAddrIndex[full] = pair;
+      }
+      if (street) {
+        personAddrIndex[street] = pair;
+      }
+    }
+    function pairForVehicle(loc) {
+      var pair = parseLocationPair(loc.latitude, loc.longitude, loc);
+      if (pair) {
+        return pair;
+      }
+      return (
+        personAddrIndex[subjectPlaceAddressKey(loc)] ||
+        personAddrIndex[subjectPlaceStreetKey(loc)] ||
+        null
+      );
+    }
     function pushLoc(loc, fromVehicle, extra, vehicle) {
       if (!loc) {
         return;
       }
+      if (model().isHistoricalOccupancy && model().isHistoricalOccupancy(loc)) {
+        return;
+      }
+      if (
+        vehicle &&
+        model().isHistoricalOccupancy &&
+        model().isHistoricalOccupancy(vehicle)
+      ) {
+        return;
+      }
       var kind = subjectPlaceKind(loc, fromVehicle);
       var addr = formatAddress(loc);
-      var pair = parseLocationPair(loc.latitude, loc.longitude);
+      if (addr === "—") {
+        addr = "";
+      }
+      var pair = fromVehicle
+        ? pairForVehicle(loc)
+        : parseLocationPair(loc.latitude, loc.longitude, loc);
       var priority = String((loc && loc.targetPriority) || "").trim();
       var api = window.COPDoc && COPDoc.locationMap;
       var vehicleColor = vehicle && vehicle.vehicleColor;
@@ -340,13 +569,34 @@
               vehicleColor: vehicleColor
             })
           : "";
+      var vehicleId =
+        (vehicle && (vehicle.vehicleId || vehicle.id)) || "";
+      var locationId = loc.locationId || "";
+      var photoOwners = [];
+      if (locationId) {
+        photoOwners.push({ type: "LOCATION", id: locationId });
+      }
+      if (vehicleId) {
+        photoOwners.push({ type: "VEHICLE", id: vehicleId });
+      }
+      var occupancy = occupancyLine(loc) || occupancyLine(vehicle) || "";
+      var title =
+        associationLabel(loc.association) || subjectPlaceKindLabel(kind);
+      var placeKey =
+        (fromVehicle ? "vehicle:" : "place:") +
+        (locationId || vehicleId || "row") +
+        ":" +
+        places.length;
       places.push({
-        id: loc.locationId || "",
+        id: locationId,
+        placeKey: placeKey,
+        vehicleId: vehicleId,
         kind: kind,
-        title: subjectPlaceKindLabel(kind),
-        address: addr !== "—" ? addr : "",
+        title: title,
+        address: addr,
         extra: extra || "",
-        meta: [extra, addr !== "—" ? addr : ""].filter(Boolean).join(" · "),
+        occupancy: occupancy,
+        meta: [extra, addr, occupancy].filter(Boolean).join(" · "),
         lat: pair ? pair[0] : "",
         lng: pair ? pair[1] : "",
         mapped: !!pair,
@@ -354,16 +604,36 @@
         isPrimary: priority === "1",
         pinColor: pinColor,
         vehicleColor: vehicleColor || "",
-        color: color
+        color: color,
+        photoOwners: photoOwners,
+        navigateUrl: mapsNavigateUrl(loc, pair)
       });
+      if (!fromVehicle) {
+        rememberPersonPair(loc, pair);
+      }
     }
     ((subject && subject.locations) || []).forEach(function (loc) {
       pushLoc(loc, false, "", null);
     });
     ((snapshot && snapshot.vehicles) || []).forEach(function (vehicle) {
       (vehicle.locations || []).forEach(function (loc) {
-        pushLoc(loc, true, vehicleHeading(vehicle), vehicle);
+        pushLoc(loc, true, vehicleSummary(vehicle), vehicle);
       });
+    });
+    separateOverlappingPins(places);
+    var navByVehicle = {};
+    places.forEach(function (place) {
+      if (!place.navigateUrl && place.mapped) {
+        place.navigateUrl = mapsNavigateUrl(null, [place.lat, place.lng]);
+      }
+      if (place.vehicleId && place.navigateUrl && !navByVehicle[place.vehicleId]) {
+        navByVehicle[place.vehicleId] = place.navigateUrl;
+      }
+    });
+    places.forEach(function (place) {
+      if (!place.navigateUrl && place.vehicleId && navByVehicle[place.vehicleId]) {
+        place.navigateUrl = navByVehicle[place.vehicleId];
+      }
     });
     return places;
   }
@@ -488,12 +758,24 @@
         var label = document.createElement("strong");
         label.textContent =
           place.title + (place.isPrimary ? " · Primary" : "");
-        var addr = document.createElement("span");
-        addr.textContent =
-          [place.extra, place.address].filter(Boolean).join(" · ") ||
-          "No address";
         body.appendChild(label);
-        body.appendChild(addr);
+        if (place.extra) {
+          var extra = document.createElement("span");
+          extra.className = "case-map-item-extra";
+          extra.textContent = place.extra;
+          body.appendChild(extra);
+        }
+        var addr = document.createElement("span");
+        addr.className = "case-map-item-address";
+        addr.textContent = place.address || (place.extra ? "" : "No address");
+        if (addr.textContent) {
+          body.appendChild(addr);
+        }
+        item.setAttribute("data-place-key", place.placeKey || place.id || "");
+        if (place.vehicleId) {
+          item.setAttribute("data-vehicle-id", place.vehicleId);
+        }
+        item.setAttribute("data-place-kind", place.kind || "");
         item.appendChild(
           caseMapKindIcon(place.kind, place.isPrimary, place.color)
         );
@@ -576,6 +858,13 @@
             actions.appendChild(reset);
           }
         }
+        if (place.navigateUrl) {
+          var nav = document.createElement("a");
+          nav.className = "fow-nav-link case-map-nav-link";
+          nav.textContent = "Navigate";
+          bindNavigateLink(nav, place.navigateUrl);
+          actions.appendChild(nav);
+        }
         if (options.allowPrimary && place.id) {
           var btn = document.createElement("button");
           btn.type = "button";
@@ -607,15 +896,33 @@
         if (actions.childNodes.length) {
           item.appendChild(actions);
         }
-        if (place.mapped) {
+        var canFocus =
+          place.mapped ||
+          place.kind === "vehicle" ||
+          place.kind === "parking" ||
+          !!place.vehicleId;
+        if (canFocus) {
+          item.classList.add("is-mapped");
           item.tabIndex = 0;
-          item.setAttribute("role", "button");
-          item.addEventListener("click", function () {
+          item.addEventListener("click", function (event) {
+            if (
+              event.target &&
+              event.target.closest &&
+              event.target.closest("a, button, input, .case-map-item-actions")
+            ) {
+              return;
+            }
             if (window.COPDoc && COPDoc.locationMap && COPDoc.locationMap.focus) {
-              COPDoc.locationMap.focus(host, place.id);
+              COPDoc.locationMap.focus(host, place.placeKey || place.id, {
+                vehicleId: place.vehicleId || "",
+                kind: place.kind || ""
+              });
             }
           });
           item.addEventListener("keydown", function (event) {
+            if (event.target !== item) {
+              return;
+            }
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               item.click();
@@ -630,8 +937,21 @@
       return;
     }
     host.hidden = false;
+    var painted = false;
     if (window.COPDoc && COPDoc.locationMap && COPDoc.locationMap.displayMany) {
-      COPDoc.locationMap.displayMany(host, mapped);
+      try {
+        painted = !!COPDoc.locationMap.displayMany(host, mapped);
+      } catch (err) {
+        painted = false;
+      }
+    }
+    if (!painted) {
+      host.classList.add("is-map-unavailable");
+      host.replaceChildren();
+      var note = document.createElement("p");
+      note.className = "records-empty";
+      note.textContent = "Interactive map unavailable. Pins stay in the list.";
+      host.appendChild(note);
     }
   }
 
@@ -673,6 +993,7 @@
       snapshot: snapshot,
       subject: subject,
       allowPrimary: false,
+      allowColor: false,
       hideWhenEmpty: true
     });
   }
@@ -748,7 +1069,7 @@
     appendSnapshotFact(
       host,
       "DOB / age",
-      [subject && subject.dateOfBirth, subject && subject.age]
+      [formatDateMdY(subject && subject.dateOfBirth), subject && subject.age]
         .filter(Boolean)
         .join(" · ")
     );
@@ -1067,7 +1388,7 @@
         var tr = document.createElement("tr");
         [
           row.formType || "—",
-          row.warrantDate || (row.issuedAt || "").slice(0, 10) || "—",
+          formatDateMdY(row.warrantDate || row.issuedAt) || "—",
           row.fileNo || row.warrantNumber || "—",
           row.officerName || row.warrantIssuer || "—",
           row.pdfFileName || "—"
@@ -1128,6 +1449,11 @@
         n += 1;
       }
     });
+    host.hidden = n < 1;
+    var group = host.closest ? host.closest(".case-bio-group") : null;
+    if (group && !group.querySelector(".case-plain-list")) {
+      group.hidden = n < 1;
+    }
     return n;
   }
 
@@ -1167,25 +1493,34 @@
       nameEl.textContent = name;
     }
     if (roleEl) {
-      roleEl.textContent = caseRoleLabel(subject && subject.caseRole);
+      var role = subject && subject.caseRole;
+      if (issuedWarrantRows(subject).length) {
+        role = "TARGET";
+      }
+      roleEl.textContent = caseRoleLabel(role);
     }
     if (byId("caseFolderFacts")) {
       fillFactHost(byId("caseFolderFacts"), [
-        ["Sex", subject && subject.sex],
+        ["Sex", formatSexLabel(subject && subject.sex)],
         [
           "DOB / age",
-          [subject && subject.dateOfBirth, subject && subject.age]
+          [
+            formatDateMdY(subject && subject.dateOfBirth),
+            subject && subject.age
+          ]
             .filter(Boolean)
             .join(" · ")
         ],
         ["Citizenship", countryName(subject && subject.citizenship)],
         [
           "A-Number",
-          subject && subject.immigration && subject.immigration.alienNumber
+          formatCaseAlienNumber(
+            subject && subject.immigration && subject.immigration.alienNumber
+          )
         ],
         ["FIN", subject && subject.immigration && subject.immigration.finNumber],
         ["Aliases", aliasLine(subject)],
-        ["SSN", subject && subject.ssn],
+        ["SSN", formatCaseSsn(subject && subject.ssn)],
         ["LexID", subject && subject.lexId]
       ]);
     }
@@ -1199,6 +1534,7 @@
       COPDoc.mediaCard.mount(byId("caseFolderPhoto"), {
         owner: { type: "PERSON", id: subject.personId },
         compact: true,
+        hideWhenEmpty: false,
         photoTitle: "",
         pickerHref: leadPickerHref("PERSON", subject.personId, snapshot.leadId),
         filesHost: byId("caseFolderFiles"),
@@ -1260,12 +1596,11 @@
       ["Disposition", dispositionLine(subject) || immigration.disposition],
       [
         "Final order",
-        immigration.finalOrderDate || (immigration.finalOrder ? "Final order" : "")
+        formatDateMdY(immigration.finalOrderDate) ||
+          (immigration.finalOrder ? "Final order" : "")
       ],
-      ["First deportation", immigration.firstDeportationDate],
-      ["Last deportation", immigration.lastDeportationDate],
-      ["A-Number", immigration.alienNumber],
-      ["FIN", immigration.finNumber]
+      ["First deportation", formatDateMdY(immigration.firstDeportationDate)],
+      ["Last deportation", formatDateMdY(immigration.lastDeportationDate)]
     ]);
     setTileEmpty(byId("caseImmigrationTile"), !n);
   }
@@ -1292,8 +1627,6 @@
       ? model().threatLevelLabel(crim.threatLevel)
       : crim.threatLevel || "None";
     var n = fillFactHost(byId("caseCriminalFacts"), [
-      ["Profile", bits.join(" · ")],
-      ["Threat", String(threat).toLowerCase() === "none" ? "" : threat],
       ["FBI", crim.fbiNumber || (subject.criminal && subject.criminal.fbiNumber)],
       [
         "NCIC",
@@ -1306,7 +1639,11 @@
     ]);
     var lines = [];
     ((subject && subject.arrests) || []).forEach(function (row) {
-      var line = [row.arrestDate, row.arrestCharge, row.arrestAgency]
+      var line = [
+        formatDateMdY(row.arrestDate),
+        row.arrestCharge,
+        row.arrestAgency
+      ]
         .filter(Boolean)
         .join(" · ");
       if (line) {
@@ -1314,7 +1651,11 @@
       }
     });
     ((subject && subject.convictions) || []).forEach(function (row) {
-      var line = [row.convictionDate, row.crime || row.charge, row.court]
+      var line = [
+        formatDateMdY(row.convictionDate),
+        row.crime || row.charge,
+        row.court
+      ]
         .filter(Boolean)
         .join(" · ");
       if (line) {
@@ -1325,7 +1666,11 @@
       if (model().isIssuedWarrant && model().isIssuedWarrant(row)) {
         return;
       }
-      var line = [row.warrantDate, row.charge, row.warrantStatus]
+      var line = [
+        formatDateMdY(row.warrantDate),
+        row.charge,
+        row.warrantStatus
+      ]
         .filter(Boolean)
         .join(" · ");
       if (line) {
@@ -1333,10 +1678,16 @@
       }
     });
     var listHas = paintPlainList(byId("caseCriminalList"), null, lines);
-    var emptyProfile = !bits.length && String(threat).toLowerCase() === "none";
+    var group =
+      byId("caseCriminalFacts") &&
+      byId("caseCriminalFacts").closest &&
+      byId("caseCriminalFacts").closest(".case-bio-group");
+    if (group) {
+      group.hidden = n < 1 && !listHas;
+    }
     setTileEmpty(
       byId("caseCriminalTile"),
-      emptyProfile && !listHas && n < 1
+      n < 1 && !listHas
     );
   }
 
@@ -1350,7 +1701,9 @@
           row.documentType,
           row.documentNumber,
           row.issuingState || row.issuingCountry,
-          row.documentExpiration ? "exp " + row.documentExpiration : ""
+          row.documentExpiration
+            ? "exp " + formatDateMdY(row.documentExpiration)
+            : ""
         ]
           .filter(Boolean)
           .join(" · ");
@@ -1402,7 +1755,7 @@
         ? m.store.getLead(row.leadId)
         : null;
     var num = snap && snap.source && snap.source.caseNumber;
-    var when = row.updatedAt ? String(row.updatedAt).slice(0, 10) : "";
+    var when = formatDateMdY(row.updatedAt);
     return [row.label, num, num ? "" : when].filter(Boolean).join(" · ") || "Case";
   }
 
@@ -1458,6 +1811,15 @@
       var to = link.to || {};
       var personId = otherPersonId(link, sid);
       var other = personId ? personLabelById(personId) : "";
+      var typeLabel = "";
+      var types = (model().ASSOCIATION_OTHER_TYPES || []).filter(function (row) {
+        return row.value === (link.otherType || to.type);
+      })[0];
+      if (types) {
+        typeLabel = types.label;
+      } else if (link.otherType || (to.type && to.type !== "PERSON")) {
+        typeLabel = link.otherType || to.type;
+      }
       var vehicleBit =
         from.type === "VEHICLE"
           ? vehicleHeading(
@@ -1465,26 +1827,28 @@
                 return row && row.vehicleId === from.id;
               })[0])
             )
-          : to.type === "VEHICLE"
+          : to.type === "VEHICLE" && to.id
             ? vehicleHeading(
                 ((snapshot.vehicles || []).filter(function (row) {
                   return row && row.vehicleId === to.id;
                 })[0])
               )
             : "";
+      var displayName = link.label || other || vehicleBit;
       var p = document.createElement("p");
       if (personId) {
         associatedPersonIds[personId] = true;
         var jump = relatedCases(personId, leadId).asSubject[0];
         if (jump) {
-          appendCaseJump(p, jump, other);
+          appendCaseJump(p, jump, displayName || other);
           jumpedLeadIds[jump.leadId] = true;
         } else {
-          appendListBit(p, other);
+          appendListBit(p, displayName || other);
         }
       } else {
-        appendListBit(p, vehicleBit);
+        appendListBit(p, displayName);
       }
+      appendListBit(p, typeLabel);
       appendListBit(p, (link.reasons || []).join(", "));
       appendListBit(p, link.notes);
       if (!p.childNodes.length) {
@@ -1531,15 +1895,22 @@
     setTileEmpty(byId("caseAssociationsTile"), !has);
   }
 
+  var historyNewestFirst = true;
+  var historyEventRows = [];
+
   function renderHistoryEvents(events) {
     var list = byId("caseHistoryList");
     var empty = byId("caseHistoryEmpty");
     if (!list) {
       return;
     }
+    if (events) {
+      historyEventRows = events;
+    }
     list.replaceChildren();
-    var rows = (events || []).slice().sort(function (a, b) {
-      return String(b.at || "").localeCompare(String(a.at || ""));
+    var rows = historyEventRows.slice().sort(function (a, b) {
+      var cmp = String(a.at || "").localeCompare(String(b.at || ""));
+      return historyNewestFirst ? -cmp : cmp;
     });
     if (!rows.length) {
       list.hidden = true;
@@ -1552,7 +1923,60 @@
       empty.hidden = true;
     }
     list.hidden = false;
+    (list._mediaUrls || []).forEach(function (url) {
+      if (url && String(url).indexOf("blob:") === 0) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    list._mediaUrls = [];
     rows.forEach(function (row) {
+      if (row.type === "media") {
+        var item = document.createElement("article");
+        item.className = "case-history-media";
+        if (row.mediaClass === "photo" && row.mediaId) {
+          var img = document.createElement("img");
+          img.className = "case-history-thumb";
+          img.alt = row.caption || "Photo";
+          item.appendChild(img);
+          var api = window.COPDoc && COPDoc.media;
+          if (api && typeof api.blob === "function") {
+            api
+              .blob(row.mediaId, "thumb")
+              .catch(function () {
+                return api.blob(row.mediaId, "display");
+              })
+              .then(function (rec) {
+                var url = mediaBlobUrl(rec, list._mediaUrls);
+                if (url) {
+                  img.src = url;
+                }
+              })
+              .catch(function () {});
+          }
+        }
+        var body = document.createElement("div");
+        body.className = "case-history-media-body";
+        if (row.at) {
+          var mediaTime = document.createElement("time");
+          mediaTime.textContent = formatWhen(row.at);
+          body.appendChild(mediaTime);
+        }
+        var title = document.createElement("strong");
+        title.textContent = row.text || "File added";
+        body.appendChild(title);
+        [row.caption, row.notes, row.place, row.originalName]
+          .filter(function (bit, i, arr) {
+            return bit && arr.indexOf(bit) === i && bit !== row.text;
+          })
+          .forEach(function (bit) {
+            var meta = document.createElement("span");
+            meta.textContent = bit;
+            body.appendChild(meta);
+          });
+        item.appendChild(body);
+        list.appendChild(item);
+        return;
+      }
       var p = document.createElement("p");
       p.className = row.type === "note" ? "is-note" : "";
       if (row.at) {
@@ -1574,11 +1998,19 @@
       events.push({ at: at || "", text: text, type: type || "event" });
     }
     var meta = (snapshot && snapshot.meta) || {};
-    push(meta.createdAt, "Case opened");
-    push(meta.committedAt, "Case filed");
-    if (snapshot && snapshot.source && snapshot.source.leadSource) {
-      push(meta.createdAt || meta.committedAt, "Source · " + sourceLine(snapshot));
+    var source = (snapshot && snapshot.source) || {};
+    var sourceBits = [
+      sourceLine(snapshot),
+      source.refAgency,
+      source.probationCheck ? "Probation" : "",
+      source.leadInfo
+    ].filter(Boolean);
+    if (sourceBits.length) {
+      push(meta.createdAt || meta.committedAt, sourceBits.join(" · "), "source");
+    } else {
+      push(meta.createdAt, "Case opened");
     }
+    push(meta.committedAt, "Case filed");
     issuedWarrantRows(subject).forEach(function (row) {
       push(
         row.issuedAt || row.warrantDate,
@@ -1691,14 +2123,23 @@
           if (!row) {
             return;
           }
+          var caption =
+            row.mediaClass === "photo" &&
+            window.COPDoc &&
+            COPDoc.model &&
+            typeof COPDoc.model.formatPhotoCaption === "function"
+              ? COPDoc.model.formatPhotoCaption(row)
+              : row.caption || "";
           extra.push({
             at: (row.meta && (row.meta.createdAt || row.meta.committedAt)) || "",
-            text:
-              row.mediaClass === "photo"
-                ? "Photo added" + (row.caption ? " · " + row.caption : "")
-                : "File added" +
-                  (row.originalName ? " · " + row.originalName : ""),
-            type: "media"
+            text: row.mediaClass === "photo" ? "Photo added" : "File added",
+            type: "media",
+            mediaClass: row.mediaClass || "",
+            mediaId: row.mediaId || "",
+            caption: caption,
+            notes: row.notes || "",
+            place: row.captionCustom ? row.place || "" : "",
+            originalName: row.mediaClass === "file" ? row.originalName || "" : ""
           });
         });
       });
@@ -1707,8 +2148,54 @@
   }
 
   function bindCaseHistory() {
+    var openBtn = byId("caseHistoryOpenNote");
+    var sortBtn = byId("caseHistorySort");
     var btn = byId("caseHistoryAddNote");
+    var cancel = byId("caseHistoryCancelNote");
+    var dialog = byId("caseHistoryDialog");
     var input = byId("caseHistoryNote");
+    if (sortBtn && sortBtn.dataset.historyBound !== "true") {
+      sortBtn.dataset.historyBound = "true";
+      sortBtn.textContent = "Sort";
+      sortBtn.title = "Showing newest first";
+      sortBtn.addEventListener("click", function () {
+        historyNewestFirst = !historyNewestFirst;
+        sortBtn.textContent = "Sort";
+        sortBtn.title = historyNewestFirst
+          ? "Showing newest first"
+          : "Showing oldest first";
+        sortBtn.setAttribute("aria-pressed", historyNewestFirst ? "true" : "false");
+        renderHistoryEvents();
+      });
+    }
+    function closeDialog() {
+      if (dialog) {
+        dialog.hidden = true;
+      }
+    }
+    if (openBtn && openBtn.dataset.historyOpenBound !== "true") {
+      openBtn.dataset.historyOpenBound = "true";
+      openBtn.addEventListener("click", function () {
+        if (dialog) {
+          dialog.hidden = false;
+        }
+        if (input) {
+          input.focus();
+        }
+      });
+    }
+    if (cancel && cancel.dataset.historyBound !== "true") {
+      cancel.dataset.historyBound = "true";
+      cancel.addEventListener("click", closeDialog);
+    }
+    if (dialog && dialog.dataset.historyBound !== "true") {
+      dialog.dataset.historyBound = "true";
+      dialog.addEventListener("click", function (event) {
+        if (event.target === dialog) {
+          closeDialog();
+        }
+      });
+    }
     if (!btn || btn.dataset.historyBound === "true") {
       return;
     }
@@ -1755,6 +2242,7 @@
       if (input) {
         input.value = "";
       }
+      closeDialog();
       if (window.COPDoc && COPDoc.setAppBarStatus) {
         COPDoc.setAppBarStatus("Note added.", { ok: true });
       }
@@ -1764,9 +2252,8 @@
   }
 
   function paintCaseWarrants(subject) {
+    var banner = byId("caseWarrantBanner");
     var list = byId("caseWarrantsList");
-    var empty = byId("warrantsIssuedEmpty");
-    var card = byId("warrantsIssuedCard");
     if (!list) {
       return;
     }
@@ -1779,21 +2266,25 @@
         );
       });
     if (!rows.length) {
-      list.hidden = true;
-      if (empty) {
-        empty.hidden = false;
+      if (banner) {
+        banner.hidden = true;
       }
-      setTileEmpty(card, true);
+      list.hidden = true;
       return;
     }
-    if (empty) {
-      empty.hidden = true;
+    if (banner) {
+      banner.hidden = false;
     }
     list.hidden = false;
-    setTileEmpty(card, false);
     rows.forEach(function (row) {
-      var item = document.createElement(row.mediaId ? "a" : "div");
-      item.className = "fow-warrant-card";
+      var item = document.createElement(row.mediaId ? "a" : "span");
+      item.textContent = [
+        row.formType || "Warrant",
+        formatDateMdY(row.warrantDate || row.issuedAt),
+        row.fileNo || row.warrantNumber
+      ]
+        .filter(Boolean)
+        .join(" · ");
       if (row.mediaId) {
         item.href = "#";
         item.addEventListener("click", function (event) {
@@ -1801,342 +2292,14 @@
           openWarrantPdf(row);
         });
       }
-      var thumb = document.createElement("div");
-      thumb.className = "fow-warrant-thumb";
-      var form = document.createElement("strong");
-      form.textContent = row.formType || "Warrant";
-      var mark = document.createElement("span");
-      mark.textContent = "Warrant";
-      thumb.appendChild(form);
-      thumb.appendChild(mark);
-      var body = document.createElement("div");
-      var title = document.createElement("strong");
-      title.textContent = warrantTitle(row);
-      var meta = document.createElement("span");
-      meta.textContent = [
-        row.fileNo || row.warrantNumber,
-        row.warrantDate || (row.issuedAt || "").slice(0, 10)
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      body.appendChild(title);
-      body.appendChild(meta);
-      item.appendChild(thumb);
-      item.appendChild(body);
       list.appendChild(item);
     });
   }
 
-  var CASE_LAYOUT_KEY = "copdocx.case-view.layout.v1";
-  var CASE_TILE_SIZES = ["s", "m", "l", "xl", "tall"];
-  var CASE_LAYOUT_DEFAULT = {
-    version: 1,
-    order: [
-      "folder",
-      "status",
-      "map",
-      "vehicles",
-      "places",
-      "warrants",
-      "history",
-      "associations",
-      "criminal",
-      "immigration",
-      "documents",
-      "source"
-    ],
-    sizes: {
-      folder: "l",
-      status: "s",
-      map: "m",
-      vehicles: "m",
-      places: "m",
-      warrants: "s",
-      history: "l",
-      associations: "m",
-      criminal: "m",
-      immigration: "m",
-      documents: "s",
-      source: "m"
-    }
-  };
-
-  function caseLayoutBoard() {
-    return byId("caseViewBoard");
-  }
-
-  function caseLayoutTiles(board) {
-    return Array.prototype.slice.call(
-      (board || caseLayoutBoard() || document).querySelectorAll("[data-tile]")
-    );
-  }
-
-  function normalizeCaseLayout(raw) {
-    var next = {
-      version: 1,
-      order: CASE_LAYOUT_DEFAULT.order.slice(),
-      sizes: {}
-    };
-    Object.keys(CASE_LAYOUT_DEFAULT.sizes).forEach(function (key) {
-      next.sizes[key] = CASE_LAYOUT_DEFAULT.sizes[key];
-    });
-    if (!raw || typeof raw !== "object") {
-      return next;
-    }
-    if (Array.isArray(raw.order)) {
-      var seen = {};
-      var order = [];
-      raw.order.forEach(function (id) {
-        var key = String(id || "");
-        if (!key || seen[key] || !CASE_LAYOUT_DEFAULT.sizes[key]) {
-          return;
-        }
-        seen[key] = true;
-        order.push(key);
-      });
-      CASE_LAYOUT_DEFAULT.order.forEach(function (id) {
-        if (!seen[id]) {
-          order.push(id);
-        }
-      });
-      next.order = order;
-    }
-    if (raw.sizes && typeof raw.sizes === "object") {
-      Object.keys(raw.sizes).forEach(function (key) {
-        var size = String(raw.sizes[key] || "");
-        if (CASE_LAYOUT_DEFAULT.sizes[key] && CASE_TILE_SIZES.indexOf(size) !== -1) {
-          next.sizes[key] = size;
-        }
-      });
-    }
-    return next;
-  }
-
-  function readCaseLayout() {
+  function dropRetiredCaseLayout() {
     try {
-      var raw = localStorage.getItem(CASE_LAYOUT_KEY);
-      if (!raw) {
-        return normalizeCaseLayout(null);
-      }
-      return normalizeCaseLayout(JSON.parse(raw));
-    } catch (err) {
-      return normalizeCaseLayout(null);
-    }
-  }
-
-  function writeCaseLayout(layout) {
-    try {
-      localStorage.setItem(
-        CASE_LAYOUT_KEY,
-        JSON.stringify(normalizeCaseLayout(layout))
-      );
+      localStorage.removeItem("copdocx.case-view.layout.v1");
     } catch (err) {}
-  }
-
-  function applyCaseLayout(layout) {
-    var board = caseLayoutBoard();
-    if (!board) {
-      return;
-    }
-    var next = normalizeCaseLayout(layout);
-    caseLayoutTiles(board).forEach(function (tile) {
-      var id = tile.getAttribute("data-tile") || "";
-      var size = next.sizes[id] || tile.getAttribute("data-size") || "m";
-      tile.setAttribute("data-size", size);
-      var index = next.order.indexOf(id);
-      tile.style.order = index === -1 ? "99" : String(index);
-      var current = tile.querySelector(".case-tile-size [aria-pressed='true']");
-      if (current) {
-        current.removeAttribute("aria-pressed");
-      }
-      var btn = tile.querySelector(
-        '.case-tile-size [data-size="' + size + '"]'
-      );
-      if (btn) {
-        btn.setAttribute("aria-pressed", "true");
-      }
-    });
-  }
-
-  function currentCaseLayoutFromDom() {
-    var board = caseLayoutBoard();
-    var tiles = caseLayoutTiles(board);
-    tiles.sort(function (a, b) {
-      return (Number(a.style.order) || 0) - (Number(b.style.order) || 0);
-    });
-    var layout = { version: 1, order: [], sizes: {} };
-    tiles.forEach(function (tile) {
-      var id = tile.getAttribute("data-tile") || "";
-      if (!id) {
-        return;
-      }
-      layout.order.push(id);
-      layout.sizes[id] = tile.getAttribute("data-size") || "m";
-    });
-    return normalizeCaseLayout(layout);
-  }
-
-  function setCaseArrangeMode(on) {
-    var board = caseLayoutBoard();
-    var arrange = byId("caseArrangeButton");
-    var done = byId("caseArrangeDoneButton");
-    var reset = byId("caseLayoutResetButton");
-    document.body.classList.toggle("case-arranging", !!on);
-    if (board) {
-      board.classList.toggle("is-arranging", !!on);
-    }
-    if (arrange) {
-      arrange.hidden = !!on;
-    }
-    if (done) {
-      done.hidden = !on;
-    }
-    if (reset) {
-      reset.hidden = !on;
-    }
-    if (window.COPDoc && COPDoc.setAppBarStatus) {
-      COPDoc.setAppBarStatus(
-        on
-          ? "Drag a card title to move it. S / M / L / XL / Tall sets the size."
-          : "",
-        on ? { ok: true } : undefined
-      );
-    }
-  }
-
-  function moveCaseTile(fromId, toId) {
-    if (!fromId || fromId === toId) {
-      return;
-    }
-    var layout = currentCaseLayoutFromDom();
-    var from = layout.order.indexOf(fromId);
-    var to = layout.order.indexOf(toId);
-    if (from === -1 || to === -1) {
-      return;
-    }
-    layout.order.splice(from, 1);
-    layout.order.splice(to, 0, fromId);
-    writeCaseLayout(layout);
-    applyCaseLayout(layout);
-  }
-
-  function bindCaseLayout() {
-    var board = caseLayoutBoard();
-    if (!board || board.dataset.layoutBound === "true") {
-      return;
-    }
-    board.dataset.layoutBound = "true";
-    caseLayoutTiles(board).forEach(function (tile) {
-      var handle =
-        tile.querySelector(".case-folder-tab") ||
-        tile.querySelector(":scope > legend") ||
-        tile;
-      handle.setAttribute("draggable", "true");
-      handle.addEventListener("dragstart", function (event) {
-        if (!board.classList.contains("is-arranging")) {
-          event.preventDefault();
-          return;
-        }
-        if (event.target.closest(".case-tile-size, .case-tile-legend-action")) {
-          event.preventDefault();
-          return;
-        }
-        event.dataTransfer.setData(
-          "text/plain",
-          tile.getAttribute("data-tile") || ""
-        );
-        event.dataTransfer.effectAllowed = "move";
-        tile.classList.add("is-dragging");
-      });
-      handle.addEventListener("dragend", function () {
-        caseLayoutTiles(board).forEach(function (row) {
-          row.classList.remove("is-dragging", "is-drop-target");
-        });
-      });
-      tile.addEventListener("dragover", function (event) {
-        if (!board.classList.contains("is-arranging")) {
-          return;
-        }
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        tile.classList.add("is-drop-target");
-      });
-      tile.addEventListener("dragleave", function (event) {
-        if (!tile.contains(event.relatedTarget)) {
-          tile.classList.remove("is-drop-target");
-        }
-      });
-      tile.addEventListener("drop", function (event) {
-        event.preventDefault();
-        tile.classList.remove("is-drop-target");
-        moveCaseTile(
-          event.dataTransfer.getData("text/plain"),
-          tile.getAttribute("data-tile") || ""
-        );
-      });
-      if (tile.querySelector(".case-tile-size")) {
-        return;
-      }
-      var sizes = document.createElement("div");
-      sizes.className = "case-tile-size";
-      CASE_TILE_SIZES.forEach(function (size) {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.setAttribute("data-size", size);
-        btn.textContent = size === "tall" ? "T" : size.toUpperCase();
-        btn.title =
-          size === "s"
-            ? "Small"
-            : size === "m"
-              ? "Medium"
-              : size === "l"
-                ? "Large"
-                : size === "xl"
-                  ? "Full row"
-                  : "Tall";
-        btn.addEventListener("click", function (event) {
-          event.preventDefault();
-          event.stopPropagation();
-          tile.setAttribute("data-size", size);
-          writeCaseLayout(currentCaseLayoutFromDom());
-          applyCaseLayout(readCaseLayout());
-        });
-        sizes.appendChild(btn);
-      });
-      var anchor =
-        tile.querySelector(":scope > legend") ||
-        tile.querySelector(".case-folder-tab");
-      if (anchor && anchor.parentNode === tile) {
-        anchor.after(sizes);
-      } else {
-        tile.insertBefore(sizes, tile.firstChild);
-      }
-    });
-    applyCaseLayout(readCaseLayout());
-    setCaseArrangeMode(false);
-    var arrange = byId("caseArrangeButton");
-    var done = byId("caseArrangeDoneButton");
-    var reset = byId("caseLayoutResetButton");
-    if (arrange) {
-      arrange.addEventListener("click", function () {
-        setCaseArrangeMode(true);
-      });
-    }
-    if (done) {
-      done.addEventListener("click", function () {
-        writeCaseLayout(currentCaseLayoutFromDom());
-        setCaseArrangeMode(false);
-      });
-    }
-    if (reset) {
-      reset.addEventListener("click", function () {
-        writeCaseLayout(CASE_LAYOUT_DEFAULT);
-        applyCaseLayout(CASE_LAYOUT_DEFAULT);
-        if (window.COPDoc && COPDoc.setAppBarStatus) {
-          COPDoc.setAppBarStatus("Layout reset to default.", { ok: true });
-        }
-      });
-    }
   }
 
   function bindCaseMapPopout() {
@@ -2273,7 +2436,6 @@
     paintSnapshotFacts(snap, subject);
     paintFolderCard(snap, subject);
     paintStatusTile(snap, subject);
-    paintSourceTile(snap);
     paintLeadCaseMap(snap, subject);
     paintLeadVehicles(snap);
     paintLeadLocations(snap, subject);
@@ -2956,21 +3118,178 @@
     });
   }
 
+  function mapsNavigateUrl(loc, pairOverride) {
+    var pair = null;
+    if (pairOverride && pairOverride.length >= 2) {
+      var y = parseFloat(pairOverride[0]);
+      var x = parseFloat(pairOverride[1]);
+      if (isFinite(y) && isFinite(x) && !(y === 0 && x === 0)) {
+        pair = [y, x];
+      }
+    }
+    if (!pair && loc) {
+      pair = parseLocationPair(loc.latitude, loc.longitude, loc);
+    }
+    var addr = loc ? formatAddress(loc) : "";
+    if (addr === "—") {
+      addr = "";
+    }
+    var dest = pair ? pair[0] + "," + pair[1] : addr;
+    if (!dest) {
+      return "";
+    }
+    if (pair) {
+      return (
+        "https://www.google.com/maps/dir/?api=1&destination=" +
+        dest +
+        "&travelmode=driving"
+      );
+    }
+    return (
+      "https://www.google.com/maps/dir/?api=1&destination=" +
+      encodeURIComponent(dest) +
+      "&travelmode=driving"
+    );
+  }
+
   function mapsSearchUrl(loc) {
-    if (!loc) {
-      return "";
+    return mapsNavigateUrl(loc);
+  }
+
+  function openMapsNavigate(url, event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
     }
-    var pair = parseLocationPair(loc.latitude, loc.longitude);
-    var addr = formatAddress(loc);
-    var q = pair
-      ? pair[0] + "," + pair[1]
-      : addr && addr !== "—"
-        ? addr
-        : "";
-    if (!q) {
-      return "";
+    var href = String(url || "");
+    if (!href || href === "#") {
+      return;
     }
-    return "https://maps.google.com/?q=" + encodeURIComponent(q);
+    var win = null;
+    try {
+      win = window.open(href, "_blank");
+    } catch (err) {}
+    if (win) {
+      try {
+        win.opener = null;
+      } catch (err2) {}
+      return;
+    }
+    window.location.href = href;
+  }
+
+  function bindNavigateLink(el, url) {
+    if (!el || !url) {
+      return;
+    }
+    el.href = url;
+    el.target = "_blank";
+    el.rel = "noopener noreferrer";
+    el.hidden = false;
+    if (el.getAttribute("data-nav-bound") === "true") {
+      return;
+    }
+    el.setAttribute("data-nav-bound", "true");
+    el.addEventListener("click", function (event) {
+      openMapsNavigate(el.getAttribute("href") || url, event);
+    });
+  }
+
+  function paintTargetLocationList(host, locs) {
+    if (!host) {
+      return;
+    }
+    host.replaceChildren();
+    var rows = (locs || []).filter(function (loc) {
+      return loc && (formatAddress(loc) !== "—" || mapsNavigateUrl(loc));
+    });
+    if (!rows.length) {
+      host.className = "fow-inline-empty";
+      host.textContent = "No additional locations loaded.";
+      return;
+    }
+    host.className = "fow-location-list";
+    rows.forEach(function (loc) {
+      var row = document.createElement("div");
+      row.className = "fow-list-row fow-location-row";
+      var body = document.createElement("div");
+      body.className = "fow-location-row-body";
+      var title = document.createElement("strong");
+      title.textContent =
+        associationLabel(loc.association) || "Location";
+      var addr = formatAddress(loc);
+      var meta = document.createElement("span");
+      meta.textContent = [
+        addr !== "—" ? addr : "",
+        loc.targetPriority ? "Priority " + loc.targetPriority : ""
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      body.appendChild(title);
+      if (meta.textContent) {
+        body.appendChild(meta);
+      }
+      row.appendChild(body);
+      var url = mapsNavigateUrl(loc);
+      if (url) {
+        var nav = document.createElement("a");
+        nav.className = "fow-nav-link";
+        nav.textContent = "Navigate";
+        bindNavigateLink(nav, url);
+        row.appendChild(nav);
+      }
+      host.appendChild(row);
+    });
+  }
+
+  function paintTargetVehicleList(host, vehicles) {
+    if (!host) {
+      return;
+    }
+    host.replaceChildren();
+    var rows = vehicles || [];
+    if (!rows.length) {
+      host.className = "fow-inline-empty";
+      host.textContent = "No additional vehicles loaded.";
+      return;
+    }
+    host.className = "fow-location-list";
+    rows.forEach(function (vehicle) {
+      var row = document.createElement("div");
+      row.className = "fow-list-row fow-location-row";
+      var body = document.createElement("div");
+      body.className = "fow-location-row-body";
+      var title = document.createElement("strong");
+      title.textContent = plateOf(vehicle) || vehicleYmm(vehicle) || "Vehicle";
+      var meta = document.createElement("span");
+      var firstLoc = ((vehicle && vehicle.locations) || []).filter(Boolean)[0];
+      meta.textContent = [
+        vehicleYmm(vehicle) && plateOf(vehicle) ? vehicleYmm(vehicle) : "",
+        firstLoc ? formatAddress(firstLoc) : ""
+      ]
+        .filter(function (bit) {
+          return bit && bit !== "—";
+        })
+        .join(" · ");
+      body.appendChild(title);
+      if (meta.textContent) {
+        body.appendChild(meta);
+      }
+      row.appendChild(body);
+      var url = "";
+      ((vehicle && vehicle.locations) || []).some(function (loc) {
+        url = mapsNavigateUrl(loc);
+        return !!url;
+      });
+      if (url) {
+        var nav = document.createElement("a");
+        nav.className = "fow-nav-link";
+        nav.textContent = "Navigate";
+        bindNavigateLink(nav, url);
+        row.appendChild(nav);
+      }
+      host.appendChild(row);
+    });
   }
 
   function pinCopyText(loc) {
@@ -3015,11 +3334,9 @@
     var pin = pinCopyText(loc);
     if (mapLink) {
       if (url) {
-        mapLink.hidden = false;
-        mapLink.href = url;
-        mapLink.target = "_blank";
-        mapLink.rel = "noopener";
+        mapLink.textContent = "Navigate";
         mapLink.removeAttribute("data-not-built");
+        bindNavigateLink(mapLink, url);
       } else {
         mapLink.hidden = true;
         mapLink.href = "#";
@@ -3242,28 +3559,8 @@
       overnight ? formatAddress(overnight) : ""
     );
 
-    paintSheetList(
-      byId("targetLocationsList"),
-      locs.map(function (loc) {
-        return [
-          formatAddress(loc),
-          associationLabel(loc.association),
-          loc.targetPriority ? "Priority " + loc.targetPriority : ""
-        ]
-          .filter(function (bit) {
-            return bit && bit !== "—";
-          })
-          .join(" · ");
-      }).filter(Boolean),
-      "No additional locations loaded."
-    );
-    paintSheetList(
-      byId("targetVehiclesList"),
-      vehicles.map(function (row) {
-        return [plateOf(row), vehicleYmm(row)].filter(Boolean).join(" · ");
-      }).filter(Boolean),
-      "No additional vehicles loaded."
-    );
+    paintTargetLocationList(byId("targetLocationsList"), locs);
+    paintTargetVehicleList(byId("targetVehiclesList"), vehicles);
 
     var opCard = byId("targetOperationCard");
     if (opCard) {
@@ -3311,22 +3608,185 @@
     });
   }
 
-  function collectPageCss() {
-    return fetch("style/style.css")
+  function fetchText(url) {
+    return fetch(url)
       .then(function (res) {
         return res.ok ? res.text() : "";
       })
       .catch(function () {
-        var css = "";
-        Array.prototype.forEach.call(document.styleSheets || [], function (sheet) {
-          try {
-            Array.prototype.forEach.call(sheet.cssRules || [], function (rule) {
-              css += rule.cssText + "\n";
-            });
-          } catch (err) {}
-        });
-        return css;
+        return "";
       });
+  }
+
+  function collectPageCss() {
+    return fetchText("style/style.css").then(function (css) {
+      if (css) {
+        return css;
+      }
+      var out = "";
+      Array.prototype.forEach.call(document.styleSheets || [], function (sheet) {
+        try {
+          Array.prototype.forEach.call(sheet.cssRules || [], function (rule) {
+            out += rule.cssText + "\n";
+          });
+        } catch (err) {}
+      });
+      return out;
+    });
+  }
+
+  function loadPlacePhotoPack(places) {
+    var api = window.COPDoc && COPDoc.media;
+    var rows = places || [];
+    if (!api || !rows.length) {
+      return Promise.resolve(rows);
+    }
+    function firstPhotoUrl(owners, index) {
+      if (index >= owners.length) {
+        return Promise.resolve("");
+      }
+      var owner = owners[index];
+      if (!owner || !owner.id) {
+        return firstPhotoUrl(owners, index + 1);
+      }
+      return api
+        .list(owner)
+        .catch(function () {
+          return [];
+        })
+        .then(function (list) {
+          var photos = (list || []).filter(function (row) {
+            return (
+              row &&
+              row.mediaClass === "photo" &&
+              (!row.meta || row.meta.status !== "draft")
+            );
+          });
+          var primary =
+            photos.filter(function (row) {
+              return row.primary;
+            })[0] || photos[0];
+          if (!primary) {
+            return firstPhotoUrl(owners, index + 1);
+          }
+          return api
+            .blob(primary.mediaId, "thumb")
+            .catch(function () {
+              return api.blob(primary.mediaId, "display");
+            })
+            .then(recToDataUrl)
+            .then(function (url) {
+              return url || firstPhotoUrl(owners, index + 1);
+            })
+            .catch(function () {
+              return firstPhotoUrl(owners, index + 1);
+            });
+        });
+    }
+    return Promise.all(
+      rows.map(function (place) {
+        return firstPhotoUrl(place.photoOwners || [], 0).then(function (url) {
+          if (url) {
+            place.photoDataUrl = url;
+          }
+          return place;
+        });
+      })
+    );
+  }
+
+  function serializeTargetPlaces(places) {
+    return (places || []).map(function (place) {
+      return {
+        id: place.id || "",
+        placeKey: place.placeKey || "",
+        vehicleId: place.vehicleId || "",
+        kind: place.kind || "home",
+        title: place.title || "",
+        extra: place.extra || "",
+        address: place.address || "",
+        occupancy: place.occupancy || "",
+        meta: place.meta || "",
+        lat: place.lat,
+        lng: place.lng,
+        mapped: !!place.mapped,
+        isPrimary: !!place.isPrimary,
+        color: place.color || "",
+        pinColor: place.pinColor || "",
+        vehicleColor: place.vehicleColor || "",
+        photoDataUrl: place.photoDataUrl || "",
+        navigateUrl: place.navigateUrl || ""
+      };
+    });
+  }
+
+  function escapeInlineScript(source) {
+    return String(source || "").replace(/<\/script/gi, "<\\/script");
+  }
+
+  function targetSheetMapBoot() {
+    return (
+      "(function(){" +
+      "var p=window.TARGET_SHEET_PHOTOS||[];var i=0;" +
+      "var img=document.getElementById('targetPhoto');" +
+      "var meta=document.getElementById('targetPhotoMeta');" +
+      "var prev=document.getElementById('targetPhotoPrev');" +
+      "var next=document.getElementById('targetPhotoNext');" +
+      "function show(n){if(!p.length||!img)return;i=(n+p.length)%p.length;" +
+      "if(p[i].src){img.src=p[i].src;img.hidden=false;}" +
+      "if(meta)meta.textContent=p[i].caption||'';}" +
+      "if(prev)prev.onclick=function(){show(i-1);};" +
+      "if(next)next.onclick=function(){show(i+1);};" +
+      "if(img&&p.length>1)img.onclick=function(e){var r=img.getBoundingClientRect();" +
+      "show(e.clientX<r.left+r.width/2?i-1:i+1);};" +
+      "function bindLegend(host){" +
+      "var list=document.getElementById('targetCaseMapList');" +
+      "if(!list||!host)return;" +
+      "list.querySelectorAll('[data-place-key]').forEach(function(item){" +
+      "item.addEventListener('click',function(ev){" +
+      "if(ev.target&&ev.target.closest&&ev.target.closest('.case-map-item-actions'))return;" +
+      "if(window.COPDoc&&COPDoc.locationMap&&COPDoc.locationMap.focus){" +
+      "COPDoc.locationMap.focus(host,item.getAttribute('data-place-key'),{" +
+      "vehicleId:item.getAttribute('data-vehicle-id')||''," +
+      "kind:item.getAttribute('data-place-kind')||''});}});});}" +
+      "function fallback(host,places){" +
+      "if(!host)return;" +
+      "host.hidden=false;" +
+      "if(!window.L){host.classList.add('is-map-unavailable');" +
+      "host.textContent='Interactive map unavailable. Use the list.';return;}" +
+      "try{var map=L.map(host,{zoomControl:true,tap:true,tapTolerance:22});" +
+      "try{L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);}catch(e1){}" +
+      "var pts=[];(places||[]).forEach(function(place){" +
+      "if(!place||place.lat==null||place.lng==null)return;" +
+      "var ll=[Number(place.lat),Number(place.lng)];" +
+      "if(!isFinite(ll[0])||!isFinite(ll[1]))return;pts.push(ll);" +
+      "var m=L.marker(ll).addTo(map);" +
+      "m.bindPopup([place.title,place.extra,place.address].filter(Boolean).join(' · '));});" +
+      "if(pts.length===1)map.setView(pts[0],17);" +
+      "else if(pts.length)map.fitBounds(pts,{padding:[28,28],maxZoom:17});" +
+      "setTimeout(function(){try{map.invalidateSize();}catch(e2){}},0);}" +
+      "catch(e3){host.classList.add('is-map-unavailable');" +
+      "host.textContent='Interactive map unavailable. Use the list.';}}" +
+      "function startMap(){" +
+      "var host=document.getElementById('targetCaseMap');" +
+      "var places=window.TARGET_SHEET_PLACES||[];" +
+      "if(!host||!places.length)return;host.hidden=false;" +
+      "try{if(window.COPDoc&&COPDoc.locationMap&&COPDoc.locationMap.displayMany){" +
+      "COPDoc.locationMap.displayMany(host,places.filter(function(x){return x&&x.mapped;}));" +
+      "bindLegend(host);return;}}catch(e4){}" +
+      "fallback(host,places.filter(function(x){return x&&x.mapped;}));}" +
+      "if(document.readyState==='complete')startMap();" +
+      "else window.addEventListener('load',startMap);" +
+      "window.addEventListener('resize',function(){" +
+      "var host=document.getElementById('targetCaseMap');" +
+      "var st=host&&host._locationMap;" +
+      "if(st&&st.map){try{st.map.invalidateSize();}catch(e5){}}});" +
+      "window.addEventListener('orientationchange',function(){" +
+      "var host=document.getElementById('targetCaseMap');" +
+      "var st=host&&host._locationMap;" +
+      "if(st&&st.map){setTimeout(function(){try{st.map.invalidateSize();}catch(e6){}},250);}});" +
+      "})();"
+    );
   }
 
   function inlineImages(root) {
@@ -3468,15 +3928,24 @@
         ? model().subjectOf(snap)
         : snap.person
       : null;
+    var places = collectSubjectPlaces(snap, subject);
     Promise.all([
       collectPageCss(),
       loadSubjectPhotoPack(),
-      loadWarrantPack(subject)
+      loadWarrantPack(subject),
+      loadPlacePhotoPack(places),
+      fetchText("vendor/leaflet/leaflet.css"),
+      fetchText("vendor/leaflet/leaflet.js"),
+      fetchText("functions/location-map.js")
     ])
       .then(function (parts) {
         var css = parts[0] || "";
         var pack = parts[1] || [];
         var warrants = parts[2] || [];
+        var packedPlaces = serializeTargetPlaces(parts[3] || places);
+        var leafletCss = parts[4] || "";
+        var leafletJs = parts[5] || "";
+        var mapJs = parts[6] || "";
         var clone = sheet.cloneNode(true);
         return inlineImages(clone).then(function () {
           clone.querySelectorAll("details").forEach(function (el) {
@@ -3499,56 +3968,53 @@
           if (meta && pack[0]) {
             meta.textContent = pack[0].caption || meta.textContent;
           }
-          var title = (byId("targetName") && byId("targetName").textContent) || "Target sheet";
-          var places = collectSubjectPlaces(snap, subject).filter(function (place) {
-            return place.mapped;
-          });
-          var script =
+          var title =
+            (byId("targetName") && byId("targetName").textContent) ||
+            "Target sheet";
+          var boot =
             "window.TARGET_SHEET_PHOTOS = " +
             JSON.stringify(pack) +
             ";window.TARGET_SHEET_PLACES = " +
-            JSON.stringify(places) +
+            JSON.stringify(packedPlaces) +
             ";" +
-            "(function(){var p=window.TARGET_SHEET_PHOTOS||[];var i=0;" +
-            "var img=document.getElementById('targetPhoto');" +
-            "var meta=document.getElementById('targetPhotoMeta');" +
-            "var prev=document.getElementById('targetPhotoPrev');" +
-            "var next=document.getElementById('targetPhotoNext');" +
-            "function show(n){if(!p.length||!img)return;i=(n+p.length)%p.length;" +
-            "if(p[i].src){img.src=p[i].src;img.hidden=false;}" +
-            "if(meta)meta.textContent=p[i].caption||'';}" +
-            "if(prev)prev.onclick=function(){show(i-1);};" +
-            "if(next)next.onclick=function(){show(i+1);};" +
-            "if(img&&p.length>1)img.onclick=function(e){var r=img.getBoundingClientRect();" +
-            "show(e.clientX<r.left+r.width/2?i-1:i+1);};" +
-            "var places=window.TARGET_SHEET_PLACES||[];" +
-            "var host=document.getElementById('targetCaseMap');" +
-            "if(host&&window.L&&places.length){host.hidden=false;" +
-            "var map=L.map(host);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);" +
-            "var pts=[];places.forEach(function(p){if(!p||p.lat==null||p.lng==null)return;" +
-            "pts.push([p.lat,p.lng]);L.marker([p.lat,p.lng]).addTo(map).bindPopup(p.title||'');});" +
-            "if(pts.length===1)map.setView(pts[0],17);else if(pts.length)map.fitBounds(pts,{padding:[28,28]});}" +
-            "})();";
+            targetSheetMapBoot();
+          var headExtra = leafletCss
+            ? "<style>\n" +
+              leafletCss.replace(/<\/style/gi, "<\\/style") +
+              "\n</style>"
+            : "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\"/>";
+          var scripts = "";
+          if (leafletJs) {
+            scripts +=
+              "<script>" + escapeInlineScript(leafletJs) + "<\/script>";
+          } else {
+            scripts +=
+              "<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"><\/script>";
+          }
+          if (mapJs) {
+            scripts += "<script>" + escapeInlineScript(mapJs) + "<\/script>";
+          }
+          scripts += "<script>" + escapeInlineScript(boot) + "<\/script>";
           var html =
             "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"UTF-8\"/>" +
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"/>" +
             "<title>" +
             String(title).replace(/</g, "") +
             " — Target sheet</title>" +
-            "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\"/>" +
+            headExtra +
             "<style>\n" +
             css.replace(/<\/style/gi, "<\\/style") +
             "\n</style></head><body data-page=\"mobile-target-sheet\">" +
             "<main class=\"mobile-fow-page\">" +
             "<nav class=\"mobile-fow-pagebar\"><div class=\"mobile-fow-pagebar-title\">" +
-            "<span>Mobile Target sheet</span><small>Offline copy</small></div></nav>" +
+            "<span>Mobile Target sheet</span><small>Saved copy</small></div></nav>" +
             clone.outerHTML +
-            "</main><script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script><script>" +
-            script.replace(/<\/script/gi, "<\\/script") +
-            "<\/script></body></html>";
+            "</main>" +
+            scripts +
+            "</body></html>";
           downloadBlob(sheetFileName(), "text/html;charset=utf-8", html);
           if (window.COPDoc && COPDoc.setAppBarStatus) {
-            COPDoc.setAppBarStatus("Downloaded offline Target sheet.", { ok: true });
+            COPDoc.setAppBarStatus("Downloaded Target sheet.", { ok: true });
           }
         });
       })
@@ -3571,7 +4037,7 @@
     if (pageKey() === "lead" || pageKey() === "case") {
       bindExports();
       bindCaseMapPopout();
-      bindCaseLayout();
+      dropRetiredCaseLayout();
       bindCaseHistory();
       paintView();
       return;

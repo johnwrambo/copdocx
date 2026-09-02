@@ -39,10 +39,14 @@ Do not edit `data/immigration.js`. Do not rewrite PDF layout. Do not merge book-
 | 28c | Lead view location maps | 28b | **0.18.4** | Filed lead location tiles show a read-only Leaflet pin when lat/long exist. |
 | 28d | Combined case map | 28c | **0.18.5** | One square case map of all person + vehicle locations. Hide empty identity facts. View photo click is the picker (no extra Add photo link). |
 | 29 | Case view Wave A | 28d | **0.21.0** | `case.html` board + folder identity card. `lead.html` redirects. Map in-tile + pop-out. Associations. Empty tiles collapse. Full-width map stays on Target sheet. |
-| 30 | Case view Wave B | 29 | **0.21.1** | Arrange layout: drag card titles, S/M/L/XL/Tall, reset. Stored in `copdocx.case-view.layout.v1` (browser, not lead JSON). |
+| 30 | Case view Wave B | 29 | **0.21.1** | Arrange layout (removed in **0.23.1**). |
 | 31 | Case view Wave C | 30 | **0.22.0** | Slide-over edit/add for identity, source, vehicle, location, immigration, criminal IDs, documents, associations. Patches one object and commits. RAP stays on the form. |
 | 32 | Case view Wave D | 31 | **0.22.1** | Case history: derived events + `lead.history[]` notes. Form collect preserves history. |
 | 33 | Case view Wave E | 32 | **0.23.0** | Association jump: PERSON links whose other party is the subject of another committed lead open `case.html?id=`. Linked-cases line lists this subject’s other committed cases and committed cases that link this person. Drafts do not jump. No investigations board. |
+| 34 | Drop Case arrange | 33 | **0.23.1** | Static Case view board from HTML `data-size`. No `copdocx.case-view.layout.v1`. |
+| 35 | Case biographics board | 34 | **0.24.0** | Combined biographics, warrant banner (issued only) sets TARGET, documents+history column, source as first history row, mint stubs on Add, keep photo-only objects. |
+| 36 | Historical occupancy | 35 | **0.24.1** | Location/vehicle `occupancy`, date range, notes, other residents. Map skips historical pins. |
+| 37 | Association strings | 36 | **0.25.0** | Associations save as name + type + note without a registry person. Optional existing-person link. Open-as-new-case not built. |
 | 28e | Square photos, 4:3 map | 28d | **0.18.6** | Subject photo stages are square (cover). Case/form location maps are 4×3. |
 | 28f | Case map legend + side files | 28e | **0.18.7** | Map = subject home/work/vehicle only, with side list. Files + gallery in the facts column. |
 | 28g | Location map basemaps | 28f | **0.18.9** | Map / Satellite / Hybrid on case map and form location maps. |

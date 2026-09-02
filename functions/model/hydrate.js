@@ -309,12 +309,7 @@
     }
 
     var relationshipRows = (snapshot.links || []).filter(function (link) {
-      return (
-        link.from &&
-        link.from.type === "PERSON" &&
-        link.to &&
-        link.to.type === "PERSON"
-      );
+      return link && link.from && link.from.type === "PERSON";
     });
     replaceList(
       "relationshipList",
@@ -323,8 +318,11 @@
       function (card, row) {
         setEntity(card, row.linkId);
         fillCard(card, {
+          associationLabel: row.label || "",
+          otherType: row.otherType || (row.to && row.to.type) || "PERSON",
           relatedPersonId: row.to && row.to.id,
-          relationshipType: (row.reasons && row.reasons[0]) || ""
+          relationshipType: (row.reasons && row.reasons[0]) || "",
+          notes: row.notes || ""
         });
       },
       false

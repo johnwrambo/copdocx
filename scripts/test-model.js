@@ -1088,6 +1088,72 @@ check(
 );
 check("stores stay split", !afterForm.bookin && !afterForm.media);
 
+var occLoc = model.createLocation();
+check("location occupancy defaults current", occLoc.occupancy === "current");
+check("location occupancy extras empty", occLoc.occupiedFrom === "" && occLoc.notes === "");
+var histLoc = model.createLocation({
+  occupancy: "historical",
+  occupiedFrom: "2020-01-01",
+  occupiedTo: "2021-06-01",
+  notes: "Moved out",
+  otherResidents: "GARCIA, LUIS"
+});
+check("historical occupancy flag", model.isHistoricalOccupancy(histLoc) === true);
+check(
+  "current occupancy is not historical",
+  model.isHistoricalOccupancy(occLoc) === false
+);
+var occVeh = model.createVehicle({ governmentVehicle: false });
+check("vehicle occupancy defaults current", occVeh.occupancy === "current");
+var histLead = model.createLeadSnapshot();
+histLead.person.locations = [histLoc, occLoc];
+model.store.saveLead(histLead, { mode: "commit" });
+var histSaved = model.store.getLead(histLead.leadId);
+check(
+  "lead keeps historical location fields",
+  histSaved.person.locations[0].occupancy === "historical" &&
+    histSaved.person.locations[0].otherResidents === "GARCIA, LUIS" &&
+    histSaved.person.locations[1].occupancy === "current"
+);
+
+var stubLink = model.createLink({
+  from: { type: "PERSON", id: histLead.subjectPersonId },
+  to: { type: "BUSINESS", id: "" },
+  label: "Garcia Roofing",
+  otherType: "BUSINESS",
+  notes: "Seen on Accurint"
+});
+check("unresolved association keeps empty to.id", stubLink.to.id === "");
+check("unresolved association keeps label", stubLink.label === "Garcia Roofing");
+check("unresolved association type", stubLink.otherType === "BUSINESS");
+histLead.links = (histLead.links || []).concat([stubLink]);
+model.store.saveLead(histLead, { mode: "commit" });
+var stubSaved = model.store.getLead(histLead.leadId);
+check(
+  "lead keeps unresolved association",
+  stubSaved.links.some(function (row) {
+    return (
+      row &&
+      row.label === "Garcia Roofing" &&
+      row.otherType === "BUSINESS" &&
+      !row.to.id
+    );
+  })
+);
+var named = model.createAssociation({
+  label: "PEREZ, ANA",
+  otherType: "PERSON",
+  from: { type: "PERSON", id: "p_a" },
+  notes: "Roommate"
+});
+check(
+  "createAssociation stores string person",
+  named.label === "PEREZ, ANA" &&
+    named.otherType === "PERSON" &&
+    named.to.id === "" &&
+    named.notes === "Roommate"
+);
+
 if (fail) {
   process.exit(1);
 }
