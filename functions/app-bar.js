@@ -77,6 +77,15 @@
     return page === "investigations" || page === "investigate";
   }
 
+  function isOperationPage(page) {
+    return (
+      page === "operations" ||
+      page === "operation" ||
+      page === "operation-form" ||
+      page === "operation-brief"
+    );
+  }
+
   function queryParam(name) {
     try {
       return new URLSearchParams(window.location.search).get(name) || "";
@@ -296,6 +305,54 @@
             id: "generateI213Button",
             label: "Generate I-213",
             call: "generateEncounterNarrative"
+          }
+        ]
+      };
+    }
+    if (page === "operations") {
+      return {
+        tab: "operations",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            label: "Add operation",
+            href: "operation-form.html",
+            primary: true,
+            chromeAction: "add"
+          }
+        ]
+      };
+    }
+    if (page === "operation-form") {
+      return {
+        tab: "operations",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            label: "Save",
+            primary: true,
+            chromeAction: "save",
+            call: "commitOperation"
+          },
+          backAction("Back to operations", "operations.html")
+        ]
+      };
+    }
+    if (page === "operation") {
+      return {
+        tab: "operations",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            label: "Edit",
+            href: recordIdHref("operation-form.html", id),
+            primary: true,
+            chromeAction: "edit"
+          },
+          backAction("Back to operations", "operations.html"),
+          {
+            label: "Generate brief",
+            call: "generateOperationBrief"
           }
         ]
       };
@@ -833,6 +890,13 @@
         "encounter.html",
         "Encounters",
         tab === "encounter" || isEncounterPage(page)
+      )
+    );
+    nav.appendChild(
+      tabLink(
+        "operations.html",
+        "Operations",
+        tab === "operations" || isOperationPage(page)
       )
     );
     nav.appendChild(tabLink("bookin.html", "Book-in", tab === "bookin"));

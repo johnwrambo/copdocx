@@ -39,5 +39,5 @@ If a PR disagrees with these files, change the files in that PR and say why.
 - Do not edit `data/immigration.js` for structure work.
 - Map file exports and baseball-card criminal/immigration cards are later.
 - Do not put +Person / +Vehicle / +Location on Book-in or Map.
-- `operation.html` is still a **zero-byte** stub. Encounter list/form shipped in 0.11.0 (`encounter.html` / `encounter-form.html`). Do not invent `encounters.html` until a view split.
+- Operations triad shipped **0.62.0** (`operations.html` / `operation.html` / `operation-form.html`). Pocket brief later. Encounter list/form shipped in 0.11.0. Do not invent `encounters.html` until a view split.
 - `home.html` is the briefing hub (`data-page="home"`). Empty action slot. No store writes.

@@ -29,7 +29,8 @@
       locations: {},
       businesses: {},
       entities: {},
-      associations: {}
+      associations: {},
+      operations: {}
     };
   }
 
@@ -52,6 +53,7 @@
     next.businesses = next.businesses || {};
     next.entities = next.entities || {};
     next.associations = next.associations || {};
+    next.operations = next.operations || {};
     next.currentLeadId = next.currentLeadId || "";
     Object.keys(next.leads).forEach(function (id) {
       if (typeof model.ensureRecordMeta === "function") {
@@ -86,6 +88,11 @@
     Object.keys(next.entities).forEach(function (id) {
       if (typeof model.ensureRecordMeta === "function") {
         model.ensureRecordMeta(next.entities[id]);
+      }
+    });
+    Object.keys(next.operations).forEach(function (id) {
+      if (typeof model.ensureRecordMeta === "function") {
+        model.ensureRecordMeta(next.operations[id]);
       }
     });
     return next;
@@ -1177,6 +1184,542 @@
       };
     }
     return { ok: true, investigationId: investigationId, error: "" };
+  }
+
+  function saveOperation(record, opts) {
+    if (!record || !record.operationId) {
+      return {
+        ok: false,
+        operationId: "",
+        error: "Operation is missing an operationId."
+      };
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return {
+        ok: false,
+        operationId: record.operationId,
+        error: fresh.error
+      };
+    }
+    var mode = (opts && opts.mode) || "commit";
+    if (mode === "commit" && !String(record.name || "").trim()) {
+      return {
+        ok: false,
+        operationId: record.operationId,
+        error: "Name this operation."
+      };
+    }
+    var previous = state.operations[record.operationId]
+      ? clone(state.operations[record.operationId])
+      : null;
+    var saved = previous ? Object.assign({}, previous, record) : record;
+    saved.schema = record.schema || model.OPERATION_SCHEMA || "copdocx.operation.v1";
+    saved.operationId = record.operationId;
+    saved.operationNumber = record.operationNumber || record.operationId;
+    saved.entityType = "OPERATION";
+    if (typeof model.stampMeta === "function") {
+      saved.meta = model.stampMeta(previous, mode);
+    } else {
+      saved.meta = record.meta || {};
+      saved.meta.updatedAt = model.nowIso();
+    }
+    saved.meta.markedComplete = false;
+    saved.targets = Array.isArray(saved.targets) ? saved.targets : [];
+    saved.teams = Array.isArray(saved.teams) ? saved.teams : [];
+    saved.targetAssignments = Array.isArray(saved.targetAssignments)
+      ? saved.targetAssignments
+      : [];
+    saved.opLocations = Array.isArray(saved.opLocations) ? saved.opLocations : [];
+    saved.medevacRoute = Array.isArray(saved.medevacRoute) ? saved.medevacRoute : [];
+    saved.history = Array.isArray(saved.history) ? saved.history : [];
+    if (mode === "commit" && model.freezeOperationTarget) {
+      saved.targets = (saved.targets || []).map(function (row) {
+        if (!row || !row.leadId) {
+          return row;
+        }
+        var lead = state.leads[row.leadId];
+        if (!lead) {
+          return row;
+        }
+        var next = clone(row);
+        next.personId = next.personId || lead.subjectPersonId || "";
+        next.freeze = model.freezeOperationTarget(lead);
+        return next;
+      });
+    }
+    state.operations[saved.operationId] = clone(saved);
+    if (!writeDisk()) {
+      adoptDisk();
+      return {
+        ok: false,
+        operationId: saved.operationId,
+        error: "Could not write localStorage (quota or private mode)."
+      };
+    }
+    return { ok: true, operationId: saved.operationId, error: "" };
+  }
+
+  function getOperation(operationId) {
+    var row = state.operations[operationId];
+    return row ? clone(row) : null;
+  }
+
+  function deleteOperation(operationId) {
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return { ok: false, operationId: operationId || "", error: fresh.error };
+    }
+    if (!operationId || !state.operations[operationId]) {
+      return {
+        ok: false,
+        operationId: operationId || "",
+        error: "Operation not found."
+      };
+    }
+    delete state.operations[operationId];
+    if (!writeDisk()) {
+      adoptDisk();
+      return {
+        ok: false,
+        operationId: operationId,
+        error: "Could not write localStorage (quota or private mode)."
+      };
+    }
+    return { ok: true, operationId: operationId, error: "" };
+  }
+
+  function listImportableOperationTargets() {
+    adoptDisk();
+    var out = [];
+    Object.keys(state.leads || {}).forEach(function (id) {
+      var lead = state.leads[id];
+      if (!lead || (model.isCommitted && !model.isCommitted(lead))) {
+        return;
+      }
+      if (model.leadIsImportableOperationTarget && !model.leadIsImportableOperationTarget(lead)) {
+        return;
+      }
+      var person = model.subjectOf ? model.subjectOf(lead) : lead.person;
+      var places = model.operationPlacesFromLead
+        ? model.operationPlacesFromLead(lead)
+        : [];
+      out.push({
+        leadId: id,
+        personId: lead.subjectPersonId || (person && person.personId) || "",
+        label:
+          (model.formatPersonLabel && model.formatPersonLabel(person)) ||
+          id,
+        caseNumber: (lead.source && lead.source.caseNumber) || "",
+        placeCount: places.length,
+        vehicleCount: places.filter(function (row) {
+          return row && row.vehicleId;
+        }).length
+      });
+    });
+    out.sort(function (a, b) {
+      return String(a.label || "").localeCompare(String(b.label || ""));
+    });
+    return out;
+  }
+
+  function addOperationTargets(operationId, leadIds) {
+    var blank = {
+      ok: false,
+      operationId: operationId || "",
+      added: 0,
+      error: ""
+    };
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    op.targets = Array.isArray(op.targets) ? op.targets : [];
+    var have = {};
+    op.targets.forEach(function (row) {
+      if (row && row.leadId) {
+        have[row.leadId] = true;
+      }
+    });
+    var added = 0;
+    (leadIds || []).forEach(function (leadId) {
+      if (!leadId || have[leadId]) {
+        return;
+      }
+      var lead = state.leads[leadId];
+      if (!lead || (model.leadIsImportableOperationTarget && !model.leadIsImportableOperationTarget(lead))) {
+        return;
+      }
+      var person = model.subjectOf ? model.subjectOf(lead) : lead.person;
+      op.targets.push(
+        model.createOperationTarget
+          ? model.createOperationTarget({
+              leadId: leadId,
+              personId: lead.subjectPersonId || (person && person.personId) || ""
+            })
+          : {
+              targetId: model.newId("tgt"),
+              leadId: leadId,
+              personId: lead.subjectPersonId || "",
+              freeze: null
+            }
+      );
+      have[leadId] = true;
+      added += 1;
+    });
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return {
+      ok: true,
+      operationId: op.operationId,
+      added: added,
+      error: ""
+    };
+  }
+
+  function removeOperationTarget(operationId, targetId) {
+    var blank = {
+      ok: false,
+      operationId: operationId || "",
+      removed: false,
+      error: ""
+    };
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var before = (op.targets || []).length;
+    op.targets = (op.targets || []).filter(function (row) {
+      return !row || row.targetId !== targetId;
+    });
+    op.targetAssignments = (op.targetAssignments || []).filter(function (row) {
+      return !row || row.targetId !== targetId;
+    });
+    if (op.targets.length === before) {
+      return {
+        ok: true,
+        operationId: op.operationId,
+        removed: false,
+        error: ""
+      };
+    }
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return {
+      ok: true,
+      operationId: op.operationId,
+      removed: true,
+      error: ""
+    };
+  }
+
+  function importOperationTeam(operationId, input) {
+    input = input || {};
+    var blank = {
+      ok: false,
+      operationId: operationId || "",
+      teamId: "",
+      error: ""
+    };
+    var ids = (input.officerIds || []).map(function (id) {
+      return String(id || "").trim();
+    }).filter(Boolean);
+    var unique = [];
+    ids.forEach(function (id) {
+      if (unique.indexOf(id) === -1) {
+        unique.push(id);
+      }
+    });
+    if (unique.length < 2 || unique.length > 4) {
+      blank.error = "A cell needs 2 to 4 officers.";
+      return blank;
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var roles = model.defaultAssignmentRoles
+      ? model.defaultAssignmentRoles(unique.length)
+      : ["eye", "contact", "primary-backup", "backup"];
+    var members = unique.map(function (officerId, index) {
+      return model.createOperationMember
+        ? model.createOperationMember({
+            officerId: officerId,
+            assignmentRole: roles[index] || "backup"
+          })
+        : { officerId: officerId, assignmentRole: roles[index] || "backup" };
+    });
+    var team = model.createOperationTeam
+      ? model.createOperationTeam({
+          name: input.name || input.rosterKey || "Cell",
+          rosterKey: input.rosterKey || "",
+          vehicleId: input.vehicleId || "",
+          members: members
+        })
+      : {
+          teamId: model.newId("cell"),
+          name: input.name || "Cell",
+          rosterKey: input.rosterKey || "",
+          vehicleId: input.vehicleId || "",
+          members: members
+        };
+    op.teams = Array.isArray(op.teams) ? op.teams : [];
+    op.teams.push(team);
+    op.importedTeamKeys = Array.isArray(op.importedTeamKeys)
+      ? op.importedTeamKeys
+      : [];
+    if (team.rosterKey && op.importedTeamKeys.indexOf(team.rosterKey) === -1) {
+      op.importedTeamKeys.push(team.rosterKey);
+    }
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return {
+      ok: true,
+      operationId: op.operationId,
+      teamId: team.teamId,
+      error: ""
+    };
+  }
+
+  function setOperationMemberRole(operationId, teamId, officerId, role) {
+    var blank = {
+      ok: false,
+      operationId: operationId || "",
+      error: ""
+    };
+    if (model.isOperationAssignmentRole && !model.isOperationAssignmentRole(role)) {
+      blank.error = "Pick an assignment role.";
+      return blank;
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var found = false;
+    (op.teams || []).forEach(function (team) {
+      if (!team || team.teamId !== teamId) {
+        return;
+      }
+      (team.members || []).forEach(function (member) {
+        if (member && member.officerId === officerId) {
+          member.assignmentRole = role;
+          found = true;
+        }
+      });
+    });
+    if (!found) {
+      blank.error = "Officer not on that cell.";
+      return blank;
+    }
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return { ok: true, operationId: op.operationId, error: "" };
+  }
+
+  function assignOperationTargetTeam(operationId, targetId, teamId) {
+    var blank = {
+      ok: false,
+      operationId: operationId || "",
+      error: ""
+    };
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var hasTarget = (op.targets || []).some(function (row) {
+      return row && row.targetId === targetId;
+    });
+    if (!hasTarget) {
+      blank.error = "Target not found.";
+      return blank;
+    }
+    if (teamId) {
+      var hasTeam = (op.teams || []).some(function (row) {
+        return row && row.teamId === teamId;
+      });
+      if (!hasTeam) {
+        blank.error = "Cell not found.";
+        return blank;
+      }
+    }
+    op.targetAssignments = Array.isArray(op.targetAssignments)
+      ? op.targetAssignments
+      : [];
+    op.targetAssignments = op.targetAssignments.filter(function (row) {
+      if (!row) {
+        return false;
+      }
+      if (row.targetId === targetId) {
+        return false;
+      }
+      if (teamId && row.teamId === teamId) {
+        return false;
+      }
+      return true;
+    });
+    if (teamId) {
+      op.targetAssignments.push({ targetId: targetId, teamId: teamId });
+    }
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return { ok: true, operationId: op.operationId, error: "" };
+  }
+
+  function removeOperationTeam(operationId, teamId) {
+    var blank = {
+      ok: false,
+      operationId: operationId || "",
+      removed: false,
+      error: ""
+    };
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var before = (op.teams || []).length;
+    op.teams = (op.teams || []).filter(function (row) {
+      return !row || row.teamId !== teamId;
+    });
+    op.targetAssignments = (op.targetAssignments || []).filter(function (row) {
+      return !row || row.teamId !== teamId;
+    });
+    if (op.teams.length === before) {
+      return {
+        ok: true,
+        operationId: op.operationId,
+        removed: false,
+        error: ""
+      };
+    }
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return {
+      ok: true,
+      operationId: op.operationId,
+      removed: true,
+      error: ""
+    };
+  }
+
+  function setOperationTeamVehicle(operationId, teamId, vehicleId) {
+    var blank = { ok: false, operationId: operationId || "", error: "" };
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var op = state.operations[operationId]
+      ? clone(state.operations[operationId])
+      : null;
+    if (!op) {
+      blank.error = "Operation not found.";
+      return blank;
+    }
+    var found = false;
+    (op.teams || []).forEach(function (team) {
+      if (team && team.teamId === teamId) {
+        team.vehicleId = vehicleId || "";
+        found = true;
+      }
+    });
+    if (!found) {
+      blank.error = "Cell not found.";
+      return blank;
+    }
+    var saved = saveOperation(op, { mode: "draft" });
+    if (!saved.ok) {
+      blank.error = saved.error || "Could not save.";
+      return blank;
+    }
+    return { ok: true, operationId: op.operationId, error: "" };
+  }
+
+  function listOperations() {
+    return Object.keys(state.operations)
+      .map(function (id) {
+        var row = state.operations[id];
+        return {
+          operationId: id,
+          operationNumber: (row && row.operationNumber) || id,
+          name: (row && row.name) || "",
+          team: (row && row.team) || "",
+          plannedStart: (row && row.plannedStart) || "",
+          plannedEnd: (row && row.plannedEnd) || "",
+          targetCount: row && Array.isArray(row.targets) ? row.targets.length : 0,
+          teamCount: row && Array.isArray(row.teams) ? row.teams.length : 0,
+          updatedAt: (row && row.meta && row.meta.updatedAt) || "",
+          metaStatus: model.metaStatus ? model.metaStatus(row) : "committed"
+        };
+      })
+      .sort(function (a, b) {
+        return String(b.updatedAt).localeCompare(String(a.updatedAt));
+      });
   }
 
   function listInvestigations() {
@@ -5180,6 +5723,18 @@
     getInvestigation: getInvestigation,
     listInvestigations: listInvestigations,
     deleteInvestigation: deleteInvestigation,
+    saveOperation: saveOperation,
+    getOperation: getOperation,
+    listOperations: listOperations,
+    deleteOperation: deleteOperation,
+    listImportableOperationTargets: listImportableOperationTargets,
+    addOperationTargets: addOperationTargets,
+    removeOperationTarget: removeOperationTarget,
+    importOperationTeam: importOperationTeam,
+    setOperationMemberRole: setOperationMemberRole,
+    assignOperationTargetTeam: assignOperationTargetTeam,
+    removeOperationTeam: removeOperationTeam,
+    setOperationTeamVehicle: setOperationTeamVehicle,
     saveVehicleRecord: saveVehicleRecord,
     getVehicleRecord: getVehicleRecord,
     findVehicleByPlate: findVehicleByPlate,

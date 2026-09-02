@@ -4,7 +4,7 @@ Two-row sticky app bar (`style/style.css`, painted by `COPDoc.chrome` in `functi
 
 ```
 Row 1  COPDoc     Version x.y.z     {date}                 .app-bar-info
-Row 2  [ File ▾ ]  Home | Cases | Investigate | Encounters | Book-in | Map | Admin ▾  [ ACTION SLOT ]
+Row 2  [ File ▾ ]  Home | Cases | Investigate | Encounters | Operations | Book-in | Map | Admin ▾  [ ACTION SLOT ]
        #fileMenu   ---------------- .app-bar-nav ----------------  .app-bar-actions
 Status #appBarStatus
 ```
@@ -75,10 +75,12 @@ Chrome **paints** the control. It does **not** call `saveLead` / `addOfficer` / 
 
 | Page kind | Primary | Secondaries |
 | --- | --- | --- |
-| Collection | **Add {record}** (`<a>`) | Cases list: **Add case** → `lead-form.html`. Investigate list: **Add investigation** → `investigate.html`. Encounter list: **Add encounter** → `encounter-form.html`. No Back (tabs leave lists). |
+| Collection | **Add {record}** (`<a>`) | Cases list: **Add case** → `lead-form.html`. Investigate list: **Add investigation** → `investigate.html`. Encounter list: **Add encounter** → `encounter-form.html`. Operations list: **Add operation** → `operation-form.html`. No Back (tabs leave lists). |
 | View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}** (Cases list: **Back to cases**). Case view (`case.html`) then **Generate Target sheet** (new window, `mobile-target-sheet.html?id=`), Book-in / Issue I-200 / Issue I-205. Case board layout is static. |
 | Form | **Save** (`<button>`) | First secondary: **Back to {origin}**. `committedAt` → view; else list. Not `history.back()`. |
 | Encounter form | **Save** (`call: commitEncounter`) stays on the form | **Back to encounters**; **Add subject** (`call: openEncounterBookIn`) quiet-saves then `bookin.html?encounterId=`; **Generate I-213** → `narrative.html?encounterId=` |
+| Operation form | **Save** (`call: commitOperation`) | **Back to operations**. Quiet draft on change once name or dates exist. |
+| Operation view | **Edit** | **Back to operations**. **Generate brief** (needs filed operation with targets; nests Target sheets in PR-E). |
 | Investigation workspace | **Save** (`call: commitInvestigation`) stays on `investigate.html?id=` | **Back to investigations**. **Import plates** (`call: focusPlateImport`) on plate-check — opens the Plates window. **Spawn** (`call: spawnChildInvestigation`) opens the child workspace. **Open as case** (`call: openInvestigationPersonAsCase`) mints or reuses a working lead for the focused PERSON, then `lead-form.html?id=` (working) or `case.html?id=` (filed). Requires a focused person. **Clear all** (`call: clearInvestigationWorkspace`) empties this wall and plate queue after confirm; shared objects and child investigations stay. Wall place/pan/connect and the Windows drawer (**Plates** / **Objects** / **Card**) overlay the wall (click the selected type chip to stop placing). Click a chip to focus; **Edit** / double-click / Enter opens the Card window (same photo/file row as other cards, **Associated** (person / vehicle / location / business / entity), **Remove from wall** / **Junk** / **Delete record**). An object photo is the wall chip face. **Find** / **Hits** live in the Objects window — not the action slot (same rule as map drawing tools). Esc closes Card. Delete/Backspace removes the focused chip when not typing. |
 | I-200 / I-205 form | **Issue** (`#appBarPrimaryAction`, `data-chrome-action="save"`) | **Back to case** (`case.html?id=`) |
 | Home, Dashboard, Schedule | empty | Home is not +Person. |

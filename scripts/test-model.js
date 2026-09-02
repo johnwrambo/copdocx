@@ -41,6 +41,7 @@ load("functions/model/officer.js");
 load("data/association-matrix.js");
 load("functions/model/link.js");
 load("functions/model/investigation.js");
+load("functions/model/operation.js");
 load("functions/model/store.js");
 load("functions/model/media.js");
 load("functions/officer-roster.js");
@@ -3190,6 +3191,182 @@ var clamped = wallUi.clampWindowPos(-400, -20, 200, 100, 800, 600);
 check("clamp keeps a strip of the window on canvas", clamped.x === 48 - 200 && clamped.y === 0);
 var clampedRight = wallUi.clampWindowPos(900, 20, 200, 100, 800, 600);
 check("clamp keeps title bar reachable", clampedRight.x === 800 - 48 && clampedRight.y === 20);
+
+var opId = model.nextOperationId({ team: 3, date: new Date("2026-09-02T12:00:00"), existingIds: [] });
+check(
+  "operation id format",
+  /^DAL3-OP-20260902-\d{3}$/.test(opId)
+);
+var opA = model.createOperation({
+  team: 3,
+  date: new Date("2026-09-02T12:00:00"),
+  existingIds: []
+});
+check("operation entity", opA.entityType === "OPERATION");
+check("operation schema", opA.schema === "copdocx.operation.v1");
+check("new operation is draft", model.metaStatus(opA) === "draft");
+check("operation empty targets", (opA.targets || []).length === 0);
+check("operation does not keep existingIds", opA.existingIds === undefined);
+var opSeq = model.nextOperationId({
+  team: 3,
+  date: new Date("2026-09-02T12:00:00"),
+  existingIds: [opA.operationId]
+});
+check("operation id sequences", opSeq !== opA.operationId);
+var opSaved = model.store.saveOperation(opA, { mode: "draft" });
+check("save draft operation", opSaved.ok);
+check(
+  "commit operation without name rejected",
+  !model.store.saveOperation(opA, { mode: "commit" }).ok
+);
+opA.name = "Lot sweep";
+var opFiled = model.store.saveOperation(opA, { mode: "commit" });
+check("commit named operation", opFiled.ok);
+var opGot = model.store.getOperation(opA.operationId);
+check(
+  "committed operation listed",
+  opGot &&
+    model.isCommitted(opGot) &&
+    model.store.listOperations().some(function (row) {
+      return row.operationId === opA.operationId;
+    })
+);
+check(
+  "operation id does not collide with encounter prefix",
+  String(opA.operationId).indexOf("-OP-") !== -1 &&
+    String(opA.operationId).indexOf("INV") !== 0
+);
+
+var opCase = model.createLeadSnapshot();
+opCase.person.name.lastName = "TARGET";
+opCase.person.name.firstName = "ONE";
+var opPlace = model.createLocation({
+  street: "100 Target St",
+  city: "Dallas",
+  state: "TX",
+  zip: "75201",
+  latitude: "32.78",
+  longitude: "-96.8"
+});
+opCase.person.locations = [opPlace];
+var opCar = model.createVehicle({
+  governmentVehicle: false,
+  licensePlate: "OP1",
+  plateState: "TX",
+  vehicleYear: "2014",
+  vehicleMake: "Ford",
+  vehicleModel: "F150"
+});
+opCar.locations = [
+  model.createLocation({
+    street: "100 Target St",
+    city: "Dallas",
+    state: "TX",
+    latitude: "32.78",
+    longitude: "-96.8"
+  })
+];
+opCase.vehicles = [opCar];
+model.store.saveLead(opCase, { mode: "commit" });
+check(
+  "importable operation target has place",
+  model.leadIsImportableOperationTarget(model.store.getLead(opCase.leadId))
+);
+var draftSkip = model.createLeadSnapshot();
+draftSkip.person.name.lastName = "DRAFT";
+draftSkip.person.locations = [opPlace];
+model.store.saveLead(draftSkip, { mode: "draft" });
+check(
+  "draft case is not importable",
+  !(model.store.listImportableOperationTargets() || []).some(function (row) {
+    return row.leadId === draftSkip.leadId;
+  })
+);
+var imported = model.store.addOperationTargets(opA.operationId, [opCase.leadId]);
+check("addOperationTargets ok", imported.ok && imported.added === 1);
+var importedAgain = model.store.addOperationTargets(opA.operationId, [opCase.leadId]);
+check("addOperationTargets skips duplicate", importedAgain.ok && importedAgain.added === 0);
+var opWithTarget = model.store.getOperation(opA.operationId);
+check(
+  "operation keeps target pointer",
+  (opWithTarget.targets || []).some(function (row) {
+    return row && row.leadId === opCase.leadId;
+  })
+);
+opWithTarget.name = "Lot sweep";
+model.store.saveOperation(opWithTarget, { mode: "commit" });
+var frozen = model.store.getOperation(opA.operationId);
+check(
+  "commit freezes target places and vehicles",
+  frozen.targets[0] &&
+    frozen.targets[0].freeze &&
+    frozen.targets[0].freeze.places.some(function (row) {
+      return row && row.city === "Dallas";
+    }) &&
+    frozen.targets[0].freeze.vehicles.some(function (row) {
+      return row && row.plate === "OP1";
+    })
+);
+var dropped = model.store.removeOperationTarget(
+  opA.operationId,
+  frozen.targets[0].targetId
+);
+check("removeOperationTarget ok", dropped.ok && dropped.removed);
+model.store.addOperationTargets(opA.operationId, [opCase.leadId]);
+
+check(
+  "cell needs two officers",
+  !model.store.importOperationTeam(opA.operationId, { officerIds: ["o1"] }).ok
+);
+var cell = model.store.importOperationTeam(opA.operationId, {
+  officerIds: ["o1", "o2"],
+  rosterKey: "DAL - 3",
+  name: "DAL - 3"
+});
+check("importOperationTeam ok", cell.ok && cell.teamId);
+var cellOp = model.store.getOperation(opA.operationId);
+check(
+  "cell defaults eye and contact",
+  cellOp.teams[0].members[0].assignmentRole === "eye" &&
+    cellOp.teams[0].members[1].assignmentRole === "contact"
+);
+var roleSet = model.store.setOperationMemberRole(
+  opA.operationId,
+  cell.teamId,
+  "o2",
+  "backup"
+);
+check("setOperationMemberRole ok", roleSet.ok);
+opWithTarget = model.store.getOperation(opA.operationId);
+var tgtId = (opWithTarget.targets[0] && opWithTarget.targets[0].targetId) || frozen.targets[0].targetId;
+var assignedCell = model.store.assignOperationTargetTeam(
+  opA.operationId,
+  tgtId,
+  cell.teamId
+);
+check("assignOperationTargetTeam ok", assignedCell.ok);
+check(
+  "officer on leave is unavailable",
+  !model.officerAvailability({ officerId: "o1", duty: "leave" }, {}).available
+);
+check(
+  "available duty with no shifts is available",
+  model.officerAvailability(
+    { officerId: "o1", duty: "available" },
+    { plannedStart: "2026-09-02T08:00", plannedEnd: "2026-09-02T16:00", shifts: [] }
+  ).available
+);
+check(
+  "shift that week but not overlapping is unavailable",
+  model.officerAvailability(
+    { officerId: "o1", duty: "available" },
+    {
+      plannedStart: "2026-09-02T08:00",
+      plannedEnd: "2026-09-02T16:00",
+      shifts: [{ officerId: "o1", date: "2026-09-04", start: "06:00", end: "14:00" }]
+    }
+  ).reason === "shift"
+);
 
 if (fail) {
   process.exit(1);

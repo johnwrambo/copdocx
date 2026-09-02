@@ -1,7 +1,7 @@
 # Operations — implementation plan (proposed)
 
-**Status:** Proposed. Comment on this file before any Operations code.  
-**Not built.** `operation.html` is still an empty stub.
+**Status:** Approved for build. PR-A skeleton **0.62.0**.  
+**Comment (brief):** the issued packet is an **operation sheet** that **nests Target sheets** — one Target-sheet block per target inside `operation-brief.html`.
 
 How to comment: under any **D#**, **PR#**, or **Q#**, add:
 
@@ -19,7 +19,8 @@ They are **one record**, two phases of work — not two products.
 | --- | --- | --- |
 | **Operation** | A targeted, planned law-enforcement action (the thing you name, staff, and brief) | Record type. Tab **Operations**. Files `operations.html` / `operation.html` / `operation-form.html` |
 | **Planning** | The work you do *on* that operation before H-hour: pick targets, staff teams, drop pins, set heading | The **form** (draft). Map + assignments live here |
-| **Order** | The issued product: map + assignments + per-officer instructions | The **view** after Save/commit. Print/PDF |
+| **Order** | The issued product: map + assignments + per-officer instructions | The **view** after Save/commit (`operation.html`) |
+| **Brief / operation sheet** | Officer pocket look: expanded Target sheet that nests one Target sheet per target | `operation-brief.html?id=` (new window, like Target sheet) |
 
 **Do not** create a separate Plan record. Draft operation = planning. Commit = issue the operational order (locks the snapshot used for the brief). Later you may *execute* it (link Encounter(s)); that is not a second triad.
 
@@ -49,7 +50,7 @@ When **date/time** is set, the form reads the **schedule** and other committed o
 | View (order / brief) | `operation.html` | `operation` | `?id=` |
 | Form (planning) | `operation-form.html` | `operation-form` | none = add; `?id=` = edit |
 
-Chrome tab **Operations** (with Encounters / Map). List primary **Add operation**. View: **Edit**, **Print order**. Form: **Save** (commit the order), **Back**. Autosave stays draft on the form URL.
+Chrome tab **Operations** after Encounters. List primary **Add operation**. View: **Edit**, **Generate brief**. Form: **Save** (commit), **Back**. Quiet draft on form change (does not write on Add until name or dates exist).
 
 Draft row → form. Committed row → view.
 
@@ -70,6 +71,12 @@ Planning = draft form. Issued order = committed view. No `plans.html`.
 `copdocx.store.v1.operations{}` next to `leads{}` / `encounters{}`. Cross-store **read** of admin roster + shifts. **Write** only `saveOperation`. Do not mutate `officer.duty` when assigning (see D8).
 
 > Comment (D2):
+
+### D11 — Operation sheet nests Target sheets
+
+The officer packet is a **more expanded Target sheet**: one operation sheet with a nested Target-sheet block per target (photo, places, vehicles, assigned cell). Not a per-officer page in v1. `operation-brief.html?id=` in a new window. Read-only. Print / Save HTML.
+
+> Comment (D11): nested Target sheets.
 
 ### D3 — Targets are imported pointers, not copies of the person
 
@@ -277,21 +284,21 @@ Missing start or heading = amber on the strip until filled.
 
 Stamps after current 0.16–0.17 work. First Operations PR **0.18.0** if map-layers already shipped; otherwise next free minor.
 
-### PR-A — Skeleton triad + store (0.18.0)
+### PR-A — Skeleton triad + store (**0.62.0**)
 
 `functions/model/operation.js`; `store.js` `operations{}`; `operations.html` list; `operation.html` empty snapshot; `operation-form.html` name + dates + Save/autosave; chrome tab; `scripts/test-operation.js`.
 
 > Comment (PR-A):
 
-### PR-B — Import targets + plot (0.18.1)
+### PR-B — Import targets + plot (**0.63.0**)
 
-Target picker from committed leads. Map on the form plots imported target locations. Freeze on commit.
+Target picker from committed leads with a current place or vehicle. Form + issued view map plots those pins. Live-read while planning; freeze places and vehicles on commit.
 
 > Comment (PR-B):
 
-### PR-C — Import teams, roles, availability (0.18.2)
+### PR-C — Import teams, roles, availability (**0.64.0**)
 
-Import by `officer.team`. 2–4 members. Assignment roles. Date window greys unavailable (shifts + overlapping committed ops). SA strip quals/roles/vehicles. Vehicle pick from committed fleet.
+Import by `officer.team`. 2–4 members. Assignment roles. Date window greys unavailable (shifts + overlapping committed ops). SA strip quals/roles/vehicles. Vehicle pick from committed fleet. One cell per target.
 
 > Comment (PR-C):
 
@@ -328,7 +335,7 @@ Link committed operation → new Encounter. Push availability onto schedule UI. 
 
 ### Q2 — Operation number format?
 
-- [ ] `DAL{team}-OP-{YYYYMMDD}-{seq}` (like encounter IDs)
+- [x] `DAL{team}-OP-{YYYYMMDD}-{seq}` (like encounter IDs)
 - [ ] Free text + optional auto stamp
 - [ ] Other:
 

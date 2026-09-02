@@ -94,9 +94,9 @@ Do not edit `data/immigration.js`. Do not rewrite PDF layout. Do not merge book-
 | 28g | Location map basemaps | 28f | **0.18.9** | Map / Satellite / Hybrid on case map and form location maps. |
 | 73 | Planning pin card + photos | 23, 28d | **0.53.0** | Shared `map-popup.js`. Case map, officer map, and `map.html` pin cards show the object photo. Media read-only on the planning map. |
 
-| 28 | Operation skeleton | 6 | **0.18.0** | See [operations-plan.md](operations-plan.md) PR-A. Comment there before coding. |
-| 29 | Import targets + map | 28 | **0.18.1** | operations-plan PR-B. |
-| 30 | Teams, roles, availability | 29 | **0.18.2** | operations-plan PR-C. Reads roster/shifts; does not write duty. |
+| 28 | Operation skeleton | 6 | **0.62.0** | Tab, `operations{}`, list + name/dates form, issued view shell. Brief nests Target sheets in a later PR. |
+| 29 | Import targets + map | 28 | **0.63.0** | Filed cases with a place/vehicle. Plot on the operation map. Freeze on issue. |
+| 30 | Teams, roles, availability | 29 | **0.64.0** | Import 2–4 officer cells. Assignment roles. Availability from duty/shifts/other ops. Assign one cell per target. |
 | 31 | Pins, heading, rally, medevac | 30 | **0.18.3** | operations-plan PR-D. |
 | 32 | Generate / print order | 31 | **0.18.4** | operations-plan PR-E. |
 

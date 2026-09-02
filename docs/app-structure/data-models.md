@@ -6,14 +6,14 @@ Factories live in `functions/model/`. Reuse Location and Vehicle; add Officer. O
 
 | Key | Module | Contents |
 | --- | --- | --- |
-| `copdocx.store.v1` | `functions/model/store.js` | `leads{}`, `people{}`, `encounters{}`, `investigations{}`, `vehicles{}`, `locations{}`, `businesses{}`, `entities{}`, `associations{}`, `currentLeadId` |
+| `copdocx.store.v1` | `functions/model/store.js` | `leads{}`, `people{}`, `encounters{}`, `investigations{}`, `operations{}`, `vehicles{}`, `locations{}`, `businesses{}`, `entities{}`, `associations{}`, `currentLeadId` |
 | `copdoc.admin.v1` | `functions/admin.js` | `{ officers, vehicles, shifts }` |
 | `alien-book-in.saved-records.v1` | `functions/book-in.js` | Book-in records array |
 | `copdocx.settings.v1` | `functions/warrant-issue.js` | `{ issuingOffice, lastOfficerId }` |
 | IndexedDB `copdocx.warrants` | `functions/warrant-issue.js` | File System Access directory handle for `warrants/` |
 | IndexedDB `copdocx.media.v1` | `functions/model/media.js` (**planned**) | Photo / file blobs + metadata. **Not** inside `copdocx.store.v1`. |
 
-File Import/Export writes leads, encounters, admin, book-in, and investigations. Encounters and investigations live in `copdocx.store.v1` next to leads — not extra stores. Investigation export includes `investigationObjects` (the referenced `people{}` / `vehicles{}` / `locations{}` / `businesses{}` / `entities{}` / `associations{}`) so the wall graph round-trips without cloning ids. The JSON bundle format is `copdocx.transfer.v1` (`functions/transfer.js`). CSV export is not imported.
+File Import/Export writes leads, encounters, investigations, operations, admin, and book-in. Encounters, investigations, and operations live in `copdocx.store.v1` next to leads — not extra stores. Investigation export includes `investigationObjects` (the referenced `people{}` / `vehicles{}` / `locations{}` / `businesses{}` / `entities{}` / `associations{}`) so the wall graph round-trips without cloning ids. The JSON bundle format is `copdocx.transfer.v1` (`functions/transfer.js`). CSV export is not imported.
 
 Lead snapshots may include `assignedOfficerId` (one committed officer from `copdoc.admin.v1`) and `history[]`: `{ eventId, at, type, text, source, officerId, officerAlias }`. Operator notes (`type: "note"`) are stored here. While an officer is assigned, new notes and system history stamp `officerAlias` (initials + badge, e.g. MR4421). `collectLead` re-appends previous `history` so a form Save does not wipe Case view notes. The Target sheet shows that officer as **Targeting Officer**.
 
@@ -30,6 +30,10 @@ Case view layout is static in `case.html` (`data-size` grid). Do not write `copd
 Cross-store **reads** OK (dashboard arrest counts; book-in prefill). Cross-store **writes** only when the user Saves on the destination form, plus Book-in **Save** which also `saveLead` commit (`promoteBookInToLead`). Do not merge the Book-in packet store.
 
 Admin roster **stays** in `copdoc.admin.v1`.
+
+## Operation — `functions/model/operation.js`
+
+`createOperation`: `operationId` / `operationNumber` `DAL{team}-OP-{YYYYMMDD}-{seq}`, `entityType: "OPERATION"`, `schema: copdocx.operation.v1`, `name`, `team`, `plannedStart`, `plannedEnd`, `targets[]`, `teams[]`, `targetAssignments[]`, `opLocations[]`, `medevacRoute[]`, `importedTeamKeys[]`, `markup`, `mapLayers`, `order`, `history[]`, `meta`. Mint id on the form; **do not write** until draft save (name or dates) or Save. Commit requires a name. **0.63.0** `store.addOperationTargets` imports committed cases with a current place or vehicle (pointers only). Planning map live-reads those cases; commit freezes `places[]` / `vehicles[]` on each target. **0.64.0** `store.importOperationTeam` takes 2–4 `officerId`s (read roster; do not write duty). `assignOperationTargetTeam` is one cell per target. `officerAvailability` uses duty, overlapping shifts that week, and other committed operations. Officer packet is an operation sheet that nests Target sheets (`operation-brief.html`, later). See [operations-plan.md](operations-plan.md).
 
 ## Investigation — `functions/model/investigation.js`
 

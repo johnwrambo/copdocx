@@ -26,7 +26,8 @@
     { key: "shifts", label: "Schedule" },
     { key: "bookin", label: "Book-in" },
     { key: "encounters", label: "Encounters" },
-    { key: "investigations", label: "Investigations" }
+    { key: "investigations", label: "Investigations" },
+    { key: "operations", label: "Operations" }
   ];
 
   function pageKey() {
@@ -44,10 +45,10 @@
 
   function appVersion() {
     if (typeof document === "undefined") {
-      return "0.61.0";
+      return "0.64.0";
     }
     var el = document.getElementById("appVersion");
-    return (el && el.getAttribute("data-version")) || "0.61.0";
+    return (el && el.getAttribute("data-version")) || "0.64.0";
   }
 
   function todayStamp() {
@@ -134,6 +135,9 @@
     }
     if (type === "investigations") {
       return row.investigationId || "";
+    }
+    if (type === "operations") {
+      return row.operationId || "";
     }
     if (type === "officers") {
       return row.officerId || row.id || "";
@@ -238,7 +242,8 @@
       locations: {},
       businesses: {},
       entities: {},
-      associations: {}
+      associations: {},
+      operations: {}
     };
   }
 
@@ -257,6 +262,7 @@
     store.businesses = store.businesses || {};
     store.entities = store.entities || {};
     store.associations = store.associations || {};
+    store.operations = store.operations || {};
     return store;
   }
 
@@ -295,6 +301,14 @@
       return Object.keys(invStore.investigations || {}).map(function (id) {
         return invStore.investigations[id];
       });
+    }
+    if (type === "operations") {
+      var opStore = readLeadStore();
+      return Object.keys(opStore.operations || {})
+        .map(function (id) {
+          return opStore.operations[id];
+        })
+        .filter(isCommitted);
     }
     var admin = readAdmin();
     if (type === "officers") {
@@ -450,6 +464,7 @@
       bookin: [],
       encounters: [],
       investigations: [],
+      operations: [],
       investigationObjects: {
         people: {},
         vehicles: {},
@@ -647,6 +662,21 @@
         })
       );
     }
+    if (type === "operations") {
+      return csvTable(
+        ["operationId", "name", "plannedStart", "plannedEnd", "targets", "updatedAt"],
+        records.map(function (row) {
+          return [
+            row.operationId || "",
+            row.name || "",
+            row.plannedStart || "",
+            row.plannedEnd || "",
+            (row.targets || []).length,
+            recordDay("operations", row)
+          ];
+        })
+      );
+    }
     if (type === "investigations") {
       return csvTable(
         ["investigationId", "kind", "title", "parentInvestigationId", "nodes", "updatedAt"],
@@ -722,7 +752,8 @@
       shifts: [],
       bookin: [],
       encounters: [],
-      investigations: []
+      investigations: [],
+      operations: []
     };
     if (Array.isArray(data)) {
       empty.leads = data;
@@ -891,7 +922,12 @@
     types.forEach(function (type) {
       var cleaned = cleanList(type, parsed[type]);
       result.skipped += cleaned.skipped;
-      if (type === "encounters" || type === "leads" || type === "investigations") {
+      if (
+        type === "encounters" ||
+        type === "leads" ||
+        type === "investigations" ||
+        type === "operations"
+      ) {
         var stored = readStored(LEAD_KEY);
         if (!stored.ok) {
           result.error = result.error || stored.error;
@@ -906,6 +942,7 @@
         store.locations = store.locations || {};
         store.businesses = store.businesses || {};
         store.entities = store.entities || {};
+        store.operations = store.operations || {};
         var added = 0;
         var updated = 0;
         var skipped = 0;
@@ -927,6 +964,26 @@
               return;
             }
             store.encounters[id] = row;
+            updated += 1;
+          });
+        } else if (type === "operations") {
+          cleaned.rows.forEach(function (row) {
+            var id = row.operationId;
+            var current = store.operations[id];
+            if (!current) {
+              store.operations[id] = row;
+              added += 1;
+              return;
+            }
+            if (jsonEqual(current, row)) {
+              skipped += 1;
+              return;
+            }
+            if (!incomingIsNewer(current, row)) {
+              skipped += 1;
+              return;
+            }
+            store.operations[id] = row;
             updated += 1;
           });
         } else if (type === "investigations") {
@@ -1072,6 +1129,14 @@
     }
     if (page === "investigations" || page === "investigate") {
       return ["investigations"];
+    }
+    if (
+      page === "operations" ||
+      page === "operation" ||
+      page === "operation-form" ||
+      page === "operation-brief"
+    ) {
+      return ["operations"];
     }
     return TYPE_META.map(function (meta) {
       return meta.key;

@@ -15,14 +15,45 @@
     return !row || !row.meta || row.meta.status !== "draft";
   }
 
-  function listCommitted() {
+  function readAdmin() {
     try {
-      var parsed = JSON.parse(global.localStorage.getItem(ADMIN_KEY) || "{}") || {};
-      var officers = parsed.officers || [];
-      return officers.filter(isCommitted);
+      return JSON.parse(global.localStorage.getItem(ADMIN_KEY) || "{}") || {};
     } catch (error) {
-      return [];
+      return {};
     }
+  }
+
+  function listCommitted() {
+    var officers = readAdmin().officers || [];
+    return officers.filter(isCommitted);
+  }
+
+  function listShifts() {
+    var shifts = readAdmin().shifts || [];
+    return Array.isArray(shifts) ? shifts.slice() : [];
+  }
+
+  function listFleet() {
+    var vehicles = readAdmin().vehicles || [];
+    return vehicles.filter(function (row) {
+      return row && isCommitted(row) && row.governmentVehicle;
+    });
+  }
+
+  function groupsByTeam() {
+    var groups = {};
+    listCommitted().forEach(function (officer) {
+      var key = String(officer.team || "").trim() || "(no team)";
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(officer);
+    });
+    return Object.keys(groups)
+      .sort()
+      .map(function (key) {
+        return { teamKey: key, officers: groups[key] };
+      });
   }
 
   function get(id) {
@@ -241,6 +272,9 @@
 
   root.officers = {
     listCommitted: listCommitted,
+    listShifts: listShifts,
+    listFleet: listFleet,
+    groupsByTeam: groupsByTeam,
     get: get,
     initials: initials,
     alias: alias,
