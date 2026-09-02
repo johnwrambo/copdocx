@@ -172,6 +172,14 @@
     if (typeof global.updateLeadSourceFields === "function") {
       global.updateLeadSourceFields();
     }
+    if (root.officers && typeof root.officers.bindAssign === "function") {
+      root.officers.bindAssign({
+        search: byId("assignedOfficerSearch"),
+        hidden: byId("assignedOfficerId"),
+        results: byId("assignedOfficerResults"),
+        value: snapshot.assignedOfficerId || ""
+      });
+    }
 
     replaceList(
       "aliasList",
@@ -369,6 +377,8 @@
   }
 
   model.hydrateLead = hydrateLead;
+  model.fillCard = fillCard;
+  model.fillLocationCard = fillLocationCard;
   model.paintCriminalProfile = paintCriminalProfile;
   model.clearRepeatableList = clearList;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -54,6 +54,8 @@
         targetPriority: "",
         // Optional #rrggbb pin override. Empty = auto (type, or vehicle color).
         pinColor: "",
+        junked: false,
+        junkedAt: "",
         occupancy: "current",
         occupiedFrom: "",
         occupiedTo: "",

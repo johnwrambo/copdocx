@@ -506,6 +506,9 @@
       vehicles: vehicles,
       links: links,
       history: preservedHistory,
+      assignedOfficerId: byId("assignedOfficerId")
+        ? textValue(byId("assignedOfficerId"))
+        : (previous && previous.assignedOfficerId) || "",
       followUps:
         typeof window.followUpRecords === "function"
           ? window.followUpRecords()
@@ -521,4 +524,5 @@
   model.collectLead = collectLead;
   model.readFields = readFields;
   model.collectLocation = collectLocation;
+  model.collectLink = collectLink;
 })(typeof window !== "undefined" ? window : globalThis);

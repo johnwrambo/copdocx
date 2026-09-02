@@ -4,7 +4,7 @@ Two-row sticky app bar (`style/style.css`, painted by `COPDoc.chrome` in `functi
 
 ```
 Row 1  COPDoc     Version x.y.z     {date}                 .app-bar-info
-Row 2  [ File ▾ ]  Home | Leads | Encounters | Book-in | Map | Admin ▾  [ ACTION SLOT ]
+Row 2  [ File ▾ ]  Home | Cases | Investigate | Encounters | Book-in | Map | Admin ▾  [ ACTION SLOT ]
        #fileMenu   ---------------- .app-bar-nav ----------------  .app-bar-actions
 Status #appBarStatus
 ```
@@ -31,8 +31,8 @@ Unimplemented items use `data-not-built`. Do not pretend they work.
 
 | Page | Items | Ships |
 | --- | --- | --- |
-| Home, Leads list, Encounter list/form, Admin pages, Book-in | **Import** / **Export** (`#fileImportButton` / `#fileExportButton`) | 0.10.0 — dialog: types, optional date range, JSON/CSV/both. Merge import with summary confirm. Encounter pages pre-check Encounters (0.11.0). |
-| Leads list | (old silent Export JSON / Download CSV) | replaced by the Export dialog (Leads pre-checked) |
+| Home, Cases list, Encounter list/form, Admin pages, Book-in | **Import** / **Export** (`#fileImportButton` / `#fileExportButton`) | 0.10.0 — dialog: types, optional date range, JSON/CSV/both. Merge import with summary confirm. Encounter pages pre-check Encounters (0.11.0). |
+| Cases list (`leads.html`) | (old silent Export JSON / Download CSV) | replaced by the Export dialog (Cases pre-checked) |
 | Lead view | Export JSON / Download CSV (this lead if committed) | lead-split PR |
 | I-200 / I-205 form | Download PDF (`#downloadWarrantPdfButton`, unflattened fill, no writeback) | 0.8.0 |
 | Lead form (`lead.html` until split) | Download JSON (`#downloadLeadButton`), Download CSV (`#downloadLeadCsvButton`) | **today**; save-shape PR: no-op unless stored `meta.status === "committed"` (never `collectLead()` of a draft). Painter **must emit these ids** — `ui.js` / `lead-csv.js` bind them. |
@@ -43,7 +43,7 @@ Unimplemented items use `data-not-built`. Do not pretend they work.
 | Other admin File Save | remove when chrome ships | officer already focusout-autosaves; dashboard `saveState()` is redundant |
 | Map | Print brief (working), Export KMZ / JSON / CSV `data-not-built` | Print brief = ops snapshot via browser print |
 | Narrative | Download JSON (`#downloadNarrativeJsonButton`), Download text (`#downloadNarrativeTextButton`) | Active I-213 or training draft |
-| Book-in | Export JSON, Import JSON (**merge**), Restore backup (**replace**, confirm) | already in the records **toolbar** (`#exportRecordsButton`, `#importRecordsButton`, `#restoreRecordsButton`). File-cleanup PR **moves** them into File and **removes the toolbar duplicates**. Not New/Save/Open. |
+| Book-in | Import / Export plus File **New** / **Open**. Action-slot **Save** files the packet and a DETAINEE lead. | New/Open stay until a book-in triad. |
 | Baseball card | Export `data-not-built` only | Generate saves the card on the lead subject when `?leadId=` is present |
 | Photo picker | Download JSON / Clear library (lab only) | With `?ownerType=` / `?leadId=`: **Save photo** writes IDB. Lab library unchanged. |
 | File upload | Download JSON / Clear library (lab only) | With owner query: **Save file** writes IDB. |
@@ -75,19 +75,20 @@ Chrome **paints** the control. It does **not** call `saveLead` / `addOfficer` / 
 
 | Page kind | Primary | Secondaries |
 | --- | --- | --- |
-| Collection | **Add {record}** (`<a>`) | Encounter list: **Add encounter** → `encounter-form.html`. No Back (tabs leave lists). |
-| View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}**. Case view (`case.html`) then **Generate Target sheet** (new window, `mobile-target-sheet.html?id=`), Book-in / Issue I-200 / Issue I-205. Case board layout is static. |
+| Collection | **Add {record}** (`<a>`) | Cases list: **Add case** → `lead-form.html`. Investigate list: **Add investigation** → `investigate.html`. Encounter list: **Add encounter** → `encounter-form.html`. No Back (tabs leave lists). |
+| View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}** (Cases list: **Back to cases**). Case view (`case.html`) then **Generate Target sheet** (new window, `mobile-target-sheet.html?id=`), Book-in / Issue I-200 / Issue I-205. Case board layout is static. |
 | Form | **Save** (`<button>`) | First secondary: **Back to {origin}**. `committedAt` → view; else list. Not `history.back()`. |
-| Encounter form | **Save** (`call: commitEncounter`) | **Back to encounters**; **Add subjects** → `bookin.html?encounterId=`; **Generate I-213** → `narrative.html?encounterId=` |
+| Encounter form | **Save** (`call: commitEncounter`) stays on the form | **Back to encounters**; **Add subject** (`call: openEncounterBookIn`) quiet-saves then `bookin.html?encounterId=`; **Generate I-213** → `narrative.html?encounterId=` |
+| Investigation workspace | **Save** (`call: commitInvestigation`) stays on `investigate.html?id=` | **Back to investigations**. **Import plates** (`call: focusPlateImport`) on plate-check — opens the Plates window. **Spawn** (`call: spawnChildInvestigation`) opens the child workspace. **Open as case** (`call: openInvestigationPersonAsCase`) mints or reuses a working lead for the focused PERSON, then `lead-form.html?id=` (working) or `case.html?id=` (filed). Requires a focused person. **Clear all** (`call: clearInvestigationWorkspace`) empties this wall and plate queue after confirm; shared objects and child investigations stay. Wall place/pan/connect and the Windows drawer (**Plates** / **Objects** / **Card**) overlay the wall (click the selected type chip to stop placing). Click a chip to focus; **Edit** / double-click / Enter opens the Card window (same photo/file row as other cards, **Associated** (person / vehicle / location / business / entity), **Remove from wall** / **Junk** / **Delete record**). An object photo is the wall chip face. **Find** / **Hits** live in the Objects window — not the action slot (same rule as map drawing tools). Esc closes Card. Delete/Backspace removes the focused chip when not typing. |
 | I-200 / I-205 form | **Issue** (`#appBarPrimaryAction`, `data-chrome-action="save"`) | **Back to case** (`case.html?id=`) |
 | Home, Dashboard, Schedule | empty | Home is not +Person. |
 | Map | **Print brief** (`#appBarPrimaryAction`, `call: printMapBrief`) | **Brief view** (`#mapBriefButton`). Drawing tools stay overlays on the map, not the slot. File also has Print brief. |
 | Photo picker | **Add photos**; with owner query **Save photo** + Back | File: Download JSON / Clear lab library. Not a chrome tab. |
 | File upload | **Add files**; with owner query **Save file** + Back | Same. |
 | I-213 (`narrative.html`, Encounter sub-page, not a tab) | **Save I-213** when `?encounterId=`; else **Update draft** | With `?encounterId=`: **Back to encounter**. Then **Copy**. Encounters tab current. |
-| Book-in (until split) | **Generate** | **Load from leads** always (committed leads only). With `?encounterId=`: **Back to encounter**, Add subject. With `?leadId=` only: **Back to lead**. Tab (no query): no Back. Then Clear, Baseball card. File: New / Save / Open. Encounter ID banner is display-only (no in-page Back). |
+| Book-in (until split) | **Save** (`call: saveCurrentRecord`) — files the packet and a DETAINEE lead. With `?encounterId=`, then return to the encounter. | **Generate** (packet PDF). **Load from cases** always (committed cases only). With `?encounterId=`: **Back to encounter**, **Add another subject**. With `?leadId=` only: **Back to case**. Tab (no query): no Back. Then Clear, Baseball card. File: New / Open (Save is the action slot). Encounter ID banner is display-only (no in-page Back). |
 | Baseball card | **Generate** (`persistBaseballCard`) | **Back to book-in** (keep `encounterId` / `leadId`) |
-| Lead form extras | Save | **Back to leads** (or **Back to lead** if `committedAt`); Follow-ups; **+Person / +Vehicle / +Location**. Never on Book-in or Map. |
+| Lead form extras | Save | **Back to cases** (or **Back to case** if `committedAt`); Follow-ups; **+Person / +Vehicle / +Location**. Never on Book-in or Map. |
 
 Six lead-form secondaries will wrap: at `max-width: 639px` `.app-bar-actions` is a full row, `justify-content: flex-end`. That crowding is accepted; do not move stubs onto other pages.
 

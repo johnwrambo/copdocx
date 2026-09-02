@@ -4,14 +4,16 @@ Every record type uses **list → view → form**. Admin dashboard is the hub: c
 
 ## Navigation (end state)
 
-- **List** — table. Primary: Add {record}.
-- **View** — snapshot. Primary: Edit. Case view (`case.html`): Book-in, Issue I-200, Issue I-205 if **committed**. `lead.html?id=` redirects to `case.html?id=`. Associations: a PERSON link jumps to `case.html?id=` when that person is the subject of another **committed** lead. A **Linked cases** line lists this subject’s other committed cases and committed cases that link this person. Drafts do not jump.
+- **List** — table. Primary: Add {record} (Cases: **Add case**).
+- **View** — snapshot. Primary: Edit. Case view (`case.html`): Book-in, Issue I-200, Issue I-205 if **committed**. `lead.html?id=` redirects to `case.html?id=`. Associations tile (**0.58.0**): same live composer as the Card — type a name / plate / street, Enter, reuse or mint (`store.associateCaseObject`). Relationship dropdown. × drops the world fact (`dropAssociation`). A PERSON name jumps to `case.html?id=` when that person is the subject of another **committed** lead. A **Linked cases** line lists this subject’s other committed cases and committed cases that link this person. Drafts do not jump. Add / name click still opens the slide-over for notes / OTHER / **Open as new case** (`store.promoteAssociateToCase`) which mints a **working** lead for a PERSON associate (or reuses their existing lead). The row stays on `leads.html` (All / Leads / Targets / Detainees, by **stage**). Save on the form files it to Case view.
 - **Form** — add (no id) or edit (`?id=`). Primary: Save (commit). Secondary: **Back to {origin}** (`committedAt` → view, else list).
 - **Add** skips view.
-- After **Save**, go to the view (**except** leads until the triad exists — see Interim).
+- After **Save**, go to the record home (view if it exists; encounter form until a view exists). Satellite Book-in Save returns to the encounter.
 - **Autosave** stays on the form URL; first draft `replaceState`s `?id=`.
 
-Draft rows → **form**. Committed rows → **view**.
+Working (`draft`) rows → **form**. Filed (`committed`) rows → **view**. Cases list chips filter **stage** (`caseRole`): All · Leads · Targets · Detainees. Officers, vehicles, encounters, and investigations keep **Working** / **Filed**. Encounter **Target / Collateral** is `encounterRole`, not stage. Investigation workspace (`investigate.html?id=`) is the form; list **Open** / **Edit** both go there. The form body is an infinite **wall** (pan/zoom). Ingest (plates) is a **Plates** overlay; **Promote** / click (with a type selected) / Tab materializes objects on the wall. Click the selected Vehicle / Person / Location / Business / Entity chip again to stop placing (empty click then does not mint). Typed A6 edges associate them (`store.associations{}` is the world fact; the wall `links[]` cite `associationId`); **Spawn** peels a child web (shared object ids, copied `x,y`, same association ids). Parent/child walls draw hulls around shared objects (Venn overlap). Every node is the same Person / Vehicle / Location / Business / Entity object and identity card as the rest of the app (including photo/file and location address fields). Nodes on the wall are title chips; if the object has a photo, that photo is the chip face with the label. Selecting a node brightens it and its one-hop neighbors (focus-plex). **Edit** / double-click / Enter opens the **Card** window for that object; placing a new object also opens Card. The Card has **Associated**: pick Person / Vehicle / Location / Business / Entity, type a name or plate or street, Enter, reuse or mint, spawn, draw the relationship. × drops this wall’s citation. Off-wall people get **Place on wall**. **Objects** is a directory (Find, Hits, jump) you show or hide. **All** clears plex. **Find** filters the Objects list (plate, name, street, kind, VIN); Enter jumps to the first match. Matching wall chips stay bright; the rest dim. Plate-check **Hits** shows vehicles that came from the plate queue. Nothing is removed from the wall. Card **Remove from wall** (`store.removeInvestigationObject`) or keyboard Delete drops the focused chip from this investigation (links too). The shared record stays. **Junk** archives it (`junked`): off every wall, skipped by reuse; placing the same identity restores it. **Delete record** permanently drops an unreferenced object. Case subjects cannot be junked or deleted. Chrome **Clear all** (`store.clearInvestigationWorkspace`) empties this wall and plate queue after confirm; shared objects and child investigations stay. Chrome **Open as case** (`store.promoteInvestigationPersonToCase`) mints a **working** lead for the focused PERSON (same `personId`, identity only, no RAP, no wall-graph dump) or reuses their existing lead. The wall stays an investigation. See [investigation-wall-plan.md](investigation-wall-plan.md).
+
+Case **Officer assigned to** (`assignedOfficerId`) is a search-select on the lead form. On Case view the officer’s name sticks at the top of Case history (does not scroll with notes). Click the name to assign or reassign in a dialog. That change is itself a history note. Shown on the Target sheet as **Targeting Officer**. History events created while assigned store `officerAlias` (initials + badge).
 
 ## Interim leads (until `leads.html` / view `lead.html`)
 
@@ -59,7 +61,8 @@ Existing rows with no `meta.status` migrate as **committed** (`committedAt ← u
 2. Merge collected fields onto it.
 3. Set `meta.status` from `mode`.
 4. On **draft**: keep previous `meta.committedAt`; set `updatedAt`.
-5. On **commit**: `committedAt = updatedAt`; then `rememberPeople`.
+5. On **commit**: `committedAt = updatedAt`.
+6. `rememberPeople` on **every** save (draft and commit) so the subject exists in `people{}` immediately.
 6. Never let collect’s blank `meta` win.
 
 Test: autosave of a previously committed lead keeps `committedAt`.
@@ -83,24 +86,25 @@ No location view page — location photos sit on that location’s card on the p
 
 ## List UX
 
-Default **All**. Drafts first (badge `.record-status-draft`), then committed by `meta.updatedAt` desc.
+Default **All**. Cases list sorts Lead, then Target, then Detainee, then `meta.updatedAt` desc. Other lists: working first, then filed by `meta.updatedAt` desc. Storage stays `meta.status` `draft` | `committed`.
 
 **Save-shape PR (lists that already exist):** `paintTable` / `paintStats` / dashboard previews:
 
 - Availability counts: `meta.status === "committed"` **and** officer `duty === "available"` / fleet `status === "available"`.
-- Draft badge on the row.
-- Draft row action: **Edit** → `*-form.html?id=` (do not use dead `editButton()`).
-- Committed row action: **View**.
+- Working badge on uncommitted rows (`textContent` **Working**).
+- Working row action: **Edit** → `*-form.html?id=` (do not use dead `editButton()`).
+- Filed row action: **View**.
 - Keep **Remove** on officers/vehicles (already deletes; also clears shifts). No lead delete (`store.js` has none; do not add).
-- Sort drafts first.
-- Filter chips All · Drafts · Committed + CSS (`.record-filter-chips`). Lead list reuses the same CSS when it ships.
+- Sort working first on officers/vehicles/encounters.
+- Filter chips All · Working · Filed on officers/vehicles/encounters (`draft` / `committed`). Cases list All · **Leads** · **Targets** · **Detainees** (`lead` / `target` / `detainee` = `caseRole` stage).
 
-Lead list columns:
+Case list (`leads.html`, tab **Cases**) columns:
 
 | Column | Source |
 | --- | --- |
-| Name | `formatPersonLabel(subject)` or “Untitled lead”. Draft badge on this cell. |
-| Crim status | derived `isCriminal` (any conviction with an offense) → Criminal / Non-criminal |
+| Name | `formatPersonLabel(subject)` or “Untitled case”. Working badge if still a draft. |
+| Stage | `caseRole` Lead / Target / Detainee. Issued I-200/I-205 counts as Target unless already Detainee. |
+| Crim / non-crim | derived `isCriminal` (any conviction with an offense) → Crim / Non-crim |
 | Immigration disposition | `person.immigration.disposition` via `IMMIGRATION_DISPOSITIONS` label |
 | City | first `person.locations[].city`, else **—** |
 | Vehicle | first vehicle plate · state; `+N` if more |
@@ -130,9 +134,9 @@ Committed only. **Never** export via `collectLead()` of the dirty form. `downloa
 No view yet. List `encounter.html` (`data-page="encounter"`). Form `encounter-form.html`.
 
 - **Add encounter** mints `encounterId` immediately (draft `saveEncounter` + `replaceState ?id=`). The ID field is readonly.
-- Commit requires `startedAt`, then goes to the list (not a view).
-- **Add subjects** → `bookin.html?encounterId=`. Banner shows the ID (not editable) and Back to encounter.
-- Book-in **Add subject** starts a blank form tagged to that encounter. **Load from leads** fills committed-lead fields that exist on Book-in (same map as 0.7.1; no middle name).
+- Commit requires `startedAt`, then **stays** on `encounter-form.html?id=` (the form is the home until a view exists).
+- **Add subject** quiet-saves, then `bookin.html?encounterId=`. Banner shows the ID (not editable) and Back to encounter.
+- Book-in with `?encounterId=` is a satellite: loud **Save** files a person + DETAINEE lead (`promoteBookInToLead`), writes `personId` / `leadId` on the packet and `encounter.subjects[]`, then returns to the encounter. **Add another subject** quiet-saves a named packet (does not file a lead) and blanks the form. **Load from leads** fills committed-lead fields that exist on Book-in (same map as 0.7.1; no middle name). Autosave does not file a case.
 - Book-in **Target / Collateral** radios are this booking’s role on this encounter (`encounterRole` on the Book-in record and `encounter.subjects[]`). Load from leads defaults to Target. Required to Save when `?encounterId=` is set. Not the RAP `person.encounters[].encounterRole` card.
 - Encounter form subjects table is Book-in records with this `encounterId`. **Edit** → `bookin.html?encounterId=&recordId=`. **×** clears `encounterId` (keeps the Book-in packet) and rebuilds `encounter.subjects[]`.
 - Saved-records table with `?encounterId=` lists only subjects assigned to that encounter. Book-in Save/Delete writes `encounter.subjects[]`.
@@ -142,7 +146,7 @@ Do not inline RAP person cards on the encounter form. Baseball card stays a Book
 
 ## Book-in prefill
 
-Own store. Do not merge.
+Own packet store. Do not merge it into `leads{}`. Book-in is an express lead form: loud **Save** mints or reuses a person and files a committed lead with `caseRole: "DETAINEE"` (in custody). `?leadId=` / **Load from leads** overlays identity onto that case and promotes it to Detainee.
 
 `bookin.html?leadId=` **always** `startNewRecord()` then prefill (page load is a fresh JS heap; do not branch on `activeRecordId`). If the lead is missing or `meta.status !== "committed"`, status error, leave the new blank form.
 
@@ -165,7 +169,7 @@ Shifts are not a draft/commit type. Book-in `meta.status` is follow-on.
 
 ## File Import / Export
 
-Workspace File **Import** / **Export** (`functions/transfer.js`). Export dialog: record types (Leads, Officers, Vehicles, Schedule, Book-in, Encounters), optional inclusive date range, JSON and/or CSV. Committed only for leads/officers/vehicles/encounters. JSON is `copdocx.transfer.v1` (`COPDoc_export_YYYYMMDD.json`). CSV is one flat file per type and is not imported.
+Workspace File **Import** / **Export** (`functions/transfer.js`). Export dialog: record types (Cases, Officers, Vehicles, Schedule, Book-in, Encounters), optional inclusive date range, JSON and/or CSV. Committed only for leads/officers/vehicles/encounters. JSON is `copdocx.transfer.v1` (`COPDoc_export_YYYYMMDD.json`). CSV is one flat file per type and is not imported.
 
 Import: pick JSON → verify → summary (counts, already here / new) → everything or selected types → merge by id (skip exact duplicates, replace different data) → reload. Also accepts a lead-snapshot array and a Book-in `alien-book-in-records` backup.
 

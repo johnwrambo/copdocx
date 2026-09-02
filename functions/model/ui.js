@@ -272,7 +272,7 @@
     replaceLeadUrl(result.leadId);
     rememberLeadSignature();
     if (quiet) {
-      setStatus("Draft saved.", true);
+      setStatus("Working copy saved.", true);
       return snapshot;
     }
     window.location.href = "case.html?id=" + encodeURIComponent(result.leadId);
@@ -396,7 +396,7 @@
   function downloadCurrentLead() {
     var snapshot = storedCommittedLead();
     if (!snapshot) {
-      setStatus("Commit the lead before exporting.");
+      setStatus("File the lead before exporting.");
       return;
     }
     var blob = new Blob([JSON.stringify(snapshot, null, 2)], {
@@ -482,7 +482,7 @@
       a.textContent = "Back to case";
     } else {
       a.href = "leads.html";
-      a.textContent = "Back to leads";
+      a.textContent = "Back to cases";
     }
   }
 
@@ -546,6 +546,19 @@
     refreshSavedLeadSelect();
     bindLeadAutoSave();
     bindCriminalProfileLive();
+    if (root.officers && typeof root.officers.bindAssign === "function") {
+      var assignedSnap =
+        qid && model.store ? model.store.getLead(qid) : null;
+      root.officers.bindAssign({
+        search: byId("assignedOfficerSearch"),
+        hidden: byId("assignedOfficerId"),
+        results: byId("assignedOfficerResults"),
+        value: (assignedSnap && assignedSnap.assignedOfficerId) || "",
+        onChange: function () {
+          saveCurrentLead({ quiet: true });
+        }
+      });
+    }
     rememberLeadSignature();
     suppressAutoSave = false;
   }

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Investigation</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="investigate">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.59.0"
+        >
+          Version 0.59.0
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="investigation-shell">
+      <form id="investigationForm" class="investigation-header" autocomplete="off" novalidate>
+        <div class="investigation-header-row">
+          <div class="field">
+            <label for="investigationId">ID</label>
+            <input type="text" id="investigationId" name="investigationId" readonly />
+          </div>
+          <div class="field">
+            <label for="investigationTeam">Team</label>
+            <input
+              type="number"
+              id="investigationTeam"
+              name="investigationTeam"
+              min="1"
+              step="1"
+              value="3"
+            />
+          </div>
+          <div class="field">
+            <label for="investigationKind">Kind</label>
+            <select id="investigationKind" name="investigationKind">
+              <option value="tag">Plate Check</option>
+              <option value="otherLe">Other Law Enforcement Agency</option>
+              <option value="elite">Elite</option>
+              <option value="other">Other</option>
+              <option value="discovered">Discovered in case</option>
+            </select>
+          </div>
+          <div class="field" id="investigationModeField">
+            <label for="investigationMode">Mode</label>
+            <select id="investigationMode" name="investigationMode">
+              <option value="bulk">Bulk</option>
+              <option value="solitary">Solitary</option>
+            </select>
+          </div>
+          <div class="field field-span-2">
+            <label for="investigationTitle">Title</label>
+            <input
+              type="text"
+              id="investigationTitle"
+              name="investigationTitle"
+              autocomplete="off"
+              placeholder="Apartment lot, referral name, …"
+            />
+          </div>
+        </div>
+        <p id="investigationParentLine" class="section-note" hidden></p>
+        <p id="investigationChildrenLine" class="section-note" hidden></p>
+      </form>
+
+      <div class="investigation-work">
+        <div id="investigationWall" class="investigation-wall">
+          <div class="investigation-wall-tools">
+            <div class="investigation-place-types" role="group" aria-label="Object to place. Click the selected type to stop placing.">
+              <button type="button" data-wall-type="VEHICLE" aria-pressed="true">Vehicle</button>
+              <button type="button" data-wall-type="PERSON" aria-pressed="false">Person</button>
+              <button type="button" data-wall-type="LOCATION" aria-pressed="false">Location</button>
+              <button type="button" data-wall-type="BUSINESS" aria-pressed="false">Business</button>
+              <button type="button" data-wall-type="ENTITY" aria-pressed="false">Entity</button>
+            </div>
+            <div class="investigation-windows" role="group" aria-label="Windows">
+              <button type="button" id="investigationWindowPlates" data-window="plates" aria-pressed="false">
+                Plates
+              </button>
+              <button type="button" id="investigationWindowObjects" data-window="objects" aria-pressed="false">
+                Objects
+              </button>
+              <button type="button" id="investigationWindowCard" data-window="card" aria-pressed="false">
+                Card
+              </button>
+            </div>
+            <p id="investigationWallHint" class="investigation-wall-hint">
+              Click a chip to focus. Edit or double-click to open its card. Drag empty space to pan.
+            </p>
+            <div class="investigation-zoom">
+              <button type="button" id="investigationZoomOut" class="action-button-secondary compact">−</button>
+              <button type="button" id="investigationZoomIn" class="action-button-secondary compact">+</button>
+            </div>
+          </div>
+          <p id="investigationWallEmpty" class="investigation-wall-empty">
+            Click the wall to place an object.
+          </p>
+          <div id="investigationSurface" class="investigation-surface">
+            <svg id="investigationEdges" class="investigation-edges" aria-hidden="true"></svg>
+            <div id="investigationHullLabels" class="investigation-hull-labels"></div>
+            <div id="investigationNodes"></div>
+          </div>
+
+          <aside id="investigationPlateDock" class="investigation-window is-plates" hidden>
+            <div class="investigation-dock-head">
+              <strong>Plates</strong>
+              <button type="button" class="action-button-secondary compact" data-window-close="plates">
+                Hide
+              </button>
+            </div>
+            <div id="investigationDockBody">
+              <p class="section-note">Paste or import. Promote drops a vehicle on the wall.</p>
+              <label class="field-caption" for="plateImportText">Paste plates</label>
+              <textarea
+                id="plateImportText"
+                rows="3"
+                placeholder="TX ABC1234&#10;WXYZ123 CA"
+              ></textarea>
+              <div class="card-list-actions">
+                <button type="button" id="plateImportButton" class="action-button compact">
+                  Import pasted
+                </button>
+                <button type="button" id="plateImportFileButton" class="action-button-secondary compact">
+                  Import file
+                </button>
+                <input
+                  type="file"
+                  id="plateImportFile"
+                  accept=".txt,.csv,text/plain,text/csv"
+                  hidden
+                />
+              </div>
+              <div id="plateQueueEmpty" class="records-empty">No plates in this queue yet.</div>
+              <div id="plateQueueWrap" class="records-table-wrap" hidden>
+                <table class="records-table">
+                  <thead>
+                    <tr>
+                      <th>Plate</th>
+                      <th>State</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="plateQueueBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </aside>
+
+          <aside id="investigationOutline" class="investigation-window is-objects investigation-outline" hidden>
+            <div class="investigation-dock-head">
+              <strong>Objects</strong>
+              <span class="investigation-outline-actions">
+                <button
+                  type="button"
+                  id="investigationOutlineHits"
+                  class="action-button-secondary compact"
+                  aria-pressed="false"
+                  hidden
+                >
+                  Hits
+                </button>
+                <button type="button" id="investigationPlexAll" class="action-button-secondary compact">
+                  All
+                </button>
+                <button type="button" class="action-button-secondary compact" data-window-close="objects">
+                  Hide
+                </button>
+              </span>
+            </div>
+            <label class="field-caption" for="investigationOutlineSearch">Find</label>
+            <input
+              id="investigationOutlineSearch"
+              type="search"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Plate, name, street…"
+            />
+            <p id="investigationOutlineEmpty" class="records-empty">No objects on this wall yet.</p>
+            <p id="investigationOutlineNone" class="records-empty" hidden>
+              No objects match.
+            </p>
+            <ul id="investigationOutlineList" class="investigation-outline-list"></ul>
+          </aside>
+
+          <aside id="investigationInspector" class="investigation-window is-card investigation-inspector" hidden>
+            <div class="investigation-dock-head">
+              <strong id="investigationInspectorTitle">Card</strong>
+              <span class="investigation-outline-actions">
+                <button
+                  type="button"
+                  id="investigationRemoveNode"
+                  class="action-button-secondary compact"
+                  hidden
+                >
+                  Remove from wall
+                </button>
+                <button type="button" class="action-button-secondary compact" data-window-close="card">
+                  Hide
+                </button>
+              </span>
+            </div>
+            <p id="investigationInspectorEmpty" class="records-empty">
+              Edit an object to open its card.
+            </p>
+            <div id="investigationInspectorCard"></div>
+            <div id="investigationAssociates" class="investigation-associates" hidden></div>
+            <div id="investigationInspectorActions" class="investigation-inspector-actions" hidden>
+              <button
+                type="button"
+                id="investigationJunkNode"
+                class="action-button-secondary compact"
+              >
+                Junk
+              </button>
+              <button
+                type="button"
+                id="investigationDeleteNode"
+                class="action-button-secondary compact"
+              >
+                Delete record
+              </button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <div id="investigationReasonPop" class="investigation-reason-pop" hidden></div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/transfer.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/lead-source.js"></script>
+    <script src="data/us-places.js"></script>
+    <script src="data/vehicles.js"></script>
+    <script src="functions/vehicles.js"></script>
+    <script src="functions/names.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/location.js"></script>
+    <script src="functions/model/vehicle.js"></script>
+    <script src="functions/model/business.js"></script>
+    <script src="functions/model/entity.js"></script>
+    <script src="data/association-matrix.js"></script>
+    <script src="functions/model/link.js"></script>
+    <script src="functions/model/investigation.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/model/media.js"></script>
+    <script src="functions/model/autosave.js"></script>
+    <script src="functions/media-card.js"></script>
+    <script src="functions/plate-parse.js"></script>
+    <script src="functions/investigations.js"></script>
+    <script src="functions/investigation-wall.js"></script>
+  </body>
+</html>

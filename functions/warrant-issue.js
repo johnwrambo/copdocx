@@ -515,7 +515,7 @@
     var pickFolder = opts.pickFolder === true;
     var snap = currentLead();
     if (!snap || !isCommitted(snap)) {
-      setStatus("Open a committed lead to issue this warrant.");
+      setStatus("Open a filed case to issue this warrant.");
       return Promise.resolve();
     }
     var pdf = pdfApi();

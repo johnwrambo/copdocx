@@ -47,9 +47,50 @@ Do not edit `data/immigration.js`. Do not rewrite PDF layout. Do not merge book-
 | 35 | Case biographics board | 34 | **0.24.0** | Combined biographics, warrant banner (issued only) sets TARGET, documents+history column, source as first history row, mint stubs on Add, keep photo-only objects. |
 | 36 | Historical occupancy | 35 | **0.24.1** | Location/vehicle `occupancy`, date range, notes, other residents. Map skips historical pins. |
 | 37 | Association strings | 36 | **0.25.0** | Associations save as name + type + note without a registry person. Optional existing-person link. Open-as-new-case not built. |
+| 38 | Open as new case | 37 | **0.26.0** | Association slide-over **Open as new case** mints a **working** lead (or reuses an existing one) for a PERSON associate. Stays in `leads{}` / All–Working–Filed. Reciprocal link + history. No RAP copy. |
+| 39 | Book-in express lead | 38 | **0.27.0** | Book-in Save mints/reuses a person and files a DETAINEE lead. Packet store stays separate. Lead Save remembers people on draft too. Chrome primary is Save. |
+| 40 | Uniform navigation | 39 | **0.28.0** | Encounter Save stays on the form. Add subject quiet-saves then opens Book-in. Book-in with `?encounterId=` Save returns to the encounter; **Add another subject** replaces the same-page Add subject no-op. |
+| 41 | Cases tab | 40 | **0.29.0** | Operator-facing Leads → Cases (tab, list, Add case, Home). Store keys and files stay `lead*`. Role column Lead / Target / Detainee. Working / Filed chips unchanged. |
+| 42 | Cases chips Leads / Targets | 41 | **0.30.0** | Cases list chips All · Leads · Targets (`draft` / `committed`). Row badge **Lead**. Officers/vehicles/encounters stay Working / Filed. |
+| 43 | Case stage filter | 42 | **0.31.0** | Cases chips filter `caseRole` (Lead / Target / Detainee), not draft/committed. Column **Stage**. Folder does not show a Detainee as Target. Encounter Target/Collateral stays `encounterRole`. |
+| 44 | Targeting officer | 43 | **0.32.0** | Case `assignedOfficerId` search-select. Target sheet **Targeting Officer**. History notes/system events stamp officer alias (initials + badge). |
+| 45 | History targeting officer | 44 | **0.32.1** | Case view: officer name sticky at top of history; click opens assign dialog. Search-select stays on the lead form, not biographics. |
+| 46 | Investigation shell | 45 | **0.33.0** | `createInvestigation` INV{team}-{YYYYMMDD}-{seq}, kinds = Case source codes, list + workspace shell, Investigate tab. |
+| 47 | Plate parser + queue | 46 | **0.33.1** | Kind `tag`: paste/file import, parse, queue table, Discard / Hit. No vehicle objects yet. |
+| 48 | Promote plate → vehicle | 47 | **0.33.2** | First-class `vehicles{}`. Promote mints/reuses a vehicle node, focuses inspector. No case. |
+| 49 | Quick-add object + link | 48 | **0.34.0** | Add person/vehicle/location from the focused object; `createLink`; reuse existing by name, plate, or address. First-class `locations{}`. No case. |
+| 50 | Spawn child investigation | 49 | **0.35.0** | Chrome **Spawn** mints a child with `parentInvestigationId`. Copies focused object + 1-hop links (same object ids, new node ids). No plate-queue copy. No case. |
+| 51 | ~~Inspector vehicle card~~ | 50 | **0.36.0** | Shipped a stacked case-form vehicle (occupancy, nested locs/links). **Dead end.** Wall replaces it. See [investigation-wall-plan.md](investigation-wall-plan.md). |
+| 51w | Investigation wall | 50 | **0.37.0** | Pan/zoom wall, click-to-place identity cards, drag move, drag-connect, promote onto the wall, spawn copies `x,y`. **Draft.** Target UX: [investigation-wall-plan.md](investigation-wall-plan.md). |
+| 56 | Compact nodes + reuse-on-type | 51w | **0.38.0** | Same Person/Vehicle/Location objects and identity cards. Title chip when unfocused; typing plate/name/address reuses; click edge to change/disconnect; Tab from focus. Promote lands in a lot strip. |
+| 57 | Focus-plex | 56 | **0.39.0** | Selected node + one-hop stay bright; rest dim. Objects list sidecar jumps to a node. All clears plex. |
+| 58 | BUSINESS + ENTITY | 57 | **0.40.0** | First-class `businesses{}` / `entities{}`. Same identity-card rule. Wall chips, A6 links, reuse by name. |
+| 59 | Hulls / Venn | 58 | **0.41.0** | Convex hulls around nodes shared with parent/child investigations. Overlap glow. Click hull tag to open the other wall. |
+| 60 | Promote person → case | 59 | **0.42.0** | Chrome **Open as case** mints or reuses a working lead for the focused PERSON on the wall. Same `personId`. Identity only (no RAP, no wall dump). |
+| 61 | Slim inspector | 60 | **0.43.0** | Wall nodes stay title chips. Identity fields (same Person/Vehicle/Location/Business/Entity card) open in the Objects-rail inspector. |
+| 62 | Outline search | 61 | **0.44.0** | Objects-rail Find filters the list (not the wall). Enter jumps. Hits shows plate-check vehicles. |
+| 63 | Deselect place type | 62 | **0.45.0** | Click the selected wall type chip again to deselect. Empty-wall click does not mint until a type is selected. |
+| 64 | Find dims the wall | 63 | **0.46.0** | Objects Find / Hits dim non-matching wall chips. Nothing is removed. Find wins over plex. |
+| 65 | Remove from wall | 64 | **0.47.0** | `removeInvestigationObject` drops the focused node and its links on this investigation only. Shared identity stays. Promoted plate returns to hit. |
+| 66 | Photo chip + card media | 65 | **0.48.0** | Wall inspector cards get the same photo/file row and location address fields. A photo on the object is the wall chip face plus label. |
+| 67 | Object identity audit | 66 | **0.49.0** | Reuse drops abandoned records. Promote-from-wall keeps RAP on `people{}`. File export includes investigations + referenced objects. `investigationIntegrity`. |
+| 68 | Clear workspace | 67 | **0.50.0** | Chrome **Clear all** empties this investigation’s wall and plate queue. Shared objects and child walls stay. |
+| 72 | Junk / delete record | 68 | **0.51.0** | **Remove from wall** vs **Junk** (archive, skip reuse, strip every wall) vs **Delete record** (unreferenced only). Case subjects blocked. |
+| 69 | Split windows (DOM) | 68 | **0.52.0** | Card overlay is not under the Objects list. |
+| 70 | Windows drawer | 69 | **0.52.0** | Wall-tools **Plates / Objects / Card**. Click = focus; Edit / double-click / Enter opens Card. |
+| 71 | Remember open windows | 70 | **0.52.0** | `sessionStorage` `copdocx.investigation-windows.v1`. Fixed overlays. |
+| 80 | Association factory | 71 | **0.53.0** | `store.associations{}`. `createAssociation` + `upsertAssociation`. Wall connect/add/spawn cite `associationId`. Indexes, integrity, File export bag. No card UI. |
+| 81 | A6 is the only catalog | 80 | **0.53.0** | `CUSTOMER_OF`. Canonical ends and validation read the matrix. |
+| 75 | Card composer (people) | 81 | **0.54.0** | Associated people on the Card window. Type a name, Enter, reuse or mint, spawn, edge, relationship, × / Place on wall. |
+| 78 | Card composer (all types) | 75 | **0.55.0** | Same Associated block: Person / Vehicle / Location / Business / Entity. Plate or street Enter. |
+| 76 | Dual-write nested case views | 78 | **0.56.0** | PERSON–LOCATION / PERSON–VEHICLE associations copy onto the case snapshot (`person.locations[]`, `lead.vehicles[]`). No RAP. No wall dump. |
+| 77 | Case Associations consume associations | 76 | **0.57.0** | Case tile lists world associations. Add/Edit slide-over uses the same constructor. Open as new case still works. |
+| 79 | Case Associations live composer | 77 | **0.58.0** | Same Enter constructor as the Card. Relationship dropdown. × drops the fact (`dropAssociation`). OTHER leftover uses `removeCaseLink`. |
+| 82 | Occupancy on the association | 79 | **0.59.0** | `occupancy` / `validFrom` / `validTo` on `associations{}`. Nested copies dual-written. Case map still reads nested current/historical. |
 | 28e | Square photos, 4:3 map | 28d | **0.18.6** | Subject photo stages are square (cover). Case/form location maps are 4×3. |
 | 28f | Case map legend + side files | 28e | **0.18.7** | Map = subject home/work/vehicle only, with side list. Files + gallery in the facts column. |
 | 28g | Location map basemaps | 28f | **0.18.9** | Map / Satellite / Hybrid on case map and form location maps. |
+| 73 | Planning pin card + photos | 23, 28d | **0.53.0** | Shared `map-popup.js`. Case map, officer map, and `map.html` pin cards show the object photo. Media read-only on the planning map. |
 
 | 28 | Operation skeleton | 6 | **0.18.0** | See [operations-plan.md](operations-plan.md) PR-A. Comment there before coding. |
 | 29 | Import targets + map | 28 | **0.18.1** | operations-plan PR-B. |

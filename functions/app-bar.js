@@ -73,6 +73,10 @@
     return page === "encounter" || page === "encounter-form" || page === "narrative";
   }
 
+  function isInvestigatePage(page) {
+    return page === "investigations" || page === "investigate";
+  }
+
   function queryParam(name) {
     try {
       return new URLSearchParams(window.location.search).get(name) || "";
@@ -179,7 +183,7 @@
       if (returnTo) {
         var backLabel = "Back";
         if (returnTo.indexOf("lead-form") === 0) {
-          backLabel = "Back to lead";
+          backLabel = "Back to case";
         } else if (returnTo.indexOf("officer-form") === 0) {
           backLabel = "Back to officer";
         } else if (returnTo.indexOf("vehicle-form") === 0) {
@@ -285,10 +289,8 @@
           backAction("Back to encounters", "encounter.html"),
           {
             id: "addEncounterSubjectsButton",
-            label: "Add subjects",
-            href: id
-              ? "bookin.html?encounterId=" + encodeURIComponent(id)
-              : "bookin.html"
+            label: "Add subject",
+            call: "openEncounterBookIn"
           },
           {
             id: "generateI213Button",
@@ -298,13 +300,59 @@
         ]
       };
     }
+    if (page === "investigations") {
+      return {
+        tab: "investigate",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            label: "Add investigation",
+            href: "investigate.html",
+            primary: true,
+            chromeAction: "add"
+          }
+        ]
+      };
+    }
+    if (page === "investigate") {
+      var investigateActions = [
+        {
+          label: "Save",
+          primary: true,
+          chromeAction: "save",
+          call: "commitInvestigation"
+        },
+        backAction("Back to investigations", "investigations.html")
+      ];
+      investigateActions.push({
+        label: "Import plates",
+        call: "focusPlateImport"
+      });
+      investigateActions.push({
+        label: "Spawn",
+        call: "spawnChildInvestigation"
+      });
+      investigateActions.push({
+        label: "Open as case",
+        call: "openInvestigationPersonAsCase"
+      });
+      investigateActions.push({
+        label: "Clear all",
+        call: "clearInvestigationWorkspace"
+      });
+      return {
+        tab: "investigate",
+        file: WORKSPACE_FILE,
+        actions: investigateActions
+      };
+    }
     if (page === "leads") {
       return {
         tab: "leads",
         file: WORKSPACE_FILE,
         actions: [
           {
-            label: "Add lead",
+            label: "Add case",
             href: "lead-form.html",
             primary: true,
             chromeAction: "add"
@@ -320,7 +368,7 @@
           primary: true,
           chromeAction: "edit"
         },
-        backAction("Back to leads", "leads.html")
+        backAction("Back to cases", "leads.html")
       ];
       if (id) {
         actions.push({
@@ -359,14 +407,14 @@
       var targetSheetActions = [];
       if (id) {
         targetSheetActions.push({
-          label: "Edit lead",
+          label: "Edit case",
           href: recordIdHref("lead-form.html", id),
           primary: true,
           chromeAction: "edit"
         });
         targetSheetActions.push(backAction("Back to case", recordIdHref("case.html", id)));
       } else {
-        targetSheetActions.push(backAction("Back to leads", "leads.html"));
+        targetSheetActions.push(backAction("Back to cases", "leads.html"));
       }
       return {
         tab: "leads",
@@ -405,7 +453,7 @@
           },
           id
             ? backAction("Back to case", recordIdHref("case.html", id))
-            : backAction("Back to leads", "leads.html")
+            : backAction("Back to cases", "leads.html")
         ]
       };
     }
@@ -420,7 +468,7 @@
           { label: "Save", primary: true, chromeAction: "save" },
           leadHasCommittedAt(id)
             ? backAction("Back to case", recordIdHref("case.html", id))
-            : backAction("Back to leads", "leads.html")
+            : backAction("Back to cases", "leads.html")
         ]
       };
     }
@@ -429,11 +477,11 @@
       var bookinLeadId = queryParam("leadId");
       var bookinActions = [
         {
-          id: "generateButton",
-          label: "Generate",
+          id: "saveRecordButton",
+          label: "Save",
           primary: true,
           chromeAction: "save",
-          call: "generateCombinedPacket"
+          call: "saveCurrentRecord"
         }
       ];
       if (encounterId) {
@@ -444,9 +492,9 @@
           )
         );
         bookinActions.push({
-          id: "addEncounterSubjectButton",
-          label: "Add subject",
-          call: "addEncounterSubject"
+          id: "addAnotherEncounterSubjectButton",
+          label: "Add another subject",
+          call: "addAnotherEncounterSubject"
         });
       } else if (bookinLeadId) {
         bookinActions.push(
@@ -454,8 +502,13 @@
         );
       }
       bookinActions.push({
+        id: "generateButton",
+        label: "Generate",
+        call: "generateCombinedPacket"
+      });
+      bookinActions.push({
         id: "loadLeadIntoEncounterButton",
-        label: "Load from leads",
+        label: "Load from cases",
         call: "openLoadLeadForEncounter"
       });
       bookinActions.push({ label: "Clear", call: "confirmClearForm" });
@@ -468,11 +521,6 @@
         tab: "bookin",
         file: WORKSPACE_FILE.concat([
           { id: "bookInFileNew", label: "New", call: "startNewRecord" },
-          {
-            id: "saveRecordButton",
-            label: "Save",
-            call: "saveCurrentRecord"
-          },
           {
             id: "openRecordsButton",
             label: "Open",
@@ -772,7 +820,14 @@
     }
 
     nav.appendChild(tabLink("home.html", "Home", tab === "home" || page === "home"));
-    nav.appendChild(tabLink("leads.html", "Leads", tab === "leads" || isLeadPage(page)));
+    nav.appendChild(tabLink("leads.html", "Cases", tab === "leads" || isLeadPage(page)));
+    nav.appendChild(
+      tabLink(
+        "investigations.html",
+        "Investigate",
+        tab === "investigate" || isInvestigatePage(page)
+      )
+    );
     nav.appendChild(
       tabLink(
         "encounter.html",

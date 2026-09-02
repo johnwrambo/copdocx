@@ -14,12 +14,13 @@ Always `?id=` in the URL even when the model field is `leadId` / `officerId` / `
 
 | Type | List | View | Form |
 | --- | --- | --- | --- |
-| Lead | `leads.html` | `case.html` (alias `lead.html` redirects) | `lead-form.html` |
+| Case (store: lead) | `leads.html` (tab **Cases**) | `case.html` (alias `lead.html` redirects) | `lead-form.html` |
 | Officer | `officers.html` | `officer.html` | `officer-form.html` |
 | Vehicle | `vehicles.html` | `vehicle.html` | `vehicle-form.html` |
 | Encounter | `encounter.html` | not split yet | `encounter-form.html` |
+| Investigation | `investigations.html` | `investigate.html` (workspace is the form) | — |
 
-`index.html` must change **all three**: `http-equiv` refresh, `<link rel="canonical">`, and the fallback `<a>` — to **`home.html`**. The Home tab is the briefing hub; Leads stays the records tab.
+`index.html` must change **all three**: `http-equiv` refresh, `<link rel="canonical">`, and the fallback `<a>` — to **`home.html`**. The Home tab is the briefing hub; **Cases** is the records tab (`leads.html`, store still `leads{}`).
 
 Until the lead split ships, the form **stays** at `lead.html` with `data-page="lead-form"` (see Interim). Do not keep the form on `lead.html` after the split.
 
@@ -37,7 +38,7 @@ Until book-in is split, `bookin.html` is the working form. Prefill uses **`booki
 ### Non-record pages
 
 `home.html` (`data-page="home"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`), `mobile-target-sheet.html` (`data-page="mobile-target-sheet"`).
-`i200-form.html` (`data-page="i200-form"`) and `i205-form.html` (`data-page="i205-form"`) are lead-view issuance forms (`?id=` is the **leadId**). Leads tab stays current. They are not a warrant triad.
+`i200-form.html` (`data-page="i200-form"`) and `i205-form.html` (`data-page="i205-form"`) are case-view issuance forms (`?id=` is the **leadId**). Cases tab stays current. They are not a warrant triad.
 `operation.html` is still empty. Do not flesh it out until [operations-plan.md](operations-plan.md) is agreed. Proposed triad: `operations.html` / `operation.html` / `operation-form.html`. `encounter.html` is the 0.11.0 list.
 
 Home is a briefing hub, not a record triad. Action slot empty. Counts and lists are placeholders until a later painter (cross-store **reads** of committed leads, admin roster, book-in). Do not write any store from `home.html`.
@@ -48,7 +49,7 @@ Home is a briefing hub, not a record triad. Action slot empty. Counts and lists 
 
 **Product Save (planned):** both pickers accept `?ownerType=&id=` (see [data-models.md](data-models.md) Media). Primary becomes **Save photo** / **Save file** and writes IndexedDB `copdocx.media.v1`. No query → lab library only. Views show a **Photo** card (hero + thumbs) and a **Documents** list via `functions/media-card.js`.
 
-Map is a planning board, not a record triad. Action slot: **Brief view** + primary **Print brief**. Writes: `copdocx.map.views.v1` (home/presets), `copdocx.map.layers.v1` (layer visibility), `copdocx.map.icons.v1` (assigned icons), `copdocx.map.markup.v1` (labels/arrows). Does not write leads/admin/book-in.
+Map is a planning board, not a record triad. Action slot: **Brief view** + primary **Print brief**. Writes: `copdocx.map.views.v1` (home/presets), `copdocx.map.layers.v1` (layer visibility), `copdocx.map.icons.v1` (assigned icons), `copdocx.map.markup.v1` (labels/arrows). Does not write leads/admin/book-in. Pin click uses the same photo card as the case map (`functions/map-popup.js`); it **reads** `copdocx.media.v1` and does not Save photo.
 
 **Map layers (0.18.0 / layout 0.19.0).** One dock row per layer: eye = visibility, name = list, icon = category glyph. A place may appear on more than one layer.
 
@@ -69,7 +70,7 @@ loads the live encounter via `encounter-narrative.js`. A missing encounter does
 **not** fall back to the demo. **Save I-213** writes `encounter.narratives[]` and
 `supervisorSummary`. Training **Update draft** stays in memory.
 
-Today the Leads tab label is **Lead** (singular) on a bare `<body>`. End state label: **Leads**.
+Chrome tab label: **Cases**. Files and `data-page` stay `leads` / `lead-form` / `case`. Person **stage** is `caseRole` Lead / Target / Detainee. Encounter Target / Collateral is `encounterRole`. **Investigate** tab: `investigations.html` / `investigate.html?id=`. Investigation ID `INV{team}-{YYYYMMDD}-{seq}`. Kind uses Case source codes (`tag` Plate Check, `otherLe`, `elite`, `other`, `discovered`). An investigation is a web of objects on a **wall** (place / drag / connect; identity in the Card window), not a Case and not a scrolling form. Objects live in `people{}`, `vehicles{}`, `locations{}`, `businesses{}`, and `entities{}` and are reused across investigations by id. **Spawn** creates a child (`parentInvestigationId`) that overlaps the parent’s focused object plus one-hop neighbors. **Open as case** files a focused PERSON as a working Case (same `personId`; wall stays put). Wall details: [investigation-wall-plan.md](investigation-wall-plan.md).
 
 ## `data-page` vs `data-admin-page` (dual-write)
 
@@ -102,7 +103,7 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | `encounter.html` | `encounter` | — |
 | `encounter-form.html` | `encounter-form` | — |
 
-`aria-current="page"`: Home tab for `home`; Leads tab for `leads|lead|case|lead-form|i200-form|i205-form|mobile-target-sheet`; Encounters tab for `encounter|encounter-form`; Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
+`aria-current="page"`: Home tab for `home`; Cases tab for `leads|lead|case|lead-form|i200-form|i205-form|mobile-target-sheet`; Investigate tab for `investigations|investigate`; Encounters tab for `encounter|encounter-form`; Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
 
 ## Interim: `lead.html` before the triad
 
@@ -169,7 +170,7 @@ List tables: `#{records}Body`, `#{records}Empty`, `#{records}TableWrap`.
 | Primary / secondary | `.action-button` / `.action-button-secondary` |
 | Status | `.app-bar-status` (`.is-ok`) |
 | Tables | `.records-table`, `.records-empty`, `.record-actions` |
-| Draft badge / chips | `.record-status.record-status-draft`, `.record-filter-chips` |
+| Working / Filed badge / chips | `.record-status.record-status-draft`, `.record-filter-chips` (officers/vehicles/encounters: Working / Filed = `draft` / `committed`; Cases: Leads / Targets / Detainees = `caseRole` stage) |
 | Narrative shell / engine scope | `.narrative-*`, `.narrative-engine-host` |
 | Home briefing hub | `.page-home`, `.home-modules`, `.home-module`, `.home-split` |
 | Map planning board | `.map-shell`, `.map-stage`, `.map-overlay`, `.map-dock`, `.map-layer-list` |
@@ -234,11 +235,12 @@ Not a chrome tab. Lab key `copdocx.file-upload.v1`. Owner query **Save file** wr
 
 ```
 app-bar.js → date.js
-→ model/util.js → model/person.js → model/store.js
-→ Leaflet (CDN) → assets/icons/copdoc-icons.js → map-views.js → map.js → map-targets.js → map-markup.js
+→ model/util.js → model/person.js → model/store.js → model/media.js
+→ Leaflet (CDN) → assets/icons/copdoc-icons.js → map-popup.js
+→ map-views.js → map.js → map-targets.js → map-markup.js
 ```
 
-Do **not** load `cards.js`, `collect.js`, `hydrate.js`, `admin.js`, or `workflow.js`. Cross-store **read** of leads for ranked locations and admin officer homes. Writes: `copdocx.map.views.v1`, `copdocx.map.layers.v1`, `copdocx.map.icons.v1`, `copdocx.map.markup.v1`. File **Print brief** works; KMZ/JSON/CSV stay `data-not-built`. Action slot: Brief view + Print brief.
+Do **not** load `cards.js`, `collect.js`, `hydrate.js`, `admin.js`, `media-card.js`, or `workflow.js`. Cross-store **read** of leads for ranked locations, admin officer homes, and media thumbs. Writes: `copdocx.map.views.v1`, `copdocx.map.layers.v1`, `copdocx.map.icons.v1`, `copdocx.map.markup.v1`. File **Print brief** works; KMZ/JSON/CSV stay `data-not-built`. Action slot: Brief view + Print brief.
 
 **Admin pages** (officer/vehicle/dashboard/schedule/list/view):
 
@@ -256,8 +258,8 @@ Load `officer.js` only once it exists (officer-model PR). Load `autosave.js` fro
 
 ```
 app-bar.js → date.js → catalogs / cards helpers
-→ model/util.js → lead.js → person.js → location.js → vehicle.js → link.js
-→ store.js → collect.js → hydrate.js → autosave.js
+→ model/util.js → lead.js → person.js → location.js → vehicle.js → data/association-matrix.js → link.js
+→ store.js → officer-roster.js → collect.js → hydrate.js → autosave.js
 → cards.js → workflow.js → ui.js → lead-csv.js
 ```
 

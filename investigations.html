@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Investigations</title>
+    <link rel="stylesheet" href="style/style.css" />
+  </head>
+  <body data-page="investigations">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.59.0"
+        >
+          Version 0.59.0
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide">
+      <fieldset class="card-static">
+        <legend>Investigations</legend>
+        <p class="section-note">
+          Webs of objects. A case is a person file; an investigation can hold many objects and spawn children.
+        </p>
+        <div class="record-filter-chips" role="group" aria-label="Filter investigations">
+          <button type="button" data-record-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-record-filter="draft" aria-pressed="false">Working</button>
+          <button type="button" data-record-filter="committed" aria-pressed="false">Filed</button>
+        </div>
+        <div id="investigationsEmpty" class="records-empty">No investigations yet.</div>
+        <div id="investigationsTableWrap" class="records-table-wrap" hidden>
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Kind</th>
+                <th>Title</th>
+                <th>Parent</th>
+                <th>Updated</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="investigationsBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/transfer.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/lead-source.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/investigation.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/investigations.js"></script>
+  </body>
+</html>

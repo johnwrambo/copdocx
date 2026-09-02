@@ -3,13 +3,19 @@
  * https://lucide.dev/license
  *
  * Usage:
- *   <script src="src/shared/icons/copdoc-icons.js"></script>
+ *   <script src="assets/icons/copdoc-icons.js"></script>
  *   COPDoc.icons.inject();
  *   el.innerHTML = COPDoc.icons.html("Crosshair", 16);
  *   // also: OpDocIcons.html("MapPin", 18)
  */
 (function (g) {
   "use strict";
+  var own = Object.prototype.hasOwnProperty;
+
+  function hasOwn(object, key) {
+    return own.call(object, key);
+  }
+
   var ICONS = {
     Archive: {
       id: "icon-archive",
@@ -21,6 +27,11 @@
       name: "arrow-right",
       svg: '<path d="M5 12h14" /><path d="m12 5 7 7-7 7" />',
     },
+    Building2: {
+      id: "icon-building-2",
+      name: "building-2",
+      svg: '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18" /><path d="M6 12H4a2 2 0 0 0-2 2v8" /><path d="M18 9h2a2 2 0 0 1 2 2v11" /><path d="M10 6h4" /><path d="M10 10h4" /><path d="M10 14h4" /><path d="M10 18h4" /><path d="M8 22h8" />',
+    },
     Car: {
       id: "icon-car",
       name: "car",
@@ -30,6 +41,21 @@
       id: "icon-check",
       name: "check",
       svg: '<path d="M20 6 9 17l-5-5" />',
+    },
+    CircleCheck: {
+      id: "icon-circle-check",
+      name: "circle-check",
+      svg: '<circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" />',
+    },
+    CircleParking: {
+      id: "icon-circle-parking",
+      name: "circle-parking",
+      svg: '<circle cx="12" cy="12" r="10" /><path d="M9 17V7h4a3 3 0 0 1 0 6H9" />',
+    },
+    CirclePlus: {
+      id: "icon-circle-plus",
+      name: "circle-plus",
+      svg: '<circle cx="12" cy="12" r="10" /><path d="M8 12h8" /><path d="M12 8v8" />',
     },
     ChevronDown: {
       id: "icon-chevron-down",
@@ -101,6 +127,11 @@
       name: "file-text",
       svg: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" />',
     },
+    Flag: {
+      id: "icon-flag",
+      name: "flag",
+      svg: '<path d="M5 22V4" /><path d="M5 4h11l-1.5 3L16 10H5" />',
+    },
     FlaskConical: {
       id: "icon-flask-conical",
       name: "flask-conical",
@@ -116,6 +147,11 @@
       name: "folder-plus",
       svg: '<path d="M12 10v6" /><path d="M9 13h6" /><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />',
     },
+    Handcuffs: {
+      id: "icon-handcuffs",
+      name: "handcuffs",
+      svg: '<circle cx="7" cy="13" r="4" /><circle cx="17" cy="13" r="4" /><path d="M11 13h2" /><path d="M7 9V5" /><path d="M4 5h6" /><path d="M17 9V5" /><path d="M14 5h6" />',
+    },
     HelpCircle: {
       id: "icon-help-circle",
       name: "help-circle",
@@ -125,6 +161,11 @@
       id: "icon-house",
       name: "house",
       svg: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" /><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />',
+    },
+    Hospital: {
+      id: "icon-hospital",
+      name: "hospital",
+      svg: '<path d="M12 7v6" /><path d="M9 10h6" /><path d="M14 21v-4a2 2 0 0 0-4 0v4" /><path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16" /><path d="M2 21h20" />',
     },
     ImageDown: {
       id: "icon-image-down",
@@ -145,6 +186,11 @@
       id: "icon-layers",
       name: "layers",
       svg: '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" /><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" /><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />',
+    },
+    Landmark: {
+      id: "icon-landmark",
+      name: "landmark",
+      svg: '<path d="M3 22h18" /><path d="M6 18v-7" /><path d="M10 18v-7" /><path d="M14 18v-7" /><path d="M18 18v-7" /><path d="m12 2 9 5H3z" />',
     },
     Loader2: {
       id: "icon-loader-2",
@@ -226,6 +272,11 @@
       name: "search",
       svg: '<path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" />',
     },
+    ScanSearch: {
+      id: "icon-scan-search",
+      name: "scan-search",
+      svg: '<path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><circle cx="11" cy="11" r="3" /><path d="m16 16-2.4-2.4" />',
+    },
     Shield: {
       id: "icon-shield",
       name: "shield",
@@ -245,6 +296,11 @@
       id: "icon-tablet",
       name: "tablet",
       svg: '<rect width="16" height="20" x="4" y="2" rx="2" ry="2" /><line x1="12" x2="12.01" y1="18" y2="18" />',
+    },
+    TriangleAlert: {
+      id: "icon-triangle-alert",
+      name: "triangle-alert",
+      svg: '<path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" />',
     },
     Trash2: {
       id: "icon-trash-2",
@@ -288,13 +344,601 @@
   }
 
   function html(name, size, extraClass) {
-    var icon = ICONS[name];
-    if (!icon) return "<!-- unknown icon: " + name + " -->";
+    var icon = hasOwn(ICONS, name) ? ICONS[name] : null;
+    if (!icon) return "";
     return svgOpen(size, extraClass) + icon.svg + "</svg>";
   }
 
+  /*
+   * Semantic symbols shared by planning, case, location, and operation maps.
+   * `id` is the stable stored value; `glyph` points to the visual primitive.
+   */
+  var MAP_ENTRIES = [
+    {
+      id: "Target",
+      label: "Target",
+      glyph: "Crosshair",
+      group: "Case & planning",
+      color: "#f0ad35",
+      shape: "circle",
+      description: "Ranked target location"
+    },
+    {
+      id: "Arrest",
+      label: "Arrest",
+      glyph: "Handcuffs",
+      group: "Case & planning",
+      color: "#e96868",
+      shape: "circle",
+      description: "Arrest or custody location"
+    },
+    {
+      id: "OfficerHome",
+      label: "Officer home",
+      glyph: "MapPinned",
+      group: "Case & planning",
+      color: "#68a8e8",
+      shape: "circle",
+      description: "Officer residence"
+    },
+    {
+      id: "Origin",
+      label: "Origin / find",
+      glyph: "ScanSearch",
+      group: "Case & planning",
+      color: "#55c7bd",
+      shape: "circle",
+      description: "Plate check, registration, or find location"
+    },
+    {
+      id: "Location",
+      label: "Location",
+      glyph: "MapPin",
+      group: "Places",
+      color: "#8aa0ad",
+      shape: "circle",
+      description: "General mapped location"
+    },
+    {
+      id: "Residence",
+      label: "Residence",
+      glyph: "Home",
+      group: "Places",
+      color: "#55c7bd",
+      shape: "circle",
+      description: "Home or residence"
+    },
+    {
+      id: "Worksite",
+      label: "Worksite",
+      glyph: "Building2",
+      group: "Places",
+      color: "#48a89f",
+      shape: "circle",
+      description: "Workplace or business"
+    },
+    {
+      id: "Vehicle",
+      label: "Vehicle",
+      glyph: "Car",
+      group: "Places",
+      color: "#8b6bb8",
+      shape: "circle",
+      description: "Vehicle registration or sighting"
+    },
+    {
+      id: "Parking",
+      label: "Known parking",
+      glyph: "CircleParking",
+      group: "Places",
+      color: "#a78bfa",
+      shape: "circle",
+      description: "Known parking location"
+    },
+    {
+      id: "OfficerStart",
+      label: "Officer start",
+      glyph: "Navigation",
+      group: "Operations",
+      color: "#68a8e8",
+      shape: "wedge",
+      description: "Officer start point and heading"
+    },
+    {
+      id: "RallyPoint",
+      label: "Rally point",
+      glyph: "Flag",
+      group: "Operations",
+      color: "#b49add",
+      shape: "circle",
+      description: "Rally or regroup location"
+    },
+    {
+      id: "StagingArea",
+      label: "Staging area",
+      glyph: "Layers",
+      group: "Operations",
+      color: "#71d7ce",
+      shape: "circle",
+      description: "Staging location"
+    },
+    {
+      id: "Cleanup",
+      label: "Cleanup point",
+      glyph: "CircleCheck",
+      group: "Operations",
+      color: "#b49add",
+      shape: "circle",
+      description: "Operation cleanup or end point"
+    },
+    {
+      id: "Medevac",
+      label: "Medevac",
+      glyph: "CirclePlus",
+      group: "Operations",
+      color: "#6fcf97",
+      shape: "diamond",
+      description: "Medevac pickup location"
+    },
+    {
+      id: "Hospital",
+      label: "Hospital",
+      glyph: "Hospital",
+      group: "Operations",
+      color: "#6fcf97",
+      shape: "diamond",
+      description: "Hospital or medical facility"
+    },
+    {
+      id: "Landmark",
+      label: "Landmark",
+      glyph: "Landmark",
+      group: "Operations",
+      color: "#aab7c0",
+      shape: "circle",
+      description: "Named landmark"
+    },
+    {
+      id: "Surveillance",
+      label: "Surveillance",
+      glyph: "Eye",
+      group: "Awareness",
+      color: "#55c7bd",
+      shape: "circle",
+      description: "Surveillance position"
+    },
+    {
+      id: "Contact",
+      label: "Contact point",
+      glyph: "Radio",
+      group: "Awareness",
+      color: "#68a8e8",
+      shape: "circle",
+      description: "Contact or communications point"
+    },
+    {
+      id: "Evidence",
+      label: "Evidence",
+      glyph: "Archive",
+      group: "Awareness",
+      color: "#f0ad35",
+      shape: "circle",
+      description: "Evidence or property location"
+    },
+    {
+      id: "Hazard",
+      label: "Hazard",
+      glyph: "TriangleAlert",
+      group: "Awareness",
+      color: "#f47b5c",
+      shape: "circle",
+      description: "Hazard or safety concern"
+    },
+    {
+      id: "SearchArea",
+      label: "Search area",
+      glyph: "Focus",
+      group: "Awareness",
+      color: "#71d7ce",
+      shape: "circle",
+      description: "Search or focus area"
+    }
+  ];
+
+  function normalizedMapKey(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+  }
+
+  var MAP_BY_KEY = Object.create(null);
+  MAP_ENTRIES.forEach(function (entry) {
+    MAP_BY_KEY[normalizedMapKey(entry.id)] = entry;
+    MAP_BY_KEY[normalizedMapKey(entry.label)] = entry;
+  });
+
+  var MAP_KIND_IDS = Object.assign(Object.create(null), {
+    target: "Target",
+    targets: "Target",
+    arrest: "Arrest",
+    arrests: "Arrest",
+    officer: "OfficerHome",
+    officers: "OfficerHome",
+    officerhome: "OfficerHome",
+    origin: "Origin",
+    originfind: "Origin",
+    platecheck: "Origin",
+    registration: "Vehicle",
+    home: "Residence",
+    residence: "Residence",
+    work: "Worksite",
+    workplace: "Worksite",
+    vehicle: "Vehicle",
+    parking: "Parking",
+    knownparking: "Parking",
+    stop: "Location",
+    other: "Location",
+    officerstart: "OfficerStart",
+    rally: "RallyPoint",
+    rallypoint: "RallyPoint",
+    staging: "StagingArea",
+    stagingarea: "StagingArea",
+    cleanup: "Cleanup",
+    medevac: "Medevac",
+    hospital: "Hospital",
+    landmark: "Landmark",
+    surveillance: "Surveillance",
+    contact: "Contact",
+    evidence: "Evidence",
+    hazard: "Hazard",
+    search: "SearchArea",
+    searcharea: "SearchArea"
+  });
+
+  var MAP_ICON_STORAGE_KEY = "copdocx.map.icons.v1";
+  var MAP_LIBRARIES = [
+    {
+      id: "standard",
+      label: "Field Ops",
+      description: "Balanced filled markers with direct operational symbols.",
+      defaultShape: "",
+      symbols: Object.create(null)
+    },
+    {
+      id: "tactical",
+      label: "Tactical",
+      description: "Angular dark markers with heavier mission-oriented symbols.",
+      defaultShape: "square",
+      symbols: {
+        Target: { glyph: "Focus" },
+        OfficerHome: { glyph: "Shield" },
+        Origin: { glyph: "Route" },
+        Location: { glyph: "Navigation" },
+        Residence: { glyph: "MapPinned" },
+        Worksite: { glyph: "Landmark" },
+        OfficerStart: { glyph: "Navigation", shape: "wedge" },
+        RallyPoint: { glyph: "Users" },
+        Cleanup: { glyph: "Check" },
+        Medevac: { glyph: "Plus", shape: "diamond" },
+        Hospital: { glyph: "CirclePlus", shape: "diamond" },
+        Landmark: { glyph: "Map" },
+        Evidence: { glyph: "Database" },
+        SearchArea: { glyph: "ScanSearch" }
+      }
+    },
+    {
+      id: "atlas",
+      label: "Atlas",
+      description: "Classic cartographic pins with a warm paper treatment.",
+      defaultShape: "pin",
+      symbols: {
+        Target: { glyph: "Star" },
+        OfficerHome: { glyph: "Shield" },
+        Origin: { glyph: "MapPinned" },
+        StagingArea: { glyph: "Map" },
+        SearchArea: { glyph: "Search" }
+      }
+    },
+    {
+      id: "minimal",
+      label: "Minimal",
+      description: "Quiet outline markers with simplified, low-noise symbols.",
+      defaultShape: "circle",
+      symbols: {
+        OfficerHome: { glyph: "Shield" },
+        Origin: { glyph: "Search" },
+        Cleanup: { glyph: "Check" },
+        Medevac: { glyph: "Plus", shape: "diamond" },
+        Hospital: { glyph: "Hospital", shape: "diamond" },
+        SearchArea: { glyph: "Focus" }
+      }
+    }
+  ];
+  var MAP_LIBRARY_BY_ID = Object.create(null);
+  MAP_LIBRARIES.forEach(function (library) {
+    MAP_LIBRARY_BY_ID[library.id] = library;
+  });
+  var MAP_LIBRARY_ALIASES = Object.assign(Object.create(null), {
+    default: "standard",
+    field: "standard",
+    fieldops: "standard",
+    standard: "standard",
+    command: "tactical",
+    tactical: "tactical",
+    atlas: "atlas",
+    cartographic: "atlas",
+    minimal: "minimal",
+    outline: "minimal"
+  });
+
+  function resolveMapLibraryId(value) {
+    var key = normalizedMapKey(value);
+    var id = hasOwn(MAP_LIBRARY_ALIASES, key)
+      ? MAP_LIBRARY_ALIASES[key]
+      : key;
+    return hasOwn(MAP_LIBRARY_BY_ID, id) ? id : "standard";
+  }
+
+  function loadMapLibraryId() {
+    try {
+      if (!g.localStorage) return "standard";
+      var raw = g.localStorage.getItem(MAP_ICON_STORAGE_KEY);
+      var stored = raw ? JSON.parse(raw) : null;
+      return resolveMapLibraryId(stored && stored.libraryId);
+    } catch (err) {
+      return "standard";
+    }
+  }
+
+  function persistMapLibraryId(id) {
+    try {
+      if (!g.localStorage) return;
+      var raw = g.localStorage.getItem(MAP_ICON_STORAGE_KEY);
+      var stored = raw ? JSON.parse(raw) : {};
+      if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
+        stored = {};
+      }
+      stored.libraryId = id;
+      g.localStorage.setItem(MAP_ICON_STORAGE_KEY, JSON.stringify(stored));
+    } catch (err) {}
+  }
+
+  var activeMapLibraryId = loadMapLibraryId();
+
+  function mapLibrary(libraryId) {
+    var id =
+      libraryId == null || libraryId === ""
+        ? activeMapLibraryId
+        : resolveMapLibraryId(libraryId);
+    return MAP_LIBRARY_BY_ID[id] || MAP_LIBRARY_BY_ID.standard;
+  }
+
+  function baseMapEntry(name) {
+    return MAP_BY_KEY[normalizedMapKey(name)] || null;
+  }
+
+  function mapEntry(name, libraryId) {
+    var entry = baseMapEntry(name);
+    if (!entry) return null;
+    var library = mapLibrary(libraryId);
+    var symbol = hasOwn(library.symbols, entry.id)
+      ? library.symbols[entry.id]
+      : null;
+    return Object.assign({}, entry, {
+      glyph: symbol && symbol.glyph ? symbol.glyph : entry.glyph,
+      shape:
+        symbol && symbol.shape
+          ? symbol.shape
+          : library.defaultShape || entry.shape,
+      libraryId: library.id
+    });
+  }
+
+  function mapEntriesFor(libraryId) {
+    return MAP_ENTRIES.map(function (entry) {
+      return mapEntry(entry.id, libraryId);
+    });
+  }
+
+  var ACTIVE_MAP_ENTRIES = mapEntriesFor(activeMapLibraryId);
+
+  function syncActiveMapEntries() {
+    var next = mapEntriesFor(activeMapLibraryId);
+    ACTIVE_MAP_ENTRIES.splice.apply(
+      ACTIVE_MAP_ENTRIES,
+      [0, ACTIVE_MAP_ENTRIES.length].concat(next)
+    );
+  }
+
+  function dispatchMapLibraryChange(id) {
+    if (!g.document || typeof g.document.dispatchEvent !== "function") return;
+    var event = null;
+    if (typeof g.CustomEvent === "function") {
+      event = new g.CustomEvent("copdoc:map-icon-librarychange", {
+        detail: { libraryId: id }
+      });
+    } else if (typeof g.document.createEvent === "function") {
+      event = g.document.createEvent("CustomEvent");
+      event.initCustomEvent(
+        "copdoc:map-icon-librarychange",
+        false,
+        false,
+        { libraryId: id }
+      );
+    }
+    if (event) g.document.dispatchEvent(event);
+  }
+
+  function setMapLibrary(libraryId, options) {
+    options = options || {};
+    activeMapLibraryId = resolveMapLibraryId(libraryId);
+    syncActiveMapEntries();
+    if (options.persist !== false) persistMapLibraryId(activeMapLibraryId);
+    if (options.notify !== false) dispatchMapLibraryChange(activeMapLibraryId);
+    return activeMapLibraryId;
+  }
+
+  function mapEntryForKind(kind, libraryId) {
+    var key = normalizedMapKey(kind);
+    var id = hasOwn(MAP_KIND_IDS, key) ? MAP_KIND_IDS[key] : "Location";
+    return mapEntry(id, libraryId);
+  }
+
+  function mapGlyphName(name, libraryId) {
+    var entry = mapEntry(name, libraryId);
+    if (entry) return entry.glyph;
+    return hasOwn(ICONS, name) ? name : "MapPin";
+  }
+
+  function mapIconHtml(name, size, extraClass, options) {
+    if (extraClass && typeof extraClass === "object") {
+      options = extraClass;
+      extraClass = "";
+    }
+    options = options || {};
+    var libraryId = options.libraryId || options.theme;
+    return html(mapGlyphName(name, libraryId), size, extraClass);
+  }
+
+  function safeMapColor(value, fallback) {
+    var color = String(value || "").trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) return color.toLowerCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(color)) {
+      return (
+        "#" +
+        color.charAt(1) + color.charAt(1) +
+        color.charAt(2) + color.charAt(2) +
+        color.charAt(3) + color.charAt(3)
+      ).toLowerCase();
+    }
+    return fallback || "#8aa0ad";
+  }
+
+  function mapColorIsLight(value) {
+    var color = safeMapColor(value, "#8aa0ad");
+    var n = parseInt(color.slice(1), 16);
+    var channels = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(
+      function (channel) {
+        var ratio = channel / 255;
+        return ratio <= 0.04045
+          ? ratio / 12.92
+          : Math.pow((ratio + 0.055) / 1.055, 2.4);
+      }
+    );
+    var luminance =
+      0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    var darkInkLuminance = 0.005;
+    var lightInkLuminance = 0.96;
+    var darkContrast = (luminance + 0.05) / (darkInkLuminance + 0.05);
+    var lightContrast = (lightInkLuminance + 0.05) / (luminance + 0.05);
+    return darkContrast >= lightContrast;
+  }
+
+  function escapeMapText(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function mapBadgeHtml(name, options) {
+    options = options || {};
+    var library = mapLibrary(options.libraryId || options.theme);
+    var entry = mapEntry(name, library.id);
+    var glyph = mapGlyphName(name, library.id);
+    var shape = entry ? entry.shape : library.defaultShape || "circle";
+    var color = safeMapColor(options.color, entry && entry.color);
+    var sizeName = options.size || (options.primary ? "primary" : "standard");
+    var pixels =
+      typeof sizeName === "number"
+        ? Math.max(20, Math.min(48, sizeName))
+        : sizeName === "compact"
+          ? 24
+          : sizeName === "primary"
+            ? 38
+            : 32;
+    var glyphSize = pixels <= 24 ? 13 : pixels >= 38 ? 20 : 17;
+    var classes = [
+      "copdoc-map-symbol",
+      "is-library-" + library.id,
+      "is-shape-" + shape,
+      pixels <= 24 ? "is-compact" : ""
+    ];
+    if (options.primary) classes.push("is-primary");
+    if (options.selected) classes.push("is-selected");
+    if (options.editable) classes.push("is-editable");
+    if (mapColorIsLight(color)) classes.push("is-light");
+    var badge = options.badge == null ? "" : String(options.badge).slice(0, 3);
+    return (
+      '<span class="' +
+      classes.filter(Boolean).join(" ") +
+      '" style="--map-symbol-color:' +
+      color +
+      ";--map-symbol-size:" +
+      pixels +
+      'px">' +
+      html(glyph, glyphSize, "copdoc-map-symbol-glyph") +
+      (badge
+        ? '<i class="copdoc-map-symbol-badge">' + escapeMapText(badge) + "</i>"
+        : "") +
+      "</span>"
+    );
+  }
+
+  var mapIcons = {
+    entries: ACTIVE_MAP_ENTRIES,
+    names: MAP_ENTRIES.map(function (entry) {
+      return entry.id;
+    }),
+    libraries: MAP_LIBRARIES.map(function (library) {
+      return {
+        id: library.id,
+        label: library.label,
+        description: library.description
+      };
+    }),
+    themes: MAP_LIBRARIES.map(function (library) {
+      return {
+        id: library.id,
+        label: library.label,
+        description: library.description
+      };
+    }),
+    entry: mapEntry,
+    forKind: mapEntryForKind,
+    entriesFor: mapEntriesFor,
+    entriesForTheme: mapEntriesFor,
+    getLibraryId: function () {
+      return activeMapLibraryId;
+    },
+    getTheme: function () {
+      return activeMapLibraryId;
+    },
+    setLibrary: setMapLibrary,
+    setTheme: setMapLibrary,
+    html: mapIconHtml,
+    badgeHtml: mapBadgeHtml,
+    color: function (name, libraryId) {
+      var entry = mapEntry(name, libraryId);
+      return entry ? entry.color : "#8aa0ad";
+    },
+    label: function (name) {
+      var entry = mapEntry(name);
+      if (entry) return entry.label;
+      if (hasOwn(ICONS, name)) {
+        return String(name).replace(/([a-z])([A-Z])/g, "$1 $2");
+      }
+      return "Location";
+    },
+    isKnown: function (name) {
+      return !!mapEntry(name) || hasOwn(ICONS, name);
+    }
+  };
+
   function use(name, size) {
-    var icon = ICONS[name];
+    var icon = hasOwn(ICONS, name) ? ICONS[name] : null;
     if (!icon) return "";
     var s = size || 16;
     return (
@@ -324,6 +968,7 @@
   var api = {
     ICONS: ICONS,
     names: Object.keys(ICONS).sort(),
+    map: mapIcons,
     html: html,
     use: use,
     sprite: sprite,
@@ -344,6 +989,7 @@
   g.OpDocIcons = api;
   var COPDoc = (g.COPDoc = g.COPDoc || {});
   COPDoc.icons = api;
+  COPDoc.mapIcons = mapIcons;
 
   /** Convenience: COPDoc.icon("MapPin", 18) */
   COPDoc.icon = function icon(name, size, extraClass) {

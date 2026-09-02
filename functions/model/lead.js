@@ -60,6 +60,7 @@
         links: [],
         followUps: [],
         history: [],
+        assignedOfficerId: "",
         meta: {
           createdAt: created,
           updatedAt: created,
@@ -96,7 +97,9 @@
         at: nowIso(),
         type: "note",
         text: "",
-        source: "operator"
+        source: "operator",
+        officerId: "",
+        officerAlias: ""
       },
       extra
     );

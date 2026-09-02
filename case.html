@@ -19,9 +19,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.25.0"
+          data-version="0.59.0"
         >
-          Version 0.25.0
+          Version 0.59.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -45,7 +45,7 @@
           >
             <header class="case-folder-tab">
               <h1 id="caseFolderName">Case</h1>
-              <span id="caseFolderRole" class="case-folder-role">Lead</span>
+              <span id="caseFolderRole" class="case-folder-role" title="Stage">Lead</span>
             </header>
             <div class="case-folder-body">
               <div id="caseFolderPhoto" class="case-folder-photo media-block"></div>
@@ -140,6 +140,13 @@
                   </button>
                 </span>
               </legend>
+              <button
+                type="button"
+                id="caseAssignedOfficerButton"
+                class="case-history-officer"
+              >
+                Assign officer
+              </button>
               <p id="caseHistoryEmpty" class="records-empty">No history yet.</p>
               <div id="caseHistoryList" class="case-history-list" hidden></div>
             </fieldset>
@@ -179,6 +186,7 @@
             No associations or linked cases.
           </p>
           <div id="caseAssociationsList" class="case-plain-list" hidden></div>
+          <div id="caseAssociationsComposer" class="investigation-associate-composer"></div>
         </fieldset>
       </div>
     </div>
@@ -210,6 +218,44 @@
           <div id="caseMapPopoutLegend" class="case-map-legend" hidden>
             <ul id="caseMapPopoutList" class="case-map-list"></ul>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="caseAssignOfficerDialog" class="case-note-dialog" hidden>
+      <div class="case-note-dialog-card">
+        <h2 id="caseAssignOfficerTitle">Officer assigned to</h2>
+        <div class="field search-field">
+          <label for="caseAssignOfficerSearch">Search officers</label>
+          <input
+            type="search"
+            id="caseAssignOfficerSearch"
+            autocomplete="off"
+            placeholder="Name, badge, or alias"
+          />
+          <input type="hidden" id="caseAssignOfficerId" />
+          <ul
+            id="caseAssignOfficerResults"
+            class="search-results"
+            role="listbox"
+            hidden
+          ></ul>
+        </div>
+        <div class="case-note-dialog-actions">
+          <button
+            type="button"
+            id="caseAssignOfficerClear"
+            class="action-button-secondary"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            id="caseAssignOfficerCancel"
+            class="action-button-secondary"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     </div>
@@ -645,7 +691,7 @@
         <legend>Association</legend>
         <div class="row">
           <div class="field">
-            <label>Name</label>
+            <label>Name / plate / street</label>
             <input type="text" data-field="associationLabel" autocomplete="off" />
           </div>
           <div class="field">
@@ -654,7 +700,9 @@
               <option value="">Select a type</option>
               <option value="PERSON">Person</option>
               <option value="VEHICLE">Vehicle</option>
+              <option value="LOCATION">Location</option>
               <option value="BUSINESS">Business</option>
+              <option value="ENTITY">Entity</option>
               <option value="OTHER">Other</option>
             </select>
           </div>
@@ -678,7 +726,12 @@
           </div>
         </div>
         <p class="section-note">
-          <button type="button" class="action-button-secondary compact" data-not-built>
+          <button
+            type="button"
+            class="action-button-secondary compact"
+            data-open-associate-case
+            hidden
+          >
             Open as new case
           </button>
         </p>
@@ -697,8 +750,12 @@
     <script src="functions/model/person.js"></script>
     <script src="functions/model/location.js"></script>
     <script src="functions/model/vehicle.js"></script>
+    <script src="functions/model/business.js"></script>
+    <script src="functions/model/entity.js"></script>
+    <script src="functions/plate-parse.js"></script>
     <script src="functions/model/link.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/officer-roster.js"></script>
     <script src="data/countries.js"></script>
     <script src="data/immigration.js"></script>
     <script src="data/vehicles.js"></script>
@@ -717,6 +774,8 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
+    <script src="assets/icons/copdoc-icons.js"></script>
+    <script src="functions/map-popup.js"></script>
     <script src="functions/location-map.js"></script>
     <script src="functions/cards.js"></script>
     <script src="functions/leads.js"></script>
@@ -724,4 +783,3 @@
     <script src="functions/case-edit.js"></script>
   </body>
 </html>
-

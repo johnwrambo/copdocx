@@ -16,6 +16,8 @@
     PERSON: true,
     VEHICLE: true,
     LOCATION: true,
+    BUSINESS: true,
+    ENTITY: true,
     OFFICER: true,
     ENCOUNTER: true,
     LEAD: true,
@@ -1033,6 +1035,7 @@
   model.formatTakenAt = formatTakenAt;
   model.formatTakenAtInput = formatTakenAtInput;
   model.formatPhotoCaption = formatPhotoCaption;
+  model.MEDIA_OWNER_TYPES = Object.keys(OWNER_TYPES);
   model.MEDIA_DB = DB_NAME;
   model.PHOTO_MAX_BYTES = PHOTO_MAX_BYTES;
   model.FILE_MAX_BYTES = FILE_MAX_BYTES;

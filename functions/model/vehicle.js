@@ -35,6 +35,8 @@
         vehicleBodyStyle: "",
         vin: "",
         registeredOwnerName: "",
+        junked: false,
+        junkedAt: "",
         locations: [],
         governmentVehicle: false,
         unit: "",

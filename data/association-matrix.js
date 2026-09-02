@@ -230,6 +230,93 @@
       symmetric: true,
       sortOrder: 240,
     }),
+
+    // —— Person → Business ——
+    row({
+      code: "EMPLOYED_BY",
+      label: "Employed by",
+      from: "PERSON",
+      to: "BUSINESS",
+      inverse: "EMPLOYER_OF",
+      inverseLabel: "Employer of",
+      sortOrder: 250,
+    }),
+    row({
+      code: "PRINCIPAL_OF",
+      label: "Principal / owner of",
+      from: "PERSON",
+      to: "BUSINESS",
+      inverse: "PRINCIPAL_IS",
+      inverseLabel: "Principal is",
+      sortOrder: 260,
+    }),
+    row({
+      code: "CUSTOMER_OF",
+      label: "Customer of",
+      from: "PERSON",
+      to: "BUSINESS",
+      inverse: "HAS_CUSTOMER",
+      inverseLabel: "Has customer",
+      sortOrder: 265,
+    }),
+
+    // —— Business → Location / Vehicle ——
+    row({
+      code: "OPERATES_AT",
+      label: "Operates at",
+      from: "BUSINESS",
+      to: "LOCATION",
+      inverse: "SITE_OF",
+      inverseLabel: "Site of",
+      sortOrder: 270,
+    }),
+    row({
+      code: "FLEET_OF",
+      label: "Fleet vehicle of",
+      from: "BUSINESS",
+      to: "VEHICLE",
+      inverse: "FLEET_VEHICLE",
+      inverseLabel: "Fleet vehicle",
+      sortOrder: 280,
+    }),
+
+    // —— Person / Entity / Location / Vehicle ——
+    row({
+      code: "MEMBER_OF",
+      label: "Member of",
+      from: "PERSON",
+      to: "ENTITY",
+      inverse: "HAS_MEMBER",
+      inverseLabel: "Has member",
+      sortOrder: 290,
+    }),
+    row({
+      code: "BASED_AT",
+      label: "Based at",
+      from: "ENTITY",
+      to: "LOCATION",
+      inverse: "BASE_OF",
+      inverseLabel: "Base of",
+      sortOrder: 300,
+    }),
+    row({
+      code: "USES_VEHICLE",
+      label: "Uses vehicle",
+      from: "ENTITY",
+      to: "VEHICLE",
+      inverse: "USED_BY",
+      inverseLabel: "Used by",
+      sortOrder: 310,
+    }),
+    row({
+      code: "AFFILIATED_WITH",
+      label: "Affiliated with",
+      from: "BUSINESS",
+      to: "ENTITY",
+      inverse: "AFFILIATE_IS",
+      inverseLabel: "Affiliate is",
+      sortOrder: 320,
+    }),
   ];
 
   root.models.ASSOCIATION_MATRIX = MATRIX;

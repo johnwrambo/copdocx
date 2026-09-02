@@ -15,9 +15,15 @@
   ];
   var KIND_COLORS = {
     home: "#55c7bd",
-    work: "#d4a017",
-    vehicle: "#5b8def",
-    parking: "#8b6bb8"
+    work: "#48a89f",
+    vehicle: "#8b6bb8",
+    parking: "#a78bfa"
+  };
+  var KIND_ICON_IDS = {
+    home: "Residence",
+    work: "Worksite",
+    vehicle: "Vehicle",
+    parking: "Parking"
   };
 
   var VEHICLE_COLOR_HEX = {
@@ -107,6 +113,51 @@
     return "home";
   }
 
+  function mapIconApi() {
+    return root.mapIcons || null;
+  }
+
+  function iconIdForKind(kind) {
+    return KIND_ICON_IDS[safeKind(kind)] || "Location";
+  }
+
+  function kindGlyphHtml(kind, size) {
+    var key = safeKind(kind);
+    var mapIcons = mapIconApi();
+    if (mapIcons && typeof mapIcons.html === "function") {
+      return mapIcons.html(iconIdForKind(key), size || 18);
+    }
+    return KIND_SVG[key] || KIND_SVG.home;
+  }
+
+  function kindLabel(kind) {
+    var mapIcons = mapIconApi();
+    if (mapIcons && typeof mapIcons.label === "function") {
+      return mapIcons.label(iconIdForKind(kind));
+    }
+    var key = safeKind(kind);
+    return key === "home" ? "Residence" : key === "work" ? "Worksite" : key;
+  }
+
+  function markerBadgeHtml(name, options) {
+    var mapIcons = mapIconApi();
+    if (mapIcons && typeof mapIcons.badgeHtml === "function") {
+      return mapIcons.badgeHtml(name, options);
+    }
+    options = options || {};
+    var fallbackKind = safeKind(options.kind);
+    return (
+      '<span class="case-map-pin-icon is-' +
+      fallbackKind +
+      (options.primary ? " is-primary" : "") +
+      '" style="color:' +
+      (safeHex(options.color) || KIND_COLORS[fallbackKind]) +
+      '">' +
+      (KIND_SVG[fallbackKind] || KIND_SVG.home) +
+      "</span>"
+    );
+  }
+
   function safeHex(value) {
     var text = String(value || "").trim();
     if (/^#[0-9a-fA-F]{6}$/.test(text)) {
@@ -124,18 +175,6 @@
       ).toLowerCase();
     }
     return "";
-  }
-
-  function hexLuminance(hex) {
-    var color = safeHex(hex);
-    if (!color) {
-      return 0;
-    }
-    var n = parseInt(color.slice(1), 16);
-    var r = (n >> 16) & 255;
-    var g = (n >> 8) & 255;
-    var b = n & 255;
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   }
 
   function vehicleColorHex(value) {
@@ -186,28 +225,69 @@
         return vehicle;
       }
     }
-    return KIND_COLORS[key] || KIND_COLORS.home;
+    return safeHex(options.defaultColor) || KIND_COLORS[key] || KIND_COLORS.home;
   }
 
   function pinIcon(kind, isPrimary, color) {
     var key = safeKind(kind);
     var hex = safeHex(color) || KIND_COLORS[key];
-    var size = isPrimary ? 30 : 24;
-    var light = hexLuminance(hex) > 0.72;
     return global.L.divIcon({
       className: "case-map-pin",
-      html:
-        '<span class="case-map-pin-icon is-' +
-        key +
-        (isPrimary ? " is-primary" : "") +
-        (light ? " is-light" : "") +
-        '" style="color:' +
-        hex +
-        '">' +
-        (KIND_SVG[key] || KIND_SVG.home) +
-        "</span>",
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2]
+      html: markerBadgeHtml(iconIdForKind(key), {
+        kind: key,
+        color: hex,
+        primary: !!isPrimary,
+        size: isPrimary ? "primary" : "standard"
+      }),
+      iconSize: [44, 44],
+      iconAnchor: [22, 22]
+    });
+  }
+
+  function editableSymbol(card) {
+    var association = card ? field(card, "locationAssociation") : null;
+    var kind = association && association.value ? association.value : "location";
+    var pinColor = card ? field(card, "pinColor") : null;
+    var vehicleColor = card ? field(card, "vehicleColor") : null;
+    var vehicleCard =
+      card && card.closest ? card.closest('[data-card="vehicle"]') : null;
+    if (!vehicleColor && vehicleCard) {
+      vehicleColor = field(vehicleCard, "vehicleColor");
+    }
+    var mapIcons = mapIconApi();
+    var entry =
+      mapIcons && typeof mapIcons.forKind === "function"
+        ? mapIcons.forKind(kind)
+        : null;
+    var colorKind =
+      entry && entry.id === "Vehicle"
+        ? "vehicle"
+        : entry && entry.id === "Parking"
+          ? "parking"
+          : entry && entry.id === "Worksite"
+            ? "work"
+            : "home";
+    return {
+      id: entry ? entry.id : "Location",
+      color: pinColorFor(colorKind, {
+        pinColor: pinColor && pinColor.value,
+        vehicleColor: vehicleColor && vehicleColor.value,
+        defaultColor: entry ? entry.color : "#8aa0ad"
+      })
+    };
+  }
+
+  function editablePinIcon(card, readonly) {
+    var symbol = editableSymbol(card);
+    return global.L.divIcon({
+      className: "case-map-pin case-map-editable-pin",
+      html: markerBadgeHtml(symbol.id, {
+        color: symbol.color,
+        editable: !readonly,
+        size: "standard"
+      }),
+      iconSize: [44, 44],
+      iconAnchor: [22, 22]
     });
   }
 
@@ -552,7 +632,9 @@
     var latlng = [Number(lat), Number(lng)];
     if (!state.marker) {
       state.marker = global.L.marker(latlng, {
-        draggable: !state.readonly
+        draggable: !state.readonly,
+        icon: editablePinIcon(state.card, state.readonly),
+        title: state.readonly ? "Mapped location" : "Editable mapped location"
       }).addTo(state.map);
       if (!state.readonly) {
         state.marker.on("dragend", function () {
@@ -564,6 +646,9 @@
       }
     } else {
       state.marker.setLatLng(latlng);
+      if (state.marker.setIcon) {
+        state.marker.setIcon(editablePinIcon(state.card, state.readonly));
+      }
     }
     var zoom = state.map.getZoom();
     state.map.setView(latlng, zoom < PIN_ZOOM ? PIN_ZOOM : zoom);
@@ -599,12 +684,21 @@
     return state;
   }
 
+  function popupApi() {
+    return root.mapPopup || null;
+  }
+
   function revokePopupUrls(state) {
-    (state && state.popupUrls ? state.popupUrls : []).forEach(function (url) {
-      if (url && String(url).indexOf("blob:") === 0) {
-        URL.revokeObjectURL(url);
-      }
-    });
+    var urls = state && state.popupUrls ? state.popupUrls : [];
+    if (popupApi() && popupApi().revoke) {
+      popupApi().revoke(urls);
+    } else {
+      urls.forEach(function (url) {
+        if (url && String(url).indexOf("blob:") === 0) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    }
     if (state) {
       state.popupUrls = [];
     }
@@ -623,140 +717,6 @@
       state.map.removeLayer(marker);
     });
     state.markers = [];
-  }
-
-  function popupCard(pin) {
-    var wrap = document.createElement("div");
-    wrap.className = "case-map-popup";
-    var photo = document.createElement("div");
-    photo.className = "case-map-popup-photo";
-    photo.hidden = true;
-    var img = document.createElement("img");
-    img.alt = pin.title || "Location photo";
-    photo.appendChild(img);
-    wrap.appendChild(photo);
-    var body = document.createElement("div");
-    body.className = "case-map-popup-body";
-    if (pin.title) {
-      var strong = document.createElement("strong");
-      strong.textContent = pin.title + (pin.isPrimary ? " · Primary" : "");
-      body.appendChild(strong);
-    }
-    if (pin.extra) {
-      var extra = document.createElement("div");
-      extra.className = "case-map-popup-extra";
-      extra.textContent = pin.extra;
-      body.appendChild(extra);
-    }
-    if (pin.address) {
-      var addr = document.createElement("div");
-      addr.className = "case-map-popup-address";
-      addr.textContent = pin.address;
-      body.appendChild(addr);
-    } else if (pin.meta && pin.meta !== pin.title && pin.meta !== pin.extra) {
-      var meta = document.createElement("div");
-      meta.className = "case-map-popup-address";
-      meta.textContent = pin.meta;
-      body.appendChild(meta);
-    }
-    if (pin.occupancy) {
-      var occ = document.createElement("div");
-      occ.className = "case-map-popup-meta";
-      occ.textContent = pin.occupancy;
-      body.appendChild(occ);
-    }
-    wrap.appendChild(body);
-    wrap._photoBox = photo;
-    wrap._photoImg = img;
-    if (pin.photoDataUrl) {
-      img.src = pin.photoDataUrl;
-      photo.hidden = false;
-      wrap._photoLoaded = true;
-    }
-    return wrap;
-  }
-
-  function asPopupBlob(payload) {
-    if (!payload) {
-      return null;
-    }
-    if (typeof Blob !== "undefined" && payload instanceof Blob) {
-      return payload;
-    }
-    if (payload.buffer && payload.byteLength != null) {
-      return new Blob([payload]);
-    }
-    return payload;
-  }
-
-  function fillPopupPhoto(card, pin, urlBag) {
-    if (!card || card._photoLoaded) {
-      return;
-    }
-    if (pin.photoDataUrl && card._photoImg) {
-      card._photoImg.src = pin.photoDataUrl;
-      card._photoBox.hidden = false;
-      card._photoLoaded = true;
-      return;
-    }
-    var api = root.media;
-    var owners = pin.photoOwners || [];
-    if (!api || !owners.length) {
-      return;
-    }
-    function tryOwner(index) {
-      if (index >= owners.length) {
-        return;
-      }
-      var owner = owners[index];
-      if (!owner || !owner.id) {
-        tryOwner(index + 1);
-        return;
-      }
-      api
-        .list(owner)
-        .catch(function () {
-          return [];
-        })
-        .then(function (rows) {
-          var photos = (rows || []).filter(function (row) {
-            return (
-              row &&
-              row.mediaClass === "photo" &&
-              (!row.meta || row.meta.status !== "draft")
-            );
-          });
-          var primary =
-            photos.filter(function (row) {
-              return row.primary;
-            })[0] || photos[0];
-          if (!primary) {
-            tryOwner(index + 1);
-            return;
-          }
-          return api
-            .blob(primary.mediaId, "thumb")
-            .catch(function () {
-              return api.blob(primary.mediaId, "display");
-            })
-            .then(function (rec) {
-              var blob = rec && asPopupBlob(rec.blob);
-              if (!blob) {
-                tryOwner(index + 1);
-                return;
-              }
-              var url = URL.createObjectURL(blob);
-              urlBag.push(url);
-              card._photoImg.src = url;
-              card._photoBox.hidden = false;
-              card._photoLoaded = true;
-            });
-        })
-        .catch(function () {
-          tryOwner(index + 1);
-        });
-    }
-    tryOwner(0);
   }
 
   function displayFallback(host) {
@@ -830,20 +790,20 @@
       var marker = global.L.marker(pin.latlng, {
         draggable: false,
         icon: pinIcon(pin.kind, pin.isPrimary, pin.color),
+        title:
+          kindLabel(pin.kind) +
+          (pin.isPrimary ? ", primary" : "") +
+          (pin.title ? " — " + pin.title : "") +
+          (pin.address ? " — " + pin.address : ""),
         zIndexOffset:
           pin.kind === "vehicle" || pin.kind === "parking" ? 250 : 0
       }).addTo(state.map);
-      var card = popupCard(pin);
-      marker.bindPopup(card, {
-        className: "case-map-popup-wrap",
-        maxWidth: 240,
-        minWidth: 168,
-        closeButton: true,
-        autoPan: true
-      });
-      marker.on("popupopen", function () {
-        fillPopupPhoto(card, pin, state.popupUrls);
-      });
+      var popup = popupApi();
+      if (popup && popup.bind) {
+        popup.bind(marker, pin, state.popupUrls);
+      } else {
+        marker.bindPopup(pin.title || pin.address || "Location");
+      }
       marker.on("click", function () {
         if (marker.setZIndexOffset) {
           state.markers.forEach(function (row) {
@@ -957,6 +917,30 @@
         sync(card);
       });
     }
+    var association = field(card, "locationAssociation");
+    if (association) {
+      association.addEventListener("change", function () {
+        sync(card);
+      });
+    }
+    var pinColor = field(card, "pinColor");
+    if (pinColor) {
+      pinColor.addEventListener("change", function () {
+        sync(card);
+      });
+    }
+    var vehicleColor = field(card, "vehicleColor");
+    var vehicleCard = card.closest
+      ? card.closest('[data-card="vehicle"]')
+      : null;
+    if (!vehicleColor && vehicleCard) {
+      vehicleColor = field(vehicleCard, "vehicleColor");
+    }
+    if (vehicleColor) {
+      vehicleColor.addEventListener("change", function () {
+        sync(card);
+      });
+    }
     sync(card);
   }
 
@@ -983,8 +967,20 @@
     focus: focus,
     resize: resize,
     kindIconHtml: function (kind) {
+      return kindGlyphHtml(kind, 18);
+    },
+    kindMarkerHtml: function (kind, options) {
+      options = options || {};
       var key = safeKind(kind);
-      return KIND_SVG[key] || KIND_SVG.home;
+      return markerBadgeHtml(iconIdForKind(key), {
+        kind: key,
+        color: safeHex(options.color) || KIND_COLORS[key],
+        primary: !!options.primary,
+        selected: !!options.selected,
+        editable: !!options.editable,
+        badge: options.badge,
+        size: options.size || "compact"
+      });
     },
     safeKind: safeKind,
     pinColorFor: pinColorFor,

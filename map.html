@@ -23,9 +23,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.25.0"
+          data-version="0.59.0"
         >
-          Version 0.25.0
+          Version 0.59.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -112,6 +112,14 @@
           </div>
           <details class="map-icon-library">
             <summary>Icons</summary>
+            <div class="map-icon-library-picker" id="mapIconLibraryPicker">
+              <label for="mapIconLibrarySelect">Icon library</label>
+              <select
+                id="mapIconLibrarySelect"
+                aria-describedby="mapIconLibraryDescription"
+              ></select>
+              <p id="mapIconLibraryDescription"></p>
+            </div>
             <div id="mapIconPalette" class="map-icon-palette"></div>
             <p id="mapIconHint" class="section-note">
               Select an icon, then a layer or a row.
@@ -131,12 +139,14 @@
     <script src="functions/model/util.js"></script>
     <script src="functions/model/person.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/model/media.js"></script>
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
     <script src="assets/icons/copdoc-icons.js"></script>
+    <script src="functions/map-popup.js"></script>
     <script src="functions/map-views.js"></script>
     <script src="functions/map.js"></script>
     <script src="functions/map-targets.js"></script>

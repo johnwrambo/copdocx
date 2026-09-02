@@ -26,6 +26,8 @@
         personId: model.newId("p"),
         entityType: "PERSON",
         caseRole: "",
+        junked: false,
+        junkedAt: "",
         name: blankName(),
         sex: "",
         dateOfBirth: "",

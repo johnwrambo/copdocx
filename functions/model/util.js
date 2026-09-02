@@ -58,6 +58,10 @@
     return metaStatus(row) === "committed";
   }
 
+  function lifecycleLabel(row) {
+    return isCommitted(row) ? "Filed" : "Working";
+  }
+
   function stampMeta(previous, mode) {
     var now = nowIso();
     var prev = (previous && previous.meta) || {};
@@ -135,6 +139,7 @@
   model.metaStatus = metaStatus;
   model.isDraft = isDraft;
   model.isCommitted = isCommitted;
+  model.lifecycleLabel = lifecycleLabel;
   model.stampMeta = stampMeta;
   model.ensureRecordMeta = ensureRecordMeta;
   model.csvCell = csvCell;

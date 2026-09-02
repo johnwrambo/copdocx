@@ -35,9 +35,16 @@ load("functions/model/person.js");
 load("functions/model/encounter.js");
 load("functions/model/location.js");
 load("functions/model/vehicle.js");
+load("functions/model/business.js");
+load("functions/model/entity.js");
 load("functions/model/officer.js");
+load("data/association-matrix.js");
 load("functions/model/link.js");
+load("functions/model/investigation.js");
 load("functions/model/store.js");
+load("functions/model/media.js");
+load("functions/officer-roster.js");
+load("functions/plate-parse.js");
 
 var model = context.COPDoc.model;
 var fail = 0;
@@ -61,6 +68,32 @@ check("empty links", blank.links.length === 0);
 check("empty history", Array.isArray(blank.history) && blank.history.length === 0);
 check("not marked complete", blank.meta.markedComplete === false);
 check("new lead is draft", blank.meta.status === "draft");
+check("new lead has no assigned officer", blank.assignedOfficerId === "");
+check(
+  "history event has officer fields",
+  model.createHistoryEvent().officerAlias === "" &&
+    model.createHistoryEvent().officerId === ""
+);
+
+var aliasOfc = {
+  firstName: "Maria",
+  middleName: "",
+  lastName: "Reyes",
+  badge: "4421"
+};
+check(
+  "officer alias is initials plus badge",
+  context.COPDoc.officers.alias(aliasOfc) === "MR4421"
+);
+check(
+  "officer alias includes middle initial",
+  context.COPDoc.officers.alias({
+    firstName: "John",
+    middleName: "David",
+    lastName: "Smith",
+    badge: "12"
+  }) === "JDS12"
+);
 
 var vehicle = model.createVehicle({
   licensePlate: "ABC123",
@@ -95,9 +128,15 @@ check("link has multiple reasons", link.reasons.length === 2);
 model.store.loadFromDisk();
 var saved = model.store.saveLead(blank);
 check("save empty lead", saved.ok === true, saved);
+blank.assignedOfficerId = "ofc_test";
+model.store.saveLead(blank, { mode: "commit" });
+check(
+  "save keeps assigned officer",
+  model.store.getLead(blank.leadId).assignedOfficerId === "ofc_test"
+);
 check(
   "list includes untitled",
-  model.store.listLeads()[0].label === "Untitled lead"
+  model.store.listLeads()[0].label === "Untitled case"
 );
 
 var loaded = model.store.getLead(blank.leadId);
@@ -140,8 +179,8 @@ var draftSnap = model.createLeadSnapshot();
 draftSnap.person.name.lastName = "DRAFT";
 model.store.saveLead(draftSnap, { mode: "draft" });
 check(
-  "draft save does not remember people",
-  !model.store.getPerson(draftSnap.subjectPersonId)
+  "draft save remembers people",
+  !!model.store.getPerson(draftSnap.subjectPersonId)
 );
 check(
   "draft status",
@@ -1152,6 +1191,1976 @@ check(
     named.otherType === "PERSON" &&
     named.to.id === "" &&
     named.notes === "Roommate"
+);
+
+var promoSource = model.createLeadSnapshot();
+promoSource.person.name.lastName = "RAMIREZ";
+promoSource.person.name.firstName = "MARIA";
+var janeLink = model.createLink({
+  from: { type: "PERSON", id: promoSource.subjectPersonId },
+  to: { type: "PERSON", id: "" },
+  otherType: "PERSON",
+  label: "DOE, JANE",
+  reasons: ["ASSOCIATE"],
+  notes: "Roommate"
+});
+promoSource.links = [janeLink];
+model.store.saveLead(promoSource, { mode: "commit" });
+var leadsBefore = model.store.listLeads().length;
+var promoJane = model.store.promoteAssociateToCase(
+  promoSource.leadId,
+  janeLink.linkId
+);
+check("promote unresolved ok", promoJane.ok && !!promoJane.leadId && !promoJane.existing);
+var janeCase = model.store.getLead(promoJane.leadId);
+check(
+  "promote lists as draft lead",
+  janeCase &&
+    janeCase.meta.status === "draft" &&
+    model.store.listLeads().some(function (row) {
+      return row.leadId === janeCase.leadId && row.metaStatus === "draft";
+    }) &&
+    model.store.listLeads().length === leadsBefore + 1
+);
+check(
+  "promote parsed name",
+  janeCase.person.name.lastName === "DOE" &&
+    janeCase.person.name.firstName === "JANE"
+);
+check("promote RAP empty", (janeCase.person.arrests || []).length === 0);
+var promoSourceAfter = model.store.getLead(promoSource.leadId);
+check(
+  "promote resolved source to.id",
+  promoSourceAfter.links[0].to.id === janeCase.subjectPersonId
+);
+check(
+  "promote reciprocal link",
+  janeCase.links.some(function (row) {
+    return (
+      row.to &&
+      row.to.id === promoSource.subjectPersonId &&
+      row.from.id === janeCase.subjectPersonId
+    );
+  })
+);
+check(
+  "promote history both sides",
+  (promoSourceAfter.history || []).some(function (row) {
+    return /DOE/.test(row.text) && row.source === "system";
+  }) &&
+    (janeCase.history || []).some(function (row) {
+      return /RAMIREZ/.test(row.text) && row.source === "system";
+    })
+);
+
+var orphan = model.createPerson({
+  caseRole: "LEAD",
+  name: { lastName: "ORPHAN", firstName: "PAT" },
+  sex: "F",
+  lexId: "LEX-O"
+});
+model.store.upsertPerson(orphan);
+var promoOrphanSrc = model.createLeadSnapshot();
+promoOrphanSrc.person.name.lastName = "HOST";
+promoOrphanSrc.links = [
+  model.createLink({
+    from: { type: "PERSON", id: promoOrphanSrc.subjectPersonId },
+    to: { type: "PERSON", id: orphan.personId },
+    otherType: "PERSON",
+    label: "ORPHAN, PAT"
+  })
+];
+model.store.saveLead(promoOrphanSrc, { mode: "commit" });
+var promoOrphan = model.store.promoteAssociateToCase(
+  promoOrphanSrc.leadId,
+  promoOrphanSrc.links[0].linkId
+);
+var orphanCase = model.store.getLead(promoOrphan.leadId);
+check(
+  "promote existing person no case",
+  promoOrphan.ok &&
+    orphanCase.subjectPersonId === orphan.personId &&
+    orphanCase.person.lexId === "LEX-O" &&
+    orphanCase.person.sex === "F" &&
+    (orphanCase.person.arrests || []).length === 0
+);
+
+var reuse = model.store.promoteAssociateToCase(
+  promoSource.leadId,
+  janeLink.linkId
+);
+check(
+  "promote existing subject reuses case",
+  reuse.ok && reuse.existing && reuse.leadId === promoJane.leadId
+);
+var leadsAfterReuse = model.store.listLeads().filter(function (row) {
+  return row.subjectPersonId === janeCase.subjectPersonId;
+});
+check("promote does not duplicate subject lead", leadsAfterReuse.length === 1);
+check("reuse of draft subject stays draft", reuse.existing && janeCase.meta.status === "draft");
+
+var bizLink = model.createLink({
+  from: { type: "PERSON", id: promoSource.subjectPersonId },
+  to: { type: "BUSINESS", id: "" },
+  otherType: "BUSINESS",
+  label: "ACME LLC"
+});
+promoSourceAfter = model.store.getLead(promoSource.leadId);
+promoSourceAfter.links.push(bizLink);
+model.store.saveLead(promoSourceAfter, { mode: "commit" });
+var promoBiz = model.store.promoteAssociateToCase(
+  promoSource.leadId,
+  bizLink.linkId
+);
+check("promote rejects non-person", !promoBiz.ok && !promoBiz.leadId);
+
+var draftSrc = model.createLeadSnapshot();
+draftSrc.links = [
+  model.createLink({
+    from: { type: "PERSON", id: draftSrc.subjectPersonId },
+    to: { type: "PERSON", id: "" },
+    otherType: "PERSON",
+    label: "DRAFT, BOB"
+  })
+];
+model.store.saveLead(draftSrc, { mode: "draft" });
+var promoDraft = model.store.promoteAssociateToCase(
+  draftSrc.leadId,
+  draftSrc.links[0].linkId
+);
+check("promote rejects draft source", !promoDraft.ok);
+
+var missing = model.store.promoteAssociateToCase(promoSource.leadId, "link_nope");
+check("promote rejects missing link", !missing.ok);
+
+model.store.saveLead(model.store.getLead(promoJane.leadId), { mode: "commit" });
+var committedJane = model.store.getLead(promoJane.leadId);
+check("promoted lead can commit", committedJane.meta.status === "committed");
+var keptCommittedAt = committedJane.meta.committedAt;
+model.store.saveLead(committedJane, { mode: "draft" });
+var afterDemote = model.store.getLead(promoJane.leadId);
+check(
+  "promoted lead draft save keeps committedAt",
+  afterDemote.meta.status === "draft" &&
+    afterDemote.meta.committedAt === keptCommittedAt
+);
+
+var bookinNew = model.store.promoteBookInToLead({
+  lastName: "GARCIA",
+  firstName: "LUIS",
+  sex: "Male",
+  dateOfBirth: "1990-02-01",
+  citizenship: "MX",
+  alienNumber: "555666777",
+  disposition: "B"
+});
+var bookinLead = model.store.getLead(bookinNew.leadId);
+var bookinPerson = model.store.getPerson(bookinNew.personId);
+check(
+  "book-in mints filed detainee",
+  bookinNew.ok &&
+    !bookinNew.existing &&
+    bookinLead &&
+    bookinLead.meta.status === "committed" &&
+    bookinLead.caseRole === "DETAINEE" &&
+    bookinLead.person.caseRole === "DETAINEE" &&
+    bookinLead.person.name.lastName === "GARCIA" &&
+    bookinLead.person.sex === "male" &&
+    bookinLead.person.immigration.alienNumber === "555666777" &&
+    bookinPerson &&
+    bookinPerson.personId === bookinNew.personId
+);
+check(
+  "book-in history notes custody",
+  (bookinLead.history || []).some(function (row) {
+    return /Detainee/.test(row.text) && row.source === "system";
+  })
+);
+
+var bookinAgain = model.store.promoteBookInToLead({
+  lastName: "GARCIA",
+  firstName: "LUIS",
+  alienNumber: "555-666-777"
+});
+check(
+  "book-in reuses A-Number",
+  bookinAgain.ok &&
+    bookinAgain.existing &&
+    bookinAgain.leadId === bookinNew.leadId &&
+    bookinAgain.personId === bookinNew.personId
+);
+
+var rapLead = model.createLeadSnapshot();
+rapLead.person.name.lastName = "RAMIREZ";
+rapLead.person.name.firstName = "ANA";
+rapLead.person.arrests = [{ arrestId: "arr_keep", offense: "theft" }];
+rapLead.person.immigration.alienNumber = "999888777";
+model.store.saveLead(rapLead, { mode: "commit" });
+var bookinUpdate = model.store.promoteBookInToLead({
+  leadId: rapLead.leadId,
+  lastName: "RAMIREZ",
+  firstName: "ANNA",
+  sex: "female"
+});
+var updatedRap = model.store.getLead(rapLead.leadId);
+check(
+  "book-in overlays identity keeps RAP",
+  bookinUpdate.ok &&
+    bookinUpdate.existing &&
+    updatedRap.person.name.firstName === "ANNA" &&
+    updatedRap.person.caseRole === "DETAINEE" &&
+    updatedRap.caseRole === "DETAINEE" &&
+    updatedRap.person.arrests.length === 1 &&
+    updatedRap.person.arrests[0].offense === "theft"
+);
+
+var bookinEmpty = model.store.promoteBookInToLead({});
+check(
+  "book-in empty identity rejected",
+  !bookinEmpty.ok && !bookinEmpty.leadId
+);
+
+var historyCount = (updatedRap.history || []).filter(function (row) {
+  return /Detainee/.test(row.text);
+}).length;
+model.store.promoteBookInToLead({
+  leadId: rapLead.leadId,
+  lastName: "RAMIREZ",
+  firstName: "ANNA"
+});
+var afterSecond = model.store.getLead(rapLead.leadId);
+var historyCountAfter = (afterSecond.history || []).filter(function (row) {
+  return /Detainee/.test(row.text);
+}).length;
+check("book-in does not repeat custody note", historyCountAfter === historyCount);
+
+var invDate = new Date(2026, 8, 2);
+var invId = model.nextInvestigationId({
+  team: 3,
+  date: invDate,
+  existingIds: []
+});
+check("investigation id format", invId === "INV3-20260902-001");
+check(
+  "investigation id sequences",
+  model.nextInvestigationId({
+    team: 3,
+    date: invDate,
+    existingIds: [invId]
+  }) === "INV3-20260902-002"
+);
+check(
+  "investigation id is per team",
+  model.nextInvestigationId({
+    team: 4,
+    date: invDate,
+    existingIds: [invId]
+  }) === "INV4-20260902-001"
+);
+var inv = model.createInvestigation({
+  kind: "tag",
+  existingIds: [],
+  date: invDate,
+  team: 3
+});
+check("investigation entity", inv.entityType === "INVESTIGATION");
+var wallNode = model.createInvestigationNode({
+  objectType: "VEHICLE",
+  objectId: "veh_wall",
+  x: 40,
+  y: 90
+});
+check(
+  "node stores wall position",
+  wallNode.x === 40 && wallNode.y === 90
+);
+check("investigation schema", inv.schema === "copdocx.investigation.v1");
+check("new investigation is draft", inv.meta.status === "draft");
+check("investigation kind tag", inv.kind === "tag" && inv.mode === "bulk");
+check(
+  "investigation id does not collide with encounter prefix",
+  inv.investigationId.indexOf("DAL") !== 0 &&
+    inv.investigationId.indexOf("INV") === 0
+);
+model.store.saveInvestigation(inv, { mode: "draft" });
+check(
+  "draft investigation listed",
+  model.store.listInvestigations().some(function (row) {
+    return row.investigationId === inv.investigationId && row.metaStatus === "draft";
+  })
+);
+var invBad = model.store.saveInvestigation(
+  { investigationId: "INV3-20260902-009", kind: "nope" },
+  { mode: "commit" }
+);
+check("investigation rejects unknown kind", !invBad.ok);
+model.store.saveInvestigation(inv, { mode: "commit" });
+check(
+  "commit investigation",
+  model.store.getInvestigation(inv.investigationId).meta.status === "committed"
+);
+var elite = model.createInvestigation({ kind: "elite", team: 3, date: invDate });
+check("elite kind has no plate mode", elite.kind === "elite" && elite.mode === "");
+check(
+  "plate-check add defaults to vehicle",
+  model.defaultInvestigationAddType("tag", "") === "VEHICLE" &&
+    model.investigationAddTypes("", "tag")[0] === "VEHICLE"
+);
+check(
+  "plate-check from person prefers vehicle",
+  model.defaultInvestigationAddType("tag", "PERSON") === "VEHICLE"
+);
+check(
+  "plate-check from vehicle adds person",
+  model.defaultInvestigationAddType("tag", "VEHICLE") === "PERSON" &&
+    model.investigationAddTypes("VEHICLE", "tag").indexOf("VEHICLE") === -1
+);
+check(
+  "elite add defaults to person",
+  model.defaultInvestigationAddType("elite", "") === "PERSON"
+);
+
+var platesApi = context.COPDoc.plates;
+var parsed = platesApi.parse("TX ABC1234\nWXYZ123 CA\nTX-HELLO1");
+check(
+  "parse state then plate",
+  parsed.kept === 3 &&
+    parsed.rows[0].state === "TX" &&
+    parsed.rows[0].plate === "ABC1234"
+);
+check(
+  "parse plate then state",
+  parsed.rows[1].state === "CA" && parsed.rows[1].plate === "WXYZ123"
+);
+check(
+  "parse dashed state-plate",
+  parsed.rows[2].state === "TX" && parsed.rows[2].plate === "HELLO1"
+);
+var mixed = platesApi.parse("ABC1234 TX, TX DEF5678;\nTX ABC1234");
+check(
+  "parse mixed separators and dupes",
+  mixed.kept === 2 && mixed.dupes === 1 && mixed.bad === 0
+);
+var skipped = platesApi.parse("\n\n***\n");
+check("parse skips empty and junk", skipped.kept === 0 && skipped.bad >= 1);
+var queued = platesApi.parse("TX ABC1234", ["TX|ABC1234"]);
+check("parse respects existing keys", queued.kept === 0 && queued.dupes === 1);
+var plt = model.createInvestigationPlate({ plate: "ab-c12", state: "tx" });
+check(
+  "plate factory normalizes",
+  plt.plate === "ABC12" && plt.state === "TX" && plt.status === "new"
+);
+
+var leadsBeforePromo = model.store.listLeads().length;
+var invPlate = model.createInvestigation({
+  kind: "tag",
+  team: 3,
+  date: invDate,
+  existingIds: [inv.investigationId]
+});
+var hitPlate = model.createInvestigationPlate({
+  plate: "HELLO1",
+  state: "TX",
+  status: "hit"
+});
+invPlate.plates = [hitPlate];
+model.store.saveInvestigation(invPlate, { mode: "draft" });
+var promoPlate = model.store.promoteInvestigationPlate(
+  invPlate.investigationId,
+  hitPlate.plateId
+);
+var promoInv = model.store.getInvestigation(invPlate.investigationId);
+var promoVeh = model.store.getVehicleRecord(promoPlate.vehicleId);
+check(
+  "promote plate mints vehicle",
+  promoPlate.ok &&
+    promoVeh &&
+    promoVeh.licensePlate === "HELLO1" &&
+    promoVeh.plateState === "TX" &&
+    !promoVeh.governmentVehicle
+);
+check(
+  "promote plate marks queue",
+  promoInv.plates[0].status === "promoted" &&
+    promoInv.plates[0].vehicleId === promoPlate.vehicleId
+);
+check(
+  "promote plate adds node and focus",
+  promoInv.nodes.length === 1 &&
+    promoInv.nodes[0].objectType === "VEHICLE" &&
+    promoInv.nodes[0].objectId === promoPlate.vehicleId &&
+    promoInv.focusNodeId === promoInv.nodes[0].nodeId
+);
+check(
+  "promote plate does not mint a case",
+  model.store.listLeads().length === leadsBeforePromo
+);
+var invPlate2 = model.createInvestigation({
+  kind: "tag",
+  team: 3,
+  date: invDate,
+  existingIds: [inv.investigationId, invPlate.investigationId]
+});
+var hitPlate2 = model.createInvestigationPlate({
+  plate: "HELLO1",
+  state: "TX",
+  status: "new"
+});
+invPlate2.plates = [hitPlate2];
+model.store.saveInvestigation(invPlate2, { mode: "draft" });
+var promoPlate2 = model.store.promoteInvestigationPlate(
+  invPlate2.investigationId,
+  hitPlate2.plateId
+);
+check(
+  "promote reuses vehicle by plate",
+  promoPlate2.ok && promoPlate2.vehicleId === promoPlate.vehicleId
+);
+var discardInv = model.createInvestigation({
+  kind: "tag",
+  team: 3,
+  date: invDate,
+  existingIds: [
+    inv.investigationId,
+    invPlate.investigationId,
+    invPlate2.investigationId
+  ]
+});
+var discarded = model.createInvestigationPlate({
+  plate: "NOPE1",
+  state: "TX",
+  status: "discarded"
+});
+discardInv.plates = [discarded];
+model.store.saveInvestigation(discardInv, { mode: "draft" });
+var promoDiscard = model.store.promoteInvestigationPlate(
+  discardInv.investigationId,
+  discarded.plateId
+);
+check("promote rejects discarded plate", !promoDiscard.ok);
+
+var leadsBeforeAdd = model.store.listLeads().length;
+var addRo = model.store.addInvestigationObject(invPlate.investigationId, {
+  objectType: "PERSON",
+  name: { lastName: "Vennweb", firstName: "Platecheck" },
+  reason: "REGISTERED_OWNER_OF"
+});
+var afterRo = model.store.getInvestigation(invPlate.investigationId);
+var roPerson = model.store.getPerson(addRo.objectId);
+check(
+  "add person from vehicle",
+  addRo.ok &&
+    !addRo.reused &&
+    addRo.objectType === "PERSON" &&
+    roPerson &&
+    roPerson.name.lastName === "Vennweb" &&
+    roPerson.caseRole === ""
+);
+check(
+  "add person node, link, and focus",
+  afterRo.nodes.length === 2 &&
+    afterRo.links.length === 1 &&
+    afterRo.links[0].from.type === "PERSON" &&
+    afterRo.links[0].to.type === "VEHICLE" &&
+    afterRo.links[0].reasons[0] === "REGISTERED_OWNER_OF" &&
+    afterRo.focusNodeId === addRo.nodeId
+);
+check(
+  "add person does not mint a case",
+  model.store.listLeads().length === leadsBeforeAdd
+);
+var addRoAgain = model.store.addInvestigationObject(invPlate.investigationId, {
+  fromNodeId: afterRo.nodes.filter(function (row) {
+    return row.objectType === "VEHICLE";
+  })[0].nodeId,
+  objectType: "PERSON",
+  name: "Vennweb, Platecheck",
+  reason: "REGISTERED_OWNER_OF"
+});
+var afterRoAgain = model.store.getInvestigation(invPlate.investigationId);
+check(
+  "reuse person by name",
+  addRoAgain.ok && addRoAgain.reused && addRoAgain.objectId === addRo.objectId
+);
+check("reuse person does not duplicate link", afterRoAgain.links.length === 1);
+
+var addPark = model.store.addInvestigationObject(invPlate.investigationId, {
+  fromNodeId: afterRo.nodes.filter(function (row) {
+    return row.objectType === "VEHICLE";
+  })[0].nodeId,
+  objectType: "LOCATION",
+  street: "100 Main St",
+  city: "Dallas",
+  state: "TX",
+  zip: "75201",
+  reason: "VEHICLE_PARKING"
+});
+var parkLoc = model.store.getLocationRecord(addPark.objectId);
+check(
+  "add parking location",
+  addPark.ok &&
+    !addPark.reused &&
+    parkLoc &&
+    parkLoc.street === "100 Main St" &&
+    parkLoc.city === "Dallas"
+);
+var addParkAgain = model.store.addInvestigationObject(invPlate.investigationId, {
+  fromNodeId: afterRo.nodes.filter(function (row) {
+    return row.objectType === "VEHICLE";
+  })[0].nodeId,
+  objectType: "LOCATION",
+  street: "100 Main St",
+  city: "Dallas",
+  state: "TX",
+  zip: "75201"
+});
+check(
+  "reuse location by address",
+  addParkAgain.ok && addParkAgain.reused && addParkAgain.objectId === addPark.objectId
+);
+
+var addVehReuse = model.store.addInvestigationObject(invPlate.investigationId, {
+  fromNodeId: addRo.nodeId,
+  objectType: "VEHICLE",
+  licensePlate: "HELLO1",
+  plateState: "TX"
+});
+check(
+  "reuse vehicle by plate",
+  addVehReuse.ok &&
+    addVehReuse.reused &&
+    addVehReuse.objectId === promoPlate.vehicleId
+);
+var addVehNew = model.store.addInvestigationObject(invPlate.investigationId, {
+  fromNodeId: addRo.nodeId,
+  objectType: "VEHICLE",
+  licensePlate: "zzz-999",
+  plateState: "tx"
+});
+var extraVeh = model.store.getVehicleRecord(addVehNew.objectId);
+check(
+  "add another vehicle to person",
+  addVehNew.ok &&
+    !addVehNew.reused &&
+    extraVeh &&
+    extraVeh.licensePlate === "ZZZ999" &&
+    extraVeh.plateState === "TX" &&
+    !extraVeh.governmentVehicle
+);
+
+var emptyPerson = model.store.addInvestigationObject(invPlate.investigationId, {
+  objectType: "PERSON",
+  name: { lastName: "", firstName: "" },
+  x: 120,
+  y: 80
+});
+check(
+  "empty person mints on wall",
+  emptyPerson.ok && emptyPerson.nodeId
+);
+var emptyPersonNode = model.store
+  .getInvestigation(invPlate.investigationId)
+  .nodes.filter(function (row) {
+    return row.nodeId === emptyPerson.nodeId;
+  })[0];
+check(
+  "placed node keeps x y",
+  emptyPersonNode && emptyPersonNode.x === 120 && emptyPersonNode.y === 80
+);
+
+var eliteAdd = model.createInvestigation({
+  kind: "elite",
+  team: 3,
+  date: invDate,
+  existingIds: [
+    inv.investigationId,
+    invPlate.investigationId,
+    invPlate2.investigationId,
+    discardInv.investigationId
+  ]
+});
+model.store.saveInvestigation(eliteAdd, { mode: "draft" });
+var seedPerson = model.store.addInvestigationObject(eliteAdd.investigationId, {
+  objectType: "PERSON",
+  name: { lastName: "Ortiz", firstName: "Ana" }
+});
+var eliteFresh = model.store.getInvestigation(eliteAdd.investigationId);
+check(
+  "add first object without focus",
+  seedPerson.ok &&
+    !seedPerson.linkId &&
+    eliteFresh.nodes.length === 1 &&
+    eliteFresh.focusNodeId === seedPerson.nodeId &&
+    eliteFresh.links.length === 0
+);
+
+var noFocusInv = model.createInvestigation({
+  kind: "tag",
+  team: 3,
+  date: invDate,
+  existingIds: [
+    inv.investigationId,
+    invPlate.investigationId,
+    invPlate2.investigationId,
+    discardInv.investigationId,
+    eliteAdd.investigationId
+  ]
+});
+model.store.saveInvestigation(noFocusInv, { mode: "draft" });
+check(
+  "spawn requires focus",
+  !model.store.spawnInvestigation(noFocusInv.investigationId).ok
+);
+
+var parentBeforeSpawn = model.store.getInvestigation(invPlate.investigationId);
+var parentVehNode = parentBeforeSpawn.nodes.filter(function (row) {
+  return row.objectType === "VEHICLE" && row.objectId === promoPlate.vehicleId;
+})[0];
+parentBeforeSpawn.focusNodeId = parentVehNode.nodeId;
+model.store.saveInvestigation(parentBeforeSpawn, { mode: "draft" });
+var parentNodeCount = parentBeforeSpawn.nodes.length;
+var parentPlateCount = (parentBeforeSpawn.plates || []).length;
+var leadsBeforeSpawn = model.store.listLeads().length;
+var spawned = model.store.spawnInvestigation(invPlate.investigationId);
+var childInv = model.store.getInvestigation(spawned.investigationId);
+var parentAfterSpawn = model.store.getInvestigation(invPlate.investigationId);
+var childIds = (childInv.nodes || []).map(function (row) {
+  return row.objectType + "|" + row.objectId;
+}).sort();
+var childNodeIds = (childInv.nodes || []).map(function (row) {
+  return row.nodeId;
+});
+var parentNodeIds = (parentAfterSpawn.nodes || []).map(function (row) {
+  return row.nodeId;
+});
+check(
+  "spawn child from focused vehicle",
+  spawned.ok &&
+    childInv.parentInvestigationId === invPlate.investigationId &&
+    childInv.kind === "tag" &&
+    (childInv.plates || []).length === 0 &&
+    parentPlateCount > 0
+);
+check(
+  "spawn copies 1-hop neighborhood",
+  childInv.nodes.length === 3 &&
+    childIds.indexOf("VEHICLE|" + promoPlate.vehicleId) !== -1 &&
+    childIds.indexOf("PERSON|" + addRo.objectId) !== -1 &&
+    childIds.indexOf("LOCATION|" + addPark.objectId) !== -1
+);
+check(
+  "spawn shares object ids, new node ids",
+  childInv.nodes.some(function (row) {
+    return row.objectId === promoPlate.vehicleId && parentNodeIds.indexOf(row.nodeId) === -1;
+  }) &&
+    childNodeIds.every(function (id) {
+      return parentNodeIds.indexOf(id) === -1;
+    })
+);
+check(
+  "spawn does not clone parent nodes or plates",
+  parentAfterSpawn.nodes.length === parentNodeCount &&
+    (parentAfterSpawn.plates || []).length === parentPlateCount
+);
+check(
+  "spawn does not mint a case",
+  model.store.listLeads().length === leadsBeforeSpawn
+);
+check(
+  "spawn notes parent and child history",
+  (parentAfterSpawn.history || []).some(function (row) {
+    return String(row.text || "").indexOf(childInv.investigationId) !== -1;
+  }) &&
+    (childInv.history || []).some(function (row) {
+      return String(row.text || "").indexOf(invPlate.investigationId) !== -1;
+    })
+);
+check(
+  "spawn copies wall position",
+  childInv.nodes.some(function (row) {
+    var parent = parentAfterSpawn.nodes.filter(function (n) {
+      return n.objectType === row.objectType && n.objectId === row.objectId;
+    })[0];
+    return parent && row.x === parent.x && row.y === parent.y;
+  })
+);
+var related = model.store.listRelatedInvestigations(invPlate.investigationId);
+var parentHulls = model.investigationHulls(parentAfterSpawn, related);
+check(
+  "parent hull covers child overlap",
+  parentHulls.some(function (hull) {
+    return (
+      hull.relation === "child" &&
+      hull.investigationId === childInv.investigationId &&
+      hull.nodeIds.length >= 1
+    );
+  })
+);
+var childRelated = model.store.listRelatedInvestigations(childInv.investigationId);
+var childHulls = model.investigationHulls(childInv, childRelated);
+check(
+  "child hull covers parent overlap",
+  childHulls.some(function (hull) {
+    return hull.relation === "parent" && hull.nodeIds.length >= 1;
+  })
+);
+var overlapCounts = model.investigationOverlapCounts(parentAfterSpawn, related);
+check(
+  "overlap counts shared nodes",
+  Object.keys(overlapCounts).length >= 1
+);
+var eliteSpawn = model.store.spawnInvestigation(eliteAdd.investigationId);
+var eliteChild = model.store.getInvestigation(eliteSpawn.investigationId);
+check(
+  "spawn solitary object shares person",
+  eliteSpawn.ok &&
+    eliteChild.nodes.length === 1 &&
+    eliteChild.nodes[0].objectId === seedPerson.objectId &&
+    eliteChild.kind === "elite" &&
+    eliteChild.links.length === 0
+);
+var blankVeh = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "VEHICLE"
+});
+var blankRec = model.store.getVehicleRecord(blankVeh.objectId);
+check(
+  "add vehicle without plate mints card",
+  blankVeh.ok &&
+    !blankVeh.reused &&
+    blankRec &&
+    blankRec.licensePlate === "" &&
+    !blankRec.governmentVehicle
+);
+var wallLink = model.store.connectInvestigationNodes(
+  eliteChild.investigationId,
+  eliteChild.nodes[0].nodeId,
+  blankVeh.nodeId,
+  "REGISTERED_OWNER_OF"
+);
+var wallLinked = model.store.getInvestigation(eliteChild.investigationId);
+check(
+  "connect wall nodes",
+  wallLink.ok &&
+    wallLinked.links.length === 1 &&
+    wallLinked.links[0].from.type === "PERSON" &&
+    wallLinked.links[0].to.type === "VEHICLE"
+);
+var blankLoc = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "LOCATION",
+  x: 200,
+  y: 40
+});
+check("empty location mints on wall", blankLoc.ok);
+var plexSrc = model.store.getInvestigation(eliteChild.investigationId);
+var plexPerson = plexSrc.nodes.filter(function (row) {
+  return row.objectType === "PERSON";
+})[0];
+plexSrc.focusNodeId = plexPerson.nodeId;
+model.store.saveInvestigation(plexSrc, { mode: "draft" });
+plexSrc = model.store.getInvestigation(eliteChild.investigationId);
+var plex = model.investigationPlex(plexSrc);
+var plexVeh = plexSrc.nodes.filter(function (row) {
+  return row.objectId === blankVeh.objectId;
+})[0];
+var plexLoc = plexSrc.nodes.filter(function (row) {
+  return row.objectId === blankLoc.objectId;
+})[0];
+check(
+  "plex includes focus and one-hop",
+  plex.active &&
+    plex.nodeIds[plexPerson.nodeId] &&
+    plexVeh &&
+    plex.nodeIds[plexVeh.nodeId]
+);
+check("plex excludes unlinked object", plexLoc && !plex.nodeIds[plexLoc.nodeId]);
+check(
+  "plex idle without focus",
+  !model.investigationPlex({
+    nodes: plexSrc.nodes,
+    links: plexSrc.links,
+    focusNodeId: ""
+  }).active
+);
+check(
+  "outline match empty query",
+  model.investigationOutlineMatch("", { objectType: "VEHICLE" }, { title: "TX HELLO1" })
+);
+check(
+  "outline match plate",
+  model.investigationOutlineMatch("hello", { objectType: "VEHICLE" }, {
+    title: "TX HELLO1",
+    kind: "Vehicle"
+  })
+);
+check(
+  "outline match kind",
+  model.investigationOutlineMatch("person", { objectType: "PERSON" }, {
+    kind: "Person",
+    title: "Ortiz, Ana"
+  })
+);
+check(
+  "outline match AND tokens",
+  model.investigationOutlineMatch("tx hello", { objectType: "VEHICLE" }, {
+    title: "TX HELLO1",
+    kind: "Vehicle"
+  })
+);
+check(
+  "outline match extra vin",
+  model.investigationOutlineMatch("1HGCM", { objectType: "VEHICLE" }, {
+    title: "Vehicle",
+    extra: "1HGCM82633A004352 Honda"
+  })
+);
+check(
+  "outline miss other title",
+  !model.investigationOutlineMatch("garcia", { objectType: "VEHICLE" }, {
+    title: "TX HELLO1",
+    kind: "Vehicle"
+  })
+);
+check(
+  "outline hit promoted vehicle",
+  model.investigationOutlineIsHit(
+    { objectType: "VEHICLE", objectId: "v_hit" },
+    { plates: [{ vehicleId: "v_hit", status: "promoted" }] }
+  )
+);
+check(
+  "outline hit ignores person",
+  !model.investigationOutlineIsHit(
+    { objectType: "PERSON", objectId: "v_hit" },
+    { plates: [{ vehicleId: "v_hit", status: "promoted" }] }
+  )
+);
+check(
+  "outline hit status hit",
+  model.investigationOutlineIsHit(
+    { objectType: "VEHICLE", objectId: "v_hit2" },
+    { plates: [{ vehicleId: "v_hit2", status: "hit" }] }
+  )
+);
+check(
+  "outline hit skips discarded",
+  !model.investigationOutlineIsHit(
+    { objectType: "VEHICLE", objectId: "v_miss" },
+    { plates: [{ vehicleId: "v_miss", status: "discarded" }] }
+  )
+);
+check(
+  "outline kind label",
+  model.investigationObjectKindLabel("VEHICLE") === "Vehicle" &&
+    model.investigationObjectKindLabel("ENTITY") === "Entity"
+);
+check(
+  "media owners include wall objects",
+  (model.MEDIA_OWNER_TYPES || []).indexOf("PERSON") !== -1 &&
+    (model.MEDIA_OWNER_TYPES || []).indexOf("VEHICLE") !== -1 &&
+    (model.MEDIA_OWNER_TYPES || []).indexOf("LOCATION") !== -1 &&
+    (model.MEDIA_OWNER_TYPES || []).indexOf("BUSINESS") !== -1 &&
+    (model.MEDIA_OWNER_TYPES || []).indexOf("ENTITY") !== -1
+);
+check(
+  "find match stays bright",
+  !model.investigationChipDim({ filterOn: true, matches: true, plexActive: true, inPlex: false })
+);
+check(
+  "find miss dims even in plex",
+  model.investigationChipDim({ filterOn: true, matches: false, plexActive: true, inPlex: true })
+);
+check(
+  "plex dims without find",
+  model.investigationChipDim({ filterOn: false, matches: true, plexActive: true, inPlex: false })
+);
+check(
+  "plex neighbor stays bright without find",
+  !model.investigationChipDim({ filterOn: false, matches: true, plexActive: true, inPlex: true })
+);
+
+var reuseA = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "VEHICLE",
+  licensePlate: "WALL1",
+  plateState: "TX",
+  x: 0,
+  y: 0
+});
+var reuseB = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "VEHICLE",
+  fromNodeId: "",
+  x: 10,
+  y: 10
+});
+var reuseRec = model.store.getVehicleRecord(reuseB.objectId);
+reuseRec.licensePlate = "WALL1";
+reuseRec.plate = "WALL1";
+reuseRec.plateState = "TX";
+model.store.saveVehicleRecord(reuseRec, { mode: "commit" });
+var reused = model.store.reuseInvestigationIdentity(
+  eliteChild.investigationId,
+  reuseB.nodeId
+);
+check(
+  "reuse vehicle by plate",
+  reused.ok && reused.reused && reused.objectId === reuseA.objectId
+);
+var afterReuse = model.store.getInvestigation(eliteChild.investigationId);
+var wall1Nodes = afterReuse.nodes.filter(function (row) {
+  return row.objectType === "VEHICLE" && row.objectId === reuseA.objectId;
+});
+check("reuse collapses duplicate vehicle node", wall1Nodes.length === 1);
+check(
+  "reuse drops abandoned vehicle record",
+  !model.store.getVehicleRecord(reuseB.objectId)
+);
+var wallIntegrity = model.store.investigationIntegrity(eliteChild.investigationId);
+check("wall integrity after reuse", wallIntegrity.ok);
+var crossPlate = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "VEHICLE",
+  licensePlate: "XWALL9",
+  plateState: "TX",
+  fromNodeId: "",
+  x: 8,
+  y: 8
+});
+var crossEmpty = model.store.addInvestigationObject(childInv.investigationId, {
+  objectType: "VEHICLE",
+  fromNodeId: "",
+  x: 9,
+  y: 9
+});
+var crossRec = model.store.getVehicleRecord(crossEmpty.objectId);
+crossRec.licensePlate = "XWALL9";
+crossRec.plate = "XWALL9";
+crossRec.plateState = "TX";
+model.store.saveVehicleRecord(crossRec, { mode: "commit" });
+var crossReuse = model.store.reuseInvestigationIdentity(
+  childInv.investigationId,
+  crossEmpty.nodeId
+);
+var childAfterCross = model.store.getInvestigation(childInv.investigationId);
+var parentAfterCross = model.store.getInvestigation(eliteChild.investigationId);
+check(
+  "reuse retargets sibling walls to kept id",
+  crossReuse.ok &&
+    crossReuse.reused &&
+    crossReuse.objectId === crossPlate.objectId &&
+    childAfterCross.nodes.some(function (row) {
+      return row.objectType === "VEHICLE" && row.objectId === crossPlate.objectId;
+    }) &&
+    parentAfterCross.nodes.some(function (row) {
+      return row.objectType === "VEHICLE" && row.objectId === crossPlate.objectId;
+    })
+);
+check(
+  "reuse drops loser used on another wall",
+  !model.store.getVehicleRecord(crossEmpty.objectId)
+);
+
+var cutId = (afterReuse.links[0] && afterReuse.links[0].linkId) || "";
+var cut = model.store.disconnectInvestigationLink(eliteChild.investigationId, cutId);
+check(
+  "disconnect wall link",
+  cut.ok &&
+    !model.store.getInvestigation(eliteChild.investigationId).links.some(function (row) {
+      return row.linkId === cutId;
+    })
+);
+
+var shop = model.createBusiness({ name: "Acme Towing" });
+check(
+  "business factory",
+  shop.entityType === "BUSINESS" && shop.name === "Acme Towing"
+);
+var crew = model.createCustomEntity({ name: "South Crew", kind: "crew" });
+check(
+  "custom entity label",
+  model.formatEntityLabel(crew) === "South Crew (crew)"
+);
+var bizAdd = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "BUSINESS",
+  name: "Acme Towing",
+  fromNodeId: "",
+  x: 400,
+  y: 40
+});
+check(
+  "add business on wall",
+  bizAdd.ok &&
+    model.store.getBusinessRecord(bizAdd.objectId).name === "Acme Towing"
+);
+var personOnWall = model.store
+  .getInvestigation(eliteChild.investigationId)
+  .nodes.filter(function (row) {
+    return row.objectType === "PERSON";
+  })[0];
+var bizLink = model.store.connectInvestigationNodes(
+  eliteChild.investigationId,
+  personOnWall.nodeId,
+  bizAdd.nodeId,
+  "EMPLOYED_BY"
+);
+var bizLinked = model.store.getInvestigation(eliteChild.investigationId);
+check(
+  "link person to business",
+  bizLink.ok &&
+    bizLinked.links.some(function (row) {
+      return (
+        row.from.type === "PERSON" &&
+        row.to.type === "BUSINESS" &&
+        row.reasons[0] === "EMPLOYED_BY"
+      );
+    })
+);
+var bizDup = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "BUSINESS",
+  name: "Acme Towing",
+  fromNodeId: ""
+});
+check(
+  "reuse business by name",
+  bizDup.ok && bizDup.reused && bizDup.objectId === bizAdd.objectId
+);
+var entAdd = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "ENTITY",
+  name: "South Crew",
+  kind: "crew",
+  fromNodeId: ""
+});
+check(
+  "add custom entity",
+  entAdd.ok &&
+    model.store.getEntityRecord(entAdd.objectId).kind === "crew"
+);
+
+var wallCaseInv = model.store.getInvestigation(eliteChild.investigationId);
+var wallPersonForCase = wallCaseInv.nodes.filter(function (row) {
+  return row.objectType === "PERSON";
+})[0];
+var wallVehForCase = wallCaseInv.nodes.filter(function (row) {
+  return row.objectType === "VEHICLE";
+})[0];
+var wallNodeCountBeforeCase = wallCaseInv.nodes.length;
+var wallLinkCountBeforeCase = (wallCaseInv.links || []).length;
+wallCaseInv.focusNodeId = wallPersonForCase.nodeId;
+model.store.saveInvestigation(wallCaseInv, { mode: "draft" });
+var leadsBeforeWallCase = model.store.listLeads().length;
+var openedWallCase = model.store.promoteInvestigationPersonToCase(
+  eliteChild.investigationId
+);
+var openedWallLead = model.store.getLead(openedWallCase.leadId);
+var wallPersonAfter = model.store.getPerson(wallPersonForCase.objectId);
+var wallAfterCase = model.store.getInvestigation(eliteChild.investigationId);
+check(
+  "promote wall person mints working lead",
+  openedWallCase.ok &&
+    !openedWallCase.existing &&
+    openedWallLead &&
+    openedWallLead.meta.status === "draft" &&
+    model.store.listLeads().length === leadsBeforeWallCase + 1
+);
+check(
+  "promote wall person keeps same person id",
+  openedWallLead.subjectPersonId === wallPersonForCase.objectId &&
+    wallPersonAfter &&
+    wallPersonAfter.personId === openedWallLead.subjectPersonId
+);
+check(
+  "promote wall person identity only",
+  openedWallLead.person.name.lastName === "Ortiz" &&
+    openedWallLead.person.name.firstName === "Ana" &&
+    openedWallLead.caseRole === "LEAD" &&
+    (openedWallLead.person.arrests || []).length === 0 &&
+    (openedWallLead.links || []).length === 0
+);
+check(
+  "promote wall person notes both sides",
+  (openedWallLead.history || []).some(function (row) {
+    return (
+      String(row.text || "").indexOf(eliteChild.investigationId) !== -1 &&
+      row.source === "system"
+    );
+  }) &&
+    (wallAfterCase.history || []).some(function (row) {
+      return /Ortiz/i.test(row.text) && row.source === "system";
+    })
+);
+check(
+  "promote wall person leaves the graph",
+  wallAfterCase.nodes.length === wallNodeCountBeforeCase &&
+    (wallAfterCase.links || []).length === wallLinkCountBeforeCase
+);
+var reuseWallCase = model.store.promoteInvestigationPersonToCase(
+  eliteChild.investigationId
+);
+check(
+  "promote wall person reuses existing lead",
+  reuseWallCase.ok &&
+    reuseWallCase.existing &&
+    reuseWallCase.leadId === openedWallCase.leadId
+);
+check(
+  "promote wall person does not duplicate subject lead",
+  model.store.listLeads().filter(function (row) {
+    return row.subjectPersonId === wallPersonForCase.objectId;
+  }).length === 1
+);
+wallCaseInv = model.store.getInvestigation(eliteChild.investigationId);
+wallCaseInv.focusNodeId = wallVehForCase.nodeId;
+model.store.saveInvestigation(wallCaseInv, { mode: "draft" });
+var promoWallVehicle = model.store.promoteInvestigationPersonToCase(
+  eliteChild.investigationId
+);
+check(
+  "promote wall rejects vehicle focus",
+  !promoWallVehicle.ok && !promoWallVehicle.leadId
+);
+var promoWallVehicleNode = model.store.promoteInvestigationPersonToCase(
+  eliteChild.investigationId,
+  wallVehForCase.nodeId
+);
+check(
+  "promote wall rejects vehicle node",
+  !promoWallVehicleNode.ok
+);
+wallCaseInv = model.store.getInvestigation(eliteChild.investigationId);
+wallCaseInv.focusNodeId = "";
+model.store.saveInvestigation(wallCaseInv, { mode: "draft" });
+var promoWallNoFocus = model.store.promoteInvestigationPersonToCase(
+  eliteChild.investigationId
+);
+check(
+  "promote wall requires person focus",
+  !promoWallNoFocus.ok
+);
+var promoWallByNode = model.store.promoteInvestigationPersonToCase(
+  eliteChild.investigationId,
+  wallPersonForCase.nodeId
+);
+check(
+  "promote wall by nodeId reuses lead",
+  promoWallByNode.ok &&
+    promoWallByNode.existing &&
+    promoWallByNode.leadId === openedWallCase.leadId
+);
+var promoMissingInv = model.store.promoteInvestigationPersonToCase("INV-nope");
+check("promote wall rejects missing investigation", !promoMissingInv.ok);
+
+var removeSrc = model.store.getInvestigation(eliteChild.investigationId);
+var removePerson = removeSrc.nodes.filter(function (row) {
+  return row.objectType === "PERSON";
+})[0];
+var removeVeh = removeSrc.nodes.filter(function (row) {
+  return row.objectType === "VEHICLE";
+})[0];
+var removePersonId = removePerson.objectId;
+var removeVehId = removeVeh.objectId;
+var removeLinkCount = (removeSrc.links || []).length;
+removeSrc.focusNodeId = removePerson.nodeId;
+model.store.saveInvestigation(removeSrc, { mode: "draft" });
+var removedPerson = model.store.removeInvestigationObject(
+  eliteChild.investigationId,
+  removePerson.nodeId
+);
+var afterRemovePerson = model.store.getInvestigation(eliteChild.investigationId);
+check(
+  "remove wall person drops node",
+  removedPerson.ok &&
+    !afterRemovePerson.nodes.some(function (row) {
+      return row.nodeId === removePerson.nodeId;
+    })
+);
+check(
+  "remove wall person keeps people record",
+  !!model.store.getPerson(removePersonId)
+);
+check(
+  "remove wall person drops its links",
+  removeLinkCount > 0 &&
+    !afterRemovePerson.links.some(function (link) {
+      return (
+        (link.from && link.from.id === removePersonId) ||
+        (link.to && link.to.id === removePersonId)
+      );
+    })
+);
+check(
+  "remove wall person keeps other nodes",
+  afterRemovePerson.nodes.some(function (row) {
+    return row.objectId === removeVehId;
+  })
+);
+check(
+  "remove wall person clears focus",
+  afterRemovePerson.focusNodeId === ""
+);
+check(
+  "remove wall person notes history",
+  (afterRemovePerson.history || []).some(function (row) {
+    return /Ortiz/i.test(row.text) && /wall/.test(row.text);
+  })
+);
+var removeMissing = model.store.removeInvestigationObject(
+  eliteChild.investigationId,
+  "node_nope"
+);
+check("remove wall missing node", !removeMissing.ok);
+
+var parentPlateInv = model.store.getInvestigation(invPlate.investigationId);
+var parentVehForRemove = parentPlateInv.nodes.filter(function (row) {
+  return row.objectType === "VEHICLE" && row.objectId === promoPlate.vehicleId;
+})[0];
+var childBeforeRemove = model.store.getInvestigation(childInv.investigationId);
+var childHadVeh = childBeforeRemove.nodes.some(function (row) {
+  return row.objectId === promoPlate.vehicleId;
+});
+var removedPlateVeh = model.store.removeInvestigationObject(
+  invPlate.investigationId,
+  parentVehForRemove.nodeId
+);
+var parentAfterRemove = model.store.getInvestigation(invPlate.investigationId);
+var childAfterRemove = model.store.getInvestigation(childInv.investigationId);
+check(
+  "remove promoted vehicle reverts plate to hit",
+  removedPlateVeh.ok &&
+    parentAfterRemove.plates.some(function (row) {
+      return row.vehicleId === promoPlate.vehicleId && row.status === "hit";
+    })
+);
+check(
+  "remove wall vehicle keeps vehicles record",
+  !!model.store.getVehicleRecord(promoPlate.vehicleId)
+);
+check(
+  "remove parent node keeps child overlap",
+  childHadVeh &&
+    childAfterRemove.nodes.some(function (row) {
+      return row.objectId === promoPlate.vehicleId;
+    })
+);
+var rePromo = model.store.promoteInvestigationPlate(
+  invPlate.investigationId,
+  parentAfterRemove.plates.filter(function (row) {
+    return row.vehicleId === promoPlate.vehicleId;
+  })[0].plateId
+);
+check("re-promote after remove", rePromo.ok && !!rePromo.nodeId);
+
+var rapWall = model.createPerson({
+  caseRole: "",
+  name: { lastName: "WALLRAP", firstName: "KIM" },
+  arrests: [{ arrestId: "arr_wall", charges: "X" }]
+});
+model.store.upsertPerson(rapWall);
+var rapNode = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "PERSON",
+  objectId: rapWall.personId,
+  fromNodeId: ""
+});
+var rapInv = model.store.getInvestigation(eliteChild.investigationId);
+rapInv.focusNodeId = rapNode.nodeId;
+model.store.saveInvestigation(rapInv, { mode: "draft" });
+var rapCase = model.store.promoteInvestigationPersonToCase(
+  eliteChild.investigationId
+);
+var rapKept = model.store.getPerson(rapWall.personId);
+check(
+  "promote wall person keeps RAP on people registry",
+  rapCase.ok &&
+    rapKept &&
+    (rapKept.arrests || []).some(function (row) {
+      return row && row.arrestId === "arr_wall";
+    })
+);
+var rapLead = model.store.getLead(rapCase.leadId);
+check(
+  "promote wall person case stays identity-only",
+  rapLead && (rapLead.person.arrests || []).length === 0
+);
+
+var childBeforeClear = model.store.getInvestigation(childInv.investigationId);
+var childNodeCount = (childBeforeClear.nodes || []).length;
+var keptPerson = model.store.getPerson(rapWall.personId);
+var clearedWall = model.store.clearInvestigationWorkspace(
+  eliteChild.investigationId
+);
+var afterClear = model.store.getInvestigation(eliteChild.investigationId);
+var childAfterClear = model.store.getInvestigation(childInv.investigationId);
+check(
+  "clear workspace empties this wall",
+  clearedWall.ok &&
+    clearedWall.cleared &&
+    (afterClear.nodes || []).length === 0 &&
+    (afterClear.links || []).length === 0 &&
+    (afterClear.plates || []).length === 0 &&
+    !afterClear.focusNodeId
+);
+check(
+  "clear workspace keeps shared person",
+  keptPerson && !!model.store.getPerson(rapWall.personId)
+);
+check(
+  "clear workspace does not touch child wall",
+  childNodeCount > 0 &&
+    (childAfterClear.nodes || []).length === childNodeCount
+);
+var clearAgain = model.store.clearInvestigationWorkspace(
+  eliteChild.investigationId
+);
+check("clear empty workspace is ok", clearAgain.ok && !clearAgain.cleared);
+var clearMissing = model.store.clearInvestigationWorkspace("INV-nope");
+check("clear missing investigation", !clearMissing.ok);
+
+var junkAdd = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "VEHICLE",
+  licensePlate: "JUNK1",
+  plateState: "TX",
+  fromNodeId: "",
+  x: 1,
+  y: 1
+});
+var junked = model.store.junkInvestigationObject(
+  eliteChild.investigationId,
+  junkAdd.nodeId
+);
+var junkRec = model.store.getVehicleRecord(junkAdd.objectId);
+check(
+  "junk keeps record and marks junked",
+  junked.ok && junkRec && junkRec.junked
+);
+check(
+  "junk removes from this wall",
+  !model.store.getInvestigation(eliteChild.investigationId).nodes.some(function (row) {
+    return row.objectId === junkAdd.objectId;
+  })
+);
+check(
+  "junk is skipped by plate reuse",
+  !model.store.findVehicleByPlate("TX", "JUNK1")
+);
+var junkRestore = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "VEHICLE",
+  licensePlate: "JUNK1",
+  plateState: "TX",
+  fromNodeId: ""
+});
+check(
+  "placing junked plate restores same vehicle",
+  junkRestore.ok &&
+    junkRestore.reused &&
+    junkRestore.objectId === junkAdd.objectId &&
+    !model.store.getVehicleRecord(junkAdd.objectId).junked
+);
+var delAdd = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "LOCATION",
+  street: "9 Junk Ln",
+  city: "Dallas",
+  state: "TX",
+  zip: "75201",
+  fromNodeId: ""
+});
+var deleted = model.store.deleteInvestigationObject(
+  eliteChild.investigationId,
+  delAdd.nodeId
+);
+check(
+  "delete unreferenced record",
+  deleted.ok && !model.store.getLocationRecord(delAdd.objectId)
+);
+var casePerson = model.store.getLead(openedWallCase.leadId);
+var caseOnWall = model.store.addInvestigationObject(eliteChild.investigationId, {
+  objectType: "PERSON",
+  objectId: casePerson.subjectPersonId,
+  fromNodeId: ""
+});
+var delCase = model.store.deleteInvestigationObject(
+  eliteChild.investigationId,
+  caseOnWall.nodeId
+);
+var junkCase = model.store.junkInvestigationObject(
+  eliteChild.investigationId,
+  caseOnWall.nodeId
+);
+check(
+  "cannot delete or junk a case subject",
+  !delCase.ok && !junkCase.ok && !!model.store.getPerson(casePerson.subjectPersonId)
+);
+
+var winTag = model.investigationWindowsDefault("tag");
+check(
+  "windows default tag opens plates only",
+  winTag.plates && !winTag.objects && !winTag.card
+);
+var winElite = model.investigationWindowsDefault("elite");
+check(
+  "windows default other kind all closed",
+  !winElite.plates && !winElite.objects && !winElite.card
+);
+check(
+  "windows default missing kind plates closed",
+  !model.investigationWindowsDefault("").plates
+);
+
+var asocInv = model.createInvestigation({
+  kind: "elite",
+  team: 3,
+  existingIds: Object.keys(model.store.listInvestigations().reduce(function (acc, row) {
+    acc[row.investigationId] = true;
+    return acc;
+  }, {}))
+});
+model.store.saveInvestigation(asocInv, { mode: "draft" });
+var asocVeh = model.store.addInvestigationObject(asocInv.investigationId, {
+  objectType: "VEHICLE",
+  licensePlate: "ASOC1",
+  plateState: "TX",
+  fromNodeId: "",
+  x: 10,
+  y: 10
+});
+var asocPer = model.store.addInvestigationObject(asocInv.investigationId, {
+  objectType: "PERSON",
+  name: { lastName: "ASOCGARCIA", firstName: "LUIS" },
+  fromNodeId: asocVeh.nodeId,
+  reason: "REGISTERED_OWNER_OF",
+  x: 310,
+  y: 10
+});
+var asocWall = model.store.getInvestigation(asocInv.investigationId);
+var asocLink = (asocWall.links || [])[0];
+check("wall connect writes associationId", asocLink && !!asocLink.associationId);
+var asocRec = model.store.getAssociation(asocLink.associationId);
+check(
+  "association canonicalizes person to vehicle",
+  asocRec &&
+    asocRec.from.type === "PERSON" &&
+    asocRec.from.id === asocPer.objectId &&
+    asocRec.to.type === "VEHICLE" &&
+    asocRec.to.id === asocVeh.objectId &&
+    asocRec.reason === "REGISTERED_OWNER_OF"
+);
+var asocAgain = model.store.upsertAssociation({
+  from: { type: "VEHICLE", id: asocVeh.objectId },
+  to: { type: "PERSON", id: asocPer.objectId },
+  reason: "REGISTERED_OWNER_OF"
+});
+check(
+  "reuse same ends+reason",
+  asocAgain.ok &&
+    asocAgain.reused &&
+    asocAgain.associationId === asocRec.associationId
+);
+var forVeh = model.store.associationsFor("VEHICLE", asocVeh.objectId);
+var forPer = model.store.associationsFor("PERSON", asocPer.objectId);
+check(
+  "associationsFor sees both ends",
+  forVeh.length >= 1 &&
+    forPer.length >= 1 &&
+    forVeh.some(function (row) {
+      return row.associationId === asocRec.associationId;
+    }) &&
+    forPer.some(function (row) {
+      return row.associationId === asocRec.associationId;
+    })
+);
+var asocPer2 = model.store.addInvestigationObject(asocInv.investigationId, {
+  objectType: "PERSON",
+  name: { lastName: "ASOCSPOUSE", firstName: "ANA" },
+  fromNodeId: "",
+  x: 10,
+  y: 200
+});
+var spouse1 = model.store.upsertAssociation({
+  from: { type: "PERSON", id: asocPer.objectId },
+  to: { type: "PERSON", id: asocPer2.objectId },
+  reason: "SPOUSE_OF"
+});
+var spouse2 = model.store.upsertAssociation({
+  from: { type: "PERSON", id: asocPer2.objectId },
+  to: { type: "PERSON", id: asocPer.objectId },
+  reason: "SPOUSE_OF"
+});
+check(
+  "symmetric spouse no reverse duplicate",
+  spouse1.ok &&
+    spouse2.ok &&
+    spouse2.reused &&
+    spouse1.associationId === spouse2.associationId
+);
+asocWall = model.store.getInvestigation(asocInv.investigationId);
+asocWall.focusNodeId = asocVeh.nodeId;
+model.store.saveInvestigation(asocWall, { mode: "draft" });
+var spawnedAsoc = model.store.spawnInvestigation(asocInv.investigationId);
+var childAsoc = model.store.getInvestigation(spawnedAsoc.investigationId);
+check(
+  "spawn cites same associationId",
+  spawnedAsoc.ok &&
+    childAsoc &&
+    (childAsoc.links || []).some(function (row) {
+      return row && row.associationId === asocLink.associationId;
+    }) &&
+    (childAsoc.links || []).every(function (row) {
+      return !row || row.linkId !== asocLink.linkId;
+    })
+);
+var childPersonNode = (childAsoc.nodes || []).filter(function (row) {
+  return row && row.objectType === "PERSON" && row.objectId === asocPer.objectId;
+})[0];
+model.store.removeInvestigationObject(childAsoc.investigationId, childPersonNode.nodeId);
+check(
+  "remove from wall keeps association",
+  !!model.store.getAssociation(asocLink.associationId)
+);
+var asocBiz = model.store.addInvestigationObject(asocInv.investigationId, {
+  objectType: "BUSINESS",
+  name: "Garcia Roofing LLC",
+  fromNodeId: ""
+});
+var custOk = model.store.upsertAssociation({
+  from: { type: "PERSON", id: asocPer.objectId },
+  to: { type: "BUSINESS", id: asocBiz.objectId },
+  reason: "CUSTOMER_OF"
+});
+check("customer of person-business", custOk.ok && !!custOk.associationId);
+var custBad = model.store.upsertAssociation({
+  from: { type: "PERSON", id: asocPer.objectId },
+  to: { type: "VEHICLE", id: asocVeh.objectId },
+  reason: "CUSTOMER_OF"
+});
+check("customer of rejects vehicle", !custBad.ok);
+var asocFoo = model.store.addInvestigationObject(asocInv.investigationId, {
+  objectType: "PERSON",
+  name: { lastName: "ASOCFOO", firstName: "PAT" },
+  fromNodeId: ""
+});
+var asocVeh2 = model.store.addInvestigationObject(asocInv.investigationId, {
+  objectType: "VEHICLE",
+  licensePlate: "ASOC2",
+  plateState: "TX",
+  fromNodeId: asocFoo.nodeId,
+  reason: "KNOWN_OPERATOR_OF"
+});
+var fooPerson = model.store.getPerson(asocFoo.objectId);
+fooPerson.name.lastName = "ASOCGARCIA";
+fooPerson.name.firstName = "LUIS";
+model.store.upsertPerson(fooPerson);
+var reusedFoo = model.store.reuseInvestigationIdentity(
+  asocInv.investigationId,
+  asocFoo.nodeId
+);
+var opAsocs = model.store.associationsFor("PERSON", asocPer.objectId);
+check(
+  "reuse-on-type retargets association ends",
+  reusedFoo.ok &&
+    reusedFoo.reused &&
+    reusedFoo.objectId === asocPer.objectId &&
+    opAsocs.some(function (row) {
+      return (
+        row.reason === "KNOWN_OPERATOR_OF" &&
+        row.to.id === asocVeh2.objectId &&
+        row.from.id === asocPer.objectId
+      );
+    })
+);
+var lonerLoc = model.store.addInvestigationObject(asocInv.investigationId, {
+  objectType: "LOCATION",
+  street: "9 Asoc Ln",
+  city: "Dallas",
+  state: "TX",
+  zip: "75201",
+  fromNodeId: asocPer.nodeId,
+  reason: "CURRENT_RESIDENCE"
+});
+var locAsoc = model.store.associationsFor("LOCATION", lonerLoc.objectId)[0];
+var deletedLoc = model.store.deleteInvestigationObject(
+  asocInv.investigationId,
+  lonerLoc.nodeId
+);
+check(
+  "delete unreferenced person-end drops hanging association",
+  deletedLoc.ok &&
+    locAsoc &&
+    !model.store.getAssociation(locAsoc.associationId) &&
+    !model.store.getLocationRecord(lonerLoc.objectId)
+);
+var caseSubj = model.store.getLead(openedWallCase.leadId);
+var caseAsoc = model.store.upsertAssociation({
+  from: { type: "PERSON", id: caseSubj.subjectPersonId },
+  to: { type: "VEHICLE", id: asocVeh.objectId },
+  reason: "KNOWN_OPERATOR_OF"
+});
+check(
+  "case subject can have associations",
+  caseAsoc.ok && !!model.store.getAssociation(caseAsoc.associationId)
+);
+var caseOnAsocWall = model.store.addInvestigationObject(asocInv.investigationId, {
+  objectType: "PERSON",
+  objectId: caseSubj.subjectPersonId,
+  fromNodeId: ""
+});
+var delCaseAsoc = model.store.deleteInvestigationObject(
+  asocInv.investigationId,
+  caseOnAsocWall.nodeId
+);
+check(
+  "cannot delete case subject even with associations",
+  !delCaseAsoc.ok && !!model.store.getPerson(caseSubj.subjectPersonId)
+);
+check(
+  "createAssociation still allows unresolved label",
+  model.createAssociation({
+    label: "PEREZ, ANA",
+    otherType: "PERSON",
+    from: { type: "PERSON", id: "p_a" }
+  }).to.id === ""
+);
+
+check(
+  "default person reason vehicle is owner",
+  model.defaultPersonAssociationReason("VEHICLE") === "REGISTERED_OWNER_OF"
+);
+check(
+  "default person reason business is customer",
+  model.defaultPersonAssociationReason("BUSINESS") === "CUSTOMER_OF"
+);
+check(
+  "card label owner",
+  model.associationCardLabel("REGISTERED_OWNER_OF") === "Owner"
+);
+var composerInv = model.createInvestigation({
+  kind: "elite",
+  team: 3,
+  existingIds: model.store.listInvestigations().map(function (row) {
+    return row.investigationId;
+  })
+});
+model.store.saveInvestigation(composerInv, { mode: "draft" });
+var composerVeh = model.store.addInvestigationObject(composerInv.investigationId, {
+  objectType: "VEHICLE",
+  licensePlate: "COMP1",
+  plateState: "TX",
+  fromNodeId: "",
+  x: 20,
+  y: 20
+});
+var composed = model.store.associateInvestigationPerson(
+  composerInv.investigationId,
+  composerVeh.nodeId,
+  { label: "COMPOSER, RITA", reason: "REGISTERED_OWNER_OF" }
+);
+var composedPerson = model.store.getPerson(composed.personId);
+var composedWall = model.store.getInvestigation(composerInv.investigationId);
+var composedLink = (composedWall.links || []).filter(function (row) {
+  return row && row.associationId === composed.associationId;
+})[0];
+var composedVehRec = model.store.getVehicleRecord(composerVeh.objectId);
+check(
+  "composer mints person, wall node, and association",
+  composed.ok &&
+    composedPerson &&
+    composedPerson.name.lastName === "COMPOSER" &&
+    composed.placed &&
+    composedLink &&
+    composedWall.nodes.some(function (row) {
+      return row.objectType === "PERSON" && row.objectId === composed.personId;
+    })
+);
+check(
+  "composer fills empty registered owner name",
+  composedVehRec &&
+    String(composedVehRec.registeredOwnerName || "").toUpperCase().indexOf("COMPOSER") !== -1
+);
+check(
+  "composer empty name rejected",
+  !model.store.associateInvestigationPerson(
+    composerInv.investigationId,
+    composerVeh.nodeId,
+    { label: "   " }
+  ).ok
+);
+var composedAgain = model.store.associateInvestigationPerson(
+  composerInv.investigationId,
+  composerVeh.nodeId,
+  { label: "COMPOSER, RITA", reason: "REGISTERED_OWNER_OF" }
+);
+check(
+  "composer reuses person and association",
+  composedAgain.ok &&
+    composedAgain.reused &&
+    composedAgain.personId === composed.personId &&
+    composedAgain.associationId === composed.associationId
+);
+var hostFocus = composedWall.focusNodeId;
+check(
+  "composer keeps host focus",
+  composedWall.focusNodeId === composerVeh.nodeId || hostFocus === composerVeh.nodeId
+);
+var afterCompose = model.store.getInvestigation(composerInv.investigationId);
+check(
+  "composer does not steal focus",
+  afterCompose.focusNodeId === composerVeh.nodeId
+);
+var dropCite = model.store.disconnectInvestigationAssociation(
+  composerInv.investigationId,
+  composed.associationId
+);
+var afterDrop = model.store.getInvestigation(composerInv.investigationId);
+check(
+  "x drops wall citation only",
+  dropCite.ok &&
+    dropCite.removed &&
+    !!model.store.getAssociation(composed.associationId) &&
+    !(afterDrop.links || []).some(function (row) {
+      return row && row.associationId === composed.associationId;
+    }) &&
+    afterDrop.nodes.some(function (row) {
+      return row.objectType === "PERSON" && row.objectId === composed.personId;
+    })
+);
+var worldBiz = model.store.addInvestigationObject(composerInv.investigationId, {
+  objectType: "BUSINESS",
+  name: "Composer Mart",
+  fromNodeId: ""
+});
+var bizCust = model.store.associateInvestigationPerson(
+  composerInv.investigationId,
+  worldBiz.nodeId,
+  { label: "CUSTOMER, PAT" }
+);
+var custAsoc = model.store.getAssociation(bizCust.associationId);
+check(
+  "composer business defaults to customer",
+  bizCust.ok && custAsoc && custAsoc.reason === "CUSTOMER_OF"
+);
+var vehFromPerson = model.store.associateInvestigationObject(
+  composerInv.investigationId,
+  composed.nodeId,
+  { objectType: "VEHICLE", label: "TX COMP2" }
+);
+var vehFromPersonRec = model.store.getVehicleRecord(vehFromPerson.objectId);
+var vehAsoc = model.store.getAssociation(vehFromPerson.associationId);
+check(
+  "composer plate mints vehicle as owner",
+  vehFromPerson.ok &&
+    vehFromPersonRec &&
+    vehFromPersonRec.licensePlate === "COMP2" &&
+    vehFromPersonRec.plateState === "TX" &&
+    vehAsoc &&
+    vehAsoc.reason === "REGISTERED_OWNER_OF"
+);
+var locFromPerson = model.store.associateInvestigationObject(
+  composerInv.investigationId,
+  composed.nodeId,
+  { objectType: "LOCATION", label: "100 Composer St, Dallas, TX 75201" }
+);
+var locRec = model.store.getLocationRecord(locFromPerson.objectId);
+var locAsoc2 = model.store.getAssociation(locFromPerson.associationId);
+check(
+  "composer address mints location as residence",
+  locFromPerson.ok &&
+    locRec &&
+    locRec.street === "100 Composer St" &&
+    locRec.city === "Dallas" &&
+    locRec.state === "TX" &&
+    locAsoc2 &&
+    locAsoc2.reason === "CURRENT_RESIDENCE"
+);
+check(
+  "composer rejects empty plate",
+  !model.store.associateInvestigationObject(
+    composerInv.investigationId,
+    composed.nodeId,
+    { objectType: "VEHICLE", label: "   " }
+  ).ok
+);
+var listed = model.store.listObjects("VEHICLE");
+check(
+  "listObjects includes composer vehicle",
+  listed.some(function (row) {
+    return row && (row.licensePlate === "COMP2" || row.plate === "COMP2");
+  })
+);
+
+var nestCase = model.store.promoteInvestigationPersonToCase(
+  composerInv.investigationId,
+  composed.nodeId
+);
+var nestLead = model.store.getLead(nestCase.leadId);
+check(
+  "open as case dual-writes associated location",
+  nestCase.ok &&
+    nestLead &&
+    (nestLead.person.locations || []).some(function (row) {
+      return row && row.city === "Dallas" && row.association === "residence";
+    })
+);
+check(
+  "open as case dual-writes associated vehicle",
+  nestLead &&
+    (nestLead.vehicles || []).some(function (row) {
+      return row && (row.licensePlate === "COMP2" || row.plate === "COMP2");
+    })
+);
+check(
+  "open as case still identity-only RAP",
+  nestLead && (nestLead.person.arrests || []).length === 0
+);
+var extraNest = model.store.associateInvestigationObject(
+  composerInv.investigationId,
+  composed.nodeId,
+  { objectType: "LOCATION", label: "200 Nest Ave, Irving, TX 75060" }
+);
+var nestLeadAfter = model.store.getLead(nestCase.leadId);
+check(
+  "associating onto an existing case updates nested locations",
+  extraNest.ok &&
+    (nestLeadAfter.person.locations || []).some(function (row) {
+      return row && row.city === "Irving";
+    })
+);
+
+var caseComposer = model.store.associateCaseObject(nestCase.leadId, {
+  objectType: "PERSON",
+  label: "CASEPAL, RIO",
+  reason: "ASSOCIATE_OF"
+});
+var caseAfterComposer = model.store.getLead(nestCase.leadId);
+check(
+  "case composer mints person association",
+  caseComposer.ok &&
+    caseComposer.associationId &&
+    !!model.store.getAssociation(caseComposer.associationId) &&
+    (caseAfterComposer.links || []).some(function (row) {
+      return row && row.associationId === caseComposer.associationId;
+    })
+);
+var caseLoc = model.store.associateCaseObject(nestCase.leadId, {
+  objectType: "LOCATION",
+  label: "9 Case St, Plano, TX 75074"
+});
+var caseAfterLoc = model.store.getLead(nestCase.leadId);
+check(
+  "case composer location dual-writes nested place",
+  caseLoc.ok &&
+    (caseAfterLoc.person.locations || []).some(function (row) {
+      return row && row.city === "Plano";
+    })
+);
+check(
+  "case composer empty name rejected",
+  !model.store.associateCaseObject(nestCase.leadId, {
+    objectType: "PERSON",
+    label: "  "
+  }).ok
+);
+
+var dropPal = model.store.dropAssociation(caseComposer.associationId);
+var afterDrop = model.store.getLead(nestCase.leadId);
+check("dropAssociation ok", dropPal.ok && dropPal.removed);
+check(
+  "dropAssociation removes world fact",
+  !(model.store.associationsFor("PERSON", nestLead.subjectPersonId) || []).some(
+    function (row) {
+      return row && row.associationId === caseComposer.associationId;
+    }
+  )
+);
+check(
+  "dropAssociation uncite case link",
+  !(afterDrop.links || []).some(function (row) {
+    return row && row.associationId === caseComposer.associationId;
+  })
+);
+check(
+  "dropAssociation keeps the other person",
+  !!model.store.getPerson(caseComposer.objectId)
+);
+
+var otherLink = model.store.associateCaseObject(nestCase.leadId, {
+  objectType: "OTHER",
+  label: "Unknown caller"
+});
+check("case OTHER link ok", otherLink.ok && otherLink.linkId && !otherLink.associationId);
+var unciteOther = model.store.removeCaseLink(nestCase.leadId, otherLink.linkId);
+var afterUncite = model.store.getLead(nestCase.leadId);
+check("removeCaseLink ok", unciteOther.ok && unciteOther.removed);
+check(
+  "removeCaseLink drops OTHER",
+  !(afterUncite.links || []).some(function (row) {
+    return row && row.linkId === otherLink.linkId;
+  })
+);
+check(
+  "dropAssociation missing id is ok",
+  model.store.dropAssociation("asoc_missing").ok &&
+    !model.store.dropAssociation("asoc_missing").removed
+);
+
+var occCase = model.createLeadSnapshot();
+occCase.person.name.lastName = "OCC";
+occCase.person.name.firstName = "ANN";
+var occPlace = model.createLocation({
+  street: "10 Occupancy St",
+  city: "Dallas",
+  state: "TX",
+  zip: "75201",
+  occupancy: "historical",
+  occupiedFrom: "2019-03-01",
+  occupiedTo: "2020-03-01"
+});
+occCase.person.locations = [occPlace];
+model.store.saveLead(occCase, { mode: "commit" });
+var occSaved = model.store.getLead(occCase.leadId);
+var occAsoc = model.store.occupancyFor(
+  "PERSON",
+  occSaved.subjectPersonId,
+  "LOCATION",
+  occPlace.locationId
+);
+check(
+  "occupancy writes onto association",
+  occAsoc &&
+    occAsoc.occupancy === "historical" &&
+    occAsoc.occupiedFrom === "2019-03-01" &&
+    occAsoc.occupiedTo === "2020-03-01"
+);
+check(
+  "occupancy dual-writes nested from association",
+  occSaved.person.locations[0].occupancy === "historical" &&
+    occSaved.person.locations[0].occupiedFrom === "2019-03-01"
+);
+model.store.upsertAssociation({
+  from: { type: "PERSON", id: occSaved.subjectPersonId },
+  to: { type: "LOCATION", id: occPlace.locationId },
+  reason: "CURRENT_RESIDENCE",
+  occupancy: "current",
+  validFrom: "",
+  validTo: ""
+});
+var occAfter = model.store.getLead(occCase.leadId);
+check(
+  "association occupancy change dual-writes nested",
+  occAfter.person.locations[0].occupancy === "current"
+);
+var occVeh = model.createVehicle({
+  governmentVehicle: false,
+  licensePlate: "OCC1",
+  plateState: "TX",
+  occupancy: "historical",
+  occupiedFrom: "2018-01-01"
+});
+occCase = model.store.getLead(occCase.leadId);
+occCase.vehicles = [occVeh];
+model.store.saveLead(occCase, { mode: "commit" });
+var occVehAsoc = model.store.occupancyFor(
+  "PERSON",
+  occSaved.subjectPersonId,
+  "VEHICLE",
+  occVeh.vehicleId
+);
+check(
+  "vehicle occupancy writes onto association",
+  occVehAsoc && occVehAsoc.occupancy === "historical"
 );
 
 if (fail) {

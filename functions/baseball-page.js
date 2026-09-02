@@ -216,7 +216,7 @@
       return;
     }
     if (m.isCommitted && !m.isCommitted(snap)) {
-      setStatus("Commit the lead before saving a baseball card.");
+      setStatus("File the lead before saving a baseball card.");
       return;
     }
     var subject = m.subjectOf ? m.subjectOf(snap) : snap.person;

@@ -255,6 +255,26 @@
       fillFields(card, {
         registeredOwner: vehicle.registeredOwnerName || ""
       });
+      var occ =
+        model().store &&
+        model().store.occupancyFor &&
+        snap &&
+        subjectOf(snap) &&
+        vehicle.vehicleId
+          ? model().store.occupancyFor(
+              "PERSON",
+              subjectOf(snap).personId,
+              "VEHICLE",
+              vehicle.vehicleId
+            )
+          : null;
+      if (occ) {
+        fillFields(card, {
+          occupancy: occ.occupancy,
+          occupiedFrom: occ.occupiedFrom,
+          occupiedTo: occ.occupiedTo
+        });
+      }
       var make = card.querySelector('[data-field="vehicleMake"]');
       if (make) {
         make.dispatchEvent(new Event("change"));
@@ -289,7 +309,7 @@
     }
   }
 
-  function hydrateLocation(card, location) {
+  function hydrateLocation(card, location, snap) {
     if (typeof bindAddressCardFull === "function") {
       bindAddressCardFull(card);
     }
@@ -299,6 +319,28 @@
       fillFields(card, {
         locationAssociation: location.association || ""
       });
+      var m = model();
+      var person = snap ? subjectOf(snap) : null;
+      var occ =
+        m.store &&
+        m.store.occupancyFor &&
+        person &&
+        person.personId &&
+        location.locationId
+          ? m.store.occupancyFor(
+              "PERSON",
+              person.personId,
+              "LOCATION",
+              location.locationId
+            )
+          : null;
+      if (occ) {
+        fillFields(card, {
+          occupancy: occ.occupancy,
+          occupiedFrom: occ.occupiedFrom,
+          occupiedTo: occ.occupiedTo
+        });
+      }
       if (location.latitude && location.longitude && root.locationMap) {
         root.locationMap.sync(card);
       }
@@ -616,7 +658,7 @@
     }
     h.appendChild(card);
     var location = locationId ? findLocation(snap, locationId) : null;
-    hydrateLocation(card, location);
+    hydrateLocation(card, location, snap);
     showPanel(location ? "Edit location" : "Add location");
   }
 
@@ -707,6 +749,37 @@
     }, "Document saved.");
   }
 
+  function fillCaseRelationshipSelect(card, otherType, selected) {
+    var sel = card && card.querySelector('[data-field="relationshipType"]');
+    if (!sel) {
+      return;
+    }
+    var m = model();
+    var type = String(otherType || "PERSON").toUpperCase();
+    var rows = [];
+    if (m.associationReasonsForPair) {
+      rows = m.associationReasonsForPair("PERSON", type) || [];
+    }
+    sel.replaceChildren();
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "Select a relationship";
+    sel.appendChild(blank);
+    rows.forEach(function (row) {
+      if (!row || !row.value) {
+        return;
+      }
+      var opt = document.createElement("option");
+      opt.value = row.value;
+      opt.textContent =
+        (m.associationCardLabel && m.associationCardLabel(row.value)) || row.label;
+      sel.appendChild(opt);
+    });
+    if (selected && rows.some(function (row) { return row && row.value === selected; })) {
+      sel.value = selected;
+    }
+  }
+
   function openAssociation(snap, linkId) {
     var card = cloneTemplate("relationshipCardTemplate");
     var h = host();
@@ -714,9 +787,6 @@
       return;
     }
     h.appendChild(card);
-    if (typeof bindRelationshipCard === "function") {
-      bindRelationshipCard(card);
-    }
     var select = card.querySelector('[data-field="relatedPersonId"]');
     var subject = subjectOf(snap);
     var sid = subject && subject.personId;
@@ -734,86 +804,211 @@
       });
     }
     var link = ((snap && snap.links) || []).filter(function (row) {
-      return row && row.linkId === linkId;
+      return row && (row.linkId === linkId || row.associationId === linkId);
     })[0];
+    var asoc =
+      !link &&
+      model().store.getAssociation &&
+      model().store.getAssociation(linkId);
+    var otherType = "PERSON";
+    var reason = "";
+    var label = "";
+    var notes = "";
+    var otherId = "";
     if (link) {
       card.dataset.entityId = link.linkId;
-      fillFields(card, {
-        associationLabel: link.label || "",
-        otherType: link.otherType || (link.to && link.to.type) || "PERSON",
-        relatedPersonId: link.to && link.to.id,
-        relationshipType: (link.reasons && link.reasons[0]) || "",
-        notes: link.notes || ""
+      if (link.associationId) {
+        card.dataset.associationId = link.associationId;
+      }
+      otherType = link.otherType || (link.to && link.to.type) || "PERSON";
+      otherId = (link.to && link.to.id) || "";
+      reason = (link.reasons && link.reasons[0]) || "";
+      label = link.label || "";
+      notes = link.notes || "";
+    } else if (asoc) {
+      card.dataset.associationId = asoc.associationId;
+      var other =
+        asoc.from && asoc.from.type === "PERSON" && asoc.from.id === sid
+          ? asoc.to
+          : asoc.from;
+      otherType = (other && other.type) || "PERSON";
+      otherId = (other && other.id) || "";
+      reason = asoc.reason || "";
+      notes = asoc.notes || "";
+      label = asoc.label || "";
+    }
+    fillCaseRelationshipSelect(card, otherType, reason);
+    fillFields(card, {
+      associationLabel: label,
+      otherType: otherType,
+      relatedPersonId: otherType === "PERSON" ? otherId : "",
+      relationshipType: reason,
+      notes: notes
+    });
+    var typeSel = card.querySelector('[data-field="otherType"]');
+    if (typeSel && typeSel.dataset.caseBound !== "true") {
+      typeSel.dataset.caseBound = "true";
+      typeSel.addEventListener("change", function () {
+        fillCaseRelationshipSelect(card, typeSel.value, "");
+        var personWrap = card.querySelector('[data-field="relatedPersonId"]');
+        if (personWrap && personWrap.closest) {
+          var field = personWrap.closest(".field");
+          if (field) {
+            field.hidden = String(typeSel.value || "").toUpperCase() !== "PERSON";
+          }
+        }
       });
     }
-    showPanel(link ? "Edit association" : "Add association");
+    var personField = card.querySelector('[data-field="relatedPersonId"]');
+    if (personField && personField.closest) {
+      var wrap = personField.closest(".field");
+      if (wrap) {
+        wrap.hidden = String(otherType || "").toUpperCase() !== "PERSON";
+      }
+    }
+    showPanel(link || asoc ? "Edit association" : "Add association");
+    syncPromoteButton(card, snap);
   }
 
-  function saveAssociation() {
-    var card = host() && host().querySelector('[data-card="relationship"]');
+  function writeAssociation(snap, card) {
     var m = model();
     var f = m.readFields(card);
     var label = String(f.associationLabel || "").trim();
-    var otherType = f.otherType || "";
+    var otherType = String(f.otherType || "").toUpperCase();
     var otherId = f.relatedPersonId || "";
     if (!label && !otherId) {
-      setStatus("Enter a name, or link an existing person.");
-      return;
+      return { ok: false, error: "Enter a name, plate, or street." };
     }
     if (!otherType) {
       otherType = otherId ? "PERSON" : "";
     }
     if (!otherType) {
-      setStatus("Pick a type.");
+      return { ok: false, error: "Pick a type." };
+    }
+    if (!m.store.associateCaseObject) {
+      return { ok: false, error: "Could not save the association." };
+    }
+    var result = m.store.associateCaseObject(snap.leadId, {
+      objectType: otherType,
+      objectId: otherType === "PERSON" ? otherId : "",
+      personId: otherType === "PERSON" ? otherId : "",
+      label: label,
+      reason: f.relationshipType || "",
+      notes: f.notes || "",
+      linkId: card.dataset.entityId || ""
+    });
+    if (!result || !result.ok) {
+      return { ok: false, error: (result && result.error) || "Could not save." };
+    }
+    card.dataset.entityId = result.linkId || "";
+    if (result.associationId) {
+      card.dataset.associationId = result.associationId;
+    }
+    var fresh = m.store.getLead(snap.leadId);
+    var link = ((fresh && fresh.links) || []).filter(function (row) {
+      return row && row.linkId === result.linkId;
+    })[0];
+    return { ok: true, link: link, error: "" };
+  }
+
+  function saveAssociation() {
+    var card = host() && host().querySelector('[data-card="relationship"]');
+    if (!card) {
       return;
     }
-    commit(function (snap) {
-      var person = subjectOf(snap);
-      snap.links = snap.links || [];
-      var linkId = card.dataset.entityId || "";
-      var existing = null;
-      var i;
-      for (i = 0; i < snap.links.length; i++) {
-        if (snap.links[i] && snap.links[i].linkId === linkId) {
-          existing = snap.links[i];
-          break;
-        }
-      }
-      if (
-        existing &&
-        existing.from &&
-        existing.from.type === "VEHICLE"
-      ) {
-        existing = null;
-        linkId = "";
-      }
-      if (!label && otherId && m.formatPersonLabel && m.store && m.store.getPerson) {
-        var linked = m.store.getPerson(otherId);
-        label = (linked && m.formatPersonLabel(linked)) || "";
-      }
-      var row = m.createLink({
-        linkId: (existing && existing.linkId) || linkId || m.newId("link"),
-        label: label,
-        otherType: otherType,
-        from: { type: "PERSON", id: person.personId },
-        to: { type: otherType, id: otherId },
-        reasons: f.relationshipType
-          ? [f.relationshipType]
-          : (existing && existing.reasons) || [],
-        notes: f.notes || ""
+    var m = model();
+    var snap = loadSnap();
+    if (!snap) {
+      setStatus("Open a case to edit.");
+      return;
+    }
+    var written = writeAssociation(snap, card);
+    if (!written.ok) {
+      setStatus(written.error);
+      return;
+    }
+    closePanel();
+    setStatus("Association saved.", true);
+    if (typeof window.paintCaseView === "function") {
+      window.paintCaseView();
+    }
+  }
+
+  function syncPromoteButton(card, snap) {
+    var btn = card && card.querySelector("[data-open-associate-case]");
+    if (!btn) {
+      return;
+    }
+    function refresh() {
+      var m = model();
+      var f = m.readFields(card);
+      var otherType = String(f.otherType || "").toUpperCase();
+      var otherId = String(f.relatedPersonId || "").trim();
+      var label = String(f.associationLabel || "").trim();
+      var personOk = otherType === "PERSON" || (!otherType && !!otherId);
+      var can =
+        snap &&
+        m.isCommitted &&
+        m.isCommitted(snap) &&
+        personOk &&
+        !!(label || otherId);
+      btn.hidden = !can;
+      btn.disabled = !can;
+    }
+    if (btn.getAttribute("data-bound") !== "true") {
+      btn.setAttribute("data-bound", "true");
+      btn.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        openAssociateAsCase(card);
       });
-      var found = false;
-      for (i = 0; i < snap.links.length; i++) {
-        if (snap.links[i] && snap.links[i].linkId === row.linkId) {
-          snap.links[i] = row;
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        snap.links.push(row);
-      }
-    }, "Association saved.");
+      card.addEventListener("input", refresh);
+      card.addEventListener("change", refresh);
+    }
+    refresh();
+  }
+
+  function openAssociateAsCase(card) {
+    var m = model();
+    var snap = loadSnap();
+    if (!snap || !m.isCommitted(snap)) {
+      setStatus("Open a filed case to promote an associate.");
+      return;
+    }
+    var f = m.readFields(card);
+    var label = String(f.associationLabel || "").trim();
+    if (!label && f.relatedPersonId && m.formatPersonLabel && m.store.getPerson) {
+      var linked = m.store.getPerson(f.relatedPersonId);
+      label = (linked && m.formatPersonLabel(linked)) || "";
+    }
+    var display = label || "this person";
+    if (
+      typeof window.confirm === "function" &&
+      !window.confirm("Open a new case for " + display + "?")
+    ) {
+      return;
+    }
+    var written = writeAssociation(snap, card);
+    if (!written.ok) {
+      setStatus(written.error);
+      return;
+    }
+    var saved = m.store.saveLead(snap, { mode: "commit" });
+    if (!saved || !saved.ok) {
+      setStatus((saved && saved.error) || "Could not save the association.");
+      return;
+    }
+    var result = m.store.promoteAssociateToCase(snap.leadId, written.link.linkId);
+    if (!result || (!result.ok && !result.leadId)) {
+      setStatus((result && result.error) || "Could not open a new case.");
+      return;
+    }
+    if (result.leadId) {
+      var opened = m.store.getLead(result.leadId);
+      var page =
+        opened && m.isCommitted(opened) ? "case.html" : "lead-form.html";
+      window.location.href = page + "?id=" + encodeURIComponent(result.leadId);
+    }
   }
 
   var OPENERS = {
@@ -951,6 +1146,29 @@
     addTileButton(byId("leadLocationsCard"), "Add", "location", true);
     addTileButton(byId("caseDocumentsTile"), "Add", "document", true);
     addTileButton(byId("caseAssociationsTile"), "Add", "association", true);
+    var assocList = byId("caseAssociationsList");
+    if (assocList && assocList.dataset.assocBound !== "true") {
+      assocList.dataset.assocBound = "true";
+      assocList.addEventListener("click", function (event) {
+        if (
+          event.target.closest &&
+          (event.target.closest("a") ||
+            event.target.closest("select") ||
+            event.target.closest("[data-case-assoc-remove]") ||
+            event.target.closest("[data-case-assoc-uncite]") ||
+            event.target.closest("[data-case-assoc-reason]"))
+        ) {
+          return;
+        }
+        var row =
+          event.target.closest && event.target.closest("[data-case-association]");
+        if (!row) {
+          return;
+        }
+        event.preventDefault();
+        open("association", row.getAttribute("data-case-association"));
+      });
+    }
   }
 
   function bind() {

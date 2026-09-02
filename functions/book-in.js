@@ -1547,6 +1547,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           record.leadId,
           `Imported record ${recordNumber} lead`
         ),
+        personId: normalizeImportedMetadataValue(
+          record.personId,
+          `Imported record ${recordNumber} person`
+        ),
         formState
       };
     }
@@ -1843,7 +1847,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     function updateActiveRecordUi() {
       const label = document.getElementById("activeRecordLabel");
       const saveButton =
-        document.getElementById("saveRecordButton");
+        document.getElementById("saveRecordButton") ||
+        document.querySelector('#appBarPrimaryAction[data-chrome-action="save"]');
 
       if (!label || !saveButton) {
         return;
@@ -1940,7 +1945,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           return role === "TARGET" || role === "COLLATERAL";
         })
         .map(row => ({
-          personId: "",
+          personId: row.personId || "",
           leadId: row.leadId || "",
           bookinRecordId: row.id,
           lastName: row.lastName || "",
@@ -2046,6 +2051,29 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       lastSavedSignature = currentFormSignature();
     }
 
+    function promoteBookInRecord(record, data) {
+      const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+      if (!store || typeof store.promoteBookInToLead !== "function") {
+        return { ok: false, error: "Lead store is not available." };
+      }
+      const citizen = document.getElementById("citizenship");
+      return store.promoteBookInToLead({
+        leadId: record.leadId || pendingLeadId || "",
+        personId: record.personId || "",
+        lastName: data.lastName || "",
+        firstName: data.firstName || "",
+        sex: getRadioValue("sex") || data.gender || "",
+        dateOfBirth: data.dateOfBirth || "",
+        age: data.age,
+        citizenship: citizen
+          ? resolveCitizenshipCode(citizen.value || selectedOptionText("citizenship"))
+          : data.countryOfCitizenship || "",
+        alienNumber: data.aNumber || "",
+        disposition: data.caseType || "",
+        status: getValue("immigrationStatus")
+      });
+    }
+
     function saveCurrentRecord(options) {
       const quiet = Boolean(options && options.quiet);
       try {
@@ -2083,8 +2111,21 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           encounterId: encounterId,
           encounterRole: encounterRole || (existing && existing.encounterRole) || "",
           leadId: pendingLeadId || (existing && existing.leadId) || "",
+          personId: (existing && existing.personId) || "",
           formState: captureFormState()
         };
+
+        let promoteError = "";
+        if (!quiet) {
+          const promoted = promoteBookInRecord(record, data);
+          if (promoted && promoted.ok) {
+            record.leadId = promoted.leadId || record.leadId;
+            record.personId = promoted.personId || record.personId;
+            pendingLeadId = record.leadId || pendingLeadId;
+          } else if (promoted && promoted.error) {
+            promoteError = promoted.error;
+          }
+        }
 
         if (existingIndex >= 0) {
           records[existingIndex] = record;
@@ -2097,15 +2138,38 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         renderSavedRecords();
         rememberFormSignature();
         syncEncounterSubjects(record);
+        if (!quiet && record.leadId) {
+          rememberLeadInUrl(record.leadId);
+        }
 
-        setStatus(
-          quiet
-            ? "Auto-saved."
-            : existing
-              ? `Saved record updated: ${getRecordSubjectLabel(record)}`
-              : `Record saved: ${getRecordSubjectLabel(record)}`,
-          "success"
-        );
+        if (quiet) {
+          setStatus("Auto-saved.", "success");
+        } else if (promoteError) {
+          setStatus(
+            `Book-in saved. ${promoteError}`,
+            "warning"
+          );
+        } else if (record.leadId) {
+          setStatus(
+            `Filed as detainee: ${getRecordSubjectLabel(record)}`,
+            "success"
+          );
+        } else if (existing) {
+          setStatus(
+            `Saved record updated: ${getRecordSubjectLabel(record)}`,
+            "success"
+          );
+        } else {
+          setStatus(
+            `Record saved: ${getRecordSubjectLabel(record)}`,
+            "success"
+          );
+        }
+        if (!quiet && !promoteError && currentEncounterId()) {
+          window.location.href =
+            "encounter-form.html?id=" +
+            encodeURIComponent(currentEncounterId());
+        }
         return true;
       } catch (error) {
         console.error(error);
@@ -2131,6 +2195,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         setEncounterRole(record.encounterRole);
       }
       activeRecordId = record.id;
+      pendingLeadId = record.leadId || "";
       renderSavedRecords();
       rememberFormSignature();
       suppressAutoSave = false;
@@ -2180,18 +2245,31 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
     function startNewRecord() {
       pendingLeadId = "";
+      activeRecordId = null;
       clearForm();
-      if (bookInLeadId()) {
-        rememberLeadInUrl("");
-      }
+      rememberLeadInUrl("");
       setStatus("New blank record ready.");
     }
 
-    function addEncounterSubject() {
+    function addAnotherEncounterSubject() {
+      const last = getValue("lastName");
+      const first = getValue("firstName");
+      const aNumber = getValue("alienNumber");
+      const digits =
+        typeof alienNumberDigits === "function"
+          ? alienNumberDigits(aNumber)
+          : String(aNumber || "").replace(/\D/g, "");
+      if (last || first || digits) {
+        saveCurrentRecord({ quiet: true });
+      }
       startNewRecord();
       if (currentEncounterId()) {
         setStatus("New subject for this encounter. Save to attach it.", true);
       }
+    }
+
+    function addEncounterSubject() {
+      addAnotherEncounterSubject();
     }
 
     function fillBookInFromLead(snap) {
@@ -2279,7 +2357,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       rememberLeadInUrl(snap.leadId || "");
       suppressAutoSave = false;
       setStatus(
-        message || "Lead loaded. Save to keep this Book-in record.",
+        message || "Case loaded. Save to keep this Book-in record.",
         true
       );
     }
@@ -2303,7 +2381,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       select.replaceChildren();
       const blank = document.createElement("option");
       blank.value = "";
-      blank.textContent = rows.length ? "Select a lead" : "No committed leads";
+      blank.textContent = rows.length ? "Select a case" : "No filed cases";
       select.appendChild(blank);
       rows.forEach(row => {
         const opt = document.createElement("option");
@@ -2326,11 +2404,11 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       store.loadFromDisk();
       const snap = store.getLead(id);
       if (!snap) {
-        setStatus("Lead not found.");
+        setStatus("Case not found.");
         return;
       }
       if (COPDoc.model.isCommitted && !COPDoc.model.isCommitted(snap)) {
-        setStatus("That lead is still a draft. Save it first.");
+        setStatus("That case is still working. Save it first.");
         return;
       }
       if (dialog) {
@@ -2339,8 +2417,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       applyLeadToForm(
         snap,
         currentEncounterId()
-          ? "Lead loaded. Save to attach it to this encounter."
-          : "Lead loaded. Save to keep this Book-in record."
+          ? "Case loaded. Save to attach it to this encounter."
+          : "Case loaded. Save to keep this Book-in record."
       );
     }
 
@@ -2357,14 +2435,14 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       store.loadFromDisk();
       const snap = store.getLead(id);
       if (!snap || (COPDoc.model.isCommitted && !COPDoc.model.isCommitted(snap))) {
-        setStatus("Lead not found or not saved.", "error");
+        setStatus("Case not found or not saved.", "error");
         return;
       }
       applyLeadToForm(
         snap,
         currentEncounterId()
-          ? "Lead loaded. Save to attach it to this encounter."
-          : "Lead loaded. Save to keep this Book-in record."
+          ? "Case loaded. Save to attach it to this encounter."
+          : "Case loaded. Save to keep this Book-in record."
       );
     }
 
@@ -3849,6 +3927,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
     window.confirmClearForm = confirmClearForm;
     window.addEncounterSubject = addEncounterSubject;
+    window.addAnotherEncounterSubject = addAnotherEncounterSubject;
     window.openLoadLeadForEncounter = openLoadLeadForEncounter;
     window.openBaseballCard = openBaseballCard;
     window.saveCurrentRecord = saveCurrentRecord;

@@ -642,12 +642,19 @@
     var api = window.COPDoc && COPDoc.locationMap;
     var key = api && api.safeKind ? api.safeKind(kind) : kind || "home";
     var el = document.createElement("span");
-    el.className =
-      "case-map-key-icon is-" + key + (isPrimary ? " is-primary" : "");
-    if (color) {
-      el.style.color = color;
-    }
-    if (api && typeof api.kindIconHtml === "function") {
+    el.className = "case-map-key-marker is-" + key;
+    if (api && typeof api.kindMarkerHtml === "function") {
+      el.innerHTML = api.kindMarkerHtml(key, {
+        color: color,
+        primary: !!isPrimary,
+        size: "compact"
+      });
+    } else if (api && typeof api.kindIconHtml === "function") {
+      el.className =
+        "case-map-key-icon is-" + key + (isPrimary ? " is-primary" : "");
+      if (color) {
+        el.style.color = color;
+      }
       el.innerHTML = api.kindIconHtml(key);
     }
     return el;
@@ -1143,8 +1150,8 @@
   function crimStatus(person) {
     var criminal = criminalProfile(person);
     return criminal.isCriminal || criminal.hasCriminalRecord
-      ? "Criminal"
-      : "Non-criminal";
+      ? "Crim"
+      : "Non-crim";
   }
 
   function catalogLabel(items, code) {
@@ -1190,20 +1197,54 @@
     }).filter(Boolean);
   }
 
+  function caseStage(snap) {
+    if (!snap) {
+      return "LEAD";
+    }
+    var m = model();
+    var subject = m && m.subjectOf ? m.subjectOf(snap) : snap.person;
+    var key = String(
+      (subject && subject.caseRole) || snap.caseRole || "LEAD"
+    ).toUpperCase();
+    if (key === "DETAINEE") {
+      return "DETAINEE";
+    }
+    if (key === "TARGET" || issuedWarrantRows(subject).length) {
+      return "TARGET";
+    }
+    return "LEAD";
+  }
+
+  function stageRank(stage) {
+    if (stage === "TARGET") {
+      return 1;
+    }
+    if (stage === "DETAINEE") {
+      return 2;
+    }
+    return 0;
+  }
+
   function filtered() {
     var rows = snapshots();
-    if (recordFilter === "draft") {
+    if (recordFilter === "lead") {
       rows = rows.filter(function (row) {
-        return !isCommitted(row);
+        return caseStage(row) === "LEAD";
       });
-    } else if (recordFilter === "committed") {
-      rows = rows.filter(isCommitted);
+    } else if (recordFilter === "target") {
+      rows = rows.filter(function (row) {
+        return caseStage(row) === "TARGET";
+      });
+    } else if (recordFilter === "detainee") {
+      rows = rows.filter(function (row) {
+        return caseStage(row) === "DETAINEE";
+      });
     }
     return rows.sort(function (a, b) {
-      var da = isCommitted(a) ? 1 : 0;
-      var db = isCommitted(b) ? 1 : 0;
-      if (da !== db) {
-        return da - db;
+      var sa = stageRank(caseStage(a));
+      var sb = stageRank(caseStage(b));
+      if (sa !== sb) {
+        return sa - sb;
       }
       var ua = (a.meta && a.meta.updatedAt) || "";
       var ub = (b.meta && b.meta.updatedAt) || "";
@@ -1238,19 +1279,27 @@
     empty.hidden = rows.length > 0;
     wrap.hidden = rows.length === 0;
     if (!all.length) {
-      empty.textContent = "No leads yet.";
+      empty.textContent = "No cases yet.";
     } else if (!rows.length) {
-      empty.textContent = "No matching records.";
+      empty.textContent =
+        recordFilter === "lead"
+          ? "No leads."
+          : recordFilter === "target"
+            ? "No targets."
+            : recordFilter === "detainee"
+              ? "No detainees."
+              : "No matching records.";
     }
     rows.forEach(function (snap) {
       var subject = m.subjectOf ? m.subjectOf(snap) : snap.person;
       var tr = document.createElement("tr");
-      var name = (m.formatPersonLabel && m.formatPersonLabel(subject)) || "Untitled lead";
+      var name = (m.formatPersonLabel && m.formatPersonLabel(subject)) || "Untitled case";
       var committed = isCommitted(snap);
       var criminal = (subject && subject.criminal) || {};
       var immigration = (subject && subject.immigration) || {};
       [
         name,
+        caseRoleLabel(caseStage(snap)),
         crimStatus(subject),
         dispositionLine(subject) || "—",
         personCity(subject) || "—",
@@ -1264,7 +1313,7 @@
         if (index === 0 && !committed) {
           var badge = document.createElement("span");
           badge.className = "record-status record-status-draft";
-          badge.textContent = "Draft";
+          badge.textContent = "Working";
           td.appendChild(document.createTextNode(" "));
           td.appendChild(badge);
         }
@@ -1493,11 +1542,7 @@
       nameEl.textContent = name;
     }
     if (roleEl) {
-      var role = subject && subject.caseRole;
-      if (issuedWarrantRows(subject).length) {
-        role = "TARGET";
-      }
-      roleEl.textContent = caseRoleLabel(role);
+      roleEl.textContent = caseRoleLabel(caseStage(snapshot));
     }
     if (byId("caseFolderFacts")) {
       fillFactHost(byId("caseFolderFacts"), [
@@ -1571,6 +1616,201 @@
       ["Filed", formatWhen(snapshot.meta && snapshot.meta.committedAt)]
     ]);
     setTileEmpty(byId("caseStatusTile"), !n);
+  }
+
+  function historyOfficerStamp(snap) {
+    var id = (snap && snap.assignedOfficerId) || "";
+    var api = window.COPDoc && COPDoc.officers;
+    return {
+      officerId: id,
+      officerAlias:
+        id && api && typeof api.aliasForId === "function" ? api.aliasForId(id) : ""
+    };
+  }
+
+  function saveAssignedOfficer(id) {
+    var m = model();
+    if (!m || !m.store) {
+      return;
+    }
+    m.store.loadFromDisk();
+    var snap = m.store.getLead(queryId());
+    if (!snap) {
+      return;
+    }
+    var prev = String(snap.assignedOfficerId || "");
+    var next = String(id || "");
+    if (prev === next) {
+      return;
+    }
+    var api = window.COPDoc && COPDoc.officers;
+    var note;
+    if (!next) {
+      var prevAlias =
+        api && typeof api.aliasForId === "function" ? api.aliasForId(prev) : "";
+      note =
+        "Cleared targeting officer" +
+        (prevAlias ? " " + prevAlias : "") +
+        ".";
+    } else {
+      snap.assignedOfficerId = next;
+      var shown =
+        api && typeof api.display === "function"
+          ? api.display(api.get(next))
+          : "";
+      note =
+        "Assigned targeting officer" + (shown ? " " + shown : "") + ".";
+    }
+    if (!next) {
+      snap.history = Array.isArray(snap.history) ? snap.history : [];
+      var clearStamp = {
+        officerId: prev,
+        officerAlias:
+          api && typeof api.aliasForId === "function" ? api.aliasForId(prev) : ""
+      };
+      snap.history.push(
+        m.createHistoryEvent
+          ? m.createHistoryEvent({
+              text: note,
+              type: "note",
+              source: "system",
+              officerId: clearStamp.officerId,
+              officerAlias: clearStamp.officerAlias
+            })
+          : {
+              eventId: "evt_" + Date.now().toString(36),
+              at: new Date().toISOString(),
+              type: "note",
+              text: note,
+              source: "system",
+              officerId: clearStamp.officerId,
+              officerAlias: clearStamp.officerAlias
+            }
+      );
+      snap.assignedOfficerId = "";
+    } else {
+      snap.history = Array.isArray(snap.history) ? snap.history : [];
+      var stamp = historyOfficerStamp(snap);
+      snap.history.push(
+        m.createHistoryEvent
+          ? m.createHistoryEvent({
+              text: note,
+              type: "note",
+              source: "system",
+              officerId: stamp.officerId,
+              officerAlias: stamp.officerAlias
+            })
+          : {
+              eventId: "evt_" + Date.now().toString(36),
+              at: new Date().toISOString(),
+              type: "note",
+              text: note,
+              source: "system",
+              officerId: stamp.officerId,
+              officerAlias: stamp.officerAlias
+            }
+      );
+    }
+    var mode = isCommitted(snap) ? "commit" : "draft";
+    var saved = m.store.saveLead(snap, { mode: mode });
+    if (!saved || !saved.ok) {
+      if (window.COPDoc && COPDoc.setAppBarStatus) {
+        COPDoc.setAppBarStatus((saved && saved.error) || "Could not assign the officer.");
+      }
+      return;
+    }
+    if (window.COPDoc && COPDoc.setAppBarStatus) {
+      COPDoc.setAppBarStatus(note, { ok: true });
+    }
+    var fresh = m.store.getLead(snap.leadId);
+    paintCaseAssignedOfficer(fresh);
+    paintCaseHistory(fresh, m.subjectOf ? m.subjectOf(fresh) : fresh.person);
+  }
+
+  function assignedOfficerLabel(snapshot) {
+    var api = window.COPDoc && COPDoc.officers;
+    if (!api || !snapshot || !snapshot.assignedOfficerId) {
+      return "";
+    }
+    var officer = api.get(snapshot.assignedOfficerId);
+    return (api.display && api.display(officer)) || "";
+  }
+
+  function paintCaseAssignedOfficer(snapshot) {
+    var btn = byId("caseAssignedOfficerButton");
+    if (!btn) {
+      return;
+    }
+    var label = assignedOfficerLabel(snapshot);
+    btn.textContent = label || "Assign officer";
+    btn.title = label
+      ? "Change targeting officer"
+      : "Assign targeting officer";
+  }
+
+  function closeAssignOfficerDialog() {
+    var dialog = byId("caseAssignOfficerDialog");
+    if (dialog) {
+      dialog.hidden = true;
+    }
+  }
+
+  function openAssignOfficerDialog() {
+    var dialog = byId("caseAssignOfficerDialog");
+    var m = model();
+    if (!dialog || !m || !m.store) {
+      return;
+    }
+    m.store.loadFromDisk();
+    var snap = m.store.getLead(queryId());
+    var api = window.COPDoc && COPDoc.officers;
+    if (api && typeof api.bindAssign === "function") {
+      api.bindAssign({
+        search: byId("caseAssignOfficerSearch"),
+        hidden: byId("caseAssignOfficerId"),
+        results: byId("caseAssignOfficerResults"),
+        value: (snap && snap.assignedOfficerId) || "",
+        onChange: function (id) {
+          saveAssignedOfficer(id);
+          closeAssignOfficerDialog();
+        }
+      });
+    }
+    dialog.hidden = false;
+    var search = byId("caseAssignOfficerSearch");
+    if (search) {
+      search.focus();
+    }
+  }
+
+  function bindCaseAssignedOfficer() {
+    var btn = byId("caseAssignedOfficerButton");
+    var dialog = byId("caseAssignOfficerDialog");
+    var cancel = byId("caseAssignOfficerCancel");
+    var clear = byId("caseAssignOfficerClear");
+    if (btn && btn.dataset.officerBound !== "true") {
+      btn.dataset.officerBound = "true";
+      btn.addEventListener("click", openAssignOfficerDialog);
+    }
+    if (cancel && cancel.dataset.officerBound !== "true") {
+      cancel.dataset.officerBound = "true";
+      cancel.addEventListener("click", closeAssignOfficerDialog);
+    }
+    if (clear && clear.dataset.officerBound !== "true") {
+      clear.dataset.officerBound = "true";
+      clear.addEventListener("click", function () {
+        saveAssignedOfficer("");
+        closeAssignOfficerDialog();
+      });
+    }
+    if (dialog && dialog.dataset.officerBound !== "true") {
+      dialog.dataset.officerBound = "true";
+      dialog.addEventListener("click", function (event) {
+        if (event.target === dialog) {
+          closeAssignOfficerDialog();
+        }
+      });
+    }
   }
 
   function paintSourceTile(snapshot) {
@@ -1771,17 +2011,6 @@
     host.appendChild(a);
   }
 
-  function appendListBit(host, text) {
-    var bit = String(text || "").trim();
-    if (!host || !bit) {
-      return;
-    }
-    if (host.childNodes.length) {
-      host.appendChild(document.createTextNode(" · "));
-    }
-    host.appendChild(document.createTextNode(bit));
-  }
-
   function relatedCases(personId, excludeLeadId) {
     var m = model();
     if (!m || !m.store || typeof m.store.relatedCommittedCases !== "function") {
@@ -1790,73 +2019,679 @@
     return m.store.relatedCommittedCases(personId, excludeLeadId);
   }
 
+  function objectLabelByRef(type, id, snapshot) {
+    var m = model();
+    var key = String(type || "").toUpperCase();
+    if (key === "PERSON") {
+      return personLabelById(id);
+    }
+    if (key === "VEHICLE") {
+      var vehicle =
+        (m.store.getVehicleRecord && m.store.getVehicleRecord(id)) ||
+        ((snapshot && snapshot.vehicles) || []).filter(function (row) {
+          return row && (row.vehicleId === id || row.id === id);
+        })[0];
+      return vehicleHeading(vehicle) || id;
+    }
+    if (key === "LOCATION") {
+      var loc =
+        (m.store.getLocationRecord && m.store.getLocationRecord(id)) ||
+        (((snapshot && snapshot.person && snapshot.person.locations) || []).filter(
+          function (row) {
+            return row && row.locationId === id;
+          }
+        )[0]);
+      return formatAddress(loc) || id;
+    }
+    if (key === "BUSINESS") {
+      var biz = m.store.getBusinessRecord && m.store.getBusinessRecord(id);
+      return (biz && biz.name) || id;
+    }
+    if (key === "ENTITY") {
+      var ent = m.store.getEntityRecord && m.store.getEntityRecord(id);
+      return (ent && (m.formatEntityLabel && m.formatEntityLabel(ent))) || (ent && ent.name) || id;
+    }
+    return id || "";
+  }
+
+  function associationTypeLabel(type) {
+    var key = String(type || "").toUpperCase();
+    if (key === "VEHICLE") {
+      return "Vehicle";
+    }
+    if (key === "LOCATION") {
+      return "Location";
+    }
+    if (key === "BUSINESS") {
+      return "Business";
+    }
+    if (key === "ENTITY") {
+      return "Entity";
+    }
+    if (key === "OTHER") {
+      return "Other";
+    }
+    return "Person";
+  }
+
+  var caseAssocDraft = {
+    query: "",
+    reason: "",
+    highlight: 0,
+    objectType: "PERSON"
+  };
+  var caseAssocFocusComposer = false;
+  var caseAssocLeadId = "";
+  var caseAssocSubjectId = "";
+
+  function caseAssocStatus(message, ok) {
+    if (window.COPDoc && COPDoc.setAppBarStatus) {
+      COPDoc.setAppBarStatus(message, ok ? { ok: true } : undefined);
+    }
+  }
+
+  function caseComposerPlaceholder(type) {
+    var key = String(type || "PERSON").toUpperCase();
+    if (key === "VEHICLE") {
+      return "Type a plate, Enter";
+    }
+    if (key === "LOCATION") {
+      return "Type a street, Enter";
+    }
+    if (key === "BUSINESS" || key === "ENTITY") {
+      return "Type a name, Enter";
+    }
+    return "Type a name, Enter";
+  }
+
+  function caseComposerTypes() {
+    var m = model();
+    var all = ["PERSON", "VEHICLE", "LOCATION", "BUSINESS", "ENTITY"];
+    if (!m || typeof m.associationReasonsForPair !== "function") {
+      return all;
+    }
+    return all.filter(function (type) {
+      return (m.associationReasonsForPair("PERSON", type) || []).length > 0;
+    });
+  }
+
+  function defaultCaseAssocReason(otherType) {
+    var m = model();
+    if (m && m.defaultPersonAssociationReason) {
+      return m.defaultPersonAssociationReason(otherType);
+    }
+    var key = String(otherType || "PERSON").toUpperCase();
+    if (key === "VEHICLE") {
+      return "REGISTERED_OWNER_OF";
+    }
+    if (key === "LOCATION") {
+      return "CURRENT_RESIDENCE";
+    }
+    if (key === "BUSINESS") {
+      return "CUSTOMER_OF";
+    }
+    if (key === "ENTITY") {
+      return "MEMBER_OF";
+    }
+    return "ASSOCIATE_OF";
+  }
+
+  function caseReasonOptions(otherType) {
+    var skip = {
+      ENCOUNTER_LOCATION: true,
+      ARREST_LOCATION: true,
+      STAGING_LOCATION: true,
+      PROCESSING_LOCATION: true
+    };
+    var m = model();
+    var rows =
+      m && m.associationReasonsForPair
+        ? m.associationReasonsForPair("PERSON", otherType) || []
+        : [];
+    return rows
+      .filter(function (row) {
+        return row && row.value && !skip[row.value];
+      })
+      .map(function (row) {
+        return {
+          value: row.value,
+          label:
+            (m.associationCardLabel && m.associationCardLabel(row.value)) ||
+            row.label
+        };
+      });
+  }
+
+  function fillCaseAssocReasonSelect(select, otherType, selected) {
+    if (!select) {
+      return;
+    }
+    var options = caseReasonOptions(otherType);
+    var want = selected || defaultCaseAssocReason(otherType);
+    select.replaceChildren();
+    options.forEach(function (row) {
+      var opt = document.createElement("option");
+      opt.value = row.value;
+      opt.textContent = row.label;
+      select.appendChild(opt);
+    });
+    if (want && options.some(function (row) { return row.value === want; })) {
+      select.value = want;
+    } else if (options.length) {
+      select.value = options[0].value;
+    }
+  }
+
+  function suggestCaseObjects(query, objectType, exceptId) {
+    var m = model();
+    var q = String(query || "").trim().toLowerCase();
+    var type = String(objectType || "PERSON").toUpperCase();
+    if (!q || !m || !m.store || typeof m.store.listObjects !== "function") {
+      return [];
+    }
+    var hits = [];
+    (m.store.listObjects(type) || []).forEach(function (row) {
+      if (!row) {
+        return;
+      }
+      var id =
+        row.personId ||
+        row.vehicleId ||
+        row.locationId ||
+        row.businessId ||
+        row.entityId ||
+        row.id;
+      if (!id || id === exceptId) {
+        return;
+      }
+      var label = objectLabelByRef(type, id, null) || associationTypeLabel(type);
+      var extra = "";
+      if (type === "VEHICLE") {
+        extra = [row.plateState, row.licensePlate || row.plate, row.vin]
+          .filter(Boolean)
+          .join(" ");
+      } else if (type === "LOCATION") {
+        extra = [row.street, row.city, row.state, row.zip]
+          .filter(Boolean)
+          .join(" ");
+      } else if (type === "BUSINESS" || type === "ENTITY") {
+        extra = [row.name, row.kind, row.phone].filter(Boolean).join(" ");
+      } else {
+        extra = [
+          row.name && row.name.lastName,
+          row.name && row.name.firstName
+        ]
+          .filter(Boolean)
+          .join(" ");
+      }
+      if ((label + " " + extra).toLowerCase().indexOf(q) === -1) {
+        return;
+      }
+      hits.push({ objectId: id, objectType: type, label: label });
+    });
+    return hits.slice(0, 8);
+  }
+
+  function paintCaseAssocSuggest(host) {
+    var list = host && host.querySelector("[data-associate-suggest]");
+    if (!list) {
+      return;
+    }
+    var hits = suggestCaseObjects(
+      caseAssocDraft.query,
+      caseAssocDraft.objectType || "PERSON",
+      caseAssocSubjectId
+    );
+    list.replaceChildren();
+    if (!hits.length || !String(caseAssocDraft.query || "").trim()) {
+      list.hidden = true;
+      caseAssocDraft.highlight = 0;
+      return;
+    }
+    list.hidden = false;
+    if (caseAssocDraft.highlight >= hits.length) {
+      caseAssocDraft.highlight = hits.length - 1;
+    }
+    if (caseAssocDraft.highlight < 0) {
+      caseAssocDraft.highlight = 0;
+    }
+    hits.forEach(function (hit, index) {
+      var li = document.createElement("li");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("data-associate-pick", hit.objectId);
+      btn.setAttribute("data-associate-pick-type", hit.objectType);
+      btn.textContent = hit.label;
+      if (index === caseAssocDraft.highlight) {
+        btn.className = "is-current";
+      }
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
+  function submitCaseAssocComposer(objectId, objectType) {
+    var m = model();
+    if (!m || !m.store || !m.store.associateCaseObject || !caseAssocLeadId) {
+      return;
+    }
+    var kind = objectType || caseAssocDraft.objectType || "PERSON";
+    var reason = caseAssocDraft.reason || defaultCaseAssocReason(kind);
+    var query = String(caseAssocDraft.query || "").trim();
+    if (!objectId && !query) {
+      caseAssocStatus(caseComposerPlaceholder(kind).replace(", Enter", "."));
+      return;
+    }
+    if (!objectId) {
+      var hits = suggestCaseObjects(query, kind, caseAssocSubjectId);
+      if (
+        hits.length &&
+        caseAssocDraft.highlight >= 0 &&
+        hits[caseAssocDraft.highlight]
+      ) {
+        objectId = hits[caseAssocDraft.highlight].objectId;
+        kind = hits[caseAssocDraft.highlight].objectType || kind;
+      }
+    }
+    var result = m.store.associateCaseObject(caseAssocLeadId, {
+      objectType: kind,
+      objectId: objectId || "",
+      personId: kind === "PERSON" ? objectId || "" : "",
+      label: query,
+      name: query,
+      reason: reason
+    });
+    if (!result || !result.ok) {
+      caseAssocStatus((result && result.error) || "Could not add that object.");
+      return;
+    }
+    caseAssocDraft.query = "";
+    caseAssocDraft.highlight = 0;
+    caseAssocFocusComposer = true;
+    if (typeof window.paintCaseView === "function") {
+      window.paintCaseView();
+    }
+    caseAssocStatus(
+      (result.reused ? "Reused " : "Added ") +
+        (objectLabelByRef(
+          result.objectType || kind,
+          result.objectId,
+          null
+        ) || associationTypeLabel(kind).toLowerCase()) +
+        ".",
+      true
+    );
+  }
+
+  function paintCaseAssocRow(list, opts) {
+    opts = opts || {};
+    var li = document.createElement("li");
+    li.className = "investigation-associate-row case-assoc-row";
+    var kind = document.createElement("span");
+    kind.className = "investigation-outline-kind";
+    kind.textContent = opts.typeLabel || associationTypeLabel(opts.objectType);
+    li.appendChild(kind);
+    var jumped = null;
+    if (opts.personId && opts.jumpedLeadIds) {
+      jumped = relatedCases(opts.personId, opts.leadId).asSubject[0];
+      if (jumped) {
+        opts.jumpedLeadIds[jumped.leadId] = true;
+      }
+    }
+    if (jumped) {
+      var jump = document.createElement("a");
+      jump.className = "investigation-associate-name case-jump";
+      jump.href = caseJumpHref(jumped.leadId);
+      jump.textContent = opts.displayName || jumped.label || "Case";
+      jump.title = "Open case";
+      li.appendChild(jump);
+    } else {
+      var nameBtn = document.createElement("button");
+      nameBtn.type = "button";
+      nameBtn.className = "investigation-associate-name";
+      if (opts.editId) {
+        nameBtn.setAttribute("data-case-association", opts.editId);
+      }
+      nameBtn.textContent = opts.displayName || associationTypeLabel(opts.objectType);
+      li.appendChild(nameBtn);
+    }
+    if (opts.associationId && caseReasonOptions(opts.objectType).length) {
+      var sel = document.createElement("select");
+      sel.setAttribute("data-case-assoc-reason", opts.associationId);
+      fillCaseAssocReasonSelect(sel, opts.objectType, opts.reason);
+      li.appendChild(sel);
+    } else if (opts.reasonLabel) {
+      var reasonBit = document.createElement("span");
+      reasonBit.className = "case-assoc-reason-label";
+      reasonBit.textContent = opts.reasonLabel;
+      li.appendChild(reasonBit);
+    }
+    var drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "action-button-secondary compact";
+    if (opts.associationId) {
+      drop.setAttribute("data-case-assoc-remove", opts.associationId);
+      drop.title = "Remove this association";
+    } else if (opts.linkId) {
+      drop.setAttribute("data-case-assoc-uncite", opts.linkId);
+      drop.title = "Remove this association";
+    }
+    drop.textContent = "×";
+    li.appendChild(drop);
+    list.appendChild(li);
+    return true;
+  }
+
+  function paintCaseAssocComposer(host) {
+    if (!host) {
+      return;
+    }
+    var types = caseComposerTypes();
+    if (types.indexOf(caseAssocDraft.objectType) === -1) {
+      caseAssocDraft.objectType = types[0] || "PERSON";
+      caseAssocDraft.reason = "";
+    }
+    if (!caseAssocDraft.reason) {
+      caseAssocDraft.reason = defaultCaseAssocReason(caseAssocDraft.objectType);
+    }
+    host.replaceChildren();
+    host.className = "investigation-associate-composer";
+    host.hidden = false;
+    var typeSel = document.createElement("select");
+    typeSel.setAttribute("data-associate-type", "");
+    types.forEach(function (type) {
+      var opt = document.createElement("option");
+      opt.value = type;
+      opt.textContent = associationTypeLabel(type);
+      typeSel.appendChild(opt);
+    });
+    typeSel.value = caseAssocDraft.objectType;
+    host.appendChild(typeSel);
+    var input = document.createElement("input");
+    input.type = "text";
+    input.setAttribute("data-associate-input", "");
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.placeholder = caseComposerPlaceholder(caseAssocDraft.objectType);
+    input.value = caseAssocDraft.query || "";
+    host.appendChild(input);
+    var reasonSel = document.createElement("select");
+    reasonSel.setAttribute("data-associate-new-reason", "");
+    fillCaseAssocReasonSelect(
+      reasonSel,
+      caseAssocDraft.objectType,
+      caseAssocDraft.reason
+    );
+    host.appendChild(reasonSel);
+    var suggest = document.createElement("ul");
+    suggest.className = "investigation-associate-suggest";
+    suggest.setAttribute("data-associate-suggest", "");
+    suggest.hidden = true;
+    host.appendChild(suggest);
+    paintCaseAssocSuggest(host);
+  }
+
+  function bindCaseAssocComposer(host) {
+    if (!host || host.dataset.assocComposerBound === "true") {
+      return;
+    }
+    host.dataset.assocComposerBound = "true";
+    host.addEventListener("input", function (event) {
+      var input = event.target.closest && event.target.closest("[data-associate-input]");
+      if (!input) {
+        return;
+      }
+      caseAssocDraft.query = input.value;
+      paintCaseAssocSuggest(host);
+    });
+    host.addEventListener("change", function (event) {
+      var typeSel =
+        event.target.closest && event.target.closest("[data-associate-type]");
+      if (typeSel) {
+        caseAssocDraft.objectType = typeSel.value;
+        caseAssocDraft.reason = "";
+        caseAssocDraft.highlight = 0;
+        paintCaseAssocComposer(host);
+        var next = host.querySelector("[data-associate-input]");
+        if (next) {
+          next.focus();
+        }
+        return;
+      }
+      var newReason =
+        event.target.closest && event.target.closest("[data-associate-new-reason]");
+      if (newReason) {
+        caseAssocDraft.reason = newReason.value;
+      }
+    });
+    host.addEventListener("keydown", function (event) {
+      var input = event.target.closest && event.target.closest("[data-associate-input]");
+      if (!input) {
+        return;
+      }
+      var hits = suggestCaseObjects(
+        caseAssocDraft.query,
+        caseAssocDraft.objectType || "PERSON",
+        caseAssocSubjectId
+      );
+      if (event.key === "ArrowDown" && hits.length) {
+        event.preventDefault();
+        caseAssocDraft.highlight = Math.min(
+          hits.length - 1,
+          (caseAssocDraft.highlight || 0) + 1
+        );
+        paintCaseAssocSuggest(host);
+        return;
+      }
+      if (event.key === "ArrowUp" && hits.length) {
+        event.preventDefault();
+        caseAssocDraft.highlight = Math.max(0, (caseAssocDraft.highlight || 0) - 1);
+        paintCaseAssocSuggest(host);
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submitCaseAssocComposer();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        caseAssocDraft.query = "";
+        caseAssocDraft.highlight = 0;
+        input.value = "";
+        paintCaseAssocSuggest(host);
+      }
+    });
+    host.addEventListener("click", function (event) {
+      var pick = event.target.closest && event.target.closest("[data-associate-pick]");
+      if (!pick) {
+        return;
+      }
+      event.preventDefault();
+      submitCaseAssocComposer(
+        pick.getAttribute("data-associate-pick"),
+        pick.getAttribute("data-associate-pick-type")
+      );
+    });
+  }
+
+  function bindCaseAssocList(list) {
+    if (!list || list.dataset.assocListBound === "true") {
+      return;
+    }
+    list.dataset.assocListBound = "true";
+    list.addEventListener("change", function (event) {
+      var reasonSel =
+        event.target.closest && event.target.closest("[data-case-assoc-reason]");
+      if (!reasonSel) {
+        return;
+      }
+      var m = model();
+      if (!m || !m.store || !m.store.setAssociationReason) {
+        return;
+      }
+      var result = m.store.setAssociationReason(
+        reasonSel.getAttribute("data-case-assoc-reason"),
+        reasonSel.value
+      );
+      if (!result || !result.ok) {
+        caseAssocStatus((result && result.error) || "Could not change that relationship.");
+        if (typeof window.paintCaseView === "function") {
+          window.paintCaseView();
+        }
+        return;
+      }
+      if (typeof window.paintCaseView === "function") {
+        window.paintCaseView();
+      }
+      caseAssocStatus("Updated relationship.", true);
+    });
+    list.addEventListener("click", function (event) {
+      var removeBtn =
+        event.target.closest && event.target.closest("[data-case-assoc-remove]");
+      if (removeBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        var m = model();
+        if (!m || !m.store || !m.store.dropAssociation) {
+          return;
+        }
+        var dropped = m.store.dropAssociation(
+          removeBtn.getAttribute("data-case-assoc-remove")
+        );
+        if (!dropped || !dropped.ok) {
+          caseAssocStatus((dropped && dropped.error) || "Could not remove that association.");
+          return;
+        }
+        if (typeof window.paintCaseView === "function") {
+          window.paintCaseView();
+        }
+        caseAssocStatus("Removed association.", true);
+        return;
+      }
+      var unciteBtn =
+        event.target.closest && event.target.closest("[data-case-assoc-uncite]");
+      if (!unciteBtn) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      var store = model() && model().store;
+      if (!store || !store.removeCaseLink || !caseAssocLeadId) {
+        return;
+      }
+      var removed = store.removeCaseLink(
+        caseAssocLeadId,
+        unciteBtn.getAttribute("data-case-assoc-uncite")
+      );
+      if (!removed || !removed.ok) {
+        caseAssocStatus((removed && removed.error) || "Could not remove that association.");
+        return;
+      }
+      if (typeof window.paintCaseView === "function") {
+        window.paintCaseView();
+      }
+      caseAssocStatus("Removed association.", true);
+    });
+  }
+
   function paintAssociationsTile(snapshot, subject) {
     var list = byId("caseAssociationsList");
     var empty = byId("caseAssociationsEmpty");
+    var composer = byId("caseAssociationsComposer");
+    var tile = byId("caseAssociationsTile");
     if (!list) {
       return;
     }
     list.replaceChildren();
     var sid = subject && subject.personId;
     var leadId = snapshot && snapshot.leadId;
+    caseAssocLeadId = leadId || "";
+    caseAssocSubjectId = sid || "";
     var jumpedLeadIds = {};
     var associatedPersonIds = {};
+    var shown = {};
     var has = false;
+    var m = model();
+    var rows = document.createElement("ul");
+    rows.className = "investigation-associate-list";
+
+    if (sid && m.store && typeof m.store.associationsFor === "function") {
+      (m.store.associationsFor("PERSON", sid) || []).forEach(function (row) {
+        if (!row || !row.from || !row.to) {
+          return;
+        }
+        var other =
+          row.from.type === "PERSON" && row.from.id === sid ? row.to : row.from;
+        if (!other || (other.type === "PERSON" && other.id === sid)) {
+          return;
+        }
+        shown[row.associationId] = true;
+        if (other.type === "PERSON" && other.id) {
+          associatedPersonIds[other.id] = true;
+        }
+        var reason = row.reason || (row.reasons && row.reasons[0]) || "";
+        if (
+          paintCaseAssocRow(rows, {
+            editId: row.associationId,
+            associationId: row.associationId,
+            leadId: leadId,
+            personId: other.type === "PERSON" ? other.id : "",
+            objectType: other.type,
+            jumpedLeadIds: jumpedLeadIds,
+            displayName:
+              objectLabelByRef(other.type, other.id, snapshot) || row.label,
+            typeLabel: associationTypeLabel(other.type),
+            reason: reason,
+            reasonLabel:
+              (m.associationCardLabel && m.associationCardLabel(reason)) || reason
+          })
+        ) {
+          has = true;
+        }
+      });
+    }
 
     ((snapshot && snapshot.links) || []).forEach(function (link) {
       if (!link) {
         return;
       }
-      var from = link.from || {};
-      var to = link.to || {};
-      var personId = otherPersonId(link, sid);
-      var other = personId ? personLabelById(personId) : "";
-      var typeLabel = "";
-      var types = (model().ASSOCIATION_OTHER_TYPES || []).filter(function (row) {
-        return row.value === (link.otherType || to.type);
-      })[0];
-      if (types) {
-        typeLabel = types.label;
-      } else if (link.otherType || (to.type && to.type !== "PERSON")) {
-        typeLabel = link.otherType || to.type;
-      }
-      var vehicleBit =
-        from.type === "VEHICLE"
-          ? vehicleHeading(
-              ((snapshot.vehicles || []).filter(function (row) {
-                return row && row.vehicleId === from.id;
-              })[0])
-            )
-          : to.type === "VEHICLE" && to.id
-            ? vehicleHeading(
-                ((snapshot.vehicles || []).filter(function (row) {
-                  return row && row.vehicleId === to.id;
-                })[0])
-              )
-            : "";
-      var displayName = link.label || other || vehicleBit;
-      var p = document.createElement("p");
-      if (personId) {
-        associatedPersonIds[personId] = true;
-        var jump = relatedCases(personId, leadId).asSubject[0];
-        if (jump) {
-          appendCaseJump(p, jump, displayName || other);
-          jumpedLeadIds[jump.leadId] = true;
-        } else {
-          appendListBit(p, displayName || other);
-        }
-      } else {
-        appendListBit(p, displayName);
-      }
-      appendListBit(p, typeLabel);
-      appendListBit(p, (link.reasons || []).join(", "));
-      appendListBit(p, link.notes);
-      if (!p.childNodes.length) {
+      if (link.associationId && shown[link.associationId]) {
         return;
       }
-      list.appendChild(p);
-      has = true;
+      var to = link.to || {};
+      var personId = otherPersonId(link, sid);
+      var typeCode = link.otherType || to.type || "";
+      var displayName =
+        link.label ||
+        (to.id ? objectLabelByRef(typeCode, to.id, snapshot) : "") ||
+        personLabelById(personId);
+      if (personId) {
+        associatedPersonIds[personId] = true;
+      }
+      var reason = (link.reasons && link.reasons[0]) || "";
+      if (
+        paintCaseAssocRow(rows, {
+          editId: link.linkId,
+          linkId: link.linkId,
+          associationId: "",
+          leadId: leadId,
+          personId: personId,
+          objectType: typeCode,
+          jumpedLeadIds: jumpedLeadIds,
+          displayName: displayName,
+          typeLabel: associationTypeLabel(typeCode),
+          reason: reason,
+          reasonLabel:
+            (m.associationCardLabel && m.associationCardLabel(reason)) || reason
+        })
+      ) {
+        has = true;
+      }
     });
+
+    if (rows.childNodes.length) {
+      list.appendChild(rows);
+    }
 
     var linked = [];
     var seenLinked = {};
@@ -1892,11 +2727,32 @@
       empty.hidden = has;
     }
     list.hidden = !has;
-    setTileEmpty(byId("caseAssociationsTile"), !has);
+    bindCaseAssocList(list);
+    if (composer) {
+      paintCaseAssocComposer(composer);
+      bindCaseAssocComposer(composer);
+    }
+    setTileEmpty(tile, false);
+    if (caseAssocFocusComposer && composer) {
+      var composerInput = composer.querySelector("[data-associate-input]");
+      if (composerInput) {
+        composerInput.focus();
+      }
+      caseAssocFocusComposer = false;
+    }
   }
 
   var historyNewestFirst = true;
   var historyEventRows = [];
+
+  function historyWhen(row) {
+    var when = formatWhen(row && row.at);
+    var alias = row && row.officerAlias;
+    if (alias) {
+      return when + " · " + alias;
+    }
+    return when;
+  }
 
   function renderHistoryEvents(events) {
     var list = byId("caseHistoryList");
@@ -1958,7 +2814,7 @@
         body.className = "case-history-media-body";
         if (row.at) {
           var mediaTime = document.createElement("time");
-          mediaTime.textContent = formatWhen(row.at);
+          mediaTime.textContent = historyWhen(row);
           body.appendChild(mediaTime);
         }
         var title = document.createElement("strong");
@@ -1981,7 +2837,7 @@
       p.className = row.type === "note" ? "is-note" : "";
       if (row.at) {
         var time = document.createElement("time");
-        time.textContent = formatWhen(row.at);
+        time.textContent = historyWhen(row);
         p.appendChild(time);
       }
       p.appendChild(document.createTextNode(row.text || ""));
@@ -2085,6 +2941,7 @@
       return;
     }
     setTileEmpty(tile, false);
+    paintCaseAssignedOfficer(snapshot);
     var events = derivedHistoryEvents(snapshot, subject);
     renderHistoryEvents(events);
     var owners = [];
@@ -2221,15 +3078,24 @@
         return;
       }
       snap.history = Array.isArray(snap.history) ? snap.history : [];
+      var stamp = historyOfficerStamp(snap);
       var event =
         m.createHistoryEvent
-          ? m.createHistoryEvent({ text: text, type: "note", source: "operator" })
+          ? m.createHistoryEvent({
+              text: text,
+              type: "note",
+              source: "operator",
+              officerId: stamp.officerId,
+              officerAlias: stamp.officerAlias
+            })
           : {
               eventId: "evt_" + Date.now().toString(36),
               at: new Date().toISOString(),
               type: "note",
               text: text,
-              source: "operator"
+              source: "operator",
+              officerId: stamp.officerId,
+              officerAlias: stamp.officerAlias
             };
       snap.history.push(event);
       var saved = m.store.saveLead(snap, { mode: "commit" });
@@ -2484,7 +3350,7 @@
     var rows = snapshots().filter(isCommitted);
     if (!rows.length) {
       if (window.COPDoc && COPDoc.setAppBarStatus) {
-        COPDoc.setAppBarStatus("No committed leads to export.");
+        COPDoc.setAppBarStatus("No filed cases to export.");
       }
       return;
     }
@@ -2494,7 +3360,7 @@
       JSON.stringify(rows, null, 2)
     );
     if (window.COPDoc && COPDoc.setAppBarStatus) {
-      COPDoc.setAppBarStatus("Downloaded committed leads JSON.", { ok: true });
+      COPDoc.setAppBarStatus("Downloaded filed cases JSON.", { ok: true });
     }
   }
 
@@ -2555,7 +3421,7 @@
     var rows = snapshots().filter(isCommitted);
     if (!rows.length) {
       if (window.COPDoc && COPDoc.setAppBarStatus) {
-        COPDoc.setAppBarStatus("No committed leads to export.");
+        COPDoc.setAppBarStatus("No filed cases to export.");
       }
       return;
     }
@@ -2566,7 +3432,7 @@
       "\r\n";
     downloadBlob("leads.csv", "text/csv;charset=utf-8", csv);
     if (window.COPDoc && COPDoc.setAppBarStatus) {
-      COPDoc.setAppBarStatus("Downloaded committed leads CSV.", { ok: true });
+      COPDoc.setAppBarStatus("Downloaded filed cases CSV.", { ok: true });
     }
   }
 
@@ -3465,15 +4331,24 @@
       [subject.dateOfBirth, subject.age].filter(Boolean).join(" · ")
     );
     setSheetText("targetAlienNumber", immigration.alienNumber);
-    setSheetText("targetSex", subject.sex);
+    setSheetText("targetSex", formatSexLabel(subject.sex));
     setSheetText("targetCitizenship", countryName(subject.citizenship));
+    var targeting =
+      window.COPDoc && COPDoc.officers
+        ? COPDoc.officers.display(COPDoc.officers.get(snap.assignedOfficerId))
+        : "";
+    setSheetText("targetTargetingOfficer", targeting);
     setSheetText(
       "targetDisposition",
       dispositionLine(subject) || immigration.disposition || immigration.status
     );
     setSheetText(
       "targetPhysicalDescription",
-      [subject.sex, subject.age ? subject.age + " yrs" : "", countryName(subject.citizenship)]
+      [
+        formatSexLabel(subject.sex),
+        subject.age ? subject.age + " yrs" : "",
+        countryName(subject.citizenship)
+      ]
         .filter(Boolean)
         .join(" · ")
     );
@@ -3724,6 +4599,25 @@
     return String(source || "").replace(/<\/script/gi, "<\\/script");
   }
 
+  function resetClonedTargetMap(root) {
+    var host =
+      root && root.querySelector ? root.querySelector("#targetCaseMap") : null;
+    if (!host) {
+      return;
+    }
+    while (host.firstChild) {
+      host.removeChild(host.firstChild);
+    }
+    Array.prototype.slice.call(host.classList || []).forEach(function (name) {
+      if (name.indexOf("leaflet-") === 0) {
+        host.classList.remove(name);
+      }
+    });
+    host.classList.remove("is-map-unavailable");
+    host.removeAttribute("style");
+    host.removeAttribute("tabindex");
+  }
+
   function targetSheetMapBoot() {
     return (
       "(function(){" +
@@ -3760,14 +4654,25 @@
       "if(!place||place.lat==null||place.lng==null)return;" +
       "var ll=[Number(place.lat),Number(place.lng)];" +
       "if(!isFinite(ll[0])||!isFinite(ll[1]))return;pts.push(ll);" +
-      "var m=L.marker(ll).addTo(map);" +
-      "m.bindPopup([place.title,place.extra,place.address].filter(Boolean).join(' · '));});" +
+      "var mo={};if(window.COPDoc&&COPDoc.mapIcons&&COPDoc.mapIcons.badgeHtml){" +
+      "var me=COPDoc.mapIcons.forKind(place.kind);" +
+      "mo.icon=L.divIcon({className:'case-map-pin',html:COPDoc.mapIcons.badgeHtml(me.id," +
+      "{color:place.color||me.color,primary:!!place.isPrimary,size:place.isPrimary?'primary':'standard'})," +
+      "iconSize:[44,44],iconAnchor:[22,22]});}" +
+      "var m=L.marker(ll,mo).addTo(map);" +
+      "var pop=document.createElement('div');" +
+      "[place.title,place.extra,place.address].filter(Boolean).forEach(function(value,index){" +
+      "if(index)pop.appendChild(document.createTextNode(' · '));" +
+      "pop.appendChild(document.createTextNode(String(value)));});m.bindPopup(pop);});" +
       "if(pts.length===1)map.setView(pts[0],17);" +
       "else if(pts.length)map.fitBounds(pts,{padding:[28,28],maxZoom:17});" +
       "setTimeout(function(){try{map.invalidateSize();}catch(e2){}},0);}" +
       "catch(e3){host.classList.add('is-map-unavailable');" +
       "host.textContent='Interactive map unavailable. Use the list.';}}" +
       "function startMap(){" +
+      "if(window.COPDoc&&COPDoc.mapIcons&&COPDoc.mapIcons.setLibrary){" +
+      "COPDoc.mapIcons.setLibrary(window.TARGET_SHEET_ICON_LIBRARY||'standard'," +
+      "{persist:false,notify:false});}" +
       "var host=document.getElementById('targetCaseMap');" +
       "var places=window.TARGET_SHEET_PLACES||[];" +
       "if(!host||!places.length)return;host.hidden=false;" +
@@ -3936,6 +4841,8 @@
       loadPlacePhotoPack(places),
       fetchText("vendor/leaflet/leaflet.css"),
       fetchText("vendor/leaflet/leaflet.js"),
+      fetchText("assets/icons/copdoc-icons.js"),
+      fetchText("functions/map-popup.js"),
       fetchText("functions/location-map.js")
     ])
       .then(function (parts) {
@@ -3945,8 +4852,17 @@
         var packedPlaces = serializeTargetPlaces(parts[3] || places);
         var leafletCss = parts[4] || "";
         var leafletJs = parts[5] || "";
-        var mapJs = parts[6] || "";
+        var iconJs = parts[6] || "";
+        var popupJs = parts[7] || "";
+        var mapJs = parts[8] || "";
+        var mapIconLibraryId =
+          window.COPDoc &&
+          COPDoc.mapIcons &&
+          typeof COPDoc.mapIcons.getLibraryId === "function"
+            ? COPDoc.mapIcons.getLibraryId()
+            : "standard";
         var clone = sheet.cloneNode(true);
+        resetClonedTargetMap(clone);
         return inlineImages(clone).then(function () {
           clone.querySelectorAll("details").forEach(function (el) {
             el.setAttribute("open", "");
@@ -3976,6 +4892,8 @@
             JSON.stringify(pack) +
             ";window.TARGET_SHEET_PLACES = " +
             JSON.stringify(packedPlaces) +
+            ";window.TARGET_SHEET_ICON_LIBRARY = " +
+            JSON.stringify(mapIconLibraryId) +
             ";" +
             targetSheetMapBoot();
           var headExtra = leafletCss
@@ -3990,6 +4908,12 @@
           } else {
             scripts +=
               "<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"><\/script>";
+          }
+          if (iconJs) {
+            scripts += "<script>" + escapeInlineScript(iconJs) + "<\/script>";
+          }
+          if (popupJs) {
+            scripts += "<script>" + escapeInlineScript(popupJs) + "<\/script>";
           }
           if (mapJs) {
             scripts += "<script>" + escapeInlineScript(mapJs) + "<\/script>";
@@ -4039,6 +4963,7 @@
       bindCaseMapPopout();
       dropRetiredCaseLayout();
       bindCaseHistory();
+      bindCaseAssignedOfficer();
       paintView();
       return;
     }

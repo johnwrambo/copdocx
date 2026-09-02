@@ -876,7 +876,7 @@
         if (index === 0 && !rowCommitted(row)) {
           var badge = document.createElement("span");
           badge.className = "record-status record-status-draft";
-          badge.textContent = "Draft";
+          badge.textContent = "Working";
           td.appendChild(document.createTextNode(" "));
           td.appendChild(badge);
         }
@@ -1219,6 +1219,13 @@
       }
       seen[key] = true;
       var kind = officerPlaceKind(loc);
+      var photoOwners = [];
+      if (loc.locationId) {
+        photoOwners.push({ type: "LOCATION", id: loc.locationId });
+      }
+      if (row.officerId || row.id) {
+        photoOwners.push({ type: "OFFICER", id: row.officerId || row.id });
+      }
       places.push({
         id: loc.locationId || "ofc-place-" + places.length,
         kind: kind,
@@ -1232,7 +1239,8 @@
         lng: pair ? pair[1] : "",
         mapped: !!pair,
         loc: loc,
-        pinColor: loc.pinColor || ""
+        pinColor: loc.pinColor || "",
+        photoOwners: photoOwners
       });
     }
     (row.locations || []).forEach(pushLoc);
@@ -1398,11 +1406,21 @@
         var mapApi = window.COPDoc && COPDoc.locationMap;
         var key =
           mapApi && mapApi.safeKind ? mapApi.safeKind(place.kind) : place.kind;
-        kind.className = "case-map-key-icon is-" + key;
-        if (mapApi && typeof mapApi.pinColorFor === "function") {
-          kind.style.color = mapApi.pinColorFor(key, place);
-        }
-        if (mapApi && typeof mapApi.kindIconHtml === "function") {
+        var markerColor =
+          mapApi && typeof mapApi.pinColorFor === "function"
+            ? mapApi.pinColorFor(key, place)
+            : "";
+        kind.className = "case-map-key-marker is-" + key;
+        if (mapApi && typeof mapApi.kindMarkerHtml === "function") {
+          kind.innerHTML = mapApi.kindMarkerHtml(key, {
+            color: markerColor,
+            size: "compact"
+          });
+        } else if (mapApi && typeof mapApi.kindIconHtml === "function") {
+          kind.className = "case-map-key-icon is-" + key;
+          if (markerColor) {
+            kind.style.color = markerColor;
+          }
           kind.innerHTML = mapApi.kindIconHtml(key);
         }
         var body = document.createElement("div");
@@ -2018,7 +2036,7 @@
           "officer-form.html?id=" + encodeURIComponent(record.id)
         );
       }
-      setStatus("Draft saved.", true);
+      setStatus("Working copy saved.", true);
       return;
     }
     window.location.href = "officer.html?id=" + encodeURIComponent(record.id);
@@ -2121,7 +2139,7 @@
         );
       }
       rememberVehicleSignature();
-      setStatus("Draft saved.", true);
+      setStatus("Working copy saved.", true);
       return;
     }
     window.location.href = "vehicle.html?id=" + encodeURIComponent(record.id);

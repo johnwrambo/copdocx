@@ -302,6 +302,9 @@ function formMediaReturn() {
   if (page === "vehicle-form") {
     return id ? "vehicle-form.html?id=" + encodeURIComponent(id) : "";
   }
+  if (page === "investigate") {
+    return id ? "investigate.html?id=" + encodeURIComponent(id) : "";
+  }
   return "";
 }
 

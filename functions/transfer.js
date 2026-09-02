@@ -20,12 +20,13 @@
   var TEMPLATE_LEGACY_KEY = "opdoc.narrative.templates.v1";
 
   var TYPE_META = [
-    { key: "leads", label: "Leads" },
+    { key: "leads", label: "Cases" },
     { key: "officers", label: "Officers" },
     { key: "vehicles", label: "Vehicles" },
     { key: "shifts", label: "Schedule" },
     { key: "bookin", label: "Book-in" },
-    { key: "encounters", label: "Encounters" }
+    { key: "encounters", label: "Encounters" },
+    { key: "investigations", label: "Investigations" }
   ];
 
   function pageKey() {
@@ -43,10 +44,10 @@
 
   function appVersion() {
     if (typeof document === "undefined") {
-      return "0.25.0";
+      return "0.59.0";
     }
     var el = document.getElementById("appVersion");
-    return (el && el.getAttribute("data-version")) || "0.25.0";
+    return (el && el.getAttribute("data-version")) || "0.59.0";
   }
 
   function todayStamp() {
@@ -130,6 +131,9 @@
     }
     if (type === "encounters") {
       return row.encounterId || "";
+    }
+    if (type === "investigations") {
+      return row.investigationId || "";
     }
     if (type === "officers") {
       return row.officerId || row.id || "";
@@ -228,7 +232,13 @@
       currentLeadId: "",
       people: {},
       leads: {},
-      encounters: {}
+      encounters: {},
+      investigations: {},
+      vehicles: {},
+      locations: {},
+      businesses: {},
+      entities: {},
+      associations: {}
     };
   }
 
@@ -241,6 +251,12 @@
     store.leads = store.leads || {};
     store.people = store.people || {};
     store.encounters = store.encounters || {};
+    store.investigations = store.investigations || {};
+    store.vehicles = store.vehicles || {};
+    store.locations = store.locations || {};
+    store.businesses = store.businesses || {};
+    store.entities = store.entities || {};
+    store.associations = store.associations || {};
     return store;
   }
 
@@ -273,6 +289,12 @@
           return encStore.encounters[id];
         })
         .filter(isCommitted);
+    }
+    if (type === "investigations") {
+      var invStore = readLeadStore();
+      return Object.keys(invStore.investigations || {}).map(function (id) {
+        return invStore.investigations[id];
+      });
     }
     var admin = readAdmin();
     if (type === "officers") {
@@ -352,6 +374,69 @@
     }
   }
 
+  function collectInvestigationObjects(rows) {
+    var store = readLeadStore();
+    var out = {
+      people: {},
+      vehicles: {},
+      locations: {},
+      businesses: {},
+      entities: {},
+      associations: {}
+    };
+    function take(type, id) {
+      if (!id) {
+        return;
+      }
+      if (type === "PERSON" && store.people[id]) {
+        out.people[id] = store.people[id];
+      }
+      if (type === "VEHICLE" && store.vehicles[id]) {
+        out.vehicles[id] = store.vehicles[id];
+      }
+      if (type === "LOCATION" && store.locations[id]) {
+        out.locations[id] = store.locations[id];
+      }
+      if (type === "BUSINESS" && store.businesses[id]) {
+        out.businesses[id] = store.businesses[id];
+      }
+      if (type === "ENTITY" && store.entities[id]) {
+        out.entities[id] = store.entities[id];
+      }
+    }
+    (rows || []).forEach(function (inv) {
+      ((inv && inv.nodes) || []).forEach(function (node) {
+        if (node) {
+          take(node.objectType, node.objectId);
+        }
+      });
+    });
+    Object.keys(store.associations || {}).forEach(function (id) {
+      var row = store.associations[id];
+      if (!row || !row.from || !row.to) {
+        return;
+      }
+      var fromTaken =
+        (row.from.type === "PERSON" && out.people[row.from.id]) ||
+        (row.from.type === "VEHICLE" && out.vehicles[row.from.id]) ||
+        (row.from.type === "LOCATION" && out.locations[row.from.id]) ||
+        (row.from.type === "BUSINESS" && out.businesses[row.from.id]) ||
+        (row.from.type === "ENTITY" && out.entities[row.from.id]);
+      var toTaken =
+        (row.to.type === "PERSON" && out.people[row.to.id]) ||
+        (row.to.type === "VEHICLE" && out.vehicles[row.to.id]) ||
+        (row.to.type === "LOCATION" && out.locations[row.to.id]) ||
+        (row.to.type === "BUSINESS" && out.businesses[row.to.id]) ||
+        (row.to.type === "ENTITY" && out.entities[row.to.id]);
+      if (fromTaken || toTaken) {
+        take(row.from.type, row.from.id);
+        take(row.to.type, row.to.id);
+        out.associations[id] = row;
+      }
+    });
+    return out;
+  }
+
   function collectExport(types, from, to) {
     var out = {
       format: FORMAT,
@@ -363,11 +448,23 @@
       vehicles: [],
       shifts: [],
       bookin: [],
-      encounters: []
+      encounters: [],
+      investigations: [],
+      investigationObjects: {
+        people: {},
+        vehicles: {},
+        locations: {},
+        businesses: {},
+        entities: {},
+        associations: {}
+      }
     };
     types.forEach(function (type) {
       out[type] = filterRecords(listType(type), type, from, to);
     });
+    if (types.indexOf("investigations") !== -1) {
+      out.investigationObjects = collectInvestigationObjects(out.investigations);
+    }
     if (types.indexOf("encounters") !== -1) {
       var encIds = {};
       out.encounters.forEach(function (row) {
@@ -550,6 +647,21 @@
         })
       );
     }
+    if (type === "investigations") {
+      return csvTable(
+        ["investigationId", "kind", "title", "parentInvestigationId", "nodes", "updatedAt"],
+        records.map(function (row) {
+          return [
+            row.investigationId || "",
+            row.kind || "",
+            row.title || "",
+            row.parentInvestigationId || "",
+            (row.nodes || []).length,
+            recordDay("investigations", row)
+          ];
+        })
+      );
+    }
     if (type === "shifts") {
       return csvTable(
         ["id", "date", "officerId", "vehicleId", "start", "end", "assignment"],
@@ -609,7 +721,8 @@
       vehicles: [],
       shifts: [],
       bookin: [],
-      encounters: []
+      encounters: [],
+      investigations: []
     };
     if (Array.isArray(data)) {
       empty.leads = data;
@@ -661,6 +774,10 @@
     empty.map = data.map && typeof data.map === "object" ? data.map : null;
     empty.templates = Array.isArray(data.templates) ? data.templates : null;
     empty.media = Array.isArray(data.media) ? data.media : null;
+    empty.investigationObjects =
+      data.investigationObjects && typeof data.investigationObjects === "object"
+        ? data.investigationObjects
+        : null;
     return empty;
   }
 
@@ -774,7 +891,7 @@
     types.forEach(function (type) {
       var cleaned = cleanList(type, parsed[type]);
       result.skipped += cleaned.skipped;
-      if (type === "encounters" || type === "leads") {
+      if (type === "encounters" || type === "leads" || type === "investigations") {
         var stored = readStored(LEAD_KEY);
         if (!stored.ok) {
           result.error = result.error || stored.error;
@@ -784,6 +901,11 @@
         store.leads = store.leads || {};
         store.people = store.people || {};
         store.encounters = store.encounters || {};
+        store.investigations = store.investigations || {};
+        store.vehicles = store.vehicles || {};
+        store.locations = store.locations || {};
+        store.businesses = store.businesses || {};
+        store.entities = store.entities || {};
         var added = 0;
         var updated = 0;
         var skipped = 0;
@@ -807,6 +929,47 @@
             store.encounters[id] = row;
             updated += 1;
           });
+        } else if (type === "investigations") {
+          cleaned.rows.forEach(function (row) {
+            var id = row.investigationId;
+            var current = store.investigations[id];
+            if (!current) {
+              store.investigations[id] = row;
+              added += 1;
+              return;
+            }
+            if (jsonEqual(current, row)) {
+              skipped += 1;
+              return;
+            }
+            if (!incomingIsNewer(current, row)) {
+              skipped += 1;
+              return;
+            }
+            store.investigations[id] = row;
+            updated += 1;
+          });
+          var maps = parsed.investigationObjects || {};
+          function mergeMap(dest, incoming) {
+            Object.keys(incoming || {}).forEach(function (id) {
+              if (!incoming[id]) {
+                return;
+              }
+              if (!dest[id]) {
+                dest[id] = incoming[id];
+                return;
+              }
+              if (incomingIsNewer(dest[id], incoming[id])) {
+                dest[id] = incoming[id];
+              }
+            });
+          }
+          mergeMap(store.people, maps.people);
+          mergeMap(store.vehicles, maps.vehicles);
+          mergeMap(store.locations, maps.locations);
+          mergeMap(store.businesses, maps.businesses);
+          mergeMap(store.entities, maps.entities);
+          mergeMap(store.associations, maps.associations);
         } else {
           cleaned.rows.forEach(function (snap) {
             var id = snap.leadId;
@@ -906,6 +1069,9 @@
     }
     if (page === "bookin") {
       return ["bookin"];
+    }
+    if (page === "investigations" || page === "investigate") {
+      return ["investigations"];
     }
     return TYPE_META.map(function (meta) {
       return meta.key;

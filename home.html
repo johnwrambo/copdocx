@@ -18,9 +18,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.25.0"
+          data-version="0.59.0"
         >
-          Version 0.25.0
+          Version 0.59.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -38,19 +38,19 @@
 
       <div class="stat-row" aria-label="Duty snapshot">
         <article class="stat-card">
-          <p class="stat-label">Committed leads</p>
+          <p class="stat-label">Filed cases</p>
           <p id="homeStatLeads" class="stat-value">—</p>
           <p class="stat-hint">Case files ready to view</p>
         </article>
         <article class="stat-card">
           <p class="stat-label">Officers available</p>
           <p id="homeStatOfficers" class="stat-value">—</p>
-          <p class="stat-hint">Committed, duty: available</p>
+          <p class="stat-hint">Filed, duty: available</p>
         </article>
         <article class="stat-card">
           <p class="stat-label">Vehicles available</p>
           <p id="homeStatVehicles" class="stat-value">—</p>
-          <p class="stat-hint">Committed, fleet: available</p>
+          <p class="stat-hint">Filed, fleet: available</p>
         </article>
         <article class="stat-card">
           <p class="stat-label">Book-ins this week</p>
@@ -62,7 +62,7 @@
       <nav class="home-modules" aria-label="Modules">
         <a class="home-module" href="leads.html">
           <span class="home-module-icon" data-icon="Crosshair" data-icon-size="22"></span>
-          <span class="home-module-label">Leads</span>
+          <span class="home-module-label">Cases</span>
           <span class="home-module-hint">Case files</span>
         </a>
         <a class="home-module" href="bookin.html">
@@ -89,10 +89,10 @@
 
       <div class="home-split">
         <fieldset class="card-static">
-          <legend>Recent leads</legend>
+          <legend>Recent cases</legend>
           <div class="dash-card-head">
-            <p class="section-note" id="homeLeadsNote">No committed leads.</p>
-            <a href="leads.html" class="action-button-secondary">Open leads</a>
+            <p class="section-note" id="homeLeadsNote">No filed cases.</p>
+            <a href="leads.html" class="action-button-secondary">Open cases</a>
           </div>
           <ul id="homeLeadsPreview" class="dash-preview" hidden></ul>
         </fieldset>
@@ -119,7 +119,7 @@
           <legend>Follow-ups</legend>
           <div class="dash-card-head">
             <p class="section-note" id="homeFollowUpsNote">No open follow-ups.</p>
-            <a href="leads.html" class="action-button-secondary">Open leads</a>
+            <a href="leads.html" class="action-button-secondary">Open cases</a>
           </div>
           <ul id="homeFollowUpsPreview" class="dash-preview" hidden></ul>
         </fieldset>

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Lead Entry</title>
+    <title>Case</title>
     
     <link rel="stylesheet" href="style/style.css" />
     <link
@@ -41,9 +41,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.25.0"
+          data-version="0.59.0"
         >
-          Version 0.25.0
+          Version 0.59.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -79,6 +79,23 @@
             <div class="field">
               <label for="caseNumber">Case / file number (optional)</label>
               <input type="text" id="caseNumber" name="caseNumber" data-field="caseNumber" autocomplete="off" />
+            </div>
+            <div class="field search-field">
+              <label for="assignedOfficerSearch">Officer assigned to</label>
+              <input
+                type="search"
+                id="assignedOfficerSearch"
+                name="assignedOfficerSearch"
+                autocomplete="off"
+                placeholder="Search officers"
+              />
+              <input type="hidden" id="assignedOfficerId" name="assignedOfficerId" />
+              <ul
+                id="assignedOfficerResults"
+                class="search-results"
+                role="listbox"
+                hidden
+              ></ul>
             </div>
           </div>
           <div class="row" data-source="otherLe" hidden>
@@ -1219,6 +1236,8 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
+    <script src="assets/icons/copdoc-icons.js"></script>
+    <script src="functions/map-popup.js"></script>
     <script src="functions/location-map.js"></script>
     <script src="data/vehicle-association-reasons.js"></script>
     <script src="data/association-matrix.js"></script>
@@ -1243,6 +1262,7 @@
     <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/link.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/officer-roster.js"></script>
     <script src="functions/model/media.js"></script>
     <script src="functions/model/collect.js"></script>
     <script src="functions/model/hydrate.js"></script>

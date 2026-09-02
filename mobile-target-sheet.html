@@ -17,9 +17,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.25.0"
+          data-version="0.59.0"
         >
-          Version 0.25.0
+          Version 0.59.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -139,6 +139,10 @@
               <div class="fow-pid-chip">
                 <span class="fow-pid-label">Citizenship</span>
                 <span id="targetCitizenship" class="fow-pid-value">&mdash;</span>
+              </div>
+              <div class="fow-pid-chip">
+                <span class="fow-pid-label">Targeting Officer</span>
+                <span id="targetTargetingOfficer" class="fow-pid-value">&mdash;</span>
               </div>
             </div>
 
@@ -393,6 +397,7 @@
     <script src="functions/model/location.js"></script>
     <script src="functions/model/lead.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/officer-roster.js"></script>
     <script src="functions/model/media.js"></script>
     <script src="data/countries.js"></script>
     <script src="vendor/leaflet/leaflet.js"></script>
@@ -403,6 +408,8 @@
         );
       }
     </script>
+    <script src="assets/icons/copdoc-icons.js"></script>
+    <script src="functions/map-popup.js"></script>
     <script src="functions/location-map.js"></script>
     <script src="functions/leads.js"></script>
   </body>

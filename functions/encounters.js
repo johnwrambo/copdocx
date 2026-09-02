@@ -162,14 +162,14 @@
         formatAddress((full.locations || [])[0]) || "—",
         subjectsLine({ subjects: subjectsForEncounter(full.encounterId) }) ||
           "—",
-        committed ? "Committed" : "Draft"
+        committed ? "Filed" : "Working"
       ].forEach(function (text, index) {
         var td = document.createElement("td");
         td.textContent = text;
         if (index === 0 && !committed) {
           var badge = document.createElement("span");
           badge.className = "record-status record-status-draft";
-          badge.textContent = "Draft";
+          badge.textContent = "Working";
           td.appendChild(document.createTextNode(" "));
           td.appendChild(badge);
         }
@@ -646,10 +646,6 @@
       body.appendChild(tr);
     });
     var href = bookinHref(encounterId);
-    var addBtn = byId("addEncounterSubjectsButton");
-    if (addBtn && encounterId) {
-      addBtn.href = href;
-    }
     var tableAdd = byId("addEncounterSubjectTableButton");
     if (tableAdd && encounterId) {
       tableAdd.href = href;
@@ -682,7 +678,25 @@
       setStatus(saved.error || "Could not save the encounter.");
       return;
     }
-    window.location.href = "encounter.html";
+    if (record.encounterId && window.history && window.history.replaceState) {
+      window.history.replaceState(
+        {},
+        "",
+        "encounter-form.html?id=" + encodeURIComponent(record.encounterId)
+      );
+    }
+    setStatus("Encounter filed.", true);
+  }
+
+  function openEncounterBookIn() {
+    var id =
+      (byId("encounterId") && byId("encounterId").value) || queryId();
+    if (!id) {
+      setStatus("Create the encounter first.");
+      return;
+    }
+    saveDraftQuiet();
+    window.location.href = bookinHref(id);
   }
 
   function generateEncounterNarrative() {
@@ -703,6 +717,7 @@
 
   window.commitEncounter = commitEncounter;
   window.generateEncounterNarrative = generateEncounterNarrative;
+  window.openEncounterBookIn = openEncounterBookIn;
 
   function ensureNewEncounter() {
     var m = model();
@@ -819,6 +834,14 @@
     }
     ensureNewEncounter();
     bindTeamRemint();
+    var tableAdd = byId("addEncounterSubjectTableButton");
+    if (tableAdd && tableAdd.dataset.openBound !== "true") {
+      tableAdd.dataset.openBound = "true";
+      tableAdd.addEventListener("click", function (event) {
+        event.preventDefault();
+        openEncounterBookIn();
+      });
+    }
     if (m.autosave && typeof m.autosave.bind === "function") {
       m.autosave.bind({
         key: "encounter-form",
