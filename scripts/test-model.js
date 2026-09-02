@@ -3163,6 +3163,34 @@ check(
   occVehAsoc && occVehAsoc.occupancy === "historical"
 );
 
+context.document = {
+  getElementById: function () {
+    return null;
+  },
+  querySelectorAll: function () {
+    return [];
+  },
+  addEventListener: function () {},
+  body: { dataset: {}, getAttribute: function () { return ""; } }
+};
+context.window.matchMedia = function () {
+  return { matches: false };
+};
+load("functions/investigation-wall.js");
+var wallUi = context.COPDoc.investigationWall;
+check(
+  "parseWindowPos reads numbers",
+  wallUi.parseWindowPos({ x: 12, y: 40 }) &&
+    wallUi.parseWindowPos({ x: 12, y: 40 }).x === 12 &&
+    wallUi.parseWindowPos({ x: 12, y: 40 }).y === 40
+);
+check("parseWindowPos rejects junk", !wallUi.parseWindowPos({ x: "no", y: 1 }));
+check("parseWindowPos rejects null", !wallUi.parseWindowPos(null));
+var clamped = wallUi.clampWindowPos(-400, -20, 200, 100, 800, 600);
+check("clamp keeps a strip of the window on canvas", clamped.x === 48 - 200 && clamped.y === 0);
+var clampedRight = wallUi.clampWindowPos(900, 20, 200, 100, 800, 600);
+check("clamp keeps title bar reachable", clampedRight.x === 800 - 48 && clampedRight.y === 20);
+
 if (fail) {
   process.exit(1);
 }

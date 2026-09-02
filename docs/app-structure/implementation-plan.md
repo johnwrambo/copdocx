@@ -78,7 +78,7 @@ Do not edit `data/immigration.js`. Do not rewrite PDF layout. Do not merge book-
 | 72 | Junk / delete record | 68 | **0.51.0** | **Remove from wall** vs **Junk** (archive, skip reuse, strip every wall) vs **Delete record** (unreferenced only). Case subjects blocked. |
 | 69 | Split windows (DOM) | 68 | **0.52.0** | Card overlay is not under the Objects list. |
 | 70 | Windows drawer | 69 | **0.52.0** | Wall-tools **Plates / Objects / Card**. Click = focus; Edit / double-click / Enter opens Card. |
-| 71 | Remember open windows | 70 | **0.52.0** | `sessionStorage` `copdocx.investigation-windows.v1`. Fixed overlays. |
+| 71 | Remember open windows | 70 | **0.52.0** | `sessionStorage` `copdocx.investigation-windows.v1`. Positions added **0.61.0**. |
 | 80 | Association factory | 71 | **0.53.0** | `store.associations{}`. `createAssociation` + `upsertAssociation`. Wall connect/add/spawn cite `associationId`. Indexes, integrity, File export bag. No card UI. |
 | 81 | A6 is the only catalog | 80 | **0.53.0** | `CUSTOMER_OF`. Canonical ends and validation read the matrix. |
 | 75 | Card composer (people) | 81 | **0.54.0** | Associated people on the Card window. Type a name, Enter, reuse or mint, spawn, edge, relationship, × / Place on wall. |
@@ -87,6 +87,8 @@ Do not edit `data/immigration.js`. Do not rewrite PDF layout. Do not merge book-
 | 77 | Case Associations consume associations | 76 | **0.57.0** | Case tile lists world associations. Add/Edit slide-over uses the same constructor. Open as new case still works. |
 | 79 | Case Associations live composer | 77 | **0.58.0** | Same Enter constructor as the Card. Relationship dropdown. × drops the fact (`dropAssociation`). OTHER leftover uses `removeCaseLink`. |
 | 82 | Occupancy on the association | 79 | **0.59.0** | `occupancy` / `validFrom` / `validTo` on `associations{}`. Nested copies dual-written. Case map still reads nested current/historical. |
+| 83 | Tab type-ahead | 82 | **0.60.0** | Wall Tab / Shift+Tab open the Card Associated composer. Do not mint a blank linked chip. |
+| 84 | Draggable windows | 83 | **0.61.0** | Drag Plates / Objects / Card title bars. Session `pos` `{x,y}`. Not on `investigations{}`. |
 | 28e | Square photos, 4:3 map | 28d | **0.18.6** | Subject photo stages are square (cover). Case/form location maps are 4×3. |
 | 28f | Case map legend + side files | 28e | **0.18.7** | Map = subject home/work/vehicle only, with side list. Files + gallery in the facts column. |
 | 28g | Location map basemaps | 28f | **0.18.9** | Map / Satellite / Hybrid on case map and form location maps. |

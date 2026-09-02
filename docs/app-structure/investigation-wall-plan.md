@@ -117,14 +117,14 @@ Vanilla. Cubic curves. Edge label = A6 reason. No force-directed physics. No tre
 
 **D5 — Gestures (MindNode feel, graph rules).**  
 - Empty drag = pan. Wheel / −+ = zoom.  
-- Empty click = place current type (default vehicle on plate-check) **if a type is selected**. Click the selected Vehicle / Person / Location / Business / Entity chip again to deselect. With no type selected, empty click does not mint; drag still pans. Tab from a focused node still adds a linked object.  
+- Empty click = place current type (default vehicle on plate-check) **if a type is selected**. Click the selected Vehicle / Person / Location / Business / Entity chip again to deselect. With no type selected, empty click does not mint; drag still pans. **Tab** from a focused node opens the Card Associated composer (type-ahead). Does not mint a blank chip.  
 - Click chip = focus / plex. Does **not** open the Object card.  
 - **Edit** on the chip (or double-click, or Enter when not typing) opens the Object card window for that object.  
 - Drag card = move.  
 - Drag **dot** = connect; drop on a node; default A6 reason; picker if more than one.  
 - Click edge = change reason or disconnect.  
 - **Delete** / **Backspace** (not while typing) or inspector **Remove from wall** drops the focused chip from *this* investigation. Shared `people{}` / `vehicles{}` / … stay. Links on this wall go with it. A promoted plate returns to **Hit**. Confirm first.  
-- Keyboard (refine): from a focused vehicle, **Tab** places a linked person (RO); **Shift+Tab** places a linked location (parking). From a person, Tab = another vehicle (RO). Does not fire while typing in a field.
+- Keyboard (**0.60.0**): from a focused vehicle, **Tab** opens Associated for a person (RO type-ahead); **Shift+Tab** for a location (parking). From a person, Tab = vehicle. Enter in the composer reuses or mints. Does not fire while typing in a field.
 
 **D6 — Promote is “send to wall.”**  
 Hit → vehicle object (reuse plate+state) → node in the current view. Focus it. Do not open a form stack.
@@ -160,9 +160,9 @@ Each button is `aria-pressed`. On = that window is open. Off = hidden. Independe
 
 **Click vs Edit.** Click = select / plex. Edit / double-click / Enter = open Card. Place-then-type still works: placing a new object **opens Card** and focuses the first field (plate / last name / street). Selecting an existing chip does not. Promote focuses the vehicle and does not open Card.
 
-**Layout.** First ship: each window is a positioned overlay (`position: absolute` on the wall). Plates default left, Objects default right, Card default center-right (or over the focused chip). Title bar: name + Hide. Not draggable in PR-A. Optional later: drag title bar, remember x/y.
+**Layout.** Each window is a positioned overlay (`position: absolute` on the wall). Plates default left, Objects default right, Card default center-right (or over the focused chip). Title bar: name + Hide. **0.61.0** drag the title bar; x/y remembered in the same session key. Not draggable under 640px (stacked defaults).
 
-**State.** Which windows are open is **session UI**, not object data. `sessionStorage` key `copdocx.investigation-windows.v1` `{ plates, objects, card }` booleans is enough. Do not put panel positions on `investigations{}` or `vehicles{}`. Do not mint `copdocx.investigation-wall.v1` for layout of nodes (D3 still holds).
+**State.** Which windows are open is **session UI**, not object data. `sessionStorage` key `copdocx.investigation-windows.v1` `{ plates, objects, card, pos: { plates, objects, card } }` (`pos` values `{x,y}` or null). Do not put panel positions on `investigations{}` or `vehicles{}`. Do not mint `copdocx.investigation-wall.v1` for layout of nodes (D3 still holds).
 
 **Chrome stays Save / Back / Import plates / Spawn / Open as case / Clear all.** Windows are overlays, same rule as map drawing tools. Import plates still focuses the Plates window (opens it if closed).
 
@@ -242,7 +242,7 @@ The wall is full width. Plates / Objects / Card are windows you toggle. Click a 
 | 72 | Junk / delete record | 68 | **0.51.0** | Card: **Remove from wall** (this map), **Junk** (keep record, skip reuse, off every wall), **Delete record** (only if unreferenced). Case subjects cannot be junked or deleted. |
 | 69 | Split windows (DOM) | 68 | **0.52.0** | Card is its own overlay, not under Objects. |
 | 70 | Windows drawer | 69 | **0.52.0** | Wall-tools **Plates / Objects / Card**. Overlays. Click = focus; Edit / double-click / Enter opens Card. Esc hides Card. |
-| 71 | Remember open windows | 70 | **0.52.0** | `sessionStorage` `copdocx.investigation-windows.v1`. No node layout key. Not draggable (Q8 later). |
+| 71 | Remember open windows | 70 | **0.52.0** | `sessionStorage` `copdocx.investigation-windows.v1`. No node layout key. |
 | 80 | Association factory | 71 | **0.53.0** | `store.associations{}`. Wall edges cite `associationId`. Spawn shares the fact. |
 | 81 | A6 catalog | 80 | **0.53.0** | `CUSTOMER_OF`. Canonical ends from the matrix. |
 | 75 | Card composer (people) | 81 | **0.54.0** | Associated people on the Card. Type a name, Enter, reuse or mint, spawn, edge, relationship. × drops the wall citation. Off-wall rows get Place on wall. |
@@ -251,6 +251,8 @@ The wall is full width. Plates / Objects / Card are windows you toggle. Click a 
 | 77 | Case Associations consume associations | 76 | **0.57.0** | Case tile lists `associations{}`. Slide-over uses `associateCaseObject`. |
 | 79 | Case Associations live composer | 77 | **0.58.0** | Case tile: type a name / plate / street, Enter. Same constructor as the Card. × drops the fact. |
 | 82 | Occupancy on the association | 79 | **0.59.0** | Occupancy dates live on the association. Nested case copies are dual-written. |
+| 83 | Tab type-ahead | 82 | **0.60.0** | Tab / Shift+Tab open the Card Associated composer. Do not mint a blank chip. |
+| 84 | Draggable windows | 83 | **0.61.0** | Drag Plates / Objects / Card by the title bar. Remember x/y in `copdocx.investigation-windows.v1`. |
 
 > Comment (PRs):
 
@@ -260,8 +262,8 @@ The wall is full width. Plates / Objects / Card are windows you toggle. Click a 
 
 **Q5.** ~~Expand in place vs slim inspector.~~ **0.43.0** put the card in the Objects rail. **D12 / 0.52.0** Card is its own window.  
 **Q6.** When Promote drops a vehicle, should it land in a **column next to the last promoted** (lot strip), or always in the view center? (0.38.0 shipped lot strip.)  
-**Q7.** Keyboard Tab from a vehicle: always mint a **new** person, or open a type-ahead that can reuse Garcia? **0.54.0** the Card composer is the type-ahead/reuse path. Tab still places a blank linked chip.  
-**Q8.** ~~Fixed overlay vs draggable.~~ **0.52.0** shipped fixed overlays. Drag title bar / remember x,y later.  
+**Q7.** ~~Keyboard Tab from a vehicle: always mint a new person, or open a type-ahead that can reuse Garcia?~~ **0.60.0** Tab opens the Associated composer (type-ahead / reuse). Does not mint a blank chip. Click-place and composer Enter still mint when the name/plate/street is empty of a match.  
+**Q8.** ~~Fixed overlay vs draggable.~~ **0.52.0** shipped fixed overlays. **0.61.0** drag title bar; remember x/y in the same session key. Narrow screens keep the stacked defaults.  
 **Q9.** ~~Objects default closed vs open.~~ **0.52.0** Objects default closed. Plates default open on kind `tag`.
 
 > Comment (Q5–Q7):

@@ -22,7 +22,91 @@
   var outlineVisible = [];
   var WINDOWS_KEY = "copdocx.investigation-windows.v1";
   var windowsOpen = { plates: true, objects: false, card: false };
+  var windowsPos = { plates: null, objects: null, card: null };
   var windowsLoaded = false;
+  var windowZ = 6;
+  var windowDrag = null;
+
+  function parseWindowPos(value) {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    var x = Number(value.x);
+    var y = Number(value.y);
+    if (!isFinite(x) || !isFinite(y)) {
+      return null;
+    }
+    return { x: x, y: y };
+  }
+
+  function clampWindowPos(x, y, width, height, boundW, boundH) {
+    var minVisible = 48;
+    var w = Number(width) || 0;
+    var h = Number(height) || 0;
+    var maxX = Math.max(0, Number(boundW) || 0) - minVisible;
+    var maxY = Math.max(0, (Number(boundH) || 0) - minVisible);
+    return {
+      x: Math.max(minVisible - w, Math.min(maxX, Number(x) || 0)),
+      y: Math.max(0, Math.min(maxY, Number(y) || 0))
+    };
+  }
+
+  function compactWindows() {
+    return (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: 639px)").matches
+    );
+  }
+
+  function windowPanelEl(name) {
+    if (name === "plates") {
+      return byId("investigationPlateDock");
+    }
+    if (name === "objects") {
+      return byId("investigationOutline");
+    }
+    if (name === "card") {
+      return byId("investigationInspector");
+    }
+    return null;
+  }
+
+  function windowPanelName(el) {
+    if (!el) {
+      return "";
+    }
+    if (el.id === "investigationPlateDock") {
+      return "plates";
+    }
+    if (el.id === "investigationOutline") {
+      return "objects";
+    }
+    if (el.id === "investigationInspector") {
+      return "card";
+    }
+    return "";
+  }
+
+  function applyWindowPositions() {
+    ["plates", "objects", "card"].forEach(function (name) {
+      var el = windowPanelEl(name);
+      if (!el) {
+        return;
+      }
+      var pos = windowsPos[name];
+      if (compactWindows() || !pos) {
+        el.style.left = "";
+        el.style.top = "";
+        el.style.right = "";
+        el.classList.remove("is-moved");
+        return;
+      }
+      el.style.left = pos.x + "px";
+      el.style.top = pos.y + "px";
+      el.style.right = "auto";
+      el.classList.add("is-moved");
+    });
+  }
 
   function currentKind() {
     var rec = loadRecord();
@@ -46,6 +130,11 @@
         windowsOpen.plates = parsed.plates !== false;
         windowsOpen.objects = !!parsed.objects;
         windowsOpen.card = !!parsed.card;
+        if (parsed.pos && typeof parsed.pos === "object") {
+          windowsPos.plates = parseWindowPos(parsed.pos.plates);
+          windowsPos.objects = parseWindowPos(parsed.pos.objects);
+          windowsPos.card = parseWindowPos(parsed.pos.card);
+        }
       }
     } catch (err) {}
   }
@@ -55,7 +144,19 @@
       return;
     }
     try {
-      sessionStorage.setItem(WINDOWS_KEY, JSON.stringify(windowsOpen));
+      sessionStorage.setItem(
+        WINDOWS_KEY,
+        JSON.stringify({
+          plates: windowsOpen.plates,
+          objects: windowsOpen.objects,
+          card: windowsOpen.card,
+          pos: {
+            plates: windowsPos.plates,
+            objects: windowsPos.objects,
+            card: windowsPos.card
+          }
+        })
+      );
     } catch (err) {}
   }
 
@@ -98,6 +199,7 @@
         !!(windowsOpen.objects && objects && !objects.hidden)
       );
     }
+    applyWindowPositions();
   }
 
   function setWindow(name, open) {
@@ -2052,19 +2154,12 @@
     }
   }
 
-  function placeLinked(shift) {
-    var m = model();
-    var record = loadRecord();
-    if (!m || !m.store || !record) {
-      return;
-    }
-    var focus = nodeById(record, record.focusNodeId);
-    if (!focus) {
-      setStatus("Focus an object first.");
-      return;
-    }
+  function tabAssociateTarget(focus, shift) {
     var type = "PERSON";
     var reason = "REGISTERED_OWNER_OF";
+    if (!focus) {
+      return { objectType: type, reason: reason };
+    }
     if (shift) {
       if (focus.objectType === "BUSINESS") {
         type = "LOCATION";
@@ -2096,23 +2191,33 @@
       type = "PERSON";
       reason = "CURRENT_RESIDENCE";
     }
-    var result = m.store.addInvestigationObject(record.investigationId, {
-      objectType: type,
-      fromNodeId: focus.nodeId,
-      reason: reason,
-      x: Number(focus.x || 0) + 300,
-      y: Number(focus.y || 0),
-      focus: true
-    });
-    if (!result || !result.ok) {
-      setStatus((result && result.error) || "Could not add that object.");
+    return { objectType: type, reason: reason };
+  }
+
+  function openTabComposer(shift) {
+    var record = loadRecord();
+    var focus = record && nodeById(record, record.focusNodeId);
+    if (!focus) {
+      setStatus("Focus an object first.");
       return;
     }
-    inspectorFocusField = true;
+    var pick = tabAssociateTarget(focus, shift);
+    var types = composerTypesForHost(focus.objectType);
+    if (types.indexOf(pick.objectType) === -1) {
+      pick.objectType = types[0] || "PERSON";
+      pick.reason = defaultAssociateReason(focus.objectType, pick.objectType);
+    }
+    associatesDraft.objectType = pick.objectType;
+    associatesDraft.reason =
+      pick.reason || defaultAssociateReason(focus.objectType, pick.objectType);
+    associatesDraft.query = "";
+    associatesDraft.highlight = 0;
+    associatesFocusComposer = true;
+    inspectorFocusField = false;
     windowsOpen.card = true;
     persistWindows();
     paint(loadRecord());
-    setStatus("Added " + type.toLowerCase() + ".", true);
+    setStatus(composerPlaceholder(pick.objectType));
   }
 
   function openEdgeMenu(linkId, clientX, clientY) {
@@ -2245,6 +2350,105 @@
       return false;
     }
     return !!el.closest("input, select, textarea, button, a, label");
+  }
+
+  function bindWindowDrag() {
+    document.querySelectorAll(".investigation-window").forEach(function (el) {
+      var head = el.querySelector(".investigation-dock-head");
+      if (!head || head.dataset.dragBound === "true") {
+        return;
+      }
+      head.dataset.dragBound = "true";
+      head.addEventListener("pointerdown", function (event) {
+        if (event.button !== 0) {
+          return;
+        }
+        if (event.target.closest && event.target.closest("button, input, select, textarea, a, label")) {
+          return;
+        }
+        if (compactWindows()) {
+          return;
+        }
+        var name = windowPanelName(el);
+        var wall = wallEl();
+        if (!name || !wall) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        var box = el.getBoundingClientRect();
+        windowZ += 1;
+        el.style.zIndex = String(windowZ);
+        windowDrag = {
+          name: name,
+          el: el,
+          dx: event.clientX - box.left,
+          dy: event.clientY - box.top,
+          startX: event.clientX,
+          startY: event.clientY,
+          moved: false,
+          pointerId: event.pointerId
+        };
+        el.classList.add("is-dragging");
+        try {
+          head.setPointerCapture(event.pointerId);
+        } catch (err) {}
+      });
+      head.addEventListener("pointermove", function (event) {
+        if (!windowDrag || windowDrag.el !== el) {
+          return;
+        }
+        var wall = wallEl();
+        if (!wall) {
+          return;
+        }
+        if (
+          !windowDrag.moved &&
+          Math.abs(event.clientX - windowDrag.startX) < 4 &&
+          Math.abs(event.clientY - windowDrag.startY) < 4
+        ) {
+          return;
+        }
+        windowDrag.moved = true;
+        var wallRect = wall.getBoundingClientRect();
+        var box = el.getBoundingClientRect();
+        var next = clampWindowPos(
+          event.clientX - wallRect.left - windowDrag.dx,
+          event.clientY - wallRect.top - windowDrag.dy,
+          box.width,
+          box.height,
+          wallRect.width,
+          wallRect.height
+        );
+        el.style.left = next.x + "px";
+        el.style.top = next.y + "px";
+        el.style.right = "auto";
+        el.classList.add("is-moved");
+      });
+      function endDrag() {
+        if (!windowDrag || windowDrag.el !== el) {
+          return;
+        }
+        el.classList.remove("is-dragging");
+        var wall = wallEl();
+        if (windowDrag.moved && wall) {
+          var wallRect = wall.getBoundingClientRect();
+          var box = el.getBoundingClientRect();
+          windowsPos[windowDrag.name] = clampWindowPos(
+            box.left - wallRect.left,
+            box.top - wallRect.top,
+            box.width,
+            box.height,
+            wallRect.width,
+            wallRect.height
+          );
+          persistWindows();
+        }
+        windowDrag = null;
+      }
+      head.addEventListener("pointerup", endDrag);
+      head.addEventListener("pointercancel", endDrag);
+    });
   }
 
   function bind() {
@@ -2730,6 +2934,13 @@
         toggleWindow(btn.getAttribute("data-window"));
       });
     });
+    bindWindowDrag();
+    if (document.body && document.body.dataset.windowResize !== "true") {
+      document.body.dataset.windowResize = "true";
+      window.addEventListener("resize", function () {
+        applyWindowPositions();
+      });
+    }
     document.querySelectorAll("[data-window-close]").forEach(function (btn) {
       btn.addEventListener("click", function (event) {
         event.preventDefault();
@@ -2778,7 +2989,7 @@
           return;
         }
         event.preventDefault();
-        placeLinked(event.shiftKey);
+        openTabComposer(event.shiftKey);
       });
     }
   }
@@ -2794,6 +3005,9 @@
     defaultPlaceType: defaultPlaceType,
     applyWindows: applyWindows,
     setWindow: setWindow,
-    openCard: openCard
+    openCard: openCard,
+    tabAssociateTarget: tabAssociateTarget,
+    parseWindowPos: parseWindowPos,
+    clampWindowPos: clampWindowPos
   };
 })(typeof window !== "undefined" ? window : globalThis);

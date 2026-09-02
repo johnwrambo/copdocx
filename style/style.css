@@ -8333,6 +8333,27 @@ body[data-page="investigate"] .investigation-shell {
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.45rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--ns-line);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.investigation-dock-head button,
+.investigation-dock-head input,
+.investigation-dock-head select,
+.investigation-dock-head a {
+  cursor: pointer;
+  touch-action: auto;
+}
+
+.investigation-window.is-dragging .investigation-dock-head {
+  cursor: grabbing;
+}
+
+.investigation-window.is-moved {
+  right: auto;
 }
 
 .investigation-dock textarea {
