@@ -283,8 +283,14 @@ const legacyPage = fs.readFileSync(path.join(root, "Narrative_Builder.html"), "u
 assert.match(legacyPage, /url=narrative\.html/i, "legacy Build 9 entry should redirect to the integrated page");
 
 const sharedCss = fs.readFileSync(path.join(root, "style/style.css"), "utf8");
-const narrativeAllCss = sharedCss.slice(sharedCss.indexOf("/* NARRATIVE BUILD 9 */"));
-const narrativeCss = sharedCss.slice(sharedCss.indexOf("/* Scoped narrative engine */"));
+const narrativeBlockStart = sharedCss.indexOf("/* NARRATIVE BUILD 9 */");
+const scopedEngineStart = sharedCss.indexOf("/* Scoped narrative engine */");
+const photoPickerStart = sharedCss.indexOf("PHOTO PICKER");
+assert.ok(narrativeBlockStart >= 0, "narrative build 9 CSS marker should exist");
+assert.ok(scopedEngineStart > narrativeBlockStart, "scoped narrative engine CSS should follow the build 9 marker");
+assert.ok(photoPickerStart > scopedEngineStart, "photo picker CSS should follow the narrative block");
+const narrativeAllCss = sharedCss.slice(narrativeBlockStart, photoPickerStart);
+const narrativeCss = sharedCss.slice(scopedEngineStart, photoPickerStart);
 assert.ok(narrativeCss.length > 1000, "scoped narrative engine CSS should be present");
 assert.doesNotMatch(narrativeAllCss, /#[0-9a-f]{3,8}\b/i, "narrative styles should use app theme tokens");
 assert.doesNotMatch(narrativeCss, /var\(--card-background\)[0-9a-f]/i);

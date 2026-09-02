@@ -2,7 +2,8 @@ const fs = require("fs");
 const vm = require("vm");
 const path = require("path");
 
-const context = { document: {} };
+// Inject the outer Date so asOf survives vm.runInContext (cross-realm instanceof).
+const context = { document: {}, Date: Date };
 vm.createContext(context);
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, "..", "functions/age.js"), "utf8"),

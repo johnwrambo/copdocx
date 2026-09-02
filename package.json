@@ -1,0 +1,27 @@
+{
+  "name": "copdocx",
+  "version": "0.66.1",
+  "private": true,
+  "description": "COPDocX local case workspace — verification and release packaging",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.19.0 <25",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "verify": "node scripts/verify.js",
+    "syntax": "node scripts/verify.js --syntax",
+    "test:js": "node scripts/verify.js --node-tests",
+    "test:python": "node scripts/verify.js --python-tests",
+    "test:harness": "node scripts/verify.js --harness",
+    "integrity": "node scripts/check-integrity.js",
+    "serve:test": "node scripts/static-server.js",
+    "hash": "node scripts/hash-manifest.js",
+    "package": "node scripts/package-release.js",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1"
+  }
+}

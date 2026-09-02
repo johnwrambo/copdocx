@@ -1,0 +1,50 @@
+name: Source tests
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  pull_request:
+
+jobs:
+  source:
+    name: Windows source verify
+    runs-on: windows-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python test requirements
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Verify
+        run: npm run verify
+
+      - name: Upload verify and package artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-verify
+          if-no-files-found: warn
+          path: |
+            dist/verify-report.json
+            dist/*.zip
+            dist/*.sha256
+            dist/*.SHA256SUMS
