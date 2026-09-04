@@ -246,12 +246,21 @@
       );
     });
 
-    person.criminal = {
+    person.criminal = Object.assign({}, (prevSubject && prevSubject.criminal) || {}, {
       fbiNumber: textValue(byId("fbiNumber")),
       ncicNumber: textValue(byId("ncicNumber")),
       stateId: textValue(byId("stateId")),
       rapSheet: textValue(byId("rapSheet"))
-    };
+    });
+    var foreignWarrantsValue = textValue(byId("foreignWarrants")).toLowerCase();
+    if (foreignWarrantsValue === "yes" || foreignWarrantsValue === "no") {
+      person.criminal.foreignWarrantsKnown = true;
+      person.criminal.hasForeignWarrants = foreignWarrantsValue === "yes";
+      person.criminal.foreignWarrantCountry =
+        foreignWarrantsValue === "yes"
+          ? textValue(byId("foreignWarrantCountry"))
+          : "";
+    }
 
     cardsIn("encounterList").forEach(function (card) {
       if (!cardHasData(card)) {
@@ -279,17 +288,33 @@
         return;
       }
       var f = readFields(card);
+      var arrestId = entityId(card, "arr");
+      var priorArrest = ((prevSubject && prevSubject.arrests) || []).filter(
+        function (row) {
+          return row && row.arrestId === arrestId;
+        }
+      )[0];
       person.arrests.push(
-        model.createArrest({
-          arrestId: entityId(card, "arr"),
+        model.createArrest(Object.assign({}, priorArrest || {}, {
+          arrestId: arrestId,
           arrestDate: f.arrestDate || "",
+          arrestTime: f.arrestTime || "",
+          arrestDateTime: f.arrestDateTime || "",
           arrestCharge: f.arrestCharge || "",
           arrestStatute: f.arrestStatute || "",
           arrestClass: f.arrestClass || "",
           arrestAgency: f.arrestAgency || "",
           arrestAgencyCode: f.arrestAgencyCode || "",
-          arrestLocation: f.arrestLocation || ""
-        })
+          arrestLocation: f.arrestLocation || "",
+          arrestingOfficer: f.arrestingOfficer || "",
+          team: f.team || "",
+          iceEventNumber: f.iceEventNumber || "",
+          encounterNumber: f.encounterNumber || "",
+          subjectRole: f.subjectRole || "",
+          vehiclePosition: f.vehiclePosition || "",
+          bookinRecordId: f.bookinRecordId || "",
+          bookInDateTime: f.bookInDateTime || ""
+        }))
       );
     });
 

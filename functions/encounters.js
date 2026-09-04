@@ -4,6 +4,9 @@
 (function () {
   "use strict";
 
+  var transientEncounter = null;
+  var recordFilter = "all";
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -36,6 +39,10 @@
       return m.isCommitted(row);
     }
     return !row || !row.meta || row.meta.status !== "draft";
+  }
+
+  function isComplete(row) {
+    return !!(row && row.meta && row.meta.markedComplete);
   }
 
   function displayOrDash(value) {
@@ -83,7 +90,11 @@
       .join("; ");
   }
 
-  var BOOKIN_KEY = "alien-book-in.saved-records.v1";
+  var BOOKIN_KEY =
+    (window.COPDoc &&
+      window.COPDoc.config &&
+      window.COPDoc.config.storageKey("bookin")) ||
+    "alien-book-in.saved-records.v1";
 
   function bookinRecords() {
     try {
@@ -144,17 +155,37 @@
       setStatus(m.store.diskError());
       return;
     }
-    var rows = m.store.listEncounters() || [];
+    var rows = (m.store.listEncounters() || []).filter(function (row) {
+      var full = m.store.getEncounter(row.encounterId) || row;
+      if (recordFilter === "complete") {
+        return isComplete(full);
+      }
+      if (recordFilter === "draft") {
+        return !isComplete(full) && !isCommitted(full);
+      }
+      if (recordFilter === "committed") {
+        return !isComplete(full) && isCommitted(full);
+      }
+      return true;
+    });
     body.replaceChildren();
     empty.hidden = rows.length > 0;
     wrap.hidden = rows.length === 0;
     if (!rows.length) {
-      empty.textContent = "No encounters yet.";
+      empty.textContent =
+        recordFilter === "complete"
+          ? "No completed encounters yet."
+          : recordFilter === "draft"
+            ? "No working encounters."
+            : recordFilter === "committed"
+              ? "No filed encounters."
+              : "No encounters yet.";
     }
     rows.forEach(function (row) {
       var full = m.store.getEncounter(row.encounterId) || row;
       var tr = document.createElement("tr");
       var committed = isCommitted(full);
+      var complete = isComplete(full);
       [
         full.encounterId,
         full.startedAt || "—",
@@ -162,11 +193,17 @@
         formatAddress((full.locations || [])[0]) || "—",
         subjectsLine({ subjects: subjectsForEncounter(full.encounterId) }) ||
           "—",
-        committed ? "Filed" : "Working"
+        complete ? "Completed" : committed ? "Filed" : "Working"
       ].forEach(function (text, index) {
         var td = document.createElement("td");
         td.textContent = text;
-        if (index === 0 && !committed) {
+        if (index === 0 && complete) {
+          var done = document.createElement("span");
+          done.className = "record-status";
+          done.textContent = "Completed";
+          td.appendChild(document.createTextNode(" "));
+          td.appendChild(done);
+        } else if (index === 0 && !committed) {
           var badge = document.createElement("span");
           badge.className = "record-status record-status-draft";
           badge.textContent = "Working";
@@ -181,8 +218,16 @@
       var link = document.createElement("a");
       link.className = "action-button-secondary compact";
       link.href = "encounter-form.html?id=" + encodeURIComponent(full.encounterId);
-      link.textContent = "Edit";
+      link.textContent = complete ? "Open" : "Edit";
       cluster.appendChild(link);
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "action-button-danger compact";
+      del.textContent = "Delete";
+      del.addEventListener("click", function () {
+        deleteEncounterRecord(full.encounterId);
+      });
+      cluster.appendChild(del);
       actions.appendChild(cluster);
       tr.appendChild(actions);
       body.appendChild(tr);
@@ -245,6 +290,7 @@
       zip: f.zip || "",
       latitude: f.latitude || "",
       longitude: f.longitude || "",
+      latLong: f.latLong || "",
       association: f.locationAssociation || f.association || "",
       parksHere: f.parksHere || "",
       targetPriority: f.targetPriority || "",
@@ -252,6 +298,15 @@
     });
     if (!loc.locationId && model().newId) {
       loc.locationId = model().newId("loc");
+    }
+    if ((!loc.latitude || !loc.longitude) && loc.latLong) {
+      var pair = String(loc.latLong).match(
+        /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/
+      );
+      if (pair) {
+        loc.latitude = loc.latitude || pair[1];
+        loc.longitude = loc.longitude || pair[2];
+      }
     }
     return loc;
   }
@@ -319,13 +374,14 @@
   function collectEncounter() {
     var m = model();
     var id = (byId("encounterId") && byId("encounterId").value) || queryId();
-    var previous = id && m.store.getEncounter(id);
+    var previous = (id && m.store.getEncounter(id)) || transientEncounter;
     var record = m.createEncounterRecord({
       encounterId: id || (previous && previous.encounterId)
     });
     if (previous) {
       record = Object.assign({}, previous, record);
       record.meta = previous.meta;
+      record.completed = previous.completed || null;
     }
     record.startedAt = (byId("encounterStartedAt") && byId("encounterStartedAt").value) || "";
     record.team = (byId("encounterTeam") && byId("encounterTeam").value) || record.team || "3";
@@ -487,6 +543,40 @@
     }
     paintSubjectsTable(record.encounterId);
     paintSupervisorSummary(record);
+    lockEncounterForm(isComplete(record));
+  }
+
+  function lockEncounterForm(locked) {
+    var form = byId("encounterForm");
+    if (!form) {
+      return;
+    }
+    form.classList.toggle("is-encounter-locked", !!locked);
+    Array.prototype.forEach.call(
+      form.querySelectorAll("input, select, textarea, button.add-card-btn"),
+      function (el) {
+        if (el.id === "encounterId") {
+          el.readOnly = true;
+          return;
+        }
+        if (el.tagName === "BUTTON") {
+          el.disabled = !!locked;
+          return;
+        }
+        el.disabled = !!locked;
+        if (el.id === "encounterId") {
+          el.disabled = false;
+          el.readOnly = true;
+        }
+      }
+    );
+    var addSubject = byId("addEncounterSubjectTableButton");
+    if (addSubject) {
+      addSubject.hidden = !!locked;
+    }
+    if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
+      COPDoc.chrome.mount();
+    }
   }
 
   function paintSupervisorSummary(record) {
@@ -595,14 +685,129 @@
     setStatus("Subject removed from this encounter.", true);
   }
 
+  var subjectsRoster = null;
+  var subjectsRosterEncounter = "";
+
   function paintSubjectsTable(encounterId) {
+    var host = byId("arrestRosterHost");
+    var rows = subjectsForEncounter(encounterId);
+    if (host) {
+      host.replaceChildren();
+      subjectsRoster = null;
+      subjectsRosterEncounter = "";
+      if (!rows.length) {
+        var emptyNote = document.createElement("p");
+        emptyNote.className = "records-empty";
+        emptyNote.textContent = "No subjects on this encounter yet.";
+        host.appendChild(emptyNote);
+      } else {
+        var wrap = document.createElement("div");
+        wrap.className = "records-table-wrap";
+        var table = document.createElement("table");
+        table.className = "records-table";
+        var head = document.createElement("thead");
+        var headRow = document.createElement("tr");
+        ["Subject", "Role", "A-Number", "Case", ""].forEach(function (label) {
+          var th = document.createElement("th");
+          th.textContent = label;
+          headRow.appendChild(th);
+        });
+        head.appendChild(headRow);
+        table.appendChild(head);
+        var body = document.createElement("tbody");
+        rows.forEach(function (row) {
+          var tr = document.createElement("tr");
+          var name = [row.lastName, row.firstName].filter(Boolean).join(", ");
+          var role = String(row.encounterRole || "").toUpperCase();
+          var roleLabel =
+            role === "COLLATERAL"
+              ? "Collateral"
+              : role === "TARGET"
+                ? "Target"
+                : "—";
+          [name || "—", roleLabel, row.alienNumber || "—", row.leadId ? "Filed" : "Packet"].forEach(
+            function (text) {
+              var td = document.createElement("td");
+              td.textContent = text;
+              tr.appendChild(td);
+            }
+          );
+          var actions = document.createElement("td");
+          var cluster = document.createElement("div");
+          cluster.className = "record-actions";
+          if (row.bookinRecordId) {
+            var edit = document.createElement("a");
+            edit.className = "action-button-secondary compact";
+            edit.href = bookinHref(encounterId, row.bookinRecordId);
+            edit.textContent = "Open";
+            cluster.appendChild(edit);
+          }
+          if (row.leadId) {
+            var caseLink = document.createElement("a");
+            caseLink.className = "action-button-secondary compact";
+            caseLink.href = "case.html?id=" + encodeURIComponent(row.leadId);
+            caseLink.textContent = "Case";
+            cluster.appendChild(caseLink);
+          }
+          var m = model();
+          var stored =
+            m && m.store && encounterId
+              ? m.store.getEncounter(encounterId)
+              : null;
+          if (!isComplete(stored)) {
+            var remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "action-button-danger compact";
+            remove.setAttribute("aria-label", "Remove " + subjectLabel(row));
+            remove.textContent = "×";
+            remove.addEventListener("click", function () {
+              unlinkEncounterSubject(encounterId, row.bookinRecordId || "");
+            });
+            cluster.appendChild(remove);
+          }
+          actions.appendChild(cluster);
+          tr.appendChild(actions);
+          body.appendChild(tr);
+        });
+        table.appendChild(body);
+        wrap.appendChild(table);
+        host.appendChild(wrap);
+      }
+      if (rows.length && window.COPDoc && COPDoc.arrestRoster) {
+        var reportHost = document.createElement("div");
+        reportHost.className = "card-list-actions";
+        var reportBtn = document.createElement("button");
+        reportBtn.type = "button";
+        reportBtn.className = "action-button compact";
+        reportBtn.textContent = "Generate report";
+        reportBtn.addEventListener("click", function () {
+          var scratch = document.createElement("div");
+          scratch.hidden = true;
+          host.appendChild(scratch);
+          var widget = COPDoc.arrestRoster.mount(scratch, {
+            encounterId: encounterId,
+            showGenerate: true
+          });
+          if (widget && widget.generate) {
+            widget.generate();
+          }
+        });
+        reportHost.appendChild(reportBtn);
+        host.appendChild(reportHost);
+      }
+      var href = bookinHref(encounterId);
+      var tableAdd = byId("addEncounterSubjectTableButton");
+      if (tableAdd && encounterId) {
+        tableAdd.href = href;
+      }
+      return;
+    }
     var body = byId("encounterSubjectsBody");
     var empty = byId("encounterSubjectsEmpty");
     var wrap = byId("encounterSubjectsTableWrap");
     if (!body || !empty || !wrap) {
       return;
     }
-    var rows = subjectsForEncounter(encounterId);
     body.replaceChildren();
     empty.hidden = rows.length > 0;
     wrap.hidden = rows.length === 0;
@@ -652,23 +857,69 @@
     }
   }
 
-  function saveDraftQuiet() {
+  function encounterHasMeaningfulData(record) {
+    if (!record) {
+      return false;
+    }
+    if (
+      record.startedAt ||
+      (record.vehicles || []).length ||
+      (record.locations || []).length ||
+      (record.subjects || []).length ||
+      (record.links || []).length ||
+      (record.narratives || []).length
+    ) {
+      return true;
+    }
+    if (!transientEncounter) {
+      return true;
+    }
+    return String(record.team || "") !== String(transientEncounter.team || "");
+  }
+
+  function rememberPersistedEncounter(record) {
+    transientEncounter = null;
+    if (record.encounterId && window.history && window.history.replaceState) {
+      window.history.replaceState(
+        {},
+        "",
+        "encounter-form.html?id=" + encodeURIComponent(record.encounterId)
+      );
+    }
+    if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
+      COPDoc.chrome.mount();
+    }
+  }
+
+  function saveDraftQuiet(options) {
+    options = options || {};
     var m = model();
     var record = collectEncounter();
     if (!record.encounterId) {
       return;
+    }
+    if (!options.force && !encounterHasMeaningfulData(record)) {
+      return true;
+    }
+    if (isComplete(record) || isComplete(m.store.getEncounter(record.encounterId))) {
+      return true;
     }
     var saved = m.store.saveEncounter(record, { mode: "draft" });
     if (saved && !saved.ok) {
       setStatus(saved.error || "Could not save the encounter.");
       return false;
     }
+    rememberPersistedEncounter(record);
     return true;
   }
 
   function commitEncounter() {
     var m = model();
     var record = collectEncounter();
+    if (isComplete(record) || isComplete(m.store.getEncounter(record.encounterId))) {
+      setStatus("This encounter is completed and locked.");
+      return;
+    }
     if (!record.startedAt) {
       setStatus("Enter the date and time of the encounter.");
       return;
@@ -678,6 +929,7 @@
       setStatus(saved.error || "Could not save the encounter.");
       return;
     }
+    transientEncounter = null;
     if (record.encounterId && window.history && window.history.replaceState) {
       window.history.replaceState(
         {},
@@ -695,7 +947,14 @@
       setStatus("Create the encounter first.");
       return;
     }
-    saveDraftQuiet();
+    var stored = model() && model().store && model().store.getEncounter(id);
+    if (isComplete(stored)) {
+      setStatus("This encounter is completed and locked.");
+      return;
+    }
+    if (saveDraftQuiet({ force: true }) === false) {
+      return;
+    }
     window.location.href = bookinHref(id);
   }
 
@@ -705,7 +964,9 @@
       setStatus("Create the encounter first.");
       return;
     }
-    saveDraftQuiet();
+    if (saveDraftQuiet({ force: true }) === false) {
+      return;
+    }
     var subjects = subjectsForEncounter(id);
     if (!subjects.length) {
       setStatus("Add subjects on Book-in before generating an I-213.");
@@ -715,9 +976,136 @@
       "narrative.html?encounterId=" + encodeURIComponent(id);
   }
 
+  function unlinkBookinPacketsFromEncounter(encounterId) {
+    if (!encounterId) {
+      return;
+    }
+    var changed = false;
+    var list = bookinRecords().map(function (item) {
+      if (item && item.encounterId === encounterId) {
+        changed = true;
+        item.encounterId = "";
+      }
+      return item;
+    });
+    if (changed) {
+      writeBookinRecords(list);
+    }
+  }
+
+  function deleteEncounterRecord(encounterId, options) {
+    options = options || {};
+    var id = String(encounterId || "").trim();
+    if (!id) {
+      setStatus("Create the encounter first.");
+      return false;
+    }
+    var m = model();
+    if (!m || !m.store || typeof m.store.deleteEncounter !== "function") {
+      setStatus("Could not delete the encounter.");
+      return false;
+    }
+    if (
+      typeof window.confirm === "function" &&
+      !window.confirm(
+        "Delete encounter " +
+          id +
+          "? Cases and Book-in packets stay. Packets on this encounter are unlinked."
+      )
+    ) {
+      return false;
+    }
+    m.store.loadFromDisk();
+    var existing = m.store.getEncounter(id);
+    if (!existing && !transientEncounter) {
+      setStatus("That encounter was not found.");
+      return false;
+    }
+    unlinkBookinPacketsFromEncounter(id);
+    if (existing) {
+      var result = m.store.deleteEncounter(id);
+      if (!result || !result.ok) {
+        setStatus((result && result.error) || "Could not delete the encounter.");
+        return false;
+      }
+    }
+    transientEncounter = null;
+    setStatus("Deleted encounter " + id + ".", true);
+    if (options.redirect !== false) {
+      if (pageKey() === "encounter") {
+        paintList();
+      } else {
+        window.location.href = "encounter.html";
+      }
+    } else {
+      paintList();
+    }
+    return true;
+  }
+
+  function deleteCurrentEncounter() {
+    var id =
+      (byId("encounterId") && byId("encounterId").value) || queryId();
+    if (!id) {
+      setStatus("Create the encounter first.");
+      return;
+    }
+    deleteEncounterRecord(id);
+  }
+
+  function completeCurrentEncounter() {
+    var m = model();
+    if (!m || !m.store) {
+      setStatus("Could not complete the encounter.");
+      return;
+    }
+    var record = collectEncounter();
+    if (isComplete(record) || isComplete(m.store.getEncounter(record.encounterId))) {
+      setStatus("This encounter is already completed.");
+      lockEncounterForm(true);
+      return;
+    }
+    if (!record.startedAt) {
+      setStatus("Set the date and time of the stop before completing.");
+      return;
+    }
+    if (
+      typeof window.confirm === "function" &&
+      !window.confirm(
+        "Mark this encounter complete?\n\nThis saves a snapshot for Map and analytics and locks the form. Later edits will not change that record."
+      )
+    ) {
+      return;
+    }
+    var saved = m.store.saveEncounter(record, { mode: "complete" });
+    if (!saved || !saved.ok) {
+      setStatus((saved && saved.error) || "Could not complete the encounter.");
+      return;
+    }
+    transientEncounter = null;
+    if (record.encounterId && window.history && window.history.replaceState) {
+      window.history.replaceState(
+        {},
+        "",
+        "encounter-form.html?id=" + encodeURIComponent(record.encounterId)
+      );
+    }
+    var fresh = m.store.getEncounter(record.encounterId);
+    hydrateEncounter(fresh);
+    var pin = fresh && fresh.completed && fresh.completed.pin;
+    setStatus(
+      pin
+        ? "Encounter completed and locked. Snapshot filed for Map and analytics."
+        : "Encounter completed and locked. Add a mapped stop and complete again is not available; re-open only as a locked record.",
+      true
+    );
+  }
+
   window.commitEncounter = commitEncounter;
+  window.completeCurrentEncounter = completeCurrentEncounter;
   window.generateEncounterNarrative = generateEncounterNarrative;
   window.openEncounterBookIn = openEncounterBookIn;
+  window.deleteCurrentEncounter = deleteCurrentEncounter;
 
   function ensureNewEncounter() {
     var m = model();
@@ -737,22 +1125,7 @@
       team: (byId("encounterTeam") && byId("encounterTeam").value) || "3",
       existingIds: existingIds
     });
-    var createdSave = m.store.saveEncounter(created, { mode: "draft" });
-    if (createdSave && !createdSave.ok) {
-      setStatus(createdSave.error || "Could not save the encounter.");
-      hydrateEncounter(created);
-      return created;
-    }
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(
-        {},
-        "",
-        "encounter-form.html?id=" + encodeURIComponent(created.encounterId)
-      );
-    }
-    if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
-      COPDoc.chrome.mount();
-    }
+    transientEncounter = created;
     hydrateEncounter(created);
     return created;
   }
@@ -781,11 +1154,12 @@
         return;
       }
       m.store.loadFromDisk();
-      var current = m.store.getEncounter(id);
+      var stored = m.store.getEncounter(id);
+      var current = stored || transientEncounter;
       if (!current) {
         return;
       }
-      if (isCommitted(current)) {
+      if (isComplete(current) || isCommitted(current)) {
         setStatus("Team is locked after the encounter is saved.");
         teamEl.value = current.team || "3";
         return;
@@ -803,24 +1177,28 @@
       });
       if (nextId === id) {
         current.team = String(team);
-        m.store.saveEncounter(current, { mode: "draft" });
+        if (stored) {
+          m.store.saveEncounter(current, { mode: "draft" });
+          rememberPersistedEncounter(current);
+        } else {
+          transientEncounter = current;
+          hydrateEncounter(current);
+          saveDraftQuiet({ force: true });
+        }
         return;
       }
       current.team = String(team);
       current.encounterId = nextId;
-      m.store.saveEncounter(current, { mode: "draft" });
-      if (m.store.deleteEncounter) {
-        m.store.deleteEncounter(id);
-      }
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState(
-          {},
-          "",
-          "encounter-form.html?id=" + encodeURIComponent(nextId)
-        );
-      }
-      if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
-        COPDoc.chrome.mount();
+      if (stored) {
+        m.store.saveEncounter(current, { mode: "draft" });
+        if (m.store.deleteEncounter) {
+          m.store.deleteEncounter(id);
+        }
+        rememberPersistedEncounter(current);
+      } else {
+        transientEncounter = current;
+        hydrateEncounter(current);
+        saveDraftQuiet({ force: true });
       }
       hydrateEncounter(current);
       setStatus("Encounter ID updated for team " + team + ".", true);
@@ -856,8 +1234,21 @@
     }
   }
 
+  function bindFilters() {
+    document.querySelectorAll("[data-record-filter]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        recordFilter = btn.getAttribute("data-record-filter") || "all";
+        document.querySelectorAll("[data-record-filter]").forEach(function (other) {
+          other.setAttribute("aria-pressed", other === btn ? "true" : "false");
+        });
+        paintList();
+      });
+    });
+  }
+
   function boot() {
     if (pageKey() === "encounter") {
+      bindFilters();
       paintList();
       return;
     }

@@ -35,9 +35,10 @@
   ];
 
   function createLocation(extra) {
-    return model.assign(
+    extra = extra || {};
+    var built = model.assign(
       {
-        locationId: model.newId("loc"),
+        locationId: extra.locationId || model.newId("loc"),
         entityType: "LOCATION",
         street: "",
         street2: "",
@@ -64,6 +65,12 @@
       },
       extra
     );
+    built.entityType = "LOCATION";
+    if (!built.locationId) {
+      built.locationId = built.id || model.newId("loc");
+    }
+    built.id = built.locationId;
+    return built;
   }
 
   function isHistoricalOccupancy(row) {

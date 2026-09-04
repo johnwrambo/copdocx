@@ -4,69 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Cases</title>
-    <link rel="stylesheet" href="style/style.css" />
+    <script>
+      (function () {
+        var q = window.location.search || "";
+        window.location.replace("cases.html" + q);
+      })();
+    </script>
   </head>
-  <body data-page="leads">
-    <header class="app-bar">
-      <div class="app-bar-info">
-        <span class="app-bar-product">COPDoc</span>
-        <span
-          id="appVersion"
-          class="app-version"
-          data-version="0.66.0"
-        >
-          Version 0.66.0
-        </span>
-        <span id="currentDate" class="app-bar-date"></span>
-      </div>
-      <div class="app-bar-navrow" id="appBarNavRow"></div>
-      <p id="appBarStatus" class="app-bar-status" hidden></p>
-    </header>
-
-    <div class="page page-wide">
-      <fieldset class="card-static">
-        <legend>Cases</legend>
-        <p class="section-note">Stage is Lead, Target, or Detainee. Encounter Target / Collateral is a different role.</p>
-        <div class="record-filter-chips" role="group" aria-label="Filter cases by stage">
-          <button type="button" data-record-filter="all" aria-pressed="true">All</button>
-          <button type="button" data-record-filter="lead" aria-pressed="false">Leads</button>
-          <button type="button" data-record-filter="target" aria-pressed="false">Targets</button>
-          <button type="button" data-record-filter="detainee" aria-pressed="false">Detainees</button>
-        </div>
-        <div id="leadsEmpty" class="records-empty">No cases yet.</div>
-        <div id="leadsTableWrap" class="records-table-wrap" hidden>
-          <table class="records-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Stage</th>
-                <th>Crim / non-crim</th>
-                <th>Immigration disposition</th>
-                <th>City</th>
-                <th>Vehicle</th>
-                <th>FBI number</th>
-                <th>A-Number</th>
-                <th>FINS</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="leadsBody"></tbody>
-          </table>
-        </div>
-      </fieldset>
-    </div>
-
-    <script src="functions/app-bar.js"></script>
-    <script src="functions/transfer.js"></script>
-    <script src="functions/date.js"></script>
-    <script src="functions/lead-source.js"></script>
-    <script src="data/immigration.js"></script>
-    <script src="functions/model/util.js"></script>
-    <script src="functions/model/lead.js"></script>
-    <script src="functions/model/person.js"></script>
-    <script src="functions/model/location.js"></script>
-    <script src="functions/model/store.js"></script>
-    <script src="functions/leads.js"></script>
-    <script src="functions/lead-csv.js"></script>
+  <body>
+    <p>
+      <a id="casesRedirectLink" href="cases.html">Open Cases</a>
+    </p>
+    <script>
+      document.getElementById("casesRedirectLink").href =
+        "cases.html" + (window.location.search || "");
+    </script>
   </body>
 </html>

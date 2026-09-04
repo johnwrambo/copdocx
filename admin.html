@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin</title>
     <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
   </head>
   <body data-page="dashboard" data-admin-page="dashboard">
     <!--
@@ -17,9 +19,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -46,7 +48,7 @@
         <article class="stat-card">
           <p class="stat-label">Arrests this week</p>
           <p id="statArrestsWeek" class="stat-value">0</p>
-          <p class="stat-hint">Book-in records, Sun–Sat</p>
+          <p class="stat-hint">Filed arrests, Sun–Sat</p>
         </article>
         <article class="stat-card">
           <p class="stat-label">Arrests this FY</p>
@@ -54,6 +56,14 @@
           <p class="stat-hint">Fiscal year starts 1 October</p>
         </article>
       </div>
+
+      <fieldset class="card-static">
+        <legend>Today's arrests</legend>
+        <p class="section-note">
+          Filed arrests for today. Generate today's report includes Baseball Cards. Other dates are on Cases.
+        </p>
+        <div id="arrestRosterHost"></div>
+      </fieldset>
 
       <fieldset class="card-static">
         <legend>Officers</legend>
@@ -89,11 +99,20 @@
     <script src="functions/transfer.js"></script>
     <script src="functions/date.js"></script>
     <script src="functions/cards.js"></script>
+    <script src="data/countries.js"></script>
+    <script src="data/immigration.js"></script>
     <script src="functions/model/util.js"></script>
+    <script src="functions/model/lead.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="functions/baseballcard.js"></script>
+    <script src="functions/arrest-report.js"></script>
+    <script src="functions/arrest-roster.js"></script>
     <script src="functions/model/location.js"></script>
     <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/officer.js"></script>
     <script src="functions/model/autosave.js"></script>
+    <script src="functions/admin-disposition.js"></script>
     <script src="functions/admin.js"></script>
   </body>
 </html>

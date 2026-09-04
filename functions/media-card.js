@@ -295,6 +295,8 @@
       return Promise.resolve();
     }
     unmount(host);
+    host._mediaCardOptions = options;
+    host.setAttribute("data-media-card-mounted", "true");
     host._mediaUrls = [];
     var api = root.media;
     var owner = options.owner;
@@ -342,12 +344,16 @@
         stage.tabIndex = 0;
         stage.title = photos.length ? "Add or edit photos" : "Add photo";
         stage.addEventListener("click", function () {
-          window.location.href = pickerHref;
+          if (!root.photoPicker || !root.photoPicker.open(pickerHref, stage)) {
+            window.location.href = pickerHref;
+          }
         });
         stage.addEventListener("keydown", function (event) {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            window.location.href = pickerHref;
+            if (!root.photoPicker || !root.photoPicker.open(pickerHref, stage)) {
+              window.location.href = pickerHref;
+            }
           }
         });
       }
@@ -478,6 +484,23 @@
     mount: mount,
     unmount: unmount
   };
+
+  global.addEventListener("copdoc:media-changed", function (event) {
+    var changed = event.detail && event.detail.owner;
+    if (!changed || !changed.id) {
+      return;
+    }
+    document.querySelectorAll('[data-media-card-mounted="true"]').forEach(function (host) {
+      var options = host._mediaCardOptions || {};
+      var owner = options.owner || {};
+      if (
+        String(owner.type || "").toUpperCase() === String(changed.type || "").toUpperCase() &&
+        String(owner.id || "") === String(changed.id || "")
+      ) {
+        mount(host, options);
+      }
+    });
+  });
 
   global.addEventListener("pagehide", function () {
     document.querySelectorAll(".media-block").forEach(function (el) {

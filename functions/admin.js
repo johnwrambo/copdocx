@@ -1,10 +1,13 @@
 /**
  * Admin hub: officers, vehicles, week schedule, and duty/arrests summary.
- * Stored in localStorage copdoc.admin.v1. Arrest counts read book-in records.
+ * Stored in localStorage copdoc.admin.v1. Arrest counts read committed case arrests.
  */
 (function () {
-  var STORAGE_KEY = "copdoc.admin.v1";
-  var BOOKIN_KEY = "alien-book-in.saved-records.v1";
+  var config = window.COPDoc && window.COPDoc.config;
+  var STORAGE_KEY =
+    (config && config.storageKey("admin")) || "copdoc.admin.v1";
+  var WORKSPACE_KEY =
+    (config && config.storageKey("workspace")) || "copdocx.store.v1";
   var DUTY_LABELS = {
     available: "Available",
     "in-field": "In field",
@@ -186,6 +189,19 @@
     return !row || !row.meta || row.meta.status !== "draft";
   }
 
+  function dispositionApi() {
+    return window.COPDoc && COPDoc.adminDisposition;
+  }
+
+  function rowJunked(row) {
+    var api = dispositionApi();
+    return api && api.isJunked ? api.isJunked(row) : Boolean(row && row.junked);
+  }
+
+  function rowActive(row) {
+    return Boolean(row && !rowJunked(row));
+  }
+
   function rowMeta(existing, mode) {
     if (window.COPDoc && COPDoc.model && typeof COPDoc.model.stampMeta === "function") {
       return COPDoc.model.stampMeta(existing, mode);
@@ -311,6 +327,22 @@
         data: null,
         error:
           "Admin storage is damaged. Do not Save. Copy the site data out if you have a backup."
+      };
+    }
+  }
+
+  function readWorkspaceForReferences() {
+    if (typeof localStorage === "undefined") {
+      return { ok: true, data: {} };
+    }
+    try {
+      var raw = localStorage.getItem(WORKSPACE_KEY) || "";
+      return { ok: true, data: raw ? JSON.parse(raw) : {} };
+    } catch (error) {
+      return {
+        ok: false,
+        data: {},
+        error: "Workspace references could not be inspected; permanent delete is blocked."
       };
     }
   }
@@ -667,33 +699,24 @@
   function countBookInArrests() {
     var week = 0;
     var fy = 0;
-    try {
-      var raw = localStorage.getItem(BOOKIN_KEY);
-      var records = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(records)) {
-        return { week: 0, fy: 0 };
-      }
-      var now = new Date();
-      var weekStart = startOfWeek(now);
-      var weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-      var fy0 = fyStart(now);
-      records.forEach(function (record) {
-        var stamp = Date.parse(record.updatedAt || record.createdAt || "");
-        if (!isFinite(stamp)) {
-          return;
-        }
-        var when = new Date(stamp);
-        if (when >= weekStart && when < weekEnd) {
-          week += 1;
-        }
-        if (when >= fy0 && when <= now) {
-          fy += 1;
-        }
-      });
-    } catch (error) {
+    var store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+    if (!store || typeof store.listArrests !== "function") {
       return { week: 0, fy: 0 };
     }
+    if (typeof store.loadFromDisk === "function") {
+      store.loadFromDisk();
+    }
+    var now = new Date();
+    var weekStart = startOfWeek(now);
+    var weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    var fy0 = fyStart(now);
+    var weekFrom = isoDate(weekStart);
+    var weekTo = isoDate(new Date(weekEnd.getTime() - 86400000));
+    var fyFrom = isoDate(fy0);
+    var fyTo = isoDate(now);
+    week = (store.listArrests({ from: weekFrom, to: weekTo }) || []).length;
+    fy = (store.listArrests({ from: fyFrom, to: fyTo }) || []).length;
     return { week: week, fy: fy };
   }
 
@@ -702,10 +725,10 @@
       return;
     }
     var officers = state.officers.filter(function (row) {
-      return rowCommitted(row) && row.duty === "available";
+      return rowActive(row) && rowCommitted(row) && row.duty === "available";
     }).length;
     var vehicles = state.vehicles.filter(function (row) {
-      return rowCommitted(row) && row.status === "available";
+      return rowActive(row) && rowCommitted(row) && row.status === "available";
     }).length;
     var arrests = countBookInArrests();
     byId("statOfficers").textContent = String(officers);
@@ -742,13 +765,17 @@
     }
     fillSelect(
       byId("shiftOfficer"),
-      state.officers.filter(rowCommitted),
+      state.officers.filter(function (row) {
+        return rowActive(row) && rowCommitted(row);
+      }),
       "Select an officer",
       officerName
     );
     fillSelect(
       byId("shiftVehicle"),
-      state.vehicles.filter(rowCommitted),
+      state.vehicles.filter(function (row) {
+        return rowActive(row) && rowCommitted(row);
+      }),
       "None",
       vehicleLabel
     );
@@ -770,7 +797,45 @@
     return btn;
   }
 
-  function removeButton(kind, id) {
+  function recordFor(kind, id) {
+    return (state[kind] || []).filter(function (row) {
+      if (kind === "officers") {
+        return row.id === id || row.officerId === id;
+      }
+      return row.id === id || row.vehicleId === id;
+    })[0];
+  }
+
+  function recordLabel(kind, row) {
+    var label = kind === "officers" ? officerName(row) : vehicleLabel(row);
+    return label || (row && (row.id || row.officerId || row.vehicleId)) || "record";
+  }
+
+  function matchingShifts(kind, id) {
+    return state.shifts.filter(function (shift) {
+      return kind === "officers"
+        ? shift.officerId === id
+        : shift.vehicleId === id;
+    });
+  }
+
+  function shiftLine(shift) {
+    return [shift.date, [shift.start, shift.end].filter(Boolean).join("–")]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function confirmLines(title, rows) {
+    var lines = rows.slice(0, 10).map(function (row) {
+      return "• " + shiftLine(row);
+    });
+    if (rows.length > 10) {
+      lines.push("• …and " + (rows.length - 10) + " more");
+    }
+    return window.confirm(title + "\n\n" + lines.join("\n"));
+  }
+
+  function shiftRemoveButton(shift) {
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "action-button-danger compact";
@@ -781,42 +846,195 @@
         setStatus(fresh.error);
         return;
       }
-      state[kind] = state[kind].filter(function (row) {
-        if (kind === "officers") {
-          return row.id !== id && row.officerId !== id;
-        }
-        if (kind === "vehicles") {
-          return row.id !== id && row.vehicleId !== id;
-        }
-        return row.id !== id;
+      var current = state.shifts.filter(function (row) {
+        return row.id === shift.id;
+      })[0];
+      if (!current) {
+        setStatus("That shift no longer exists.");
+        paint();
+        return;
+      }
+      if (!window.confirm("Remove shift " + shiftLine(current) + "?")) {
+        return;
+      }
+      state.shifts = state.shifts.filter(function (row) {
+        return row.id !== current.id;
       });
+      if (persistOrRollback()) {
+        setStatus("Shift removed.", true);
+        paint();
+      }
+    });
+    return btn;
+  }
+
+  function removeFromScheduleButton(kind, id) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "action-button-secondary compact";
+    btn.textContent = "Remove from schedule";
+    btn.addEventListener("click", function () {
+      var fresh = adoptDisk();
+      if (!fresh.ok) {
+        setStatus(fresh.error);
+        return;
+      }
+      var shifts = matchingShifts(kind, id);
+      if (!shifts.length) {
+        setStatus("No schedule assignments found.");
+        paint();
+        return;
+      }
+      var verb = kind === "officers" ? "Remove these shifts?" : "Unassign this vehicle from these shifts?";
+      if (!confirmLines(verb, shifts)) {
+        return;
+      }
       if (kind === "officers") {
         state.shifts = state.shifts.filter(function (shift) {
           return shift.officerId !== id;
         });
-      }
-      if (kind === "vehicles") {
+      } else {
         state.shifts.forEach(function (shift) {
           if (shift.vehicleId === id) {
             shift.vehicleId = "";
           }
         });
       }
+      if (persistOrRollback()) {
+        setStatus(
+          kind === "officers"
+            ? shifts.length + " shift(s) removed."
+            : "Vehicle unassigned from " + shifts.length + " shift(s).",
+          true
+        );
+        paint();
+      }
+    });
+    return btn;
+  }
+
+  function archiveButton(kind, id) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "action-button-danger compact";
+    btn.textContent = "Junk";
+    btn.addEventListener("click", function () {
+      var fresh = adoptDisk();
+      if (!fresh.ok) {
+        setStatus(fresh.error);
+        return;
+      }
+      var row = recordFor(kind, id);
+      if (!row || rowJunked(row)) {
+        paint();
+        return;
+      }
+      var label = recordLabel(kind, row);
+      if (!window.confirm("Junk " + label + "?\n\nThe record is archived and can be restored. References and media are kept.")) {
+        return;
+      }
+      var api = dispositionApi();
+      if (api && api.archive) {
+        api.archive(row);
+      } else {
+        row.junked = true;
+        row.junkedAt = new Date().toISOString();
+      }
+      if (persistOrRollback()) {
+        setStatus(label + " moved to Junk.", true);
+        paint();
+      }
+    });
+    return btn;
+  }
+
+  function restoreButton(kind, id) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "action-button-secondary compact";
+    btn.textContent = "Restore";
+    btn.addEventListener("click", function () {
+      var fresh = adoptDisk();
+      if (!fresh.ok) {
+        setStatus(fresh.error);
+        return;
+      }
+      var row = recordFor(kind, id);
+      if (!row) {
+        paint();
+        return;
+      }
+      var api = dispositionApi();
+      if (api && api.restore) {
+        api.restore(row);
+      } else {
+        row.junked = false;
+        row.junkedAt = "";
+      }
+      if (persistOrRollback()) {
+        setStatus(recordLabel(kind, row) + " restored.", true);
+        paint();
+      }
+    });
+    return btn;
+  }
+
+  function deleteRecordButton(kind, id) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "action-button-danger compact";
+    btn.textContent = "Delete record";
+    btn.addEventListener("click", function () {
+      var fresh = adoptDisk();
+      if (!fresh.ok) {
+        setStatus(fresh.error);
+        return;
+      }
+      var row = recordFor(kind, id);
+      if (!row || !rowJunked(row)) {
+        setStatus("Move the record to Junk before permanent deletion.");
+        paint();
+        return;
+      }
+      var workspace = readWorkspaceForReferences();
+      if (!workspace.ok) {
+        setStatus(workspace.error);
+        return;
+      }
+      var api = dispositionApi();
+      var refs = api && api.references
+        ? api.references(kind, id, state, workspace.data)
+        : [{ type: "unknown", label: "Reference checking is unavailable" }];
+      if (refs.length) {
+        setStatus(
+          "Delete blocked: " + refs.map(function (item) { return item.label; }).join("; ")
+        );
+        window.alert(
+          "Delete record is blocked until these references are removed:\n\n" +
+            refs.map(function (item) { return "• " + item.label; }).join("\n")
+        );
+        return;
+      }
+      var label = recordLabel(kind, row);
+      var typed = window.prompt(
+        "Permanent deletion cannot be undone. Type this record name exactly to continue:\n\n" + label
+      );
+      if (typed !== label) {
+        setStatus("Permanent delete cancelled; the name did not match.");
+        return;
+      }
+      state[kind] = state[kind].filter(function (candidate) {
+        return candidate !== row;
+      });
       if (!persistOrRollback()) {
         return;
       }
-      if (
-        window.COPDoc &&
-        COPDoc.media &&
-        typeof COPDoc.media.removeByOwner === "function"
-      ) {
-        var ownerType = kind === "officers" ? "OFFICER" : kind === "vehicles" ? "VEHICLE" : "";
-        if (ownerType) {
-          COPDoc.media.removeByOwner({ type: ownerType, id: id }).then(
-            function () {},
-            function () {}
-          );
-        }
+      setStatus(label + " permanently deleted.", true);
+      if (window.COPDoc && COPDoc.media && typeof COPDoc.media.removeByOwner === "function") {
+        var ownerType = kind === "officers" ? "OFFICER" : "VEHICLE";
+        COPDoc.media.removeByOwner({ type: ownerType, id: id }).catch(function () {
+          setStatus(label + " was deleted, but its media could not be removed.");
+        });
       }
       paint();
     });
@@ -825,6 +1043,11 @@
 
   function sortRecords(rows) {
     return rows.slice().sort(function (a, b) {
+      var ja = rowJunked(a) ? 1 : 0;
+      var jb = rowJunked(b) ? 1 : 0;
+      if (ja !== jb) {
+        return ja - jb;
+      }
       var da = rowCommitted(a) ? 1 : 0;
       var db = rowCommitted(b) ? 1 : 0;
       if (da !== db) {
@@ -838,12 +1061,18 @@
 
   function filteredRecords(kind) {
     var rows = state[kind] || [];
-    if (recordFilter === "draft") {
+    if (recordFilter === "junk") {
+      rows = rows.filter(rowJunked);
+    } else if (recordFilter === "draft") {
       rows = rows.filter(function (row) {
-        return !rowCommitted(row);
+        return rowActive(row) && !rowCommitted(row);
       });
     } else if (recordFilter === "committed") {
-      rows = rows.filter(rowCommitted);
+      rows = rows.filter(function (row) {
+        return rowActive(row) && rowCommitted(row);
+      });
+    } else {
+      rows = rows.filter(rowActive);
     }
     return sortRecords(rows);
   }
@@ -873,10 +1102,12 @@
       columns.forEach(function (col, index) {
         var td = document.createElement("td");
         td.textContent = col(row);
-        if (index === 0 && !rowCommitted(row)) {
+        if (index === 0 && (!rowCommitted(row) || rowJunked(row))) {
           var badge = document.createElement("span");
-          badge.className = "record-status record-status-draft";
-          badge.textContent = "Working";
+          badge.className = rowJunked(row)
+            ? "record-status record-status-junk"
+            : "record-status record-status-draft";
+          badge.textContent = rowJunked(row) ? "Junk" : "Working";
           td.appendChild(document.createTextNode(" "));
           td.appendChild(badge);
         }
@@ -906,7 +1137,15 @@
         }
         rowActions.appendChild(link);
       }
-      rowActions.appendChild(removeButton(kind, row.id));
+      if (matchingShifts(kind, row.id).length) {
+        rowActions.appendChild(removeFromScheduleButton(kind, row.id));
+      }
+      if (rowJunked(row)) {
+        rowActions.appendChild(restoreButton(kind, row.id));
+        rowActions.appendChild(deleteRecordButton(kind, row.id));
+      } else {
+        rowActions.appendChild(archiveButton(kind, row.id));
+      }
       actions.appendChild(rowActions);
       tr.appendChild(actions);
       body.appendChild(tr);
@@ -937,7 +1176,9 @@
   }
 
   function paintDashboard() {
-    var officers = state.officers.filter(rowCommitted);
+    var officers = state.officers.filter(function (row) {
+      return rowActive(row) && rowCommitted(row);
+    });
     var available = officers.filter(function (row) {
       return row.duty === "available";
     });
@@ -955,7 +1196,9 @@
         available.length +
         " available"
     );
-    var vehicles = state.vehicles.filter(rowCommitted);
+    var vehicles = state.vehicles.filter(function (row) {
+      return rowActive(row) && rowCommitted(row);
+    });
     var openVehicles = vehicles.filter(function (row) {
       return row.status === "available";
     });
@@ -1081,10 +1324,27 @@
         tr.appendChild(td);
       });
       var actions = document.createElement("td");
-      actions.appendChild(removeButton("shifts", shift.id));
+      actions.appendChild(shiftRemoveButton(shift));
       tr.appendChild(actions);
       body.appendChild(tr);
     });
+  }
+
+  var todayRoster = null;
+
+  function mountTodayArrests() {
+    var host = byId("arrestRosterHost");
+    if (!host || !window.COPDoc || !COPDoc.arrestRoster) {
+      return;
+    }
+    if (!todayRoster) {
+      todayRoster = COPDoc.arrestRoster.mount(host, {
+        todayOnly: true,
+        showGenerate: true
+      });
+    } else if (todayRoster.refresh) {
+      todayRoster.refresh();
+    }
   }
 
   function paint() {
@@ -1131,6 +1391,7 @@
     }
     paintWeek();
     paintShiftsTable();
+    mountTodayArrests();
     if (adminPage() === "officer-view") {
       paintOfficerView(queryParam("id"));
     }
@@ -1240,7 +1501,13 @@
         mapped: !!pair,
         loc: loc,
         pinColor: loc.pinColor || "",
-        photoOwners: photoOwners
+        photoOwners: photoOwners,
+        objectPhotoOwners: loc.locationId
+          ? [{ type: "LOCATION", id: loc.locationId }]
+          : [],
+        personPhotoOwners: row.officerId || row.id
+          ? [{ type: "OFFICER", id: row.officerId || row.id }]
+          : []
       });
     }
     (row.locations || []).forEach(pushLoc);
@@ -2166,7 +2433,9 @@
     var query = val("assignOfficerSearch").toLowerCase();
     var selected = assignedIdsFromInput();
     var officers = state.officers
-      .filter(rowCommitted)
+      .filter(function (row) {
+        return rowActive(row) && rowCommitted(row);
+      })
       .filter(function (officer) {
         return !query || officerSearchHay(officer).indexOf(query) !== -1;
       })
@@ -2175,7 +2444,7 @@
         return officerName(a).localeCompare(officerName(b));
       });
     list.replaceChildren();
-    if (!state.officers.length) {
+    if (!state.officers.some(rowActive)) {
       var empty = document.createElement("p");
       empty.className = "assign-officer-empty";
       empty.textContent = "No officers on the roster.";

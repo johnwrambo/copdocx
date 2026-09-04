@@ -1,0 +1,72 @@
+Vehicles entered during book in are not automatically linking in the person case
+
+Arrests/encounters are not showing on map
+
+
+1) Uniform delete — officers must not vanish on one click
+Problem: On officers.html / vehicles.html, red Remove (admin.js removeButton) deletes the roster row, matching shifts, and media with NO confirm. Schedule shifts are the same. Investigate already has three steps with confirms: Remove from wall, Junk, Delete record. records.md still says keep one-click Remove on officers/vehicles; that doc is wrong vs this punch.
+Intended: One deletion grammar everywhere. No instant destroy from a list. Confirm always. Permanent delete is a second step (type the name). Officers/vehicles: Remove from schedule vs archive/junk vs Delete record only if unreferenced (no shifts, not on the map). Copy should match the wall: Remove from wall / Junk / Delete record. Shifts for that officer are listed and explained, not silently wiped as the only path.
+Files: officers.html, vehicles.html, schedule.html, functions/admin.js (removeButton, paintTable); officer.html / vehicle.html if delete lives on the view. Reuse store.js disposition only for wall objects. Do not fold the admin roster into store.people / store.vehicles. Update records.md (drop Keep Remove).
+Constraints: Do not merge the three JSON stores. Do not add lead delete. File stays Import/Export. Media removeByOwner only after a real delete. Case-subject rules stay for wall objects. Officers are not people{} and are not wall junk today.
+Done when: Officer Remove never deletes without confirm plus a second step for permanent delete. Vehicle list matches. Wall three buttons unchanged.
+
+2) Map card shows object photo AND associated person photo
+Problem: Pin card (map-popup.js) has one image slot and stops at the first photo. Case map queues LOCATION then VEHICLE, never PERSON, so a subject mugshot never appears on a house/car pin. Planning map is the same for targets; officer homes queue LOCATION then OFFICER but still one slot. map-parity-plan D2 currently says person is a fallback, not a second face.
+Intended: If the pin object has a photo AND an associated person has a photo, show both (object main, person inset). Object-only or person-only still one photo. Associated person = case subject, or PERSON linked to that LOCATION/VEHICLE. Officer-home pins: location photo + officer portrait. Arrest layer can stay one person photo.
+Files: functions/map-popup.js, style/style.css (.case-map-popup*), functions/leads.js, functions/map-targets.js, functions/location-map.js, functions/admin.js officer pins. Update map-parity-plan.md D2 from fallback chain to show both when both exist.
+Constraints: Photo stays on the object (PERSON|VEHICLE|LOCATION|OFFICER), never on the lead. Do not merge map engines. Do not merge stores. Prefer primary committed photos. Planning map stays read-only vs leads/admin.
+Done when: House pin with location photo + subject mugshot shows both. Vehicle pin with plate photo + person mugshot shows both. Person with no object photo still shows the mugshot. map.html targets match. No lead-owned media rows.
+
+3) File menu off the nav bar
+Problem: File (Import/Export) is prepended on every page app bar, including Home, and competes with tabs for work that is occasional disk I/O.
+Intended: Take #fileMenu off the app bar. Put workspace Import/Export (and CSV) on Home as a Tools / Utilities module/card, or a small tools.html linked from Home. Page-specific downloads stay on that page (Map Print brief already in the action slot; warrant PDF; narrative download). Lab picker Clear/Download stay with the picker until it is a popup.
+Files: functions/app-bar.js (mount, WORKSPACE_FILE, configFor), home.html, functions/home.js, functions/transfer.js, docs/app-structure/chrome.md (redraw row 2 without File), taxonomy.md File ids.
+Constraints: File remains disk I/O only. Do not merge stores on import. Do not park Save/Add/New/Open in Tools except documented exceptions until book-in/lead triads exist. Home still does not write record stores; the Import/Export dialogs are the writers.
+Done when: No File dropdown on Cases / Investigate / Map / Admin. Home (or Tools) can Import JSON and Export JSON/CSV with the same dialogs. Map Print brief still works. chrome.md bar matches the painter.
+
+4) Photo picker is a popup, not a whole page
+Problem: Add photo navigates to photo-picker.html (full chrome page). That dumps the form/card/wall and reloads on Back. photo-picker.js only boots if data-page is photo-picker, so it cannot drop into a dialog today. View gallery overlay is view-only, not the picker.
+Intended: Add photo opens a modal over the current page (same crop/tag/Save). Save photo writes IDB for the ownerType+id already on the card, then closes with no location hop. Lab-only full page can remain for development or fold into the same dialog with no owner. file-upload.html is out of scope unless the same shell is reused.
+Files: photo-picker.html, functions/photo-picker.js (drop the data-page gate; export open/mount), functions/media-card.js, functions/cards.js, functions/admin.js, functions/investigation-wall.js, functions/app-bar.js mediaPickerChrome, style/style.css.
+Constraints: Photo attaches to the object, not the lead. leadId means the lead subject; owner type is not LEAD. Do not write leads/admin/book-in JSON. Do not merge media IDB into JSON stores.
+Done when: From officer form, vehicle card, person card, and Investigate Card, Add photo does not change the URL to photo-picker.html. Save stores a primary thumb on that owner; closing restores the same form/wall state. No media row with owner type LEAD.
+
+5) Simple password on the main screen
+Problem: App is a local HTML workspace with no gate on Home.
+Intended: A simple unlock on first load (Home / index) before chrome is usable. This is a shoulder-surf lock, not encryption: stores stay in localStorage/IndexedDB as they are. Remember unlock for the tab session; prompt again next visit. Fail closed to a lock screen, not a broken app. Do not ship a cloud login.
+Files: home.html / index.html, a small gate script, maybe settings on Admin later to set/change the phrase. Do not invent a users table.
+Constraints: Do not encrypt or re-key the three JSON stores or media IDB in this item. Do not call it security in the UI. Unlock first, then Tools/Import.
+Done when: Cold open shows a lock, not Briefing. Correct phrase shows Home. Wrong phrase stays locked. Refresh in the same tab can stay unlocked; a new visit locks again.
+
+---
+2026-09-02 Build Bot (keep adding until done)
+
+Docs vs disk
+- Classic outline still says lead form is lead.html and File New/Open stays until leads.html exists. Disk: leads.html / case.html / lead-form.html. lead.html only redirects. Update taxonomy/records/chrome interim sections.
+- data-models stores table still says media IDB is planned. It shipped (functions/model/media.js, copdocx.media.v1).
+- React blueprint (docs/app-blueprint.md) is a rewrite contract: no Investigate, versions 0.18.4/0.19.0. Do not mix with classic. Header on disk is 0.56.0. GitHub last commit is still 0.25.0.
+
+Git / commits (do not dump all of dirty main)
+- Commit Investigate wall first (pages, investigation/business/entity models, plate-parse, wall plan, test-model.js).
+- Then map popup/icons (map-popup.js, icon tests, copdoc-icons.js). case.html and map.html already load those.
+- Then associations/case/chrome pile. Do not split style.css.
+- Do not commit: Alien_Book_In_Docs_v1_0_4.html, address_old.js, style-old.css, docs/COPDoc_Oracle_Build_Package_v1.0.0.zip, Narrative_Builder.html (redirect only).
+- operation.html stays empty stub.
+- Expand untracked .gitignore before first commit (old files, zips, OS/IDE junk). Current stub only ignores node_modules.
+
+Tests (paste to Grok Build)
+- test-age.js FAIL still 17: calculateAge Date check uses instanceof; vm sandbox drops asOf. Fix Date detection in functions/age.js. Do not change birthday math.
+- test-narrative-build9.js FAIL hex: test slices style.css from NARRATIVE BUILD 9 to EOF. Narrative block has no hex. End slice at PHOTO PICKER. Do not restyle map hex.
+
+Still to do here
+- Store-key registry (copdocx.store.v1 vs admin vs book-in vs media IDB vs map keys). Do not merge the three JSON stores.
+- Re-run tests after the two Grok Build fixes.
+- officer-roster.js is loaded by case.html; ride with the associations/case commit, not leftovers.
+
+Click-through 2026-09-02 (empty stores, no saves of people)
+- Add investigation mints and persists immediately: Add investigation created INV3-20260902-002 WORKING/Untitled without pressing Save. Drafts leak into storage. (INV3-20260902-001 was an earlier orphan from a load check.)
+- bookin.html header/title show Version 0.5.2 while the rest of the app shows 0.56.0. APP_RELEASE 0.5.2 is the book-in backup format; chrome still looks like the product is stuck at 0.5.2.
+- encounter-form.html assigns DAL3-… on page open. List still said no encounters (did not persist this time). Confirm Save is the only writer; same premature-id pattern as investigations.
+- Map: one unpainted OSM tile patch on first paint (cosmetic).
+- ADMIN dropdown: snapshot had links with no visible labels (dashboard/officers/vehicles/schedule). Check accessibility / icon-only menu.
+- Not a bug: Officers/Vehicles Working vs Filed matches records.md (draft/committed), not investigation chips copied by mistake. Home em-dash stats are still the skeleton.

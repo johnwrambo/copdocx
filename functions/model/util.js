@@ -65,11 +65,13 @@
   function stampMeta(previous, mode) {
     var now = nowIso();
     var prev = (previous && previous.meta) || {};
-    var commit = mode === "commit";
+    var complete = mode === "complete";
+    var commit = mode === "commit" || complete;
     return {
       createdAt: prev.createdAt || now,
       updatedAt: now,
-      markedComplete: false,
+      markedComplete: complete ? true : prev.markedComplete === true,
+      completedAt: complete ? now : prev.completedAt || "",
       status: commit ? "committed" : "draft",
       committedAt: commit ? now : prev.committedAt || ""
     };

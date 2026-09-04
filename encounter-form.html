@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Encounter</title>
     <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -19,9 +21,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -110,25 +112,11 @@
         <fieldset class="card-static">
           <legend>Arrested subjects</legend>
           <p class="section-note">
-            Subjects are Book-in records tagged with this encounter. Edit opens Book-in. Remove unlinks them; the Book-in packet is kept.
+            Book-in Save subject attaches the packet to this encounter and files the case.
+            Stop date/time and mapped lat/long carry into Book-in and the arrest map.
+            Complete freezes the encounter snapshot for the Encounters layer.
           </p>
-          <div id="encounterSubjectsEmpty" class="records-empty">
-            No subjects on this encounter yet.
-          </div>
-          <div id="encounterSubjectsTableWrap" class="records-table-wrap" hidden>
-            <table class="records-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Role</th>
-                  <th>A-Number</th>
-                  <th>Saved</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="encounterSubjectsBody"></tbody>
-            </table>
-          </div>
+          <div id="arrestRosterHost"></div>
           <div class="card-list-actions">
             <a
               id="addEncounterSubjectTableButton"
@@ -385,10 +373,14 @@
     <script src="functions/model/link.js"></script>
     <script src="functions/model/encounter.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/baseballcard.js"></script>
+    <script src="functions/arrest-report.js"></script>
+    <script src="functions/arrest-roster.js"></script>
     <script src="functions/model/media.js"></script>
     <script src="functions/model/autosave.js"></script>
     <script src="functions/media-card.js"></script>
     <script src="functions/cards.js"></script>
     <script src="functions/encounters.js"></script>
+    <script src="functions/photo-picker-modal.js"></script>
   </body>
 </html>

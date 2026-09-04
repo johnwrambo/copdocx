@@ -6,7 +6,8 @@
   "use strict";
 
   var root = (global.COPDoc = global.COPDoc || {});
-  var ADMIN_KEY = "copdoc.admin.v1";
+  var ADMIN_KEY =
+    (root.config && root.config.storageKey("admin")) || "copdoc.admin.v1";
 
   function isCommitted(row) {
     if (root.model && typeof root.model.isCommitted === "function") {
@@ -25,7 +26,9 @@
 
   function listCommitted() {
     var officers = readAdmin().officers || [];
-    return officers.filter(isCommitted);
+    return officers.filter(function (row) {
+      return row && !row.junked && isCommitted(row);
+    });
   }
 
   function listShifts() {
@@ -36,7 +39,7 @@
   function listFleet() {
     var vehicles = readAdmin().vehicles || [];
     return vehicles.filter(function (row) {
-      return row && isCommitted(row) && row.governmentVehicle;
+      return row && !row.junked && isCommitted(row) && row.governmentVehicle;
     });
   }
 
@@ -60,7 +63,7 @@
     if (!id) {
       return null;
     }
-    var list = listCommitted();
+    var list = (readAdmin().officers || []).filter(isCommitted);
     var i;
     for (i = 0; i < list.length; i++) {
       if (list[i].id === id || list[i].officerId === id) {

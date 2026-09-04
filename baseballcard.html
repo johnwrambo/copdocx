@@ -5,32 +5,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Baseball Card</title>
     <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
     <style>
       .baseball-card-editor {
-        min-height: 14rem;
-        padding: 0.65rem 0.75rem;
+        --bb-card-width: 1050px;
+        --bb-photo-percent: 34%;
+        --bb-photo-min-height: 570px;
+        --bb-line-width: 1px;
+        --bb-line-color: #8a8a8a;
+        --bb-font: Arial, Helvetica, sans-serif;
+        --bb-body-size: 16px;
+        --bb-heading-size: 20px;
+        --bb-line-height: 1.45;
+        min-height: 0;
+        padding: 0;
+        overflow-x: auto;
         border: 1px solid var(--ns-line-strong);
         border-radius: 3px;
-        background: var(--ns-ink);
-        color: var(--ns-text);
-        font: inherit;
-        line-height: 1.45;
-        white-space: pre-wrap;
+        background: #fff;
+        color: #171717;
+        white-space: normal;
       }
-      .baseball-card-editor:focus {
+      .baseball-card-editor:focus,
+      .baseball-card-editor:focus-within {
         outline: 2px solid var(--ns-teal);
         outline-offset: 2px;
       }
-      .baseball-card-editor p {
-        margin: 0 0 0.75rem;
+      .baseball-card-editor .arrest-card {
+        width: min(100%, var(--bb-card-width));
+        margin: 0 auto;
+        border-collapse: collapse;
+        table-layout: fixed;
+        background: #fff;
+        color: #171717;
+        font-family: var(--bb-font);
+        line-height: var(--bb-line-height);
+        white-space: normal;
       }
-      .baseball-card-editor .baseball-bullets {
-        margin: 0.35rem 0 0 1.5rem;
+      .baseball-card-editor .arrest-card th,
+      .baseball-card-editor .arrest-card td {
+        border: var(--bb-line-width) solid var(--bb-line-color);
+      }
+      .baseball-card-editor .photo-cell {
+        width: var(--bb-photo-percent);
         padding: 0;
+        vertical-align: top;
+        background: #fff;
       }
-      .baseball-card-editor .baseball-bullets li {
-        margin: 0.45rem 0;
-        white-space: pre-wrap;
+      .baseball-card-editor .photo-cell img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        min-height: var(--bb-photo-min-height);
+        object-fit: cover;
+        object-position: center top;
+      }
+      .baseball-card-editor .city-row {
+        height: 44px;
+        padding: 9px 16px;
+        text-align: left;
+        vertical-align: middle;
+        font-size: var(--bb-heading-size);
+        line-height: 1.2;
+        background: #fff;
+      }
+      .baseball-card-editor .narrative-cell {
+        padding: 18px 20px 22px;
+        vertical-align: top;
+        font-size: var(--bb-body-size);
+        font-family: var(--bb-font);
+      }
+      .baseball-card-editor .narrative-cell p {
+        margin: 0 0 20px;
+      }
+      .baseball-card-editor .narrative-cell h2 {
+        margin: 4px 0 12px;
+        font-size: var(--bb-body-size);
+        line-height: 1.35;
+      }
+      .baseball-card-editor .narrative-cell ul {
+        margin: 0;
+        padding-left: 24px;
+        max-height: none;
+        overflow: visible;
+      }
+      .baseball-card-editor .narrative-cell li + li {
+        margin-top: 9px;
+      }
+      @media (max-width: 700px) {
+        .baseball-card-editor .arrest-card,
+        .baseball-card-editor .arrest-card tbody,
+        .baseball-card-editor .arrest-card tr,
+        .baseball-card-editor .arrest-card th,
+        .baseball-card-editor .arrest-card td {
+          display: block;
+          width: 100%;
+        }
+        .baseball-card-editor .photo-cell img {
+          min-height: 0;
+          max-height: 360px;
+          aspect-ratio: 4 / 5;
+        }
+        .baseball-card-editor .city-row {
+          height: auto;
+        }
       }
       .criminal-history-row {
         display: grid;
@@ -49,6 +128,87 @@
         flex-direction: column;
         gap: 0.3rem;
       }
+      .baseball-photo-layout {
+        display: grid;
+        gap: 1rem;
+        align-items: start;
+      }
+      @media (min-width: 720px) {
+        .baseball-photo-layout {
+          grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+        }
+      }
+      .baseball-photo-preview {
+        display: block;
+        width: 100%;
+        max-height: 360px;
+        object-fit: contain;
+        border: 1px solid var(--ns-line-strong);
+        border-radius: 3px;
+        background: var(--ns-ink);
+      }
+      .baseball-photo-preview[hidden] {
+        display: none;
+      }
+      .baseball-card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-top: 0.8rem;
+      }
+      .baseball-card-status {
+        margin: 0.65rem 0 0;
+      }
+      .baseball-style-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.35rem 0.6rem;
+        margin-top: 0.25rem;
+        align-items: end;
+      }
+      .baseball-style-grid .field {
+        gap: 0.12rem;
+      }
+      .baseball-style-grid label {
+        font-size: 0.72rem;
+        line-height: 1.2;
+      }
+      .baseball-style-grid input,
+      .baseball-style-grid select {
+        height: 1.75rem;
+        min-height: 0;
+        padding: 0.15rem 0.4rem;
+        font-size: 0.82rem;
+      }
+      .baseball-style-grid input[type="color"] {
+        padding: 0.08rem;
+        cursor: pointer;
+      }
+      .baseball-style-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 0.35rem;
+        margin-top: 0.4rem;
+      }
+      .baseball-style-actions .action-button,
+      .baseball-style-actions .action-button-secondary {
+        padding: 0.22rem 0.55rem;
+        font-size: 0.78rem;
+      }
+      .baseball-card-status.is-ok {
+        color: var(--ns-teal-bright);
+      }
+      @media (max-width: 900px) {
+        .baseball-style-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 640px) {
+        .baseball-style-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
     </style>
   </head>
   <body data-page="baseballcard">
@@ -58,9 +218,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -138,13 +298,121 @@
       </fieldset>
 
       <fieldset class="card-static">
+        <legend>Foreign warrants and arrest photo</legend>
+        <div class="baseball-photo-layout">
+          <div>
+            <div class="row">
+              <div class="field">
+                <label for="foreignWarrants">Foreign warrants</label>
+                <select id="foreignWarrants" name="foreignWarrants">
+                  <option value="no" selected>No</option>
+                  <option value="yes">Yes</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="foreignWarrantCountry">Country</label>
+                <input
+                  type="text"
+                  id="foreignWarrantCountry"
+                  name="foreignWarrantCountry"
+                  autocomplete="off"
+                  disabled
+                />
+              </div>
+            </div>
+            <div class="field">
+              <label for="arrestPhoto">Photo from arrest in the field</label>
+              <input type="file" id="arrestPhoto" accept="image/*" />
+              <p class="section-note">
+                COPDoc saves a resized copy in the subject's media library for the unified arrest report.
+              </p>
+              <button
+                type="button"
+                id="removeArrestPhoto"
+                class="action-button-secondary compact"
+                hidden
+              >
+                Remove photo
+              </button>
+            </div>
+          </div>
+          <img
+            id="arrestPhotoPreview"
+            class="baseball-photo-preview"
+            alt="Photo from arrest in the field"
+            hidden
+          />
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Card appearance</legend>
+        <p class="section-note">Live preview. Save as default to keep these values.</p>
+        <div class="baseball-style-grid">
+          <div class="field">
+            <label for="bbStyleWidth">Box width</label>
+            <input id="bbStyleWidth" type="number" min="480" max="1400" step="10" />
+          </div>
+          <div class="field">
+            <label for="bbStyleLine">Line width</label>
+            <input id="bbStyleLine" type="number" min="1" max="8" step="1" />
+          </div>
+          <div class="field">
+            <label for="bbStyleLineColor">Line color</label>
+            <input id="bbStyleLineColor" type="color" value="#8a8a8a" />
+          </div>
+          <div class="field">
+            <label for="bbStyleFont">Font</label>
+            <select id="bbStyleFont"></select>
+          </div>
+          <div class="field">
+            <label for="bbStyleBody">Body size</label>
+            <input id="bbStyleBody" type="number" min="10" max="28" step="1" />
+          </div>
+          <div class="field">
+            <label for="bbStyleHeading">Heading size</label>
+            <input id="bbStyleHeading" type="number" min="12" max="36" step="1" />
+          </div>
+          <div class="field">
+            <label for="bbStylePhoto">Photo column %</label>
+            <input id="bbStylePhoto" type="number" min="20" max="50" step="1" />
+          </div>
+          <div class="field">
+            <label for="bbStylePhotoHeight">Photo min height</label>
+            <input id="bbStylePhotoHeight" type="number" min="240" max="900" step="10" />
+          </div>
+        </div>
+        <div class="baseball-style-actions">
+          <button type="button" id="bbStyleSaveDefault" class="action-button">
+            Save as default
+          </button>
+          <button type="button" id="bbStyleRestore" class="action-button-secondary">
+            Restore factory
+          </button>
+        </div>
+        <p id="bbStyleStatus" class="section-note baseball-card-status" hidden></p>
+      </fieldset>
+
+      <fieldset class="card-static">
         <legend>Baseball card</legend>
-        <label for="baseballCardEditor" class="section-note">Generated text. Edit before copying.</label>
+        <label for="baseballCardEditor" class="section-note">Generated arrest card. Edit the text before copying.</label>
         <div
           id="baseballCardEditor"
           class="baseball-card-editor"
           contenteditable="true"
         ></div>
+        <div class="baseball-card-actions">
+          <button type="button" id="saveBaseballCardButton" class="action-button">
+            Save card
+          </button>
+          <button type="button" id="copyBaseballCardButton" class="action-button-secondary">
+            Copy for email
+          </button>
+          <button type="button" id="downloadBaseballCardButton" class="action-button-secondary">
+            Download HTML
+          </button>
+        </div>
+        <p id="baseballCardStatus" class="section-note baseball-card-status" hidden></p>
       </fieldset>
     </div>
 
@@ -157,6 +425,7 @@
     <script src="functions/model/lead.js"></script>
     <script src="functions/model/person.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/model/media.js"></script>
     <script src="functions/baseballcard.js"></script>
     <script src="functions/baseball-page.js"></script>
   </body>

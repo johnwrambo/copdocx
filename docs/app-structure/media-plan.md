@@ -62,7 +62,7 @@ No `mediaIds[]` on person/vehicle. Views call `media.list({ type, id })` via ind
 
 ### D7 — Add photo lives on that object’s card
 
-The card supplies the query. Vehicle card → `photo-picker.html?ownerType=VEHICLE&id={vehicleId}`. User does not pick “attach to lead” after the fact.
+The card supplies the owner query to the in-page photo-picker modal. Vehicle card → `photo-picker.html?ownerType=VEHICLE&id={vehicleId}` inside the embedded picker. User does not pick “attach to lead” after the fact and the parent URL does not change.
 
 > Comment (D7):
 
@@ -201,7 +201,7 @@ Do **not** put +Person / +Vehicle / +Location on these cards.
 
 `file-upload.html` uses the same query. `leadId=` on the photo picker means the lead **subject**, not owner type LEAD.
 
-Chrome with owner: primary **Save photo** / **Save file**. File menu stays Download JSON / Clear **lab** library (does not wipe IDB).
+Owner-scoped photo use: the parent modal provides **Add photos**, **Save photos**, and **Cancel**. Save writes IDB, posts the owner to the parent, closes, restores focus, and refreshes matching media cards. Standalone lab downloads/clear remain page-specific actions and do not wipe product IDB. File upload still uses its page chrome.
 
 > Comment (picker URL / chrome):
 

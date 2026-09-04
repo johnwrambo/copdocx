@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Encounters</title>
     <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
   </head>
   <body data-page="encounter">
     <header class="app-bar">
@@ -13,9 +15,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -35,6 +37,16 @@
 
       <fieldset class="card-static">
         <legend>Existing encounters</legend>
+        <p class="section-note">
+          Working is still being built. Filed is saved. Completed is locked and
+          uses the snapshot for Map and analytics.
+        </p>
+        <div class="record-filter-chips" role="group" aria-label="Filter encounters">
+          <button type="button" data-record-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-record-filter="draft" aria-pressed="false">Working</button>
+          <button type="button" data-record-filter="committed" aria-pressed="false">Filed</button>
+          <button type="button" data-record-filter="complete" aria-pressed="false">Completed</button>
+        </div>
         <div id="encountersEmpty" class="records-empty">No encounters yet.</div>
         <div id="encountersTableWrap" class="records-table-wrap" hidden>
           <table class="records-table">

@@ -207,6 +207,15 @@
     setById("fbiNumber", criminal.fbiNumber || "");
     setById("ncicNumber", criminal.ncicNumber || "");
     setById("stateId", criminal.stateId || "");
+    setById(
+      "foreignWarrants",
+      criminal.foreignWarrantsKnown || criminal.hasForeignWarrants
+        ? criminal.hasForeignWarrants
+          ? "yes"
+          : "no"
+        : ""
+    );
+    setById("foreignWarrantCountry", criminal.foreignWarrantCountry || "");
     setById("rapSheet", criminal.rapSheet || "");
 
     replaceList("encounterList", "encounter", subject.encounters, function (card, row) {

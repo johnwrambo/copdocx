@@ -341,6 +341,14 @@
             : place.vehicleId
               ? [{ type: "VEHICLE", id: place.vehicleId }]
               : [],
+          objectPhotoOwners: place.locationId
+            ? [{ type: "LOCATION", id: place.locationId }]
+            : place.vehicleId
+              ? [{ type: "VEHICLE", id: place.vehicleId }]
+              : [],
+          personPhotoOwners: target.personId
+            ? [{ type: "PERSON", id: target.personId }]
+            : [],
           placeKey:
             (target.targetId || target.leadId || "t") + ":" + index
         });

@@ -110,6 +110,7 @@
       backdrop.hidden = false;
     }
     if (wrap) {
+      wrap.classList.toggle("is-wide", state.kind === "association");
       wrap.hidden = false;
     }
   }
@@ -123,7 +124,7 @@
     return m.store.getLead(queryId());
   }
 
-  function commit(mutator, okMsg) {
+  function commit(mutator, okMsg, closeAfter) {
     var m = model();
     var snap = loadSnap();
     if (!snap || !m.isCommitted(snap)) {
@@ -136,7 +137,9 @@
       setStatus((saved && saved.error) || "Could not save.");
       return;
     }
-    closePanel();
+    if (closeAfter !== false) {
+      closePanel();
+    }
     setStatus(okMsg || "Saved.", true);
     if (typeof window.paintCaseView === "function") {
       window.paintCaseView();
@@ -405,8 +408,15 @@
       fillFields(crim, {
         fbiNumber: ids.fbiNumber,
         ncicNumber: ids.ncicNumber,
-        stateId: ids.stateId
+        stateId: ids.stateId,
+        foreignWarrants: ids.foreignWarrantsKnown
+          ? ids.hasForeignWarrants
+            ? "yes"
+            : "no"
+          : "",
+        foreignWarrantCountry: ids.foreignWarrantCountry || ""
       });
+      bindForeignWarrantFields(crim);
     }
     showPanel("Edit biographics");
   }
@@ -437,7 +447,27 @@
     }
   }
 
-  function saveIdentity() {
+  function bindForeignWarrantFields(card) {
+    var select = card && card.querySelector('[data-field="foreignWarrants"]');
+    var country = card && card.querySelector('[data-field="foreignWarrantCountry"]');
+    if (!select || !country) {
+      return;
+    }
+    function sync() {
+      var yes = select.value === "yes";
+      country.disabled = !yes;
+      if (!yes) {
+        country.value = "";
+      }
+    }
+    if (select.dataset.foreignWarrantBound !== "true") {
+      select.dataset.foreignWarrantBound = "true";
+      select.addEventListener("change", sync);
+    }
+    sync();
+  }
+
+  function saveIdentity(closeAfter) {
     var h = host();
     var card = h && h.querySelector('[data-card="identity"]');
     var immCard = h && h.querySelector('[data-card="immigration"]');
@@ -455,6 +485,10 @@
     }
     var imm = immCard ? m.readFields(immCard) : {};
     var crim = crimCard ? m.readFields(crimCard) : {};
+    if (crim.foreignWarrants === "yes" && !crim.foreignWarrantCountry) {
+      setStatus("Enter the foreign warrant country.");
+      return;
+    }
     commit(function (snap) {
       var person = subjectOf(snap);
       person.name = person.name || {};
@@ -485,9 +519,17 @@
         person.criminal.fbiNumber = crim.fbiNumber || "";
         person.criminal.ncicNumber = crim.ncicNumber || "";
         person.criminal.stateId = crim.stateId || "";
+        if (crim.foreignWarrants === "yes" || crim.foreignWarrants === "no") {
+          person.criminal.foreignWarrantsKnown = true;
+          person.criminal.hasForeignWarrants = crim.foreignWarrants === "yes";
+          person.criminal.foreignWarrantCountry =
+            crim.foreignWarrants === "yes"
+              ? crim.foreignWarrantCountry || ""
+              : "";
+        }
       }
       snap.person = person;
-    }, "Biographics saved.");
+    }, "Biographics saved.", closeAfter);
   }
 
   function openSource(snap) {
@@ -521,7 +563,7 @@
     showPanel("Edit source");
   }
 
-  function saveSource() {
+  function saveSource(closeAfter) {
     var card = host() && host().querySelector("[data-card]");
     var f = model().readFields(card);
     commit(function (snap, m) {
@@ -533,7 +575,7 @@
         probationCheck: !!f.probationCheck,
         leadInfo: f.leadInfo || ""
       });
-    }, "Source saved.");
+    }, "Source saved.", closeAfter);
   }
 
   function openImmigration(snap) {
@@ -547,7 +589,7 @@
     showPanel("Edit immigration");
   }
 
-  function saveImmigration() {
+  function saveImmigration(closeAfter) {
     var card = host() && host().querySelector("[data-card]");
     var f = model().readFields(card);
     commit(function (snap) {
@@ -562,7 +604,7 @@
       person.immigration.finalOrderDate = f.finalOrderDate || "";
       person.immigration.finalOrder = !!f.finalOrderDate;
       snap.person = person;
-    }, "Immigration saved.");
+    }, "Immigration saved.", closeAfter);
   }
 
   function openCriminal(snap) {
@@ -576,22 +618,39 @@
     fillFields(card, {
       fbiNumber: crim.fbiNumber,
       ncicNumber: crim.ncicNumber,
-      stateId: crim.stateId
+      stateId: crim.stateId,
+      foreignWarrants: crim.foreignWarrantsKnown
+        ? crim.hasForeignWarrants
+          ? "yes"
+          : "no"
+        : "",
+      foreignWarrantCountry: crim.foreignWarrantCountry || ""
     });
+    bindForeignWarrantFields(card);
     showPanel("Edit criminal identifiers");
   }
 
-  function saveCriminal() {
+  function saveCriminal(closeAfter) {
     var card = host() && host().querySelector("[data-card]");
     var f = model().readFields(card);
+    if (f.foreignWarrants === "yes" && !f.foreignWarrantCountry) {
+      setStatus("Enter the foreign warrant country.");
+      return;
+    }
     commit(function (snap) {
       var person = subjectOf(snap);
       person.criminal = person.criminal || {};
       person.criminal.fbiNumber = f.fbiNumber || "";
       person.criminal.ncicNumber = f.ncicNumber || "";
       person.criminal.stateId = f.stateId || "";
+      if (f.foreignWarrants === "yes" || f.foreignWarrants === "no") {
+        person.criminal.foreignWarrantsKnown = true;
+        person.criminal.hasForeignWarrants = f.foreignWarrants === "yes";
+        person.criminal.foreignWarrantCountry =
+          f.foreignWarrants === "yes" ? f.foreignWarrantCountry || "" : "";
+      }
       snap.person = person;
-    }, "Criminal identifiers saved.");
+    }, "Criminal identifiers saved.", closeAfter);
   }
 
   function openVehicle(snap, vehicleId) {
@@ -608,7 +667,7 @@
     showPanel(vehicle ? "Edit vehicle" : "Add vehicle");
   }
 
-  function saveVehicle() {
+  function saveVehicle(closeAfter) {
     var card = host() && host().querySelector('[data-card="vehicle"]');
     if (!card) {
       return;
@@ -647,7 +706,8 @@
       if (!found) {
         snap.vehicles.push(next);
       }
-    }, "Vehicle saved.");
+      state.id = next.vehicleId;
+    }, "Vehicle saved.", closeAfter);
   }
 
   function openLocation(snap, locationId) {
@@ -662,7 +722,7 @@
     showPanel(location ? "Edit location" : "Add location");
   }
 
-  function saveLocation() {
+  function saveLocation(closeAfter) {
     var card = host() && host().querySelector('[data-card="location"]');
     if (!card) {
       return;
@@ -692,7 +752,8 @@
         person.locations.push(next);
         snap.person = person;
       }
-    }, "Location saved.");
+      state.id = next.locationId;
+    }, "Location saved.", closeAfter);
   }
 
   function openDocument(snap, documentId) {
@@ -717,7 +778,7 @@
     showPanel(doc ? "Edit document" : "Add document");
   }
 
-  function saveDocument() {
+  function saveDocument(closeAfter) {
     var card = host() && host().querySelector('[data-card="document"]');
     var m = model();
     var f = m.readFields(card);
@@ -746,7 +807,8 @@
         person.documents.push(row);
       }
       snap.person = person;
-    }, "Document saved.");
+      state.id = row.documentId;
+    }, "Document saved.", closeAfter);
   }
 
   function fillCaseRelationshipSelect(card, otherType, selected) {
@@ -755,7 +817,7 @@
       return;
     }
     var m = model();
-    var type = String(otherType || "PERSON").toUpperCase();
+    var type = String(otherType || "").toUpperCase();
     var rows = [];
     if (m.associationReasonsForPair) {
       rows = m.associationReasonsForPair("PERSON", type) || [];
@@ -763,7 +825,7 @@
     sel.replaceChildren();
     var blank = document.createElement("option");
     blank.value = "";
-    blank.textContent = "Select a relationship";
+    blank.textContent = type ? "Select a relationship" : "Select an object type first";
     sel.appendChild(blank);
     rows.forEach(function (row) {
       if (!row || !row.value) {
@@ -778,6 +840,352 @@
     if (selected && rows.some(function (row) { return row && row.value === selected; })) {
       sel.value = selected;
     }
+    sel.disabled = !type || !rows.length;
+  }
+
+  function associationTypeLabel(otherType) {
+    var labels = {
+      PERSON: "person",
+      VEHICLE: "vehicle",
+      LOCATION: "location",
+      BUSINESS: "business",
+      ENTITY: "entity"
+    };
+    return labels[String(otherType || "").toUpperCase()] || "object";
+  }
+
+  function associationObjectLabel(otherType, record) {
+    var m = model();
+    var type = String(otherType || "").toUpperCase();
+    if (!record) {
+      return "";
+    }
+    if (type === "PERSON") {
+      return (m.formatPersonLabel && m.formatPersonLabel(record)) || record.personId || "";
+    }
+    if (type === "VEHICLE") {
+      return [record.plateState, record.licensePlate || record.plate]
+        .filter(Boolean)
+        .join(" ") || record.vin || record.vehicleId || "";
+    }
+    if (type === "LOCATION") {
+      return [record.street, record.city, record.state].filter(Boolean).join(", ") ||
+        record.locationId || "";
+    }
+    if (type === "BUSINESS") {
+      return (m.formatBusinessLabel && m.formatBusinessLabel(record)) ||
+        record.name || record.businessId || "";
+    }
+    return (m.formatEntityLabel && m.formatEntityLabel(record)) ||
+      record.name || record.entityId || "";
+  }
+
+  function associationObjectRecord(otherType, objectId) {
+    var store = model() && model().store;
+    if (!store || !objectId) {
+      return null;
+    }
+    if (typeof store.getObjectRecord === "function") {
+      return store.getObjectRecord(otherType, objectId);
+    }
+    if (otherType === "PERSON") {
+      return store.getPerson && store.getPerson(objectId);
+    }
+    if (otherType === "VEHICLE") {
+      return store.getVehicleRecord && store.getVehicleRecord(objectId);
+    }
+    if (otherType === "LOCATION") {
+      return store.getLocationRecord && store.getLocationRecord(objectId);
+    }
+    if (otherType === "BUSINESS") {
+      return store.getBusinessRecord && store.getBusinessRecord(objectId);
+    }
+    return store.getEntityRecord && store.getEntityRecord(objectId);
+  }
+
+  function provisionalAssociationObject(otherType, label) {
+    var m = model();
+    var extra = {};
+    label = String(label || "").trim();
+    if (otherType === "PERSON" && label) {
+      var parsed = typeof window.parsePersonName === "function"
+        ? window.parsePersonName(label)
+        : null;
+      extra.name = {
+        lastName: (parsed && parsed.last) || label,
+        firstName: (parsed && parsed.first) || "",
+        middleName: (parsed && parsed.middle) || ""
+      };
+    } else if (otherType === "VEHICLE" && label) {
+      var plateBits = label.toUpperCase().split(/\s+/).filter(Boolean);
+      extra.plateState = plateBits.length > 1 && /^[A-Z]{2}$/.test(plateBits[0])
+        ? plateBits.shift()
+        : "";
+      extra.licensePlate = plateBits.join("").replace(/[^A-Z0-9]/g, "");
+    } else if (otherType === "LOCATION") {
+      extra.street = label;
+    } else if (otherType === "BUSINESS" || otherType === "ENTITY") {
+      extra.name = label;
+    }
+    return m.store && typeof m.store.createObjectRecord === "function"
+      ? m.store.createObjectRecord(otherType, extra)
+      : null;
+  }
+
+  function populateAssociationObjectSelect(card, otherType, selectedId, subjectId) {
+    var select = card && card.querySelector('[data-field="relatedObjectId"]');
+    var store = model() && model().store;
+    if (!select) {
+      return;
+    }
+    select.replaceChildren();
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = otherType
+      ? "Create new " + associationTypeLabel(otherType)
+      : "Select an object type first";
+    select.appendChild(blank);
+    if (!otherType || !store || typeof store.listObjects !== "function") {
+      select.disabled = true;
+      return;
+    }
+    var rows = store.listObjects(otherType) || [];
+    rows
+      .filter(function (row) {
+        return !(otherType === "PERSON" && row && row.personId === subjectId);
+      })
+      .sort(function (a, b) {
+        return associationObjectLabel(otherType, a).localeCompare(
+          associationObjectLabel(otherType, b)
+        );
+      })
+      .forEach(function (row) {
+        var id =
+          row.personId || row.vehicleId || row.locationId ||
+          row.businessId || row.entityId || row.id || "";
+        if (!id) {
+          return;
+        }
+        var option = document.createElement("option");
+        option.value = id;
+        option.textContent = associationObjectLabel(otherType, row) || id;
+        select.appendChild(option);
+      });
+    select.disabled = false;
+    select.value = selectedId || "";
+  }
+
+  function buildAssociationPersonCard(hostEl, person) {
+    var identity = cloneTemplate("caseIdentityTemplate");
+    var immigration = cloneTemplate("caseImmigrationTemplate");
+    var criminal = cloneTemplate("caseCriminalIdsTemplate");
+    var name = (person && person.name) || {};
+    if (identity) {
+      identity.querySelector("legend").textContent = "Person";
+      identity.dataset.entityId = (person && person.personId) || "";
+      hostEl.appendChild(identity);
+      fillFields(identity, {
+        lastName: name.lastName,
+        firstName: name.firstName,
+        middleName: name.middleName,
+        sex: person && person.sex,
+        dateOfBirth: person && person.dateOfBirth,
+        age: person && person.age,
+        ssn: person && person.ssn,
+        lexId: person && person.lexId,
+        citizenship: person && person.citizenship
+      });
+      var citizenship = identity.querySelector('[data-field="citizenship"]');
+      if (typeof populateCitizenshipSelect === "function") {
+        populateCitizenshipSelect(citizenship, false);
+        citizenship.value = (person && person.citizenship) || "";
+      }
+      if (typeof bindNameCard === "function") {
+        bindNameCard(identity);
+      }
+      if (typeof bindAgeCard === "function") {
+        bindAgeCard(identity);
+      }
+      var ssnInput = identity.querySelector('[data-field="ssn"]');
+      if (typeof bindSSNInput === "function" && ssnInput) {
+        bindSSNInput(ssnInput);
+      }
+    }
+    if (immigration) {
+      hostEl.appendChild(immigration);
+      openImmigrationFields(immigration, person || {});
+    }
+    if (criminal) {
+      hostEl.appendChild(criminal);
+      var ids = (person && person.criminal) || {};
+      fillFields(criminal, {
+        fbiNumber: ids.fbiNumber,
+        ncicNumber: ids.ncicNumber,
+        stateId: ids.stateId,
+        foreignWarrants: ids.foreignWarrantsKnown
+          ? ids.hasForeignWarrants
+            ? "yes"
+            : "no"
+          : "",
+        foreignWarrantCountry: ids.foreignWarrantCountry || ""
+      });
+      bindForeignWarrantFields(criminal);
+    }
+  }
+
+  function renderAssociationObjectCard(card, otherType, objectId, label, snap) {
+    var objectHost = card && card.querySelector("[data-association-object-host]");
+    var details = card && card.querySelector("[data-association-details]");
+    var help = card && card.querySelector("[data-association-object-help]");
+    if (!objectHost) {
+      return;
+    }
+    objectHost.replaceChildren();
+    objectHost.dataset.objectType = otherType || "";
+    objectHost.dataset.objectId = objectId || "";
+    if (!otherType) {
+      if (details) {
+        details.hidden = true;
+      }
+      if (help) {
+        help.textContent = "Choose a type, then select an existing object or create a complete new one.";
+      }
+      return;
+    }
+    var record = associationObjectRecord(otherType, objectId) ||
+      provisionalAssociationObject(otherType, label);
+    if (record && !objectHost.dataset.objectId) {
+      objectHost.dataset.objectId =
+        record.personId || record.vehicleId || record.locationId ||
+        record.businessId || record.entityId || record.id || "";
+    }
+    if (otherType === "PERSON") {
+      buildAssociationPersonCard(objectHost, record || {});
+    } else {
+      var templateId = otherType === "VEHICLE"
+        ? "vehicleCardTemplate"
+        : otherType === "LOCATION"
+          ? "locationCardTemplate"
+          : otherType === "BUSINESS"
+            ? "businessCardTemplate"
+            : "entityCardTemplate";
+      var objectCard = cloneTemplate(templateId);
+      if (objectCard) {
+        objectHost.appendChild(objectCard);
+        if (otherType === "VEHICLE") {
+          hydrateVehicle(objectCard, record, snap);
+        } else if (otherType === "LOCATION") {
+          hydrateLocation(objectCard, record, snap);
+        } else {
+          objectCard.dataset.entityId =
+            (record && (record.businessId || record.entityId || record.id)) || "";
+          fillFields(objectCard, record || {});
+        }
+      }
+    }
+    if (details) {
+      details.hidden = false;
+    }
+    if (help) {
+      help.textContent = objectId
+        ? "Editing the selected canonical " + associationTypeLabel(otherType) + "."
+        : "Creating a complete new " + associationTypeLabel(otherType) + " using the standard object card.";
+    }
+    syncPromoteButton(card, snap);
+  }
+
+  function collectAssociationObject(card, otherType) {
+    var m = model();
+    var objectHost = card.querySelector("[data-association-object-host]");
+    var objectId = (objectHost && objectHost.dataset.objectId) || "";
+    var existing = associationObjectRecord(otherType, objectId);
+    if (otherType === "PERSON") {
+      var identity = objectHost.querySelector('[data-card="identity"]');
+      var immigration = objectHost.querySelector('[data-card="immigration"]');
+      var criminal = objectHost.querySelector('[data-card="criminal"]');
+      var fields = m.readFields(identity);
+      var imm = m.readFields(immigration);
+      var crim = m.readFields(criminal);
+      var ssnInput = identity && identity.querySelector('[data-field="ssn"]');
+      if (ssnInput && typeof validateSSN === "function") {
+        var ssn = validateSSN(ssnInput.value);
+        if (!ssn.valid) {
+          return { ok: false, record: null, error: ssn.reason || "Enter a valid SSN." };
+        }
+        fields.ssn = ssn.formatted || fields.ssn;
+      }
+      if (crim.foreignWarrants === "yes" && !crim.foreignWarrantCountry) {
+        return { ok: false, record: null, error: "Enter the foreign warrant country." };
+      }
+      var person = existing || m.store.createObjectRecord("PERSON", { personId: objectId });
+      person.name = person.name || {};
+      person.name.lastName = fields.lastName || "";
+      person.name.firstName = fields.firstName || "";
+      person.name.middleName = fields.middleName || "";
+      person.sex = fields.sex || "";
+      person.dateOfBirth = fields.dateOfBirth || "";
+      person.age = fields.age === "" || fields.age == null
+        ? person.age || ""
+        : Number(fields.age);
+      person.citizenship = fields.citizenship || "";
+      person.ssn = fields.ssn || "";
+      person.lexId = fields.lexId || "";
+      person.immigration = person.immigration || {};
+      person.immigration.alienNumber = imm.alienNumber || "";
+      person.immigration.finNumber = imm.finNumber || "";
+      person.immigration.disposition = imm.immigrationDisposition || "";
+      person.immigration.status = imm.immigrationStatus || "";
+      person.immigration.firstDeportationDate = imm.firstDeportationDate || "";
+      person.immigration.lastDeportationDate = imm.lastDeportationDate || "";
+      person.immigration.finalOrderDate = imm.finalOrderDate || "";
+      person.immigration.finalOrder = !!imm.finalOrderDate;
+      person.criminal = person.criminal || {};
+      person.criminal.fbiNumber = crim.fbiNumber || "";
+      person.criminal.ncicNumber = crim.ncicNumber || "";
+      person.criminal.stateId = crim.stateId || "";
+      if (crim.foreignWarrants === "yes" || crim.foreignWarrants === "no") {
+        person.criminal.foreignWarrantsKnown = true;
+        person.criminal.hasForeignWarrants = crim.foreignWarrants === "yes";
+        person.criminal.foreignWarrantCountry =
+          crim.foreignWarrants === "yes" ? crim.foreignWarrantCountry || "" : "";
+      }
+      if (
+        !associationObjectLabel("PERSON", person) &&
+        !person.immigration.alienNumber &&
+        !person.criminal.fbiNumber
+      ) {
+        return { ok: false, record: null, error: "Enter a name, A-Number, or FBI number." };
+      }
+      return { ok: true, record: person, error: "" };
+    }
+    var objectCard = objectHost.querySelector("[data-card]");
+    if (otherType === "VEHICLE") {
+      var vehicle = collectVehicleCard(objectCard);
+      if (!vehicle.licensePlate && !vehicle.vin && !vehicle.vehicleMake && !vehicle.vehicleModel) {
+        return { ok: false, record: null, error: "Enter a plate, VIN, make, or model." };
+      }
+      return { ok: true, record: vehicle, error: "" };
+    }
+    if (otherType === "LOCATION") {
+      var location = collectLocationCard(objectCard);
+      if (!location.street && !location.city && !location.latitude && !location.longitude) {
+        return { ok: false, record: null, error: "Enter a street, city, or coordinates." };
+      }
+      return { ok: true, record: location, error: "" };
+    }
+    var values = m.readFields(objectCard);
+    if (!values.name) {
+      return { ok: false, record: null, error: "Enter a name." };
+    }
+    var record = existing || m.store.createObjectRecord(otherType, {});
+    record.name = values.name || "";
+    record.notes = values.notes || "";
+    if (otherType === "BUSINESS") {
+      record.phone = values.phone || "";
+    } else {
+      record.kind = values.kind || "";
+    }
+    return { ok: true, record: record, error: "" };
   }
 
   function openAssociation(snap, linkId) {
@@ -787,138 +1195,134 @@
       return;
     }
     h.appendChild(card);
-    var select = card.querySelector('[data-field="relatedPersonId"]');
     var subject = subjectOf(snap);
     var sid = subject && subject.personId;
-    if (select && select.options.length < 2 && model().store && model().store.allPeople) {
-      model().store.allPeople().forEach(function (person) {
-        if (!person || person.personId === sid) {
-          return;
-        }
-        var opt = document.createElement("option");
-        opt.value = person.personId;
-        opt.textContent =
-          (model().formatPersonLabel && model().formatPersonLabel(person)) ||
-          person.personId;
-        select.appendChild(opt);
-      });
+    var link = linkId
+      ? ((snap && snap.links) || []).filter(function (row) {
+          return row && (row.linkId === linkId || row.associationId === linkId);
+        })[0]
+      : null;
+    var asoc = linkId && model().store.getAssociation
+      ? model().store.getAssociation((link && link.associationId) || linkId)
+      : null;
+    var source = asoc || link;
+    var other = null;
+    if (source && source.from && source.to) {
+      other = source.from.type === "PERSON" && source.from.id === sid
+        ? source.to
+        : source.from;
     }
-    var link = ((snap && snap.links) || []).filter(function (row) {
-      return row && (row.linkId === linkId || row.associationId === linkId);
-    })[0];
-    var asoc =
-      !link &&
-      model().store.getAssociation &&
-      model().store.getAssociation(linkId);
-    var otherType = "PERSON";
-    var reason = "";
-    var label = "";
-    var notes = "";
-    var otherId = "";
+    var otherType = String(
+      (other && other.type) || (link && link.otherType) || ""
+    ).toUpperCase();
+    var otherId = (other && other.id) || "";
+    var reason = (source && (source.reason || (source.reasons && source.reasons[0]))) || "";
+    var notes = (source && source.notes) || "";
+    var label = (source && source.label) || (link && link.label) || "";
+    if (otherType === "OTHER") {
+      otherType = "ENTITY";
+      otherId = "";
+    }
     if (link) {
-      card.dataset.entityId = link.linkId;
-      if (link.associationId) {
-        card.dataset.associationId = link.associationId;
-      }
-      otherType = link.otherType || (link.to && link.to.type) || "PERSON";
-      otherId = (link.to && link.to.id) || "";
-      reason = (link.reasons && link.reasons[0]) || "";
-      label = link.label || "";
-      notes = link.notes || "";
-    } else if (asoc) {
-      card.dataset.associationId = asoc.associationId;
-      var other =
-        asoc.from && asoc.from.type === "PERSON" && asoc.from.id === sid
-          ? asoc.to
-          : asoc.from;
-      otherType = (other && other.type) || "PERSON";
-      otherId = (other && other.id) || "";
-      reason = asoc.reason || "";
-      notes = asoc.notes || "";
-      label = asoc.label || "";
+      card.dataset.entityId = link.linkId || "";
     }
-    fillCaseRelationshipSelect(card, otherType, reason);
-    fillFields(card, {
-      associationLabel: label,
-      otherType: otherType,
-      relatedPersonId: otherType === "PERSON" ? otherId : "",
-      relationshipType: reason,
-      notes: notes
-    });
-    var typeSel = card.querySelector('[data-field="otherType"]');
-    if (typeSel && typeSel.dataset.caseBound !== "true") {
-      typeSel.dataset.caseBound = "true";
-      typeSel.addEventListener("change", function () {
-        fillCaseRelationshipSelect(card, typeSel.value, "");
-        var personWrap = card.querySelector('[data-field="relatedPersonId"]');
-        if (personWrap && personWrap.closest) {
-          var field = personWrap.closest(".field");
-          if (field) {
-            field.hidden = String(typeSel.value || "").toUpperCase() !== "PERSON";
-          }
-        }
-      });
+    if (asoc) {
+      card.dataset.associationId = asoc.associationId || "";
     }
-    var personField = card.querySelector('[data-field="relatedPersonId"]');
-    if (personField && personField.closest) {
-      var wrap = personField.closest(".field");
-      if (wrap) {
-        wrap.hidden = String(otherType || "").toUpperCase() !== "PERSON";
+    fillFields(card, { notes: notes });
+    var typeSelect = card.querySelector('[data-field="otherType"]');
+    var objectSelect = card.querySelector('[data-field="relatedObjectId"]');
+    function changeObjectType() {
+      var type = String(typeSelect.value || "").toUpperCase();
+      populateAssociationObjectSelect(card, type, "", sid);
+      fillCaseRelationshipSelect(card, type, "");
+      renderAssociationObjectCard(card, type, "", "", snap);
+    }
+    function changeSelectedObject() {
+      renderAssociationObjectCard(
+        card,
+        String(typeSelect.value || "").toUpperCase(),
+        objectSelect.value,
+        "",
+        snap
+      );
+    }
+    typeSelect.addEventListener("input", changeObjectType);
+    typeSelect.addEventListener("change", changeObjectType);
+    objectSelect.addEventListener("input", changeSelectedObject);
+    objectSelect.addEventListener("change", changeSelectedObject);
+    function initializeObjectSelection() {
+      if (!card.isConnected) {
+        return;
       }
+      typeSelect.value = otherType || "";
+      populateAssociationObjectSelect(card, otherType, otherId, sid);
+      fillCaseRelationshipSelect(card, otherType, reason);
+      renderAssociationObjectCard(card, otherType, otherId, label, snap);
     }
     showPanel(link || asoc ? "Edit association" : "Add association");
+    initializeObjectSelection();
+    window.setTimeout(initializeObjectSelection, 0);
     syncPromoteButton(card, snap);
   }
 
   function writeAssociation(snap, card) {
     var m = model();
-    var f = m.readFields(card);
-    var label = String(f.associationLabel || "").trim();
-    var otherType = String(f.otherType || "").toUpperCase();
-    var otherId = f.relatedPersonId || "";
-    if (!label && !otherId) {
-      return { ok: false, error: "Enter a name, plate, or street." };
-    }
+    var fields = m.readFields(card);
+    var otherType = String(fields.otherType || "").toUpperCase();
     if (!otherType) {
-      otherType = otherId ? "PERSON" : "";
+      return { ok: false, link: null, objectId: "", error: "Pick an object type." };
     }
-    if (!otherType) {
-      return { ok: false, error: "Pick a type." };
+    if (!fields.relationshipType) {
+      return { ok: false, link: null, objectId: "", error: "Pick a relationship." };
+    }
+    var collected = collectAssociationObject(card, otherType);
+    if (!collected.ok) {
+      return { ok: false, link: null, objectId: "", error: collected.error };
     }
     if (!m.store.associateCaseObject) {
-      return { ok: false, error: "Could not save the association." };
+      return { ok: false, link: null, objectId: "", error: "Could not save the association." };
     }
     var result = m.store.associateCaseObject(snap.leadId, {
       objectType: otherType,
-      objectId: otherType === "PERSON" ? otherId : "",
-      personId: otherType === "PERSON" ? otherId : "",
-      label: label,
-      reason: f.relationshipType || "",
-      notes: f.notes || "",
-      linkId: card.dataset.entityId || ""
+      objectId:
+        collected.record.personId || collected.record.vehicleId ||
+        collected.record.locationId || collected.record.businessId ||
+        collected.record.entityId || collected.record.id || "",
+      objectRecord: collected.record,
+      reason: fields.relationshipType,
+      notes: fields.notes || "",
+      linkId: card.dataset.entityId || "",
+      associationId: card.dataset.associationId || ""
     });
     if (!result || !result.ok) {
-      return { ok: false, error: (result && result.error) || "Could not save." };
+      return {
+        ok: false,
+        link: null,
+        objectId: "",
+        error: (result && result.error) || "Could not save."
+      };
     }
     card.dataset.entityId = result.linkId || "";
-    if (result.associationId) {
-      card.dataset.associationId = result.associationId;
-    }
+    card.dataset.associationId = result.associationId || "";
+    state.id = result.associationId || result.linkId || "";
     var fresh = m.store.getLead(snap.leadId);
     var link = ((fresh && fresh.links) || []).filter(function (row) {
       return row && row.linkId === result.linkId;
     })[0];
-    return { ok: true, link: link, error: "" };
+    return {
+      ok: true,
+      link: link,
+      objectId: result.objectId || "",
+      objectType: result.objectType || otherType,
+      error: ""
+    };
   }
 
-  function saveAssociation() {
+  function saveAssociation(closeAfter) {
     var card = host() && host().querySelector('[data-card="relationship"]');
-    if (!card) {
-      return;
-    }
-    var m = model();
     var snap = loadSnap();
-    if (!snap) {
+    if (!card || !snap) {
       setStatus("Open a case to edit.");
       return;
     }
@@ -927,11 +1331,25 @@
       setStatus(written.error);
       return;
     }
-    closePanel();
-    setStatus("Association saved.", true);
     if (typeof window.paintCaseView === "function") {
       window.paintCaseView();
     }
+    if (closeAfter !== false) {
+      closePanel();
+      setStatus("Association saved.", true);
+      return;
+    }
+    var select = card.querySelector('[data-field="relatedObjectId"]');
+    populateAssociationObjectSelect(
+      card,
+      written.objectType,
+      written.objectId,
+      subjectOf(snap) && subjectOf(snap).personId
+    );
+    if (select) {
+      select.value = written.objectId;
+    }
+    setStatus("Association applied. Continue editing or Save & Close.", true);
   }
 
   function syncPromoteButton(card, snap) {
@@ -941,17 +1359,19 @@
     }
     function refresh() {
       var m = model();
-      var f = m.readFields(card);
-      var otherType = String(f.otherType || "").toUpperCase();
-      var otherId = String(f.relatedPersonId || "").trim();
-      var label = String(f.associationLabel || "").trim();
-      var personOk = otherType === "PERSON" || (!otherType && !!otherId);
+      var fields = m.readFields(card);
+      var identity = card.querySelector('[data-card="identity"]');
+      var personFields = identity ? m.readFields(identity) : {};
       var can =
         snap &&
         m.isCommitted &&
         m.isCommitted(snap) &&
-        personOk &&
-        !!(label || otherId);
+        String(fields.otherType || "").toUpperCase() === "PERSON" &&
+        !!(
+          (card.querySelector('[data-field="relatedObjectId"]') || {}).value ||
+          personFields.lastName ||
+          personFields.firstName
+        );
       btn.hidden = !can;
       btn.disabled = !can;
     }
@@ -975,13 +1395,11 @@
       setStatus("Open a filed case to promote an associate.");
       return;
     }
-    var f = m.readFields(card);
-    var label = String(f.associationLabel || "").trim();
-    if (!label && f.relatedPersonId && m.formatPersonLabel && m.store.getPerson) {
-      var linked = m.store.getPerson(f.relatedPersonId);
-      label = (linked && m.formatPersonLabel(linked)) || "";
-    }
-    var display = label || "this person";
+    var identity = card.querySelector('[data-card="identity"]');
+    var personFields = identity ? m.readFields(identity) : {};
+    var display = [personFields.firstName, personFields.lastName]
+      .filter(Boolean)
+      .join(" ") || "this person";
     if (
       typeof window.confirm === "function" &&
       !window.confirm("Open a new case for " + display + "?")
@@ -993,11 +1411,6 @@
       setStatus(written.error);
       return;
     }
-    var saved = m.store.saveLead(snap, { mode: "commit" });
-    if (!saved || !saved.ok) {
-      setStatus((saved && saved.error) || "Could not save the association.");
-      return;
-    }
     var result = m.store.promoteAssociateToCase(snap.leadId, written.link.linkId);
     if (!result || (!result.ok && !result.leadId)) {
       setStatus((result && result.error) || "Could not open a new case.");
@@ -1005,8 +1418,7 @@
     }
     if (result.leadId) {
       var opened = m.store.getLead(result.leadId);
-      var page =
-        opened && m.isCommitted(opened) ? "case.html" : "lead-form.html";
+      var page = opened && m.isCommitted(opened) ? "case.html" : "lead-form.html";
       window.location.href = page + "?id=" + encodeURIComponent(result.leadId);
     }
   }
@@ -1059,56 +1471,20 @@
     fn(snap, id);
   }
 
-  function save() {
+  function save(closeAfter) {
     var fn = SAVERS[state.kind];
     if (fn) {
-      fn();
-    }
-  }
-
-  function addStubThenOpen(kind) {
-    var m = model();
-    var snap = loadSnap();
-    if (!snap || !m.isCommitted(snap)) {
-      setStatus("Open a filed case to edit.");
-      return;
-    }
-    if (kind === "vehicle") {
-      var vehicle = m.createVehicle({ governmentVehicle: false });
-      snap.vehicles = snap.vehicles || [];
-      snap.vehicles.push(vehicle);
-      var savedVeh = m.store.saveLead(snap, { mode: "commit" });
-      if (!savedVeh || !savedVeh.ok) {
-        setStatus((savedVeh && savedVeh.error) || "Could not save.");
-        return;
-      }
-      if (typeof window.paintCaseView === "function") {
-        window.paintCaseView();
-      }
-      open("vehicle", vehicle.vehicleId);
-      return;
-    }
-    if (kind === "location") {
-      var person = subjectOf(snap);
-      var location = m.createLocation({});
-      person.locations = person.locations || [];
-      person.locations.push(location);
-      snap.person = person;
-      var savedLoc = m.store.saveLead(snap, { mode: "commit" });
-      if (!savedLoc || !savedLoc.ok) {
-        setStatus((savedLoc && savedLoc.error) || "Could not save.");
-        return;
-      }
-      if (typeof window.paintCaseView === "function") {
-        window.paintCaseView();
-      }
-      open("location", location.locationId);
+      fn(closeAfter);
     }
   }
 
   function addTileButton(tile, label, kind, add) {
     if (!tile) {
       return;
+    }
+    if (add) {
+      tile.classList.remove("is-empty");
+      tile.hidden = false;
     }
     var legend =
       tile.querySelector(":scope > legend") ||
@@ -1128,10 +1504,6 @@
     btn.addEventListener("click", function (event) {
       event.preventDefault();
       event.stopPropagation();
-      if (add && (kind === "vehicle" || kind === "location")) {
-        addStubThenOpen(kind);
-        return;
-      }
       open(kind, "");
     });
     legend.appendChild(btn);
@@ -1176,11 +1548,20 @@
       return;
     }
     var saveBtn = byId("caseEditSave");
+    var applyBtn = byId("caseEditApply");
     var cancelBtn = byId("caseEditCancel");
     var backdrop = byId("caseEditBackdrop");
     if (saveBtn && saveBtn.dataset.bound !== "true") {
       saveBtn.dataset.bound = "true";
-      saveBtn.addEventListener("click", save);
+      saveBtn.addEventListener("click", function () {
+        save(true);
+      });
+    }
+    if (applyBtn && applyBtn.dataset.bound !== "true") {
+      applyBtn.dataset.bound = "true";
+      applyBtn.addEventListener("click", function () {
+        save(false);
+      });
     }
     if (cancelBtn && cancelBtn.dataset.bound !== "true") {
       cancelBtn.dataset.bound = "true";

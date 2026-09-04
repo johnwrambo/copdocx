@@ -64,12 +64,11 @@
       built.registeredOwnerName = String(ownerName);
     }
     delete built.registeredOwner;
+    built.entityType = "VEHICLE";
     if (!built.vehicleId) {
       built.vehicleId = built.id || model.newId("veh");
     }
-    if (!built.id) {
-      built.id = built.vehicleId;
-    }
+    built.id = built.vehicleId;
     if (built.licensePlate) {
       built.licensePlate = String(built.licensePlate).toUpperCase();
     }
@@ -94,6 +93,18 @@
     if (!Array.isArray(built.equipment)) {
       built.equipment = [];
     }
+    built.meta = model.assign(
+      {
+        createdAt: now,
+        updatedAt: now,
+        markedComplete: false,
+        status: "draft",
+        committedAt: ""
+      },
+      built.meta && typeof built.meta === "object" && !Array.isArray(built.meta)
+        ? built.meta
+        : {}
+    );
     return built;
   }
 

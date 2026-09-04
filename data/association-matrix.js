@@ -150,6 +150,16 @@
       inverseLabel: "Operated by",
       sortOrder: 120,
     }),
+    row({
+      code: "LE_ENCOUNTER_IN_VEHICLE",
+      label: "Documented LE encounter in vehicle",
+      from: "PERSON",
+      to: "VEHICLE",
+      inverse: "ENCOUNTERED_WITH_PERSON",
+      inverseLabel: "Documented LE encounter with person",
+      sortOrder: 125,
+      description: "Event-scoped co-occurrence; does not assert ownership or operation.",
+    }),
 
     // —— Vehicle → Location ——
     row({

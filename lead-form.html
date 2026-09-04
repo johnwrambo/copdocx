@@ -6,6 +6,8 @@
     <title>Case</title>
     
     <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -41,9 +43,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -372,6 +374,24 @@
             <div class="field">
               <label for="stateId">SID</label>
               <input type="text" id="stateId" name="stateId" />
+            </div>
+            <div class="field">
+              <label for="foreignWarrants">Foreign Warrants</label>
+              <select id="foreignWarrants" name="foreignWarrants">
+                <option value="">Select Yes or No</option>
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="foreignWarrantCountry">Foreign Warrant Country</label>
+              <input
+                type="text"
+                id="foreignWarrantCountry"
+                name="foreignWarrantCountry"
+                autocomplete="off"
+                placeholder="Required when Yes"
+              />
             </div>
             <div class="field field-span-2">
               <label for="rapSheet">Rap Sheet</label>
@@ -1069,6 +1089,53 @@
               data-field="arrestLocation"
             />
           </div>
+          <div class="field">
+            <label for="arrestTime">Arrest Time</label>
+            <input type="time" id="arrestTime" name="arrestTime" data-field="arrestTime" />
+          </div>
+          <div class="field">
+            <label for="bookInDateTime">Book-In Date and Time</label>
+            <input
+              type="datetime-local"
+              id="bookInDateTime"
+              name="bookInDateTime"
+              data-field="bookInDateTime"
+            />
+          </div>
+          <div class="field">
+            <label for="iceEventNumber">ICE Event Number</label>
+            <input type="text" id="iceEventNumber" name="iceEventNumber" data-field="iceEventNumber" />
+          </div>
+          <div class="field">
+            <label for="encounterNumber">Encounter Number</label>
+            <input type="text" id="encounterNumber" name="encounterNumber" data-field="encounterNumber" />
+          </div>
+          <div class="field">
+            <label for="arrestingOfficer">Arresting Officer</label>
+            <input type="text" id="arrestingOfficer" name="arrestingOfficer" data-field="arrestingOfficer" />
+          </div>
+          <div class="field">
+            <label for="arrestTeam">Team</label>
+            <input type="text" id="arrestTeam" name="arrestTeam" data-field="team" />
+          </div>
+          <div class="field">
+            <label for="arrestSubjectRole">Subject Role</label>
+            <select id="arrestSubjectRole" name="arrestSubjectRole" data-field="subjectRole">
+              <option value="">Select an Option</option>
+              <option value="TARGET">Target</option>
+              <option value="COLLATERAL">Collateral</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="arrestVehiclePosition">Vehicle Position</label>
+            <select id="arrestVehiclePosition" name="arrestVehiclePosition" data-field="vehiclePosition">
+              <option value="">Select an Option</option>
+              <option value="Driver">Driver</option>
+              <option value="Passenger">Passenger</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <input type="hidden" id="bookinRecordId" name="bookinRecordId" data-field="bookinRecordId" />
         </div>
       </fieldset>
     </template>
@@ -1282,6 +1349,6 @@
         };
       }
     </script>
-  
+    <script src="functions/photo-picker-modal.js"></script>
   </body>
 </html>

@@ -1,0 +1,375 @@
+{
+  "schema": "copdocx.blueprint.taxonomy.v1",
+  "blueprintId": "COPDOCX-BP-1",
+  "snapshotDate": "2026-08-31",
+  "target": {
+    "framework": "React + TypeScript",
+    "router": "HashRouter",
+    "runtimeNetworkRequired": false,
+    "browserPersistence": "IndexedDB copdocx.workspace.v2",
+    "supportedOrigin": "fixed local loopback or packaged desktop",
+    "fileProtocolIsAcceptanceTarget": false,
+    "legacyOriginMigration": "complete archive export from classic app, then first-run import"
+  },
+  "states": [
+    { "id": "built", "meaning": "Present in the current modern app and included in parity scope." },
+    { "id": "skeleton", "meaning": "Present, but placeholder or incomplete." },
+    { "id": "intended", "meaning": "Canonical behavior for the React recreation." },
+    { "id": "planned", "meaning": "Reserved and not presented as working." },
+    { "id": "legacy", "meaning": "Reference or migration input only." }
+  ],
+  "modules": [
+    { "id": "M-HOME", "name": "Home", "owns": [], "responsibility": "Read-only operational briefing." },
+    { "id": "M-LEADS", "name": "Leads", "owns": ["E-LEAD", "E-PERSON", "E-CASE-VEHICLE", "E-LOCATION", "E-LINK", "E-FOLLOWUP"], "responsibility": "Subject-centered case snapshots and lead outputs." },
+    { "id": "M-ENCOUNTERS", "name": "Encounters", "owns": ["E-ENCOUNTER", "E-PARTICIPANT", "E-NARRATIVE"], "responsibility": "Field events, booked participants, and I-213 narratives." },
+    { "id": "M-BOOKIN", "name": "Book-in", "owns": ["E-BOOKIN"], "responsibility": "Detainee intake and output generation." },
+    { "id": "M-MAP", "name": "Map", "owns": ["E-MAP-STATE"], "responsibility": "Workspace location projection, operational layers, views, and markup." },
+    { "id": "M-ADMIN", "name": "Admin", "owns": ["E-OFFICER", "E-FLEET-VEHICLE", "E-SHIFT"], "responsibility": "Personnel, fleet, schedule, and summaries." },
+    { "id": "M-MEDIA", "name": "Media", "owns": ["E-MEDIA"], "responsibility": "Owner-scoped uploaded photos and files." },
+    { "id": "M-ARTIFACT", "name": "Artifacts", "owns": ["E-ARTIFACT"], "responsibility": "Versioned generated outputs and binary bytes." }
+  ],
+  "repositories": [
+    { "id": "R-LEAD", "entity": "E-LEAD", "v2Store": "leads", "legacySources": ["localStorage:copdocx.store.v1/leads"] },
+    { "id": "R-PEOPLE-INDEX", "entity": "E-PERSON", "v2Store": "peopleIndex", "derived": true, "legacySources": ["localStorage:copdocx.store.v1/people"] },
+    { "id": "R-ENCOUNTER", "entity": "E-ENCOUNTER", "v2Store": "encounters", "legacySources": ["localStorage:copdocx.store.v1/encounters"] },
+    { "id": "R-BOOKIN", "entity": "E-BOOKIN", "v2Store": "bookIns", "legacySources": ["localStorage:alien-book-in.saved-records.v1"] },
+    { "id": "R-OFFICER", "entity": "E-OFFICER", "v2Store": "officers", "legacySources": ["localStorage:copdoc.admin.v1/officers"] },
+    { "id": "R-FLEET", "entity": "E-FLEET-VEHICLE", "v2Store": "fleetVehicles", "legacySources": ["localStorage:copdoc.admin.v1/vehicles"] },
+    { "id": "R-SHIFT", "entity": "E-SHIFT", "v2Store": "shifts", "legacySources": ["localStorage:copdoc.admin.v1/shifts"] },
+    { "id": "R-MEDIA", "entity": "E-MEDIA", "v2Store": ["mediaMeta", "mediaBlobs"], "legacySources": ["IndexedDB:copdocx.media.v1"] },
+    { "id": "R-ARTIFACT", "entity": "E-ARTIFACT", "v2Store": ["artifactMeta", "artifactBlobs"], "legacySources": ["generated downloads", "IndexedDB:copdocx.warrants directory handle"] },
+    { "id": "R-SETTINGS", "entity": "E-SETTINGS", "v2Store": "settings", "legacySources": ["localStorage:copdocx.settings.v1"] },
+    { "id": "R-MAP", "entity": "E-MAP-STATE", "v2Store": "mapState", "legacySources": ["localStorage:copdocx.map.views.v1", "localStorage:copdocx.map.layers.v1", "localStorage:copdocx.map.icons.v1", "localStorage:copdocx.map.markup.v1"] },
+    { "id": "R-TEMPLATE", "entity": "E-NARRATIVE-TEMPLATE", "v2Store": "narrativeTemplates", "legacySources": ["localStorage:opdoc.narrative.templates.v2", "localStorage:opdoc.narrative.templates.v1"] }
+  ],
+  "pages": [
+    {
+      "id": "P-HOME",
+      "module": "M-HOME",
+      "current": { "file": "home.html", "state": "skeleton" },
+      "intended": { "route": "#/home", "view": "dashboard", "primaryAction": null },
+      "reads": ["R-LEAD", "R-ENCOUNTER", "R-BOOKIN", "R-OFFICER", "R-FLEET", "R-SHIFT"],
+      "writes": []
+    },
+    {
+      "id": "P-LEAD-LIST",
+      "module": "M-LEADS",
+      "current": { "file": "leads.html", "state": "built" },
+      "intended": { "route": "#/leads", "view": "record-collection", "primaryAction": "Add lead" },
+      "reads": ["R-LEAD"],
+      "writes": []
+    },
+    {
+      "id": "P-LEAD-VIEW",
+      "module": "M-LEADS",
+      "current": { "file": "lead.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/leads/:leadId", "view": "record-detail", "primaryAction": "Edit" },
+      "reads": ["R-LEAD", "R-MEDIA"],
+      "writes": ["R-MEDIA"]
+    },
+    {
+      "id": "P-LEAD-NEW",
+      "module": "M-LEADS",
+      "current": { "file": "lead-form.html", "state": "built" },
+      "intended": { "route": "#/leads/new", "view": "record-form", "primaryAction": "Save" },
+      "reads": ["R-PEOPLE-INDEX"],
+      "writes": ["R-LEAD", "R-PEOPLE-INDEX"]
+    },
+    {
+      "id": "P-LEAD-EDIT",
+      "module": "M-LEADS",
+      "current": { "file": "lead-form.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/leads/:leadId/edit", "view": "record-form", "primaryAction": "Save" },
+      "reads": ["R-LEAD", "R-PEOPLE-INDEX"],
+      "writes": ["R-LEAD", "R-PEOPLE-INDEX"]
+    },
+    {
+      "id": "P-TARGET-SHEET",
+      "module": "M-LEADS",
+      "current": { "file": "mobile-target-sheet.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/leads/:leadId/target-sheet", "view": "printable-detail", "primaryAction": "Edit lead", "plannedCapabilities": ["target-sheet-download"] },
+      "reads": ["R-LEAD", "R-MEDIA"],
+      "writes": []
+    },
+    {
+      "id": "P-I200",
+      "module": "M-LEADS",
+      "current": { "file": "i200-form.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/leads/:leadId/warrants/i-200/new", "view": "issuance-form", "primaryAction": "Issue" },
+      "reads": ["R-LEAD", "R-OFFICER", "R-SETTINGS"],
+      "writes": ["R-LEAD", "R-ARTIFACT"]
+    },
+    {
+      "id": "P-I205",
+      "module": "M-LEADS",
+      "current": { "file": "i205-form.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/leads/:leadId/warrants/i-205/new", "view": "issuance-form", "primaryAction": "Issue" },
+      "reads": ["R-LEAD", "R-OFFICER", "R-SETTINGS"],
+      "writes": ["R-LEAD", "R-ARTIFACT"]
+    },
+    {
+      "id": "P-ENCOUNTER-LIST",
+      "module": "M-ENCOUNTERS",
+      "current": { "file": "encounter.html", "state": "built" },
+      "intended": { "route": "#/encounters", "view": "record-collection", "primaryAction": "Add encounter" },
+      "reads": ["R-ENCOUNTER"],
+      "writes": ["R-ENCOUNTER"]
+    },
+    {
+      "id": "P-ENCOUNTER-NEW",
+      "module": "M-ENCOUNTERS",
+      "current": { "file": "encounter-form.html", "state": "built" },
+      "intended": { "route": "#/encounters/new", "view": "editable-workspace", "primaryAction": "Save" },
+      "reads": ["R-LEAD", "R-FLEET"],
+      "writes": ["R-ENCOUNTER"]
+    },
+    {
+      "id": "P-ENCOUNTER-WORKSPACE",
+      "module": "M-ENCOUNTERS",
+      "current": { "file": "encounter-form.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/encounters/:encounterId", "view": "editable-workspace", "primaryAction": "Save" },
+      "reads": ["R-ENCOUNTER", "R-BOOKIN", "R-LEAD"],
+      "writes": ["R-ENCOUNTER"]
+    },
+    {
+      "id": "P-NARRATIVE",
+      "module": "M-ENCOUNTERS",
+      "current": { "file": "narrative.html", "state": "built", "query": ["encounterId"] },
+      "intended": { "route": "#/encounters/:encounterId/narrative", "view": "editor-workspace", "primaryAction": "Save I-213" },
+      "reads": ["R-ENCOUNTER", "R-BOOKIN", "R-LEAD", "R-OFFICER", "R-SETTINGS", "R-TEMPLATE"],
+      "writes": ["R-ENCOUNTER", "R-ARTIFACT"]
+    },
+    {
+      "id": "P-NARRATIVE-TRAINING",
+      "module": "M-ENCOUNTERS",
+      "current": { "file": "narrative.html", "state": "built" },
+      "intended": { "route": "#/narrative/training", "view": "training-workspace", "primaryAction": "Update draft" },
+      "reads": ["R-TEMPLATE"],
+      "writes": []
+    },
+    {
+      "id": "P-BOOKIN",
+      "module": "M-BOOKIN",
+      "current": { "file": "bookin.html", "state": "built", "query": ["recordId", "leadId", "encounterId"] },
+      "intended": { "route": "#/book-in", "view": "form-workspace", "primaryAction": "Generate", "secondaryActions": ["Save record", "Load from leads", "Clear", "Baseball card"], "localPanelActions": ["New record", "Open saved record"] },
+      "reads": ["R-BOOKIN", "R-LEAD", "R-ENCOUNTER"],
+      "writes": ["R-BOOKIN", "R-ENCOUNTER", "R-ARTIFACT"],
+      "transactionGroups": [["R-BOOKIN", "R-ENCOUNTER"]]
+    },
+    {
+      "id": "P-BASEBALL",
+      "module": "M-BOOKIN",
+      "current": { "file": "baseballcard.html", "state": "built" },
+      "intended": { "route": "#/book-in/baseball-card", "view": "generated-output-editor", "primaryAction": "Generate", "plannedCapabilities": ["baseball-export"] },
+      "reads": ["R-BOOKIN", "R-LEAD"],
+      "writes": ["R-LEAD", "R-ARTIFACT"]
+    },
+    {
+      "id": "P-MAP",
+      "module": "M-MAP",
+      "current": { "file": "map.html", "state": "built" },
+      "intended": { "route": "#/map", "view": "geospatial-workspace", "primaryAction": "Print brief", "plannedCapabilities": ["kmz-export", "map-json-export", "map-csv-export"] },
+      "reads": ["R-LEAD", "R-ENCOUNTER", "R-OFFICER", "R-MAP"],
+      "writes": ["R-MAP", "R-ARTIFACT"]
+    },
+    {
+      "id": "P-PHOTO-PICKER",
+      "module": "M-MEDIA",
+      "current": { "file": "photo-picker.html", "state": "built", "query": ["ownerType", "id", "leadId", "return"] },
+      "intended": { "route": "#/media/photos", "view": "media-picker", "primaryAction": "Save photos" },
+      "reads": ["R-MEDIA", "R-LEAD", "R-ENCOUNTER", "R-OFFICER", "R-FLEET", "R-BOOKIN"],
+      "writes": ["R-MEDIA"]
+    },
+    {
+      "id": "P-FILE-UPLOAD",
+      "module": "M-MEDIA",
+      "current": { "file": "file-upload.html", "state": "built", "query": ["ownerType", "id", "leadId", "return"] },
+      "intended": { "route": "#/media/files", "view": "media-picker", "primaryAction": "Save files" },
+      "reads": ["R-MEDIA", "R-LEAD", "R-ENCOUNTER", "R-OFFICER", "R-FLEET", "R-BOOKIN"],
+      "writes": ["R-MEDIA"]
+    },
+    {
+      "id": "P-ADMIN",
+      "module": "M-ADMIN",
+      "current": { "file": "admin.html", "state": "built" },
+      "intended": { "route": "#/admin", "view": "dashboard", "primaryAction": null },
+      "reads": ["R-OFFICER", "R-FLEET", "R-SHIFT", "R-BOOKIN"],
+      "writes": []
+    },
+    {
+      "id": "P-OFFICER-LIST",
+      "module": "M-ADMIN",
+      "current": { "file": "officers.html", "state": "built" },
+      "intended": { "route": "#/admin/officers", "view": "record-collection", "primaryAction": "Add officer" },
+      "reads": ["R-OFFICER"],
+      "writes": ["R-OFFICER", "R-SHIFT"]
+    },
+    {
+      "id": "P-OFFICER-VIEW",
+      "module": "M-ADMIN",
+      "current": { "file": "officer.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/admin/officers/:officerId", "view": "record-detail", "primaryAction": "Edit" },
+      "reads": ["R-OFFICER", "R-MEDIA"],
+      "writes": ["R-MEDIA"]
+    },
+    {
+      "id": "P-OFFICER-NEW",
+      "module": "M-ADMIN",
+      "current": { "file": "officer-form.html", "state": "built" },
+      "intended": { "route": "#/admin/officers/new", "view": "record-form", "primaryAction": "Save" },
+      "reads": [],
+      "writes": ["R-OFFICER"]
+    },
+    {
+      "id": "P-OFFICER-EDIT",
+      "module": "M-ADMIN",
+      "current": { "file": "officer-form.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/admin/officers/:officerId/edit", "view": "record-form", "primaryAction": "Save" },
+      "reads": ["R-OFFICER"],
+      "writes": ["R-OFFICER"]
+    },
+    {
+      "id": "P-FLEET-LIST",
+      "module": "M-ADMIN",
+      "current": { "file": "vehicles.html", "state": "built" },
+      "intended": { "route": "#/admin/vehicles", "view": "record-collection", "primaryAction": "Add vehicle" },
+      "reads": ["R-FLEET"],
+      "writes": ["R-FLEET", "R-SHIFT"]
+    },
+    {
+      "id": "P-FLEET-VIEW",
+      "module": "M-ADMIN",
+      "current": { "file": "vehicle.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/admin/vehicles/:vehicleId", "view": "record-detail", "primaryAction": "Edit" },
+      "reads": ["R-FLEET", "R-MEDIA"],
+      "writes": ["R-MEDIA"]
+    },
+    {
+      "id": "P-FLEET-NEW",
+      "module": "M-ADMIN",
+      "current": { "file": "vehicle-form.html", "state": "built" },
+      "intended": { "route": "#/admin/vehicles/new", "view": "record-form", "primaryAction": "Save" },
+      "reads": ["R-OFFICER"],
+      "writes": ["R-FLEET"]
+    },
+    {
+      "id": "P-FLEET-EDIT",
+      "module": "M-ADMIN",
+      "current": { "file": "vehicle-form.html", "state": "built", "query": ["id"] },
+      "intended": { "route": "#/admin/vehicles/:vehicleId/edit", "view": "record-form", "primaryAction": "Save" },
+      "reads": ["R-FLEET", "R-OFFICER"],
+      "writes": ["R-FLEET"]
+    },
+    {
+      "id": "P-SCHEDULE",
+      "module": "M-ADMIN",
+      "current": { "file": "schedule.html", "state": "built" },
+      "intended": { "route": "#/admin/schedule", "view": "schedule-workspace", "primaryAction": null },
+      "reads": ["R-OFFICER", "R-FLEET", "R-SHIFT"],
+      "writes": ["R-SHIFT"]
+    }
+  ],
+  "reservedRoutes": [
+    { "id": "P-OPERATIONS-LIST", "route": "#/operations", "state": "planned", "sourceFile": null },
+    { "id": "P-OPERATION-VIEW", "route": "#/operations/:operationId", "state": "planned", "sourceFile": "operation.html" },
+    { "id": "P-OPERATION-EDIT", "route": "#/operations/:operationId/edit", "state": "planned", "sourceFile": null }
+  ],
+  "compatibility": [
+    { "file": "index.html", "kind": "redirect", "targetPage": "P-HOME" },
+    { "file": "Narrative_Builder.html", "kind": "redirect", "targetPage": "P-NARRATIVE-TRAINING" },
+    { "file": "Alien_Book_In_Docs_v1_0_4.html", "kind": "legacy", "bundle": false },
+    { "file": "style/style-old.css", "kind": "legacy", "bundle": false },
+    { "file": "functions/address_old.js", "kind": "legacy", "bundle": false }
+  ],
+  "uiComponents": [
+    { "id": "UI-SHELL", "name": "AppShell", "kind": "shell" },
+    { "id": "UI-PAGE", "name": "Page/PageHeader", "kind": "layout" },
+    { "id": "UI-ACTIONS", "name": "PageActionBar/ActionMenu", "kind": "navigation-action" },
+    { "id": "UI-FORM", "name": "FormSection/FormGrid/Field", "kind": "form" },
+    { "id": "UI-CARD", "name": "Card", "kind": "surface" },
+    { "id": "UI-REPEATABLE", "name": "RepeatableCardList<T>", "kind": "collection-editor" },
+    { "id": "UI-RECORD-LIST", "name": "RecordListPage/DataTable", "kind": "record" },
+    { "id": "UI-RECORD-VIEW", "name": "RecordViewPage/SnapshotGrid", "kind": "record" },
+    { "id": "UI-RECORD-FORM", "name": "RecordFormPage", "kind": "record" },
+    { "id": "UI-MEDIA", "name": "MediaBlock", "kind": "media" },
+    { "id": "UI-DIALOG", "name": "Dialog/ConfirmDialog", "kind": "overlay" }
+  ],
+  "cards": [
+    { "id": "CARD-LEAD-SOURCE", "name": "LeadSourceCard", "path": "Lead.source" },
+    { "id": "CARD-SUBJECT", "name": "SubjectCard", "path": "Lead.person" },
+    { "id": "CARD-ALIAS", "name": "AliasCard", "path": "Person.aliases[]" },
+    { "id": "CARD-RELATIONSHIP", "name": "RelationshipCard", "path": "Lead.links[]" },
+    { "id": "CARD-CASE-VEHICLE", "name": "CaseVehicleCard", "path": "Lead.vehicles[]|Encounter.vehicles[]" },
+    { "id": "CARD-LOCATION", "name": "LocationCard", "path": "owner.locations[]" },
+    { "id": "CARD-LINK", "name": "EntityLinkCard", "path": "Lead.links[]" },
+    { "id": "CARD-DOCUMENT", "name": "IdentityDocumentCard", "path": "Person.documents[]" },
+    { "id": "CARD-RAP-ENCOUNTER", "name": "PoliceEncounterCard", "path": "Person.encounters[]" },
+    { "id": "CARD-ARREST", "name": "ArrestCard", "path": "Person.arrests[]" },
+    { "id": "CARD-CONVICTION", "name": "ConvictionCard", "path": "Person.convictions[]" },
+    { "id": "CARD-WARRANT", "name": "WarrantCard", "path": "Person.warrants[]" },
+    { "id": "CARD-FOLLOWUP", "name": "FollowUpCard", "path": "Lead.followUps[]" },
+    { "id": "CARD-ENCOUNTER-DETAILS", "name": "EncounterDetailsCard", "path": "Encounter" },
+    { "id": "CARD-ENCOUNTER-SUBJECT", "name": "EncounterParticipantCard", "path": "Encounter.participants[]" },
+    { "id": "CARD-SUPERVISOR", "name": "SupervisorSummaryCard", "path": "Encounter.supervisorSummary" },
+    { "id": "CARD-OFFICER", "name": "OfficerCard", "path": "Officer" },
+    { "id": "CARD-FLEET", "name": "FleetVehicleCard", "path": "FleetVehicle" },
+    { "id": "CARD-SHIFT", "name": "ShiftCard", "path": "Shift" },
+    { "id": "CARD-MEDICAL", "name": "MedicalQuestionCard", "path": "BookIn.medical.answers" },
+    { "id": "CARD-MEDIA", "name": "MediaAttachmentCard", "path": "Media.owner" },
+    { "id": "CARD-STAT", "name": "StatCard", "path": "derived projection" }
+  ],
+  "entities": [
+    { "id": "E-LEAD", "name": "LeadAggregate", "key": "leadId", "repository": "R-LEAD", "owns": ["E-PERSON", "E-CASE-VEHICLE", "E-LINK", "E-FOLLOWUP"] },
+    { "id": "E-PERSON", "name": "PersonSnapshot", "key": "personId", "owner": "E-LEAD", "owns": ["E-LOCATION", "aliases", "identityDocuments", "rapRows", "immigration"] },
+    { "id": "E-CASE-VEHICLE", "name": "CaseVehicleSnapshot", "key": "vehicleId", "owner": "E-LEAD|E-ENCOUNTER", "owns": ["E-LOCATION"] },
+    { "id": "E-LOCATION", "name": "Location", "key": "locationId", "owner": "E-PERSON|E-CASE-VEHICLE|E-ENCOUNTER|E-OFFICER" },
+    { "id": "E-LINK", "name": "EntityLink", "key": "linkId", "owner": "E-LEAD" },
+    { "id": "E-FOLLOWUP", "name": "FollowUp", "key": "followUpId", "owner": "E-LEAD" },
+    { "id": "E-ENCOUNTER", "name": "EncounterAggregate", "key": "encounterId", "repository": "R-ENCOUNTER", "owns": ["E-PARTICIPANT", "E-NARRATIVE", "E-LOCATION", "E-CASE-VEHICLE"] },
+    { "id": "E-PARTICIPANT", "name": "EncounterParticipant", "key": "participantId", "owner": "E-ENCOUNTER", "references": ["E-BOOKIN", "E-PERSON", "E-LEAD"] },
+    { "id": "E-NARRATIVE", "name": "EncounterNarrative", "key": "narrativeId", "owner": "E-ENCOUNTER" },
+    { "id": "E-BOOKIN", "name": "BookInRecordV2", "key": "bookInId", "repository": "R-BOOKIN", "references": ["E-LEAD", "E-PERSON", "E-ENCOUNTER"] },
+    { "id": "E-OFFICER", "name": "Officer", "key": "officerId", "repository": "R-OFFICER", "owns": ["E-LOCATION"] },
+    { "id": "E-FLEET-VEHICLE", "name": "FleetVehicle", "key": "vehicleId", "repository": "R-FLEET", "references": ["E-OFFICER"] },
+    { "id": "E-SHIFT", "name": "Shift", "key": "shiftId", "repository": "R-SHIFT", "references": ["E-OFFICER", "E-FLEET-VEHICLE"] },
+    { "id": "E-MEDIA", "name": "Media", "key": "mediaId", "repository": "R-MEDIA", "references": ["OwnerRef"] },
+    { "id": "E-ARTIFACT", "name": "Artifact", "key": "artifactId", "repository": "R-ARTIFACT", "references": ["OwnerRef", "sourceRevisions"] },
+    { "id": "E-MAP-STATE", "name": "MapState", "key": "workspace", "repository": "R-MAP" },
+    { "id": "E-SETTINGS", "name": "Settings", "key": "workspace", "repository": "R-SETTINGS" },
+    { "id": "E-NARRATIVE-TEMPLATE", "name": "NarrativeTemplate", "key": "templateId", "repository": "R-TEMPLATE" }
+  ],
+  "ownerPolicy": {
+    "PERSON": { "photos": true, "files": true },
+    "VEHICLE": { "photos": true, "files": true },
+    "LOCATION": { "photos": true, "files": true },
+    "OFFICER": { "photos": true, "files": true },
+    "ENCOUNTER": { "photos": "scene-only", "files": true },
+    "LEAD": { "photos": false, "files": "case-level-only" },
+    "BOOKIN": { "photos": "only-when-no-person", "files": true }
+  },
+  "legacyAliases": [
+    { "entity": "E-OFFICER", "legacy": "id", "canonical": "officerId" },
+    { "entity": "E-FLEET-VEHICLE", "legacy": "id", "canonical": "vehicleId" },
+    { "entity": "E-FLEET-VEHICLE", "legacy": "plate", "canonical": "licensePlate" },
+    { "entity": "E-OFFICER", "legacy": "address", "canonical": "locations[]" },
+    { "entity": "E-FLEET-VEHICLE", "legacy": "status", "canonical": "availabilityStatus" },
+    { "entity": "E-ENCOUNTER", "legacy": "subjects[]", "canonical": "participants[]" },
+    { "entity": "E-BOOKIN", "legacy": "formState", "canonical": "typed BookInRecordV2 groups plus extensions" }
+  ],
+  "flows": [
+    { "id": "FLOW-LEAD-COMMIT", "producers": ["P-LEAD-NEW", "P-LEAD-EDIT"], "transaction": ["R-LEAD", "R-PEOPLE-INDEX"], "consumers": ["P-LEAD-LIST", "P-LEAD-VIEW", "P-TARGET-SHEET", "P-MAP", "P-BOOKIN", "P-NARRATIVE"] },
+    { "id": "FLOW-BOOKIN-PARTICIPANT", "producers": ["P-BOOKIN"], "transaction": ["R-BOOKIN", "R-ENCOUNTER"], "consumers": ["P-ENCOUNTER-WORKSPACE", "P-NARRATIVE", "P-ADMIN"] },
+    { "id": "FLOW-NARRATIVE", "producers": ["P-NARRATIVE"], "reads": ["R-ENCOUNTER", "R-BOOKIN", "R-LEAD", "R-OFFICER", "R-SETTINGS", "R-TEMPLATE"], "writes": ["R-ENCOUNTER", "R-ARTIFACT"] },
+    { "id": "FLOW-WARRANT", "producers": ["P-I200", "P-I205"], "reads": ["R-LEAD", "R-OFFICER", "R-SETTINGS"], "transaction": ["R-LEAD", "R-ARTIFACT"] },
+    { "id": "FLOW-MEDIA", "producers": ["P-PHOTO-PICKER", "P-FILE-UPLOAD"], "writes": ["R-MEDIA"], "consumers": ["P-LEAD-VIEW", "P-TARGET-SHEET", "P-OFFICER-VIEW", "P-FLEET-VIEW", "P-MAP"] },
+    { "id": "FLOW-MAP", "producers": ["P-MAP"], "reads": ["R-LEAD", "R-ENCOUNTER", "R-OFFICER"], "writes": ["R-MAP", "R-ARTIFACT"] },
+    { "id": "FLOW-ARCHIVE", "reads": ["R-LEAD", "R-ENCOUNTER", "R-BOOKIN", "R-OFFICER", "R-FLEET", "R-SHIFT", "R-MEDIA", "R-ARTIFACT", "R-SETTINGS", "R-MAP", "R-TEMPLATE"], "format": "copdocx.workspace-archive.v2" }
+  ],
+  "actionRules": {
+    "fileMenu": "Local file I/O only: import, export, restore, download, print-to-file.",
+    "onePrimaryAction": true,
+    "backIsFirstSecondary": true,
+    "autosaveMeansCommit": false,
+    "plannedActionsAppearSuccessful": false
+  }
+}

@@ -29,6 +29,7 @@
   var assign = model.assign;
 
   function createSource(extra) {
+    extra = extra || {};
     return assign(
       {
         leadSource: "",
@@ -44,11 +45,12 @@
 
   /** A new blank case. The subject person exists even when every field is empty. */
   function createLead(extra) {
+    extra = extra || {};
     var person = model.createPerson
       ? model.createPerson({ caseRole: "LEAD" })
       : { personId: newId("p"), caseRole: "LEAD", locations: [] };
     var created = nowIso();
-    return assign(
+    var built = assign(
       {
         schema: model.SCHEMA,
         leadId: newId("lead"),
@@ -71,6 +73,36 @@
       },
       extra
     );
+    var suppliedPerson =
+      built.person && typeof built.person === "object" ? built.person : person;
+    if (!suppliedPerson.personId && built.subjectPersonId) {
+      suppliedPerson.personId = built.subjectPersonId;
+    }
+    built.person = model.createPerson
+      ? model.createPerson(suppliedPerson)
+      : suppliedPerson;
+    built.subjectPersonId = built.person.personId;
+    built.caseRole = built.caseRole || built.person.caseRole || "LEAD";
+    built.person.caseRole = built.caseRole;
+    built.source = createSource(built.source);
+    ["vehicles", "links", "followUps", "history"].forEach(function (key) {
+      if (!Array.isArray(built[key])) {
+        built[key] = [];
+      }
+    });
+    built.meta = assign(
+      {
+        createdAt: created,
+        updatedAt: created,
+        markedComplete: false,
+        status: "draft",
+        committedAt: ""
+      },
+      built.meta && typeof built.meta === "object" && !Array.isArray(built.meta)
+        ? built.meta
+        : {}
+    );
+    return built;
   }
 
   function subjectOf(snapshot) {

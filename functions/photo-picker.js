@@ -25,6 +25,10 @@
 
   var model = (global.COPDoc && COPDoc.model) || {};
   var mediaApi = global.COPDoc && COPDoc.media;
+  var embeddedMode = false;
+  try {
+    embeddedMode = new URLSearchParams(window.location.search).get("embedded") === "1";
+  } catch (error) {}
   function hasOwnerQuery() {
     try {
       var q = new URLSearchParams(window.location.search);
@@ -65,6 +69,12 @@
   function setStatus(message, ok) {
     if (global.COPDoc && typeof COPDoc.setAppBarStatus === "function") {
       COPDoc.setAppBarStatus(message, { ok: !!ok });
+    }
+    if (embeddedMode && global.parent && global.parent !== global) {
+      global.parent.postMessage(
+        { type: "copdocx:photo-picker-status", message: message || "", ok: !!ok },
+        "*"
+      );
     }
   }
 
@@ -1040,6 +1050,13 @@
         })[0];
         var done = function () {
           setStatus("Photos saved.", true);
+          if (embeddedMode && global.parent && global.parent !== global) {
+            global.parent.postMessage(
+              { type: "copdocx:photo-picker-saved", owner: current },
+              "*"
+            );
+            return;
+          }
           var href = mediaApi.returnHref(current);
           if (href) {
             window.location.href = href;
@@ -1389,6 +1406,15 @@
 
   loadState();
   bind();
+  if (embeddedMode) {
+    document.body.classList.add("photo-picker-embedded");
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && global.parent && global.parent !== global) {
+        event.preventDefault();
+        global.parent.postMessage({ type: "copdocx:photo-picker-close" }, "*");
+      }
+    });
+  }
   if (ownerMode) {
     document.body.classList.add("photo-owner-mode");
   }

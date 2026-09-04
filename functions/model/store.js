@@ -15,7 +15,8 @@
 
   var root = (global.COPDoc = global.COPDoc || {});
   var model = (root.model = root.model || {});
-  var STORAGE_KEY = "copdocx.store.v1";
+  var STORAGE_KEY =
+    (root.config && root.config.storageKey("workspace")) || "copdocx.store.v1";
 
   function emptyState() {
     return {
@@ -39,6 +40,125 @@
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function mergeRecord(previous, incoming) {
+    var merged = previous ? clone(previous) : {};
+    Object.keys(incoming || {}).forEach(function (key) {
+      var next = incoming[key];
+      var prior = merged[key];
+      if (
+        next &&
+        prior &&
+        typeof next === "object" &&
+        typeof prior === "object" &&
+        !Array.isArray(next) &&
+        !Array.isArray(prior)
+      ) {
+        merged[key] = mergeRecord(prior, next);
+      } else {
+        merged[key] = next;
+      }
+    });
+    return merged;
+  }
+
+  function canonicalPersonRecord(person, previous) {
+    var merged = mergeRecord(previous, person);
+    return typeof model.createPerson === "function"
+      ? model.createPerson(merged)
+      : merged;
+  }
+
+  function matchingById(list, idKey, id) {
+    var rows = Array.isArray(list) ? list : [];
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i] && (rows[i][idKey] || rows[i].id) === id) {
+        return rows[i];
+      }
+    }
+    return null;
+  }
+
+  function canonicalLocationRecord(location, previous) {
+    var merged = mergeRecord(previous, location);
+    return typeof model.createLocation === "function"
+      ? model.createLocation(merged)
+      : merged;
+  }
+
+  function canonicalVehicleRecord(vehicle, previous) {
+    var merged = mergeRecord(previous, vehicle);
+    var built = typeof model.createVehicle === "function"
+      ? model.createVehicle(merged)
+      : merged;
+    var previousLocations = (previous && previous.locations) || [];
+    built.locations = (built.locations || []).map(function (location) {
+      var id = location && (location.locationId || location.id);
+      var old = id
+        ? matchingById(previousLocations, "locationId", id) || state.locations[id]
+        : null;
+      return canonicalLocationRecord(location, old);
+    });
+    return built;
+  }
+
+  function canonicalLeadGraph(record, previous) {
+    var previousSubject = previous && model.subjectOf
+      ? model.subjectOf(previous)
+      : previous && previous.person;
+    var subject = model.subjectOf ? model.subjectOf(record) : record.person;
+    if (subject) {
+      var subjectId = subject.personId || record.subjectPersonId || "";
+      if (!subject.personId && subjectId) {
+        subject.personId = subjectId;
+      }
+      var knownSubject =
+        previousSubject &&
+        (!subjectId || previousSubject.personId === subjectId)
+          ? previousSubject
+          : (subjectId && state.people[subjectId]) || null;
+      subject = canonicalPersonRecord(subject, knownSubject);
+      var previousLocations = (knownSubject && knownSubject.locations) || [];
+      subject.locations = (subject.locations || []).map(function (location) {
+        var id = location && (location.locationId || location.id);
+        var old = id
+          ? matchingById(previousLocations, "locationId", id) || state.locations[id]
+          : null;
+        return canonicalLocationRecord(location, old);
+      });
+      record.person = subject;
+      record.subjectPersonId = subject.personId;
+      record.caseRole = record.caseRole || subject.caseRole || "LEAD";
+      subject.caseRole = record.caseRole;
+    }
+    record.source = typeof model.createSource === "function"
+      ? model.createSource(record.source || {})
+      : record.source || {};
+    var previousVehicles = (previous && previous.vehicles) || [];
+    record.vehicles = (Array.isArray(record.vehicles) ? record.vehicles : []).map(
+      function (vehicle) {
+        var id = vehicle && (vehicle.vehicleId || vehicle.id);
+        var old = id
+          ? matchingById(previousVehicles, "vehicleId", id) || state.vehicles[id]
+          : null;
+        return canonicalVehicleRecord(vehicle, old);
+      }
+    );
+    record.links = (Array.isArray(record.links) ? record.links : []).map(
+      function (link) {
+        return typeof model.createLink === "function"
+          ? model.createLink(link || {})
+          : link;
+      }
+    );
+    ["followUps", "history"].forEach(function (key) {
+      if (!Array.isArray(record[key])) {
+        record[key] = [];
+      }
+    });
+    return record;
   }
 
   function normalizeState(next) {
@@ -165,11 +285,15 @@
   function rememberPeople(snapshot) {
     var subject = model.subjectOf ? model.subjectOf(snapshot) : snapshot.person;
     if (subject && subject.personId) {
-      state.people[subject.personId] = clone(subject);
+      state.people[subject.personId] = clone(
+        canonicalPersonRecord(subject, state.people[subject.personId])
+      );
     }
     (snapshot.people || []).forEach(function (person) {
       if (person && person.personId) {
-        state.people[person.personId] = clone(person);
+        state.people[person.personId] = clone(
+          canonicalPersonRecord(person, state.people[person.personId])
+        );
       }
     });
   }
@@ -191,7 +315,29 @@
     var previous = state.leads[snapshot.leadId]
       ? clone(state.leads[snapshot.leadId])
       : null;
-    var record = previous ? Object.assign({}, previous, snapshot) : snapshot;
+    var merged = mergeRecord(previous, snapshot);
+    var incomingSubject = model.subjectOf
+      ? model.subjectOf(snapshot)
+      : snapshot.person;
+    var previousSubject = previous && model.subjectOf
+      ? model.subjectOf(previous)
+      : previous && previous.person;
+    var incomingSubjectId =
+      (incomingSubject && incomingSubject.personId) || snapshot.subjectPersonId || "";
+    var previousSubjectId =
+      (previousSubject && previousSubject.personId) ||
+      (previous && previous.subjectPersonId) ||
+      "";
+    if (
+      incomingSubject &&
+      incomingSubjectId &&
+      previousSubjectId &&
+      incomingSubjectId !== previousSubjectId
+    ) {
+      merged.person = clone(incomingSubject);
+      merged.subjectPersonId = incomingSubjectId;
+    }
+    var record = canonicalLeadGraph(merged, previous);
     record.schema = snapshot.schema || model.SCHEMA;
     record.leadId = snapshot.leadId;
     if (typeof model.stampMeta === "function") {
@@ -202,6 +348,8 @@
     }
     record.meta.markedComplete = false;
     syncNestedOccupancyToAssociations(record);
+    rememberPeople(record);
+    syncLeadLinksToAssociations(record);
     applyAssociationNestingToLead(record);
     state.leads[record.leadId] = clone(record);
     state.currentLeadId = record.leadId;
@@ -749,6 +897,435 @@
     return found;
   }
 
+  function normalizedIdentityText(value) {
+    return String(value || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toUpperCase();
+  }
+
+  function personByFbiNumber(fbiNumber) {
+    var wanted = normalizedIdentityText(fbiNumber).replace(/\s+/g, "");
+    var found = null;
+    if (!wanted) {
+      return null;
+    }
+    allPeople().some(function (person) {
+      var criminal = (person && person.criminal) || {};
+      if (
+        normalizedIdentityText(criminal.fbiNumber).replace(/\s+/g, "") === wanted
+      ) {
+        found = person;
+        return true;
+      }
+      return false;
+    });
+    return found;
+  }
+
+  function personByNameAndBirth(lastName, firstName, dateOfBirth) {
+    var wantedLast = normalizedIdentityText(lastName);
+    var wantedFirst = normalizedIdentityText(firstName);
+    var wantedDob = String(dateOfBirth || "").trim();
+    var found = null;
+    if (!wantedLast || !wantedFirst || !wantedDob) {
+      return null;
+    }
+    allPeople().some(function (person) {
+      var name = (person && person.name) || {};
+      if (
+        normalizedIdentityText(name.lastName) === wantedLast &&
+        normalizedIdentityText(name.firstName) === wantedFirst &&
+        String(person.dateOfBirth || "").trim() === wantedDob
+      ) {
+        found = person;
+        return true;
+      }
+      return false;
+    });
+    return found;
+  }
+
+  function bookInStateValue(record, stateIds, recordKeys) {
+    var state = (record && record.formState) || {};
+    var ids = Array.isArray(stateIds) ? stateIds : [stateIds];
+    var keys = Array.isArray(recordKeys) ? recordKeys : [recordKeys];
+    var i;
+    for (i = 0; i < ids.length; i += 1) {
+      var entry = state[ids[i]];
+      if (entry && entry.value !== undefined && String(entry.value).trim() !== "") {
+        return String(entry.value).trim();
+      }
+    }
+    for (i = 0; i < keys.length; i += 1) {
+      if (
+        record &&
+        keys[i] &&
+        record[keys[i]] !== undefined &&
+        String(record[keys[i]]).trim() !== ""
+      ) {
+        return String(record[keys[i]]).trim();
+      }
+    }
+    return "";
+  }
+
+  function bookInRadioValue(record, choices, recordKeys) {
+    var state = (record && record.formState) || {};
+    var i;
+    for (i = 0; i < choices.length; i += 1) {
+      var entry = state[choices[i].id];
+      if (entry && entry.checked) {
+        return choices[i].value;
+      }
+    }
+    return bookInStateValue(record, [], recordKeys);
+  }
+
+  function normalizeBookInRole(value) {
+    var role = normalizedIdentityText(value);
+    return role === "TARGET" || role === "COLLATERAL" ? role : "";
+  }
+
+  function normalizeBookInVehiclePosition(value) {
+    var normalized = normalizedIdentityText(value);
+    if (normalized === "DRIVER") {
+      return "Driver";
+    }
+    if (normalized === "PASSENGER") {
+      return "Passenger";
+    }
+    if (normalized === "OTHER") {
+      return "Other";
+    }
+    return "";
+  }
+
+  function normalizeBookInCatalogCode(value, items) {
+    var cleaned = String(value || "").trim();
+    if (!cleaned) {
+      return "";
+    }
+    var normalized = cleaned.toLowerCase();
+    var match = (Array.isArray(items) ? items : []).filter(function (item) {
+      if (!item) {
+        return false;
+      }
+      var labels = [
+        item.code,
+        item.label,
+        item.description,
+        item.official,
+        String(item.code || "") + " - " + String(item.label || item.description || "")
+      ].concat(item.aliases || []);
+      return labels.some(function (label) {
+        return String(label || "").trim().toLowerCase() === normalized;
+      });
+    })[0];
+    return match && match.code ? String(match.code) : cleaned;
+  }
+
+  function normalizeBookInAge(value) {
+    if (value === "" || value === null || value === undefined) {
+      return "";
+    }
+    var age = Number(value);
+    return isFinite(age) && age >= 0 && age < 130 ? age : "";
+  }
+
+  function bookInAgeOnDate(dateOfBirth, asOfDate) {
+    var dobMatch = String(dateOfBirth || "")
+      .trim()
+      .match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!dobMatch) {
+      return "";
+    }
+    var asOfMatch = String(asOfDate || "")
+      .trim()
+      .match(/^(\d{4})-(\d{2})-(\d{2})/);
+    var today = new Date();
+    var year = asOfMatch ? Number(asOfMatch[1]) : today.getFullYear();
+    var month = asOfMatch ? Number(asOfMatch[2]) : today.getMonth() + 1;
+    var day = asOfMatch ? Number(asOfMatch[3]) : today.getDate();
+    var birthYear = Number(dobMatch[1]);
+    var birthMonth = Number(dobMatch[2]);
+    var birthDay = Number(dobMatch[3]);
+    var validated = new Date(Date.UTC(birthYear, birthMonth - 1, birthDay));
+    if (
+      validated.getUTCFullYear() !== birthYear ||
+      validated.getUTCMonth() + 1 !== birthMonth ||
+      validated.getUTCDate() !== birthDay
+    ) {
+      return "";
+    }
+    var age = year - birthYear;
+    if (month < birthMonth || (month === birthMonth && day < birthDay)) {
+      age -= 1;
+    }
+    return normalizeBookInAge(age);
+  }
+
+  function normalizeBookInDisposition(value) {
+    var cleaned = String(value || "").trim();
+    var normalized = cleaned.toLowerCase();
+    if (normalized === "b&b" || normalized === "b and b") {
+      return "B";
+    }
+    return normalizeBookInCatalogCode(
+      cleaned,
+      global.IMMIGRATION_DISPOSITIONS
+    );
+  }
+
+  function normalizeBookInClock(value) {
+    var match = String(value || "")
+      .trim()
+      .match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) {
+      return "";
+    }
+    return String(Number(match[1])).padStart(2, "0") + ":" + match[2];
+  }
+
+  function previousDateKey(dateKey) {
+    var match = String(dateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      return dateKey || "";
+    }
+    var date = new Date(
+      Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    );
+    date.setUTCDate(date.getUTCDate() - 1);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function combineBookInArrestDateTime(bookInDateTime, arrestTime) {
+    var dateTime = String(bookInDateTime || "").trim();
+    var dateMatch = dateTime.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}):(\d{2}))?/);
+    var clock = normalizeBookInClock(arrestTime);
+    if (!dateMatch || !clock) {
+      return dateTime;
+    }
+    var dateKey = dateMatch[1];
+    var bookInClock = dateMatch[2] ? dateMatch[2] + ":" + dateMatch[3] : "";
+    if (bookInClock && clock > bookInClock) {
+      dateKey = previousDateKey(dateKey);
+    }
+    return dateKey + "T" + clock;
+  }
+
+  function bookInMedicalData(record) {
+    var state = (record && record.formState) || {};
+    var noMedicalEntry = state.noMedicalIssues || state.no_medical_issues;
+    var medical = {
+      communicationAnswer: bookInRadioValue(
+        record,
+        [
+          { id: "communication_yes", value: "Yes" },
+          { id: "communication_no", value: "No" }
+        ],
+        ["communicationAnswer"]
+      ),
+      noMedicalIssues: !!(noMedicalEntry && noMedicalEntry.checked),
+      medicalIssues: bookInStateValue(
+        record,
+        ["medicalIssues", "medical_issues"],
+        ["medicalIssues"]
+      ),
+      medicine: bookInStateValue(record, ["medicine"], ["medicine"]),
+      additionalObservations: bookInStateValue(
+        record,
+        ["additionalObservations", "additional_observations"],
+        ["additionalObservations"]
+      ),
+      referralAnswer: bookInRadioValue(
+        record,
+        [
+          { id: "referral_yes", value: "Yes" },
+          { id: "referral_no", value: "No" }
+        ],
+        ["referralAnswer"]
+      )
+    };
+    var question;
+    for (question = 1; question <= 13; question += 1) {
+      medical["q" + question + "Answer"] = bookInRadioValue(
+        record,
+        [
+          { id: "q" + question + "_yes", value: "Yes" },
+          { id: "q" + question + "_no", value: "No" }
+        ],
+        ["q" + question + "Answer"]
+      );
+      if (question >= 3) {
+        medical["q" + question + "Details"] = bookInStateValue(
+          record,
+          ["q" + question + "_details"],
+          ["q" + question + "Details"]
+        );
+      }
+    }
+    return medical;
+  }
+
+  /** Convert either COPDoc or Alien Book-In 1.x saved-record fields to one input. */
+  function bookInPromotionInput(record) {
+    record = record || {};
+    var gender = bookInStateValue(record, ["gender"], ["gender", "sex"]);
+    if (!gender) {
+      gender = bookInRadioValue(
+        record,
+        [
+          { id: "sexMale", value: "male" },
+          { id: "sexFemale", value: "female" }
+        ],
+        ["sex"]
+      );
+    }
+    var bookInDateTime = bookInStateValue(
+      record,
+      ["dateTime", "date_time"],
+      ["dateTime", "bookInDateTime"]
+    );
+    var arrestTime = normalizeBookInClock(
+      bookInStateValue(record, ["arrestTime", "arrest_time"], ["arrestTime"])
+    );
+    var arrestDateTime = combineBookInArrestDateTime(bookInDateTime, arrestTime);
+    var arrestDate = String(arrestDateTime || bookInDateTime).slice(0, 10);
+    var dateOfBirth = bookInStateValue(
+      record,
+      ["dateOfBirth", "date_of_birth"],
+      ["dateOfBirth"]
+    );
+    var age = normalizeBookInAge(
+      bookInStateValue(record, ["age"], ["age"])
+    );
+    if (age === "") {
+      age = bookInAgeOnDate(dateOfBirth, arrestDate);
+    }
+    var subjectRole = normalizeBookInRole(
+      bookInRadioValue(
+        record,
+        [
+          { id: "subject_role_target", value: "TARGET" },
+          { id: "subject_role_collateral", value: "COLLATERAL" },
+          { id: "encounterRoleTarget", value: "TARGET" },
+          { id: "encounterRoleCollateral", value: "COLLATERAL" }
+        ],
+        ["subjectRole", "encounterRole"]
+      )
+    );
+    var vehiclePosition = normalizeBookInVehiclePosition(
+      bookInStateValue(
+        record,
+        ["vehiclePosition", "vehicle_position"],
+        ["vehiclePosition"]
+      )
+    );
+    var foreignWarrants = String(
+      bookInStateValue(
+        record,
+        ["foreignWarrants", "foreign_warrants"],
+        ["foreignWarrants"]
+      )
+    )
+      .trim()
+      .toLowerCase();
+    return {
+      leadId: String(record.leadId || "").trim(),
+      personId: String(record.personId || "").trim(),
+      bookinRecordId: String(record.id || record.bookinRecordId || "").trim(),
+      lastName: bookInStateValue(record, ["lastName", "last_name"], ["lastName"]),
+      firstName: bookInStateValue(record, ["firstName", "first_name"], ["firstName"]),
+      sex: gender,
+      dateOfBirth: dateOfBirth,
+      age: age,
+      citizenship: normalizeBookInCatalogCode(
+        bookInStateValue(
+          record,
+          ["citizenship", "country_of_citizenship"],
+          ["countryOfCitizenship", "citizenship"]
+        ),
+        global.COUNTRIES
+      ),
+      alienNumber: bookInStateValue(
+        record,
+        ["alienNumber", "a_number"],
+        ["aNumber", "alienNumber"]
+      ),
+      fbiNumber: bookInStateValue(
+        record,
+        ["fbiNumber", "fbi_number"],
+        ["fbiNumber"]
+      ),
+      foreignWarrantsKnown:
+        foreignWarrants === "yes" || foreignWarrants === "no",
+      hasForeignWarrants: foreignWarrants === "yes",
+      foreignWarrantCountry:
+        foreignWarrants === "yes"
+          ? bookInStateValue(
+              record,
+              ["foreignWarrantCountry", "foreign_warrant_country"],
+              ["foreignWarrantCountry"]
+            )
+          : "",
+      disposition: normalizeBookInDisposition(
+        bookInStateValue(
+          record,
+          ["immigrationDisposition", "case_type"],
+          ["caseType", "disposition"]
+        )
+      ),
+      status: normalizeBookInCatalogCode(
+        bookInStateValue(record, ["immigrationStatus"], ["status"]),
+        global.IMMIGRATION_STATUS
+      ),
+      iceEventNumber: bookInStateValue(
+        record,
+        ["iceEvent", "ice_event"],
+        ["iceEvent"]
+      ),
+      encounterNumber: bookInStateValue(
+        record,
+        ["encounterNumber", "encounter_number"],
+        ["encounterNumber"]
+      ),
+      encounterId: String(record.encounterId || "").trim(),
+      subjectRole: subjectRole,
+      vehiclePosition: vehiclePosition,
+      arrestDate: arrestDate,
+      arrestTime: arrestTime,
+      arrestDateTime: arrestDateTime,
+      bookInDateTime: bookInDateTime,
+      arrestingOfficer: bookInStateValue(
+        record,
+        ["officersName", "officers_name"],
+        ["officersName"]
+      ),
+      team: bookInStateValue(record, ["team"], ["team"]),
+      booking: {
+        cash: bookInStateValue(record, ["cash"], ["cash"]),
+        travelDocuments: bookInStateValue(
+          record,
+          ["travelDocs", "travel_docs"],
+          ["travelDocs"]
+        ),
+        propertyTag: bookInStateValue(
+          record,
+          ["propertyTag", "property_tag"],
+          ["propertyTag"]
+        ),
+        holdingCellNumber: bookInStateValue(
+          record,
+          ["cellNum", "cell_num"],
+          ["cellNum"]
+        ),
+        children: bookInStateValue(record, ["children"], ["children"]),
+        medical: bookInMedicalData(record)
+      }
+    };
+  }
+
   function overlayBookInPerson(person, input) {
     var next = person ? clone(person) : model.createPerson({ caseRole: "DETAINEE" });
     next.caseRole = "DETAINEE";
@@ -781,7 +1358,86 @@
     if (input.status) {
       next.immigration.status = input.status;
     }
+    next.criminal = next.criminal || {};
+    if (input.fbiNumber) {
+      next.criminal.fbiNumber = input.fbiNumber;
+    }
+    if (input.foreignWarrantsKnown === true) {
+      next.criminal.foreignWarrantsKnown = true;
+      next.criminal.hasForeignWarrants = input.hasForeignWarrants === true;
+      next.criminal.foreignWarrantCountry = input.hasForeignWarrants
+        ? String(input.foreignWarrantCountry || "").trim()
+        : "";
+    }
     return next;
+  }
+
+  function upsertBookInArrest(person, input) {
+    var recordId = String(input.bookinRecordId || "").trim();
+    var hasArrestData = !!(
+      recordId ||
+      input.arrestDate ||
+      input.arrestDateTime ||
+      input.bookInDateTime
+    );
+    if (!hasArrestData) {
+      return "";
+    }
+    person.arrests = Array.isArray(person.arrests) ? person.arrests : [];
+    var index = -1;
+    person.arrests.some(function (row, rowIndex) {
+      if (row && recordId && String(row.bookinRecordId || "") === recordId) {
+        index = rowIndex;
+        return true;
+      }
+      return false;
+    });
+    var previous = index >= 0 ? person.arrests[index] : null;
+    var pin = encounterPin(
+      input.encounterId && state.encounters[input.encounterId]
+    );
+    var arrestInput = Object.assign({}, previous || {}, {
+        arrestDate: String(input.arrestDate || "").trim(),
+        arrestTime: normalizeBookInClock(input.arrestTime),
+        arrestDateTime: String(input.arrestDateTime || "").trim(),
+        arrestingOfficer: String(input.arrestingOfficer || "").trim(),
+        team: String(input.team || "").trim(),
+        iceEventNumber: String(input.iceEventNumber || "").trim(),
+        encounterNumber: String(input.encounterNumber || "").trim(),
+        encounterId: String(input.encounterId || "").trim(),
+        subjectRole: normalizeBookInRole(input.subjectRole),
+        vehiclePosition: normalizeBookInVehiclePosition(input.vehiclePosition),
+        bookinRecordId: recordId,
+        bookInDateTime: String(input.bookInDateTime || "").trim(),
+        arrestLocation:
+          String(input.arrestLocation || "").trim() ||
+          (previous && previous.arrestLocation) ||
+          (pin && pin.arrestLocation) ||
+          "",
+        latitude:
+          String(input.latitude || "").trim() ||
+          (previous && previous.latitude) ||
+          (pin && pin.latitude) ||
+          "",
+        longitude:
+          String(input.longitude || "").trim() ||
+          (previous && previous.longitude) ||
+          (pin && pin.longitude) ||
+          "",
+        booking: Object.assign({}, (previous && previous.booking) || {}, input.booking || {})
+      });
+    var linkedArrestId =
+      (previous && previous.arrestId) || String(input.arrestId || "");
+    if (linkedArrestId) {
+      arrestInput.arrestId = linkedArrestId;
+    }
+    var arrest = model.createArrest(arrestInput);
+    if (index >= 0) {
+      person.arrests[index] = arrest;
+    } else {
+      person.arrests.push(arrest);
+    }
+    return arrest.arrestId;
   }
 
   /**
@@ -803,15 +1459,16 @@
     var lastName = String(input.lastName || "").trim();
     var firstName = String(input.firstName || "").trim();
     var aNumber = digitsOnly(input.alienNumber);
+    var fbiNumber = String(input.fbiNumber || "").trim();
     var leadId = String(input.leadId || "").trim();
     var personId = String(input.personId || "").trim();
-    if (!leadId && !personId && !lastName && !firstName && !aNumber) {
+    if (!leadId && !personId && !lastName && !firstName && !aNumber && !fbiNumber) {
       return {
         ok: false,
         leadId: "",
         personId: "",
         existing: false,
-        error: "Enter a name or A-Number to file a case."
+        error: "Enter a name, A-Number, or FBI Number to file a case."
       };
     }
     var snap = leadId ? getLead(leadId) : null;
@@ -836,18 +1493,50 @@
         existing = !!snap;
       }
     }
+    if (!person && !snap && fbiNumber) {
+      var fbiMatch = personByFbiNumber(fbiNumber);
+      if (fbiMatch) {
+        person = clone(fbiMatch);
+        personId = person.personId || "";
+        leadId = leadIdForPerson(personId);
+        snap = leadId ? getLead(leadId) : null;
+        existing = !!snap;
+      }
+    }
+    if (!person && !snap) {
+      var identityMatch = personByNameAndBirth(
+        lastName,
+        firstName,
+        input.dateOfBirth
+      );
+      if (identityMatch) {
+        person = clone(identityMatch);
+        personId = person.personId || "";
+        leadId = leadIdForPerson(personId);
+        snap = leadId ? getLead(leadId) : null;
+        existing = !!snap;
+      }
+    }
     var overlay = {
       lastName: lastName,
       firstName: firstName,
       sex: normalizeSex(input.sex),
       dateOfBirth: String(input.dateOfBirth || "").trim(),
-      age: input.age,
-      citizenship: String(input.citizenship || "").trim(),
+      age: normalizeBookInAge(input.age),
+      citizenship: normalizeBookInCatalogCode(
+        input.citizenship,
+        global.COUNTRIES
+      ),
       alienNumber: aNumber,
-      disposition: String(input.disposition || "").trim(),
-      status: String(input.status || "").trim()
+      fbiNumber: fbiNumber,
+      disposition: normalizeBookInDisposition(input.disposition),
+      status: normalizeBookInCatalogCode(input.status, global.IMMIGRATION_STATUS),
+      foreignWarrantsKnown: input.foreignWarrantsKnown === true,
+      hasForeignWarrants: input.hasForeignWarrants === true,
+      foreignWarrantCountry: String(input.foreignWarrantCountry || "").trim()
     };
     person = overlayBookInPerson(person, overlay);
+    var arrestId = upsertBookInArrest(person, input);
     personId = person.personId;
     var wasDetainee =
       snap &&
@@ -869,6 +1558,40 @@
         appendSystemNote(snap, "Booked in. Status set to Detainee / in custody.");
       }
     }
+    snap.source = snap.source || (model.createSource ? model.createSource() : {});
+    if (!snap.source.leadSource) {
+      snap.source.leadSource = "BOOK_IN";
+    }
+    if (!snap.source.caseNumber) {
+      snap.source.caseNumber = String(
+        input.iceEventNumber || input.encounterNumber || ""
+      ).trim();
+    }
+    if (input.bookinRecordId) {
+      snap.history = Array.isArray(snap.history) ? snap.history : [];
+      var hasBookInEvent = snap.history.some(function (row) {
+        return (
+          row &&
+          String(row.bookinRecordId || "") === String(input.bookinRecordId)
+        );
+      });
+      if (!hasBookInEvent) {
+        var event = model.createHistoryEvent
+          ? model.createHistoryEvent({
+              type: "book-in",
+              text: "Book-in arrest added to the case.",
+              source: "book-in",
+              bookinRecordId: String(input.bookinRecordId)
+            })
+          : {
+              type: "book-in",
+              text: "Book-in arrest added to the case.",
+              source: "book-in",
+              bookinRecordId: String(input.bookinRecordId)
+            };
+        snap.history.push(event);
+      }
+    }
     snap.person = person;
     snap.subjectPersonId = person.personId;
     snap.caseRole = "DETAINEE";
@@ -886,7 +1609,205 @@
       ok: true,
       leadId: saved.leadId,
       personId: personId,
+      arrestId: arrestId,
       existing: existing,
+      error: ""
+    };
+  }
+
+  function promoteBookInRecord(record, options) {
+    record = record || {};
+    options = options || {};
+    var input = bookInPromotionInput(record);
+    var supplied = options.formData || options;
+    Object.keys(supplied || {}).forEach(function (key) {
+      if (key !== "formData" && supplied[key] !== undefined) {
+        input[key] = supplied[key];
+      }
+    });
+    input.leadId = String(record.leadId || input.leadId || "").trim();
+    input.personId = String(record.personId || input.personId || "").trim();
+    input.bookinRecordId = String(record.id || input.bookinRecordId || "").trim();
+    input.alienNumber = input.alienNumber || input.aNumber || "";
+    input.citizenship = input.citizenship || input.countryOfCitizenship || "";
+    input.disposition = input.disposition || input.caseType || "";
+    input.iceEventNumber = input.iceEventNumber || input.iceEvent || "";
+    input.subjectRole = input.subjectRole || input.encounterRole || "";
+    input.arrestingOfficer = input.arrestingOfficer || input.officersName || "";
+    input.bookInDateTime = input.bookInDateTime || input.dateTime || "";
+    input.arrestTime = normalizeBookInClock(input.arrestTime);
+    input.arrestDateTime =
+      input.arrestDateTime ||
+      combineBookInArrestDateTime(input.bookInDateTime, input.arrestTime);
+    input.arrestDate =
+      input.arrestDate ||
+      String(input.arrestDateTime || input.bookInDateTime).slice(0, 10);
+    input.sex = input.sex || input.gender || "";
+    input.booking = Object.assign(
+      {},
+      bookInPromotionInput(record).booking,
+      input.booking || {}
+    );
+    return promoteBookInToLead(input);
+  }
+
+  function promoteBookInRecords(records) {
+    var rows = (Array.isArray(records) ? records : []).map(clone);
+    var summary = {
+      ok: true,
+      rows: rows,
+      promoted: 0,
+      created: 0,
+      reused: 0,
+      failed: 0,
+      errors: []
+    };
+    rows.forEach(function (row) {
+      var result = promoteBookInRecord(row);
+      if (!result || !result.ok) {
+        summary.ok = false;
+        summary.failed += 1;
+        summary.errors.push({
+          recordId: String((row && row.id) || ""),
+          error: (result && result.error) || "Could not create the case."
+        });
+        return;
+      }
+      row.leadId = result.leadId || row.leadId || "";
+      row.personId = result.personId || row.personId || "";
+      row.arrestId = result.arrestId || row.arrestId || "";
+      summary.promoted += 1;
+      if (result.existing) {
+        summary.reused += 1;
+      } else {
+        summary.created += 1;
+      }
+    });
+    return summary;
+  }
+
+  /**
+   * Add event-scoped person/vehicle facts after a Book-in save.
+   * All main-store mutations are persisted together and repeat saves reuse the
+   * same vehicle identities and associations.
+   */
+  function linkEncounterVehiclesToPerson(input) {
+    input = input || {};
+    var encounterId = String(input.encounterId || "").trim();
+    var personId = String(input.personId || "").trim();
+    var leadId = String(input.leadId || "").trim();
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return { ok: false, vehicleIds: [], associationIds: [], error: fresh.error };
+    }
+    var encounter = encounterId && state.encounters[encounterId];
+    if (!encounter) {
+      return {
+        ok: false,
+        vehicleIds: [],
+        associationIds: [],
+        error: "Encounter not found; its vehicles were not linked."
+      };
+    }
+    if (!personId || !state.people[personId]) {
+      return {
+        ok: false,
+        vehicleIds: [],
+        associationIds: [],
+        error: "Booked person not found; encounter vehicles were not linked."
+      };
+    }
+    if (!leadId) {
+      leadId = leadIdForPerson(personId);
+    }
+    if (!leadId || !state.leads[leadId]) {
+      return {
+        ok: false,
+        vehicleIds: [],
+        associationIds: [],
+        error: "Filed case not found; encounter vehicles were not linked."
+      };
+    }
+
+    var vehicleIds = [];
+    var associationIds = [];
+    var error = "";
+    (encounter.vehicles || []).forEach(function (vehicle) {
+      if (error || !vehicle) {
+        return;
+      }
+      var vehicleId = vehicle.vehicleId || vehicle.id || "";
+      if (!vehicleId) {
+        return;
+      }
+      putIdentityVehicle(vehicle);
+      var shared = state.vehicles[vehicleId];
+      shared.locations = Array.isArray(shared.locations) ? shared.locations : [];
+      (vehicle.locations || []).forEach(function (location) {
+        if (!location || !location.locationId) {
+          return;
+        }
+        putIdentityLocation(location);
+        var existingLocation = shared.locations.filter(function (row) {
+          return row && row.locationId === location.locationId;
+        })[0];
+        if (existingLocation) {
+          Object.assign(existingLocation, clone(location));
+        } else {
+          shared.locations.push(clone(location));
+        }
+        var locationReason = reasonFromNestedLocationKind(location.association);
+        if (locationReason === "CURRENT_RESIDENCE") {
+          locationReason = "VEHICLE_PARKING";
+        }
+        writePairOccupancy(
+          "VEHICLE",
+          vehicleId,
+          "LOCATION",
+          location.locationId,
+          location,
+          locationReason
+        );
+      });
+      var linked = upsertAssociation(
+        {
+          from: { type: "PERSON", id: personId },
+          to: { type: "VEHICLE", id: vehicleId },
+          reason: "LE_ENCOUNTER_IN_VEHICLE",
+          source: {
+            encounterId: encounterId,
+            leadId: leadId,
+            bookinRecordId: String(input.bookinRecordId || "")
+          }
+        },
+        { skipAdopt: true, persist: false, skipLeadSync: true }
+      );
+      if (!linked || !linked.ok) {
+        error = (linked && linked.error) || "Could not link an encounter vehicle.";
+        return;
+      }
+      vehicleIds.push(vehicleId);
+      associationIds.push(linked.associationId);
+    });
+    if (error) {
+      adoptDisk();
+      return { ok: false, vehicleIds: [], associationIds: [], error: error };
+    }
+    applyAssociationNestingToLead(state.leads[leadId]);
+    rememberPeople(state.leads[leadId]);
+    if (!writeDisk()) {
+      adoptDisk();
+      return {
+        ok: false,
+        vehicleIds: [],
+        associationIds: [],
+        error: "Could not write encounter vehicle links to localStorage."
+      };
+    }
+    return {
+      ok: true,
+      vehicleIds: vehicleIds,
+      associationIds: associationIds,
       error: ""
     };
   }
@@ -908,6 +1829,116 @@
       .sort(function (a, b) {
         return String(b.updatedAt).localeCompare(String(a.updatedAt));
       });
+  }
+
+  function bookInStorageKey() {
+    return (root.config && root.config.storageKey("bookin")) ||
+      "alien-book-in.saved-records.v1";
+  }
+
+  function loadBookInPackets() {
+    if (typeof localStorage === "undefined") {
+      return [];
+    }
+    try {
+      var raw = localStorage.getItem(bookInStorageKey()) || "";
+      if (!raw) {
+        return [];
+      }
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function packetsForQuery(opts) {
+    if (opts && Object.prototype.hasOwnProperty.call(opts, "packets")) {
+      return Array.isArray(opts.packets) ? opts.packets : [];
+    }
+    return loadBookInPackets();
+  }
+
+  function packetLookup(packets) {
+    var map = {};
+    (packets || []).forEach(function (record) {
+      if (record && record.id) {
+        map[String(record.id)] = record;
+      }
+    });
+    return map;
+  }
+
+  function listArrests(opts) {
+    opts = opts || {};
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return [];
+    }
+    var packets = packetsForQuery(opts);
+    if (root.arrestReport && typeof root.arrestReport.collect === "function") {
+      return root.arrestReport.collect(
+        {
+          loadFromDisk: function () {},
+          listLeads: listLeads,
+          getLead: getLead,
+          bookInPromotionInput: bookInPromotionInput
+        },
+        packets,
+        opts
+      );
+    }
+    var records = packetLookup(packets);
+    var rows = [];
+    Object.keys(state.leads).forEach(function (id) {
+      var snap = state.leads[id];
+      if (!snap || (model.isCommitted && !model.isCommitted(snap))) {
+        return;
+      }
+      if (opts.leadId && String(snap.leadId || id) !== String(opts.leadId)) {
+        return;
+      }
+      var person = model.subjectOf ? model.subjectOf(snap) : snap.person;
+      ((person && person.arrests) || []).forEach(function (arrest) {
+        if (!arrest) {
+          return;
+        }
+        var dateKey = String(arrest.arrestDate || arrest.arrestDateTime || "").slice(0, 10);
+        if (opts.from && dateKey && dateKey < opts.from) {
+          return;
+        }
+        if (opts.to && dateKey && dateKey > opts.to) {
+          return;
+        }
+        if ((opts.from || opts.to) && !dateKey) {
+          return;
+        }
+        var recordId = String(arrest.bookinRecordId || "");
+        var input = bookInPromotionInput(records[recordId] || {});
+        var encounterId = String(arrest.encounterId || input.encounterId || "");
+        var encounterNumber = String(
+          arrest.encounterNumber || input.encounterNumber || encounterId
+        );
+        if (
+          opts.encounterId &&
+          encounterId !== String(opts.encounterId) &&
+          encounterNumber !== String(opts.encounterId)
+        ) {
+          return;
+        }
+        rows.push({
+          leadId: snap.leadId || id,
+          personId: (person && person.personId) || "",
+          arrestId: arrest.arrestId || "",
+          bookinRecordId: recordId,
+          iceEvent: String(arrest.iceEventNumber || input.iceEventNumber || ""),
+          arrestDate: dateKey,
+          encounterId: encounterId,
+          encounterNumber: encounterNumber
+        });
+      });
+    });
+    return rows;
   }
 
   /**
@@ -972,7 +2003,14 @@
     if (!fresh.ok) {
       return { ok: false, error: fresh.error };
     }
-    state.people[person.personId] = clone(person);
+    state.people[person.personId] = clone(
+      canonicalPersonRecord(person, state.people[person.personId])
+    );
+    syncObjectOwnedLocations(
+      "PERSON",
+      person.personId,
+      state.people[person.personId].locations
+    );
     if (!writeDisk()) {
       adoptDisk();
       return {
@@ -981,6 +2019,230 @@
       };
     }
     return { ok: true, error: "" };
+  }
+
+  function locationPin(location) {
+    if (!location) {
+      return null;
+    }
+    var canon =
+      location.locationId && state.locations[location.locationId]
+        ? state.locations[location.locationId]
+        : null;
+    var lat = String(
+      location.latitude || (canon && canon.latitude) || ""
+    ).trim();
+    var lng = String(
+      location.longitude || (canon && canon.longitude) || ""
+    ).trim();
+    if (!lat || !lng) {
+      var parsed = String(
+        location.latLong || (canon && canon.latLong) || ""
+      ).match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+      if (parsed) {
+        lat = parsed[1];
+        lng = parsed[2];
+      }
+    }
+    if (!lat || !lng || !isFinite(Number(lat)) || !isFinite(Number(lng))) {
+      return null;
+    }
+    if (Number(lat) === 0 && Number(lng) === 0) {
+      return null;
+    }
+    var street = location.street || (canon && canon.street) || "";
+    var city = location.city || (canon && canon.city) || "";
+    var region = location.state || (canon && canon.state) || "";
+    var zip = location.zip || (canon && canon.zip) || "";
+    var address = [street, [city, region].filter(Boolean).join(", "), zip]
+      .filter(Boolean)
+      .join(", ");
+    return {
+      latitude: lat,
+      longitude: lng,
+      arrestLocation: address,
+      locationId: location.locationId || (canon && canon.locationId) || ""
+    };
+  }
+
+  function encounterPin(encounter) {
+    if (!encounter) {
+      return null;
+    }
+    var i;
+    var pin;
+    var locations = encounter.locations || [];
+    for (i = 0; i < locations.length; i += 1) {
+      pin = locationPin(locations[i]);
+      if (pin) {
+        return pin;
+      }
+    }
+    var vehicles = encounter.vehicles || [];
+    for (i = 0; i < vehicles.length; i += 1) {
+      var nested = (vehicles[i] && vehicles[i].locations) || [];
+      var j;
+      for (j = 0; j < nested.length; j += 1) {
+        pin = locationPin(nested[j]);
+        if (pin) {
+          return pin;
+        }
+      }
+    }
+    return null;
+  }
+
+  function snapshotLocation(location) {
+    var pin = locationPin(location);
+    var canon =
+      location && location.locationId && state.locations[location.locationId]
+        ? state.locations[location.locationId]
+        : null;
+    return {
+      locationId: (location && location.locationId) || "",
+      street: (location && location.street) || (canon && canon.street) || "",
+      street2: (location && location.street2) || (canon && canon.street2) || "",
+      city: (location && location.city) || (canon && canon.city) || "",
+      state: (location && location.state) || (canon && canon.state) || "",
+      zip: (location && location.zip) || (canon && canon.zip) || "",
+      latitude: (pin && pin.latitude) || "",
+      longitude: (pin && pin.longitude) || "",
+      association:
+        (location && location.association) || (canon && canon.association) || ""
+    };
+  }
+
+  function buildEncounterCompleted(encounter) {
+    var pin = encounterPin(encounter);
+    return {
+      schema: "copdocx.encounter-snapshot.v1",
+      generatedAt: model.nowIso ? model.nowIso() : new Date().toISOString(),
+      encounterId: encounter.encounterId,
+      startedAt: encounter.startedAt || "",
+      team: encounter.team || "",
+      officeCode: encounter.officeCode || "",
+      subjects: clone(encounter.subjects || []),
+      locations: (encounter.locations || []).map(snapshotLocation),
+      vehicles: (encounter.vehicles || []).map(function (vehicle) {
+        return {
+          vehicleId: (vehicle && (vehicle.vehicleId || vehicle.id)) || "",
+          licensePlate: (vehicle && vehicle.licensePlate) || "",
+          plateState: (vehicle && vehicle.plateState) || "",
+          year: (vehicle && vehicle.vehicleYear) || "",
+          make: (vehicle && vehicle.make) || (vehicle && vehicle.vehicleMake) || "",
+          model: (vehicle && vehicle.model) || (vehicle && vehicle.vehicleModel) || "",
+          locations: ((vehicle && vehicle.locations) || []).map(snapshotLocation)
+        };
+      }),
+      supervisorSummary: clone(encounter.supervisorSummary || {
+        text: "",
+        derivedAt: "",
+        coverage: null
+      }),
+      pin: pin
+        ? {
+            latitude: pin.latitude,
+            longitude: pin.longitude,
+            arrestLocation: pin.arrestLocation,
+            locationId: pin.locationId
+          }
+        : null
+    };
+  }
+
+  function stampArrestsFromEncounter(encounter) {
+    var pin = encounterPin(encounter) || (encounter.completed && encounter.completed.pin);
+    if (!pin) {
+      return;
+    }
+    (encounter.subjects || []).forEach(function (subject) {
+      if (!subject || !subject.leadId || !state.leads[subject.leadId]) {
+        return;
+      }
+      var lead = state.leads[subject.leadId];
+      var person = model.subjectOf ? model.subjectOf(lead) : lead.person;
+      if (!person || !Array.isArray(person.arrests)) {
+        return;
+      }
+      var changed = false;
+      person.arrests.forEach(function (arr) {
+        if (!arr) {
+          return;
+        }
+        var match =
+          (arr.encounterId && arr.encounterId === encounter.encounterId) ||
+          (subject.bookinRecordId &&
+            arr.bookinRecordId === subject.bookinRecordId);
+        if (!match) {
+          return;
+        }
+        if (!arr.latitude) {
+          arr.latitude = pin.latitude;
+        }
+        if (!arr.longitude) {
+          arr.longitude = pin.longitude;
+        }
+        if (!arr.arrestLocation) {
+          arr.arrestLocation = pin.arrestLocation;
+        }
+        changed = true;
+      });
+      if (!changed) {
+        return;
+      }
+      lead.person = person;
+      if (person.personId && state.people[person.personId]) {
+        state.people[person.personId].arrests = clone(person.arrests);
+      }
+    });
+  }
+
+  function completeEncounter(encounterId) {
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return { ok: false, encounterId: encounterId || "", error: fresh.error };
+    }
+    var row = state.encounters[encounterId];
+    if (!row) {
+      return {
+        ok: false,
+        encounterId: encounterId || "",
+        error: "Encounter not found."
+      };
+    }
+    if (!String(row.startedAt || "").trim()) {
+      return {
+        ok: false,
+        encounterId: encounterId,
+        error: "Set the date and time of the stop before completing."
+      };
+    }
+    return saveEncounter(row, { mode: "complete" });
+  }
+
+  function applyEncounterLocationToArrests(encounterId) {
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return { ok: false, encounterId: encounterId || "", error: fresh.error };
+    }
+    var row = state.encounters[encounterId];
+    if (!row) {
+      return {
+        ok: false,
+        encounterId: encounterId || "",
+        error: "Encounter not found."
+      };
+    }
+    stampArrestsFromEncounter(row);
+    if (!writeDisk()) {
+      adoptDisk();
+      return {
+        ok: false,
+        encounterId: encounterId,
+        error: "Could not write localStorage (quota or private mode)."
+      };
+    }
+    return { ok: true, encounterId: encounterId, error: "" };
   }
 
   function saveEncounter(record, opts) {
@@ -1003,16 +2265,18 @@
     var previous = state.encounters[record.encounterId]
       ? clone(state.encounters[record.encounterId])
       : null;
-    var saved = previous ? Object.assign({}, previous, record) : record;
+    var saved = mergeRecord(previous, record);
     saved.schema = record.schema || "copdocx.encounter.v1";
     saved.encounterId = record.encounterId;
     if (typeof model.stampMeta === "function") {
-      saved.meta = model.stampMeta(previous, mode);
+      saved.meta = model.stampMeta(previous, mode === "complete" ? "complete" : mode);
     } else {
       saved.meta = record.meta || {};
       saved.meta.updatedAt = model.nowIso();
     }
-    saved.meta.markedComplete = false;
+    if (previous && previous.completed && mode !== "complete") {
+      saved.completed = clone(previous.completed);
+    }
     if (!Array.isArray(saved.vehicles)) {
       saved.vehicles = [];
     }
@@ -1028,8 +2292,34 @@
     if (!Array.isArray(saved.narratives)) {
       saved.narratives = [];
     }
+    var previousVehicles = (previous && previous.vehicles) || [];
+    saved.vehicles = saved.vehicles.map(function (vehicle) {
+      var id = vehicle && (vehicle.vehicleId || vehicle.id);
+      var old = id
+        ? matchingById(previousVehicles, "vehicleId", id) || state.vehicles[id]
+        : null;
+      return canonicalVehicleRecord(vehicle, old);
+    });
+    var previousLocations = (previous && previous.locations) || [];
+    saved.locations = saved.locations.map(function (location) {
+      var id = location && (location.locationId || location.id);
+      var old = id
+        ? matchingById(previousLocations, "locationId", id) || state.locations[id]
+        : null;
+      return canonicalLocationRecord(location, old);
+    });
+    saved.links = saved.links.map(function (link) {
+      return typeof model.createLink === "function"
+        ? model.createLink(link || {})
+        : link;
+    });
     if (!saved.supervisorSummary || typeof saved.supervisorSummary !== "object") {
       saved.supervisorSummary = { text: "", derivedAt: "", coverage: null };
+    }
+    syncEncounterObjects(saved);
+    if (mode === "complete") {
+      saved.completed = buildEncounterCompleted(saved);
+      stampArrestsFromEncounter(saved);
     }
     state.encounters[saved.encounterId] = clone(saved);
     if (!writeDisk()) {
@@ -1992,9 +3282,13 @@
     }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.vehicles[id] ? clone(state.vehicles[id]) : null;
-    var saved = previous ? Object.assign({}, previous, record) : record;
+    var merged = mergeRecord(previous, record);
+    var saved = typeof model.createVehicle === "function"
+      ? model.createVehicle(merged)
+      : merged;
     saved.vehicleId = id;
-    saved.id = saved.id || id;
+    saved.id = id;
+    saved.entityType = "VEHICLE";
     saved.governmentVehicle = false;
     if (typeof model.stampMeta === "function") {
       saved.meta = model.stampMeta(previous, mode);
@@ -2004,6 +3298,7 @@
     }
     saved.meta.markedComplete = false;
     state.vehicles[id] = clone(saved);
+    syncObjectOwnedLocations("VEHICLE", id, saved.locations);
     if (!writeDisk()) {
       adoptDisk();
       return {
@@ -2182,9 +3477,12 @@
     }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.locations[id] ? clone(state.locations[id]) : null;
-    var saved = previous ? Object.assign({}, previous, record) : record;
+    var merged = mergeRecord(previous, record);
+    var saved = typeof model.createLocation === "function"
+      ? model.createLocation(merged)
+      : merged;
     saved.locationId = id;
-    saved.id = saved.id || id;
+    saved.id = id;
     saved.entityType = "LOCATION";
     if (typeof model.stampMeta === "function") {
       saved.meta = model.stampMeta(previous, mode);
@@ -2253,9 +3551,12 @@
     }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.businesses[id] ? clone(state.businesses[id]) : null;
-    var saved = previous ? Object.assign({}, previous, record) : record;
+    var merged = mergeRecord(previous, record);
+    var saved = typeof model.createBusiness === "function"
+      ? model.createBusiness(merged)
+      : merged;
     saved.businessId = id;
-    saved.id = saved.id || id;
+    saved.id = id;
     saved.entityType = "BUSINESS";
     if (typeof model.stampMeta === "function") {
       saved.meta = model.stampMeta(previous, mode);
@@ -2317,9 +3618,12 @@
     }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.entities[id] ? clone(state.entities[id]) : null;
-    var saved = previous ? Object.assign({}, previous, record) : record;
+    var merged = mergeRecord(previous, record);
+    var saved = typeof model.createCustomEntity === "function"
+      ? model.createCustomEntity(merged)
+      : merged;
     saved.entityId = id;
-    saved.id = saved.id || id;
+    saved.id = id;
     saved.entityType = "ENTITY";
     if (typeof model.stampMeta === "function") {
       saved.meta = model.stampMeta(previous, mode);
@@ -2343,6 +3647,139 @@
   function getEntityRecord(entityId) {
     var row = state.entities[entityId];
     return row ? clone(row) : null;
+  }
+
+  function canonicalObjectType(objectType) {
+    var type = String(objectType || "").trim().toUpperCase();
+    return type === "PERSON" ||
+      type === "VEHICLE" ||
+      type === "LOCATION" ||
+      type === "BUSINESS" ||
+      type === "ENTITY"
+      ? type
+      : "";
+  }
+
+  function objectRecordId(objectType, record) {
+    var type = canonicalObjectType(objectType);
+    record = record || {};
+    if (type === "PERSON") {
+      return record.personId || record.id || "";
+    }
+    if (type === "VEHICLE") {
+      return record.vehicleId || record.id || "";
+    }
+    if (type === "LOCATION") {
+      return record.locationId || record.id || "";
+    }
+    if (type === "BUSINESS") {
+      return record.businessId || record.id || "";
+    }
+    if (type === "ENTITY") {
+      return record.entityId || record.id || "";
+    }
+    return "";
+  }
+
+  /**
+   * The one context-free constructor gateway for case, Book-In, encounter,
+   * and investigation object editors.
+   */
+  function createObjectRecord(objectType, extra) {
+    var type = canonicalObjectType(objectType);
+    extra = extra || {};
+    if (type === "PERSON" && typeof model.createPerson === "function") {
+      return model.createPerson(extra);
+    }
+    if (type === "VEHICLE" && typeof model.createVehicle === "function") {
+      return model.createVehicle(extra);
+    }
+    if (type === "LOCATION" && typeof model.createLocation === "function") {
+      return model.createLocation(extra);
+    }
+    if (type === "BUSINESS" && typeof model.createBusiness === "function") {
+      return model.createBusiness(extra);
+    }
+    if (type === "ENTITY" && typeof model.createCustomEntity === "function") {
+      return model.createCustomEntity(extra);
+    }
+    return null;
+  }
+
+  function getObjectRecord(objectType, objectId) {
+    var type = canonicalObjectType(objectType);
+    if (type === "PERSON") {
+      return getPerson(objectId);
+    }
+    if (type === "VEHICLE") {
+      return getVehicleRecord(objectId);
+    }
+    if (type === "LOCATION") {
+      return getLocationRecord(objectId);
+    }
+    if (type === "BUSINESS") {
+      return getBusinessRecord(objectId);
+    }
+    if (type === "ENTITY") {
+      return getEntityRecord(objectId);
+    }
+    return null;
+  }
+
+  /**
+   * Persist any canonical object through its normal constructor and store.
+   * Callers never need to know which backing map owns the object.
+   */
+  function saveObjectRecord(objectType, record, opts) {
+    var type = canonicalObjectType(objectType);
+    var blank = {
+      ok: false,
+      objectType: type,
+      objectId: "",
+      record: null,
+      error: ""
+    };
+    if (!type) {
+      blank.error = "Pick a person, vehicle, location, business, or entity.";
+      return blank;
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      blank.error = fresh.error;
+      return blank;
+    }
+    var input = record || {};
+    var requestedId = objectRecordId(type, input);
+    var previous = requestedId ? getObjectRecord(type, requestedId) : null;
+    var candidate = createObjectRecord(type, mergeRecord(previous, input));
+    if (!candidate) {
+      blank.error = "The object constructor is not available.";
+      return blank;
+    }
+    var result;
+    if (type === "PERSON") {
+      result = upsertPerson(candidate);
+    } else if (type === "VEHICLE") {
+      result = saveVehicleRecord(candidate, opts);
+    } else if (type === "LOCATION") {
+      result = saveLocationRecord(candidate, opts);
+    } else if (type === "BUSINESS") {
+      result = saveBusinessRecord(candidate, opts);
+    } else {
+      result = saveEntityRecord(candidate, opts);
+    }
+    if (!result || !result.ok) {
+      blank.error = (result && result.error) || "Could not save that object.";
+      return blank;
+    }
+    var id = objectRecordId(type, candidate);
+    return {
+      ok: true,
+      objectType: type,
+      objectId: id,
+      record: getObjectRecord(type, id),
+      error: ""
+    };
   }
 
   function findEntityByName(name, exceptId, includeJunked) {
@@ -2563,7 +4000,7 @@
     return objectId;
   }
 
-  function resolveInvestigationAddObject(objectType, input) {
+  function resolveObjectRecord(objectType, input) {
     input = input || {};
     var reused = false;
     var record = null;
@@ -2599,7 +4036,7 @@
               name: name,
               caseRole: ""
             };
-        var savedPerson = upsertPerson(record);
+        var savedPerson = saveObjectRecord("PERSON", record, { mode: "commit" });
         if (!savedPerson.ok) {
           return {
             ok: false,
@@ -2609,6 +4046,7 @@
             error: savedPerson.error || "Could not save the person."
           };
         }
+        record = savedPerson.record || record;
         reused = false;
       }
       return {
@@ -2654,7 +4092,7 @@
               plateState: plateState,
               governmentVehicle: false
             };
-        var savedVeh = saveVehicleRecord(record, { mode: "commit" });
+        var savedVeh = saveObjectRecord("VEHICLE", record, { mode: "commit" });
         if (!savedVeh.ok) {
           return {
             ok: false,
@@ -2664,7 +4102,7 @@
             error: savedVeh.error || "Could not save the vehicle."
           };
         }
-        record = getVehicleRecord(savedVeh.vehicleId);
+        record = savedVeh.record || getVehicleRecord(savedVeh.objectId);
         reused = false;
       }
       return {
@@ -2704,7 +4142,7 @@
               { locationId: model.newId("loc"), entityType: "LOCATION" },
               locInput
             );
-        var savedLoc = saveLocationRecord(record, { mode: "commit" });
+        var savedLoc = saveObjectRecord("LOCATION", record, { mode: "commit" });
         if (!savedLoc.ok) {
           return {
             ok: false,
@@ -2714,7 +4152,7 @@
             error: savedLoc.error || "Could not save the location."
           };
         }
-        record = getLocationRecord(savedLoc.locationId);
+        record = savedLoc.record || getLocationRecord(savedLoc.objectId);
         reused = false;
       }
       return {
@@ -2751,7 +4189,7 @@
               name: bizName,
               phone: input.phone || ""
             };
-        var savedBiz = saveBusinessRecord(record, { mode: "commit" });
+        var savedBiz = saveObjectRecord("BUSINESS", record, { mode: "commit" });
         if (!savedBiz.ok) {
           return {
             ok: false,
@@ -2761,7 +4199,7 @@
             error: savedBiz.error || "Could not save the business."
           };
         }
-        record = getBusinessRecord(savedBiz.businessId);
+        record = savedBiz.record || getBusinessRecord(savedBiz.objectId);
         reused = false;
       }
       return {
@@ -2798,7 +4236,7 @@
               name: entName,
               kind: input.kind || ""
             };
-        var savedEnt = saveEntityRecord(record, { mode: "commit" });
+        var savedEnt = saveObjectRecord("ENTITY", record, { mode: "commit" });
         if (!savedEnt.ok) {
           return {
             ok: false,
@@ -2808,7 +4246,7 @@
             error: savedEnt.error || "Could not save the entity."
           };
         }
-        record = getEntityRecord(savedEnt.entityId);
+        record = savedEnt.record || getEntityRecord(savedEnt.objectId);
         reused = false;
       }
       return {
@@ -2859,7 +4297,7 @@
       blank.error = "Pick a person, vehicle, location, business, or entity.";
       return blank;
     }
-    var resolved = resolveInvestigationAddObject(objectType, input);
+    var resolved = resolveObjectRecord(objectType, input);
     if (!resolved.ok) {
       blank.objectType = objectType;
       blank.error = resolved.error;
@@ -3259,6 +4697,99 @@
     return state.associations[record.associationId];
   }
 
+  function saveAssociationRecord(associationId, input, opts) {
+    opts = opts || {};
+    var blank = {
+      ok: false,
+      reused: false,
+      associationId: associationId || "",
+      error: ""
+    };
+    if (!opts.skipAdopt) {
+      var fresh = adoptDisk();
+      if (!fresh.ok) {
+        blank.error = fresh.error;
+        return blank;
+      }
+    }
+    input = input || {};
+    var existing = associationId && state.associations
+      ? state.associations[associationId]
+      : null;
+    var previousAssociation = existing ? clone(existing) : null;
+    var fromType = (input.from && input.from.type) || input.fromEntityType ||
+      (existing && existing.from && existing.from.type) || "";
+    var fromId = (input.from && input.from.id) || input.fromEntityId ||
+      (existing && existing.from && existing.from.id) || "";
+    var toType = (input.to && input.to.type) || input.toEntityType ||
+      (existing && existing.to && existing.to.type) || "";
+    var toId = (input.to && input.to.id) || input.toEntityId ||
+      (existing && existing.to && existing.to.id) || "";
+    var reason = input.reason || input.associationTypeCode ||
+      (input.reasons && input.reasons[0]) ||
+      (existing && (existing.reason || (existing.reasons && existing.reasons[0]))) ||
+      "";
+    if (!reason) {
+      blank.error = "Pick a link type.";
+      return blank;
+    }
+    if (model.validateAssociationEnds) {
+      var valid = model.validateAssociationEnds(fromType, toType, reason);
+      if (!valid || !valid.ok) {
+        blank.error =
+          (valid && valid.errors && valid.errors[0]) ||
+          "Those objects cannot be linked as " + reason + ".";
+        return blank;
+      }
+    }
+    var ends = canonicalLinkEnds(fromType, fromId, toType, toId, reason);
+    if (
+      ends.fromType === ends.toType &&
+      ends.fromId &&
+      ends.fromId === ends.toId
+    ) {
+      blank.error = "Cannot link an object to itself.";
+      return blank;
+    }
+    var merged = mergeRecord(existing, input);
+    merged.associationId = associationId || merged.associationId || model.newId("asoc");
+    merged.from = { type: ends.fromType, id: ends.fromId };
+    merged.to = { type: ends.toType, id: ends.toId };
+    merged.reason = ends.reason || reason;
+    merged.reasons = [merged.reason];
+    merged.otherType = ends.toType;
+    var record = model.createAssociation
+      ? model.createAssociation(merged)
+      : merged;
+    record.associationId = merged.associationId;
+    record.from = merged.from;
+    record.to = merged.to;
+    record.reason = merged.reason;
+    record.reasons = [merged.reason];
+    putAssociation(record);
+    if (previousAssociation) {
+      pruneAssociationProjections(previousAssociation);
+    }
+    if (!opts.skipLeadSync) {
+      if (record.from.type === "PERSON") {
+        syncLeadsForPerson(record.from.id);
+      }
+      if (record.to.type === "PERSON") {
+        syncLeadsForPerson(record.to.id);
+      }
+    }
+    if (opts.persist !== false && !writeDisk()) {
+      blank.error = "Could not write localStorage (quota or private mode).";
+      return blank;
+    }
+    return {
+      ok: true,
+      reused: !!existing,
+      associationId: record.associationId,
+      error: ""
+    };
+  }
+
   function upsertAssociation(input, opts) {
     opts = opts || {};
     var blank = {
@@ -3318,42 +4849,14 @@
     );
     if (existing) {
       if (isJunked(existing)) {
-        existing.junked = false;
-        existing.junkedAt = "";
+        input.junked = false;
+        input.junkedAt = "";
       }
-      if (input.notes && !existing.notes) {
-        existing.notes = input.notes;
-      }
-      if (input.label) {
-        existing.label = input.label;
-      }
-      if (input.occupancy) {
-        existing.occupancy = input.occupancy;
-      }
-      if (input.validFrom || input.occupiedFrom) {
-        existing.validFrom = input.validFrom || input.occupiedFrom;
-      }
-      if (input.validTo || input.occupiedTo) {
-        existing.validTo = input.validTo || input.occupiedTo;
-      }
-      putAssociation(existing);
-      if (!opts.skipLeadSync) {
-        if (ends.fromType === "PERSON") {
-          syncLeadsForPerson(ends.fromId);
-        }
-        if (ends.toType === "PERSON") {
-          syncLeadsForPerson(ends.toId);
-        }
-      }
-      if (opts.persist !== false) {
-        writeDisk();
-      }
-      return {
-        ok: true,
-        reused: true,
-        associationId: existing.associationId,
-        error: ""
-      };
+      return saveAssociationRecord(existing.associationId, input, {
+        skipAdopt: true,
+        persist: opts.persist,
+        skipLeadSync: opts.skipLeadSync
+      });
     }
     var record = model.createAssociation
       ? model.createAssociation({
@@ -3553,7 +5056,9 @@
     state.locations = state.locations || {};
     var prev = state.locations[loc.locationId];
     if (!prev) {
-      var copy = clone(loc);
+      var copy = typeof model.createLocation === "function"
+        ? model.createLocation(clone(loc))
+        : clone(loc);
       copy.entityType = "LOCATION";
       copy.locationId = loc.locationId;
       copy.id = copy.id || loc.locationId;
@@ -3580,7 +5085,9 @@
     state.vehicles = state.vehicles || {};
     var prev = state.vehicles[id];
     if (!prev) {
-      var copy = clone(veh);
+      var copy = typeof model.createVehicle === "function"
+        ? model.createVehicle(clone(veh))
+        : clone(veh);
       copy.entityType = "VEHICLE";
       copy.vehicleId = id;
       copy.id = copy.id || id;
@@ -3601,6 +5108,100 @@
       prev.registeredOwnerName = veh.registeredOwnerName;
     }
     prev.governmentVehicle = false;
+  }
+
+  function syncObjectOwnedLocations(ownerType, ownerId, locations) {
+    if (!ownerId) {
+      return;
+    }
+    (locations || []).forEach(function (location) {
+      if (!location || !location.locationId) {
+        return;
+      }
+      putIdentityLocation(location);
+      var reason = reasonFromNestedLocationKind(location.association);
+      if (ownerType === "VEHICLE" && reason === "CURRENT_RESIDENCE") {
+        reason = "VEHICLE_PARKING";
+      }
+      upsertAssociation(
+        {
+          from: { type: ownerType, id: ownerId },
+          to: { type: "LOCATION", id: location.locationId },
+          reason: reason,
+          occupancy: location.occupancy || "current",
+          validFrom: location.occupiedFrom || "",
+          validTo: location.occupiedTo || ""
+        },
+        { skipAdopt: true, persist: false, skipLeadSync: true }
+      );
+    });
+  }
+
+  function syncEncounterObjects(encounter) {
+    if (!encounter) {
+      return;
+    }
+    (encounter.vehicles || []).forEach(function (vehicle) {
+      if (!vehicle) {
+        return;
+      }
+      putIdentityVehicle(vehicle);
+      var vehicleId = vehicle.vehicleId || vehicle.id || "";
+      (vehicle.locations || []).forEach(function (location) {
+        if (!vehicleId || !location || !location.locationId) {
+          return;
+        }
+        putIdentityLocation(location);
+        var reason = reasonFromNestedLocationKind(location.association);
+        if (reason === "CURRENT_RESIDENCE") {
+          reason = "VEHICLE_PARKING";
+        }
+        upsertAssociation(
+          {
+            from: { type: "VEHICLE", id: vehicleId },
+            to: { type: "LOCATION", id: location.locationId },
+            reason: reason,
+            source: { encounterId: encounter.encounterId || "" }
+          },
+          { skipAdopt: true, persist: false, skipLeadSync: true }
+        );
+      });
+    });
+    (encounter.locations || []).forEach(putIdentityLocation);
+    (encounter.links || []).forEach(function (link) {
+      if (!link || !link.from || !link.to) {
+        return;
+      }
+      var fromType = canonicalObjectType(link.from.type);
+      var toType = canonicalObjectType(link.to.type || link.otherType);
+      var fromId = String(link.from.id || "");
+      var toId = String(link.to.id || "");
+      var reason = String((link.reasons && link.reasons[0]) || "").trim();
+      if (
+        !fromType ||
+        !toType ||
+        !fromId ||
+        !toId ||
+        !reason ||
+        !objectExists(fromType, fromId) ||
+        !objectExists(toType, toId)
+      ) {
+        return;
+      }
+      var result = upsertAssociation(
+        Object.assign({
+          from: { type: fromType, id: fromId },
+          to: { type: toType, id: toId },
+          reason: reason,
+          label: link.label || investigationObjectLabel(toType, toId),
+          source: { encounterId: encounter.encounterId || "" }
+        }, link.notes ? { notes: link.notes } : {}),
+        { skipAdopt: true, persist: false, skipLeadSync: true }
+      );
+      if (result && result.ok) {
+        link.associationId = result.associationId;
+      }
+    });
   }
 
   function writePairOccupancy(fromType, fromId, toType, toId, row, defaultReason) {
@@ -3682,6 +5283,58 @@
     });
   }
 
+  /** Materialize every resolvable lead link as the same world association used by investigations. */
+  function syncLeadLinksToAssociations(lead) {
+    if (!lead || !Array.isArray(lead.links)) {
+      return;
+    }
+    lead.links.forEach(function (link) {
+      if (!link || !link.from || !link.to) {
+        return;
+      }
+      var fromType = canonicalObjectType(link.from.type);
+      var toType = canonicalObjectType(link.to.type || link.otherType);
+      var fromId = String(link.from.id || "");
+      var toId = String(link.to.id || "");
+      var reason = String((link.reasons && link.reasons[0]) || "").trim();
+      if (
+        !fromType ||
+        !toType ||
+        !fromId ||
+        !toId ||
+        !reason ||
+        !objectExists(fromType, fromId) ||
+        !objectExists(toType, toId)
+      ) {
+        return;
+      }
+      var input = {
+        from: { type: fromType, id: fromId },
+        to: { type: toType, id: toId },
+        reason: reason,
+        label: link.label || investigationObjectLabel(toType, toId),
+        source: { leadId: lead.leadId || "" }
+      };
+      if (link.notes) {
+        input.notes = link.notes;
+      }
+      var result = link.associationId && state.associations[link.associationId]
+        ? saveAssociationRecord(link.associationId, input, {
+            skipAdopt: true,
+            persist: false,
+            skipLeadSync: true
+          })
+        : upsertAssociation(input, {
+            skipAdopt: true,
+            persist: false,
+            skipLeadSync: true
+          });
+      if (result && result.ok) {
+        link.associationId = result.associationId;
+      }
+    });
+  }
+
   function otherEnd(row, type, id) {
     if (!row || !row.from || !row.to) {
       return null;
@@ -3693,6 +5346,92 @@
       return row.from;
     }
     return null;
+  }
+
+  function hasLiveAssociationBetween(typeA, idA, typeB, idB) {
+    return Object.keys(state.associations || {}).some(function (associationId) {
+      var row = state.associations[associationId];
+      if (!row || isJunked(row) || !row.from || !row.to) {
+        return false;
+      }
+      return (
+        (row.from.type === typeA &&
+          row.from.id === idA &&
+          row.to.type === typeB &&
+          row.to.id === idB) ||
+        (row.from.type === typeB &&
+          row.from.id === idB &&
+          row.to.type === typeA &&
+          row.to.id === idA)
+      );
+    });
+  }
+
+  /** Remove only denormalized case projections no longer backed by a world fact. */
+  function pruneAssociationProjectionFromLead(lead, association) {
+    if (!lead || !association || !association.from || !association.to) {
+      return false;
+    }
+    var person = model.subjectOf ? model.subjectOf(lead) : lead.person;
+    var personId = (person && person.personId) || lead.subjectPersonId || "";
+    var changed = false;
+    var other = personId ? otherEnd(association, "PERSON", personId) : null;
+    if (
+      other &&
+      other.type === "LOCATION" &&
+      !hasLiveAssociationBetween("PERSON", personId, "LOCATION", other.id)
+    ) {
+      var beforeLocations = (person.locations || []).length;
+      person.locations = (person.locations || []).filter(function (row) {
+        return !row || row.locationId !== other.id;
+      });
+      changed = changed || person.locations.length !== beforeLocations;
+    }
+    if (
+      other &&
+      other.type === "VEHICLE" &&
+      !hasLiveAssociationBetween("PERSON", personId, "VEHICLE", other.id)
+    ) {
+      var beforeVehicles = (lead.vehicles || []).length;
+      lead.vehicles = (lead.vehicles || []).filter(function (row) {
+        return !row || (row.vehicleId || row.id) !== other.id;
+      });
+      changed = changed || lead.vehicles.length !== beforeVehicles;
+    }
+    (lead.vehicles || []).forEach(function (vehicle) {
+      if (!vehicle) {
+        return;
+      }
+      var vehicleId = vehicle.vehicleId || vehicle.id || "";
+      var place = vehicleId
+        ? otherEnd(association, "VEHICLE", vehicleId)
+        : null;
+      if (
+        !place ||
+        place.type !== "LOCATION" ||
+        hasLiveAssociationBetween("VEHICLE", vehicleId, "LOCATION", place.id)
+      ) {
+        return;
+      }
+      var before = (vehicle.locations || []).length;
+      vehicle.locations = (vehicle.locations || []).filter(function (row) {
+        return !row || row.locationId !== place.id;
+      });
+      changed = changed || vehicle.locations.length !== before;
+    });
+    if (changed && person) {
+      lead.person = person;
+    }
+    return changed;
+  }
+
+  function pruneAssociationProjections(association) {
+    Object.keys(state.leads || {}).forEach(function (leadId) {
+      var lead = state.leads[leadId];
+      if (pruneAssociationProjectionFromLead(lead, association)) {
+        rememberPeople(lead);
+      }
+    });
   }
 
   function ensureNestedLocation(list, locationId, reason, asoc) {
@@ -3710,9 +5449,7 @@
         list[i].zip = src.zip || list[i].zip;
         list[i].latitude = src.latitude || list[i].latitude;
         list[i].longitude = src.longitude || list[i].longitude;
-        if (!list[i].association) {
-          list[i].association = nestedLocationKind(reason);
-        }
+        list[i].association = nestedLocationKind(reason);
         if (asoc) {
           applyAssociationOccupancy(list[i], asoc);
         }
@@ -3930,8 +5667,10 @@
         error: ""
       };
     }
+    var removedAssociation = clone(state.associations[associationId]);
     delete state.associations[associationId];
     stripAssociationCitations(associationId);
+    pruneAssociationProjections(removedAssociation);
     if (!writeDisk()) {
       adoptDisk();
       blank.error = "Could not write localStorage (quota or private mode).";
@@ -5038,6 +6777,19 @@
       label: label,
       name: input.name || label
     };
+    if (input.objectRecord && typeof input.objectRecord === "object") {
+      var savedObject = saveObjectRecord(objectType, input.objectRecord, {
+        mode: "commit"
+      });
+      if (!savedObject || !savedObject.ok) {
+        blank.error =
+          (savedObject && savedObject.error) || "Could not save that object.";
+        return blank;
+      }
+      objectId = savedObject.objectId;
+      payload.objectId = objectId;
+      label = investigationObjectLabel(objectType, objectId) || label;
+    }
     if (objectType === "VEHICLE") {
       var plate = parsePlateLabel(label);
       payload.licensePlate = plate.plate;
@@ -5072,23 +6824,29 @@
         return blank;
       }
     }
-    var resolved = resolveInvestigationAddObject(objectType, payload);
+    var resolved = resolveObjectRecord(objectType, payload);
     if (!resolved || !resolved.ok) {
       blank.error = (resolved && resolved.error) || "Could not save that object.";
       return blank;
     }
     objectId = resolved.objectId;
-    var asoc = upsertAssociation(
-      {
-        from: { type: "PERSON", id: personId },
-        to: { type: objectType, id: objectId },
-        reason: reason,
-        notes: notes,
-        label: investigationObjectLabel(objectType, objectId),
-        source: { leadId: lead.leadId }
-      },
-      { skipAdopt: true, persist: true }
-    );
+    var associationInput = {
+      from: { type: "PERSON", id: personId },
+      to: { type: objectType, id: objectId },
+      reason: reason,
+      notes: notes,
+      label: investigationObjectLabel(objectType, objectId),
+      source: { leadId: lead.leadId }
+    };
+    var asoc = input.associationId && state.associations[input.associationId]
+      ? saveAssociationRecord(input.associationId, associationInput, {
+          skipAdopt: true,
+          persist: true
+        })
+      : upsertAssociation(associationInput, {
+          skipAdopt: true,
+          persist: true
+        });
     if (!asoc || !asoc.ok) {
       blank.error = (asoc && asoc.error) || "Could not save the association.";
       return blank;
@@ -5919,6 +7677,8 @@
           startedAt: row.startedAt || "",
           updatedAt: (row.meta && row.meta.updatedAt) || "",
           metaStatus: model.metaStatus ? model.metaStatus(row) : "committed",
+          markedComplete: !!(row.meta && row.meta.markedComplete),
+          completedAt: (row.meta && row.meta.completedAt) || "",
           subjects: (row.subjects || []).slice(),
           vehicles: (row.vehicles || []).slice(),
           locations: (row.locations || []).slice()
@@ -5935,14 +7695,21 @@
     saveLead: saveLead,
     getLead: getLead,
     listLeads: listLeads,
+    listArrests: listArrests,
     relatedCommittedCases: relatedCommittedCases,
     promoteAssociateToCase: promoteAssociateToCase,
     promoteInvestigationPersonToCase: promoteInvestigationPersonToCase,
     promoteBookInToLead: promoteBookInToLead,
+    bookInPromotionInput: bookInPromotionInput,
+    promoteBookInRecord: promoteBookInRecord,
+    promoteBookInRecords: promoteBookInRecords,
+    linkEncounterVehiclesToPerson: linkEncounterVehiclesToPerson,
     allPeople: allPeople,
     getPerson: getPerson,
     upsertPerson: upsertPerson,
     saveEncounter: saveEncounter,
+    completeEncounter: completeEncounter,
+    applyEncounterLocationToArrests: applyEncounterLocationToArrests,
     getEncounter: getEncounter,
     deleteEncounter: deleteEncounter,
     listEncounters: listEncounters,
@@ -5981,10 +7748,15 @@
     getEntityRecord: getEntityRecord,
     findEntityByName: findEntityByName,
     findPersonByName: findPersonByName,
+    createObjectRecord: createObjectRecord,
+    getObjectRecord: getObjectRecord,
+    saveObjectRecord: saveObjectRecord,
+    resolveObjectRecord: resolveObjectRecord,
     promoteInvestigationPlate: promoteInvestigationPlate,
     addInvestigationObject: addInvestigationObject,
     connectInvestigationNodes: connectInvestigationNodes,
     upsertAssociation: upsertAssociation,
+    saveAssociationRecord: saveAssociationRecord,
     getAssociation: getAssociation,
     associationsFor: associationsFor,
     occupancyFor: occupancyFor,

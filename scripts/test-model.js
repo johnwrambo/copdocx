@@ -20,6 +20,17 @@ var context = {
 };
 context.globalThis = context;
 context.window = context;
+context.COUNTRIES = [
+  { code: "CA", label: "Canada" },
+  { code: "BR", label: "Brazil" },
+  { code: "MX", label: "Mexico" }
+];
+context.IMMIGRATION_DISPOSITIONS = [
+  { code: "DTNR", label: "Detainer" },
+  { code: "HCA", label: "HSI Criminal Arrest" },
+  { code: "REINST", label: "Reinstatement of Deport Order I-871" }
+];
+context.IMMIGRATION_STATUS = [];
 vm.createContext(context);
 
 function load(rel) {
@@ -43,6 +54,7 @@ load("functions/model/link.js");
 load("functions/model/investigation.js");
 load("functions/model/operation.js");
 load("functions/model/store.js");
+load("functions/arrest-report.js");
 load("functions/model/media.js");
 load("functions/officer-roster.js");
 load("functions/plate-parse.js");
@@ -70,6 +82,31 @@ check("empty history", Array.isArray(blank.history) && blank.history.length === 
 check("not marked complete", blank.meta.markedComplete === false);
 check("new lead is draft", blank.meta.status === "draft");
 check("new lead has no assigned officer", blank.assignedOfficerId === "");
+var partialLead = model.createLeadSnapshot({
+  person: {
+    name: { lastName: "PARTIAL" },
+    criminal: { fbiNumber: "FBI-PARTIAL" }
+  },
+  source: { caseNumber: "CASE-PARTIAL" },
+  vehicles: null,
+  links: null
+});
+check(
+  "lead factory canonicalizes a partial supplied subject",
+  partialLead.person.entityType === "PERSON" &&
+    partialLead.person.name.lastName === "PARTIAL" &&
+    partialLead.person.name.firstName === "" &&
+    partialLead.person.criminal.fbiNumber === "FBI-PARTIAL" &&
+    partialLead.person.criminal.threatLevel === "none" &&
+    partialLead.subjectPersonId === partialLead.person.personId
+);
+check(
+  "lead factory normalizes partial aggregate collections",
+  partialLead.source.caseNumber === "CASE-PARTIAL" &&
+    partialLead.source.leadSource === "" &&
+    Array.isArray(partialLead.vehicles) &&
+    Array.isArray(partialLead.links)
+);
 check(
   "history event has officer fields",
   model.createHistoryEvent().officerAlias === "" &&
@@ -127,6 +164,31 @@ check("link does not change title name", vehicle.registeredOwnerName === "GARCIA
 check("link has multiple reasons", link.reasons.length === 2);
 
 model.store.loadFromDisk();
+var replacementLead = model.createLeadSnapshot();
+replacementLead.person.name.lastName = "ORIGINAL";
+replacementLead.person.criminal.fbiNumber = "SHOULD-NOT-CARRY";
+model.store.saveLead(replacementLead, { mode: "commit" });
+var replacementSubject = model.createPerson({
+  name: { lastName: "REPLACEMENT" }
+});
+model.store.saveLead(
+  {
+    leadId: replacementLead.leadId,
+    subjectPersonId: replacementSubject.personId,
+    person: {
+      personId: replacementSubject.personId,
+      name: { lastName: "REPLACEMENT" }
+    }
+  },
+  { mode: "commit" }
+);
+var replacedLead = model.store.getLead(replacementLead.leadId);
+check(
+  "replacing a lead subject does not inherit the old identity",
+  replacedLead.subjectPersonId === replacementSubject.personId &&
+    replacedLead.person.name.lastName === "REPLACEMENT" &&
+    replacedLead.person.criminal.fbiNumber === ""
+);
 var saved = model.store.saveLead(blank);
 check("save empty lead", saved.ok === true, saved);
 blank.assignedOfficerId = "ofc_test";
@@ -345,7 +407,11 @@ bbcLead.person.immigration.firstDeportationDate = "2019-01-02";
 bbcLead.person.immigration.lastDeportationDate = "2024-06-15";
 bbcLead.person.immigration.finalOrderDate = "2018-12-01";
 bbcLead.person.immigration.baseballCards = [
-  model.createBaseballCard({ text: "ICE Dallas arrested ...", disposition: "REINST" })
+  model.createBaseballCard({
+    text: "ICE Dallas arrested ...",
+    disposition: "REINST",
+    photoMediaId: "med_bbc"
+  })
 ];
 model.store.saveLead(bbcLead, { mode: "commit" });
 var bbcStored = model.store.getLead(bbcLead.leadId);
@@ -358,7 +424,12 @@ check(
 check(
   "lead save keeps baseballCards",
   bbcStored.person.immigration.baseballCards.length === 1 &&
-    bbcStored.person.immigration.baseballCards[0].text.indexOf("ICE Dallas") !== -1
+    bbcStored.person.immigration.baseballCards[0].text.indexOf("ICE Dallas") !== -1 &&
+    bbcStored.person.immigration.baseballCards[0].photoMediaId === "med_bbc" &&
+    !Object.prototype.hasOwnProperty.call(
+      bbcStored.person.immigration.baseballCards[0],
+      "photoDataUrl"
+    )
 );
 bbcStored.person.immigration.alienNumber = "A000111222";
 model.store.saveLead(bbcStored, { mode: "commit" });
@@ -664,6 +735,134 @@ check(
   "encounter persists supervisor summary",
   withNar.supervisorSummary &&
     withNar.supervisorSummary.text === "Supervisor line."
+);
+
+var doomedEnc = model.createEncounterRecord({
+  team: "3",
+  existingIds: (model.store.listEncounters() || []).map(function (row) {
+    return row.encounterId;
+  })
+});
+model.store.saveEncounter(doomedEnc, { mode: "commit" });
+var doomedId = doomedEnc.encounterId;
+check(
+  "deleteEncounter ok",
+  model.store.deleteEncounter(doomedId).ok === true
+);
+check("deleteEncounter removes the row", !model.store.getEncounter(doomedId));
+check(
+  "deleteEncounter missing is not ok",
+  model.store.deleteEncounter(doomedId).ok === false
+);
+
+var completeEnc = model.createEncounterRecord({
+  team: "3",
+  existingIds: (model.store.listEncounters() || []).map(function (row) {
+    return row.encounterId;
+  })
+});
+completeEnc.startedAt = "2026-09-04T10:00";
+completeEnc.locations.push(
+  model.createLocation({
+    street: "200 Main St",
+    city: "Dallas",
+    state: "TX",
+    latitude: "32.78",
+    longitude: "-96.80"
+  })
+);
+completeEnc.subjects.push(
+  model.createEncounterSubject({
+    leadId: enc.leadId || "",
+    lastName: "LOKI",
+    firstName: "Laufeyson",
+    bookinRecordId: "book_complete"
+  })
+);
+var completeLead = model.createLeadSnapshot();
+completeLead.person.name.lastName = "LOKI";
+completeLead.person.name.firstName = "Laufeyson";
+completeLead.person.arrests = [
+  model.createArrest({
+    bookinRecordId: "book_complete",
+    encounterId: completeEnc.encounterId,
+    arrestDate: "2026-09-04"
+  })
+];
+model.store.saveLead(completeLead, { mode: "commit" });
+completeEnc.subjects[0].leadId = completeLead.leadId;
+completeEnc.subjects[0].personId = completeLead.person.personId;
+model.store.saveEncounter(completeEnc, { mode: "commit" });
+var completedSave = model.store.saveEncounter(completeEnc, { mode: "complete" });
+check("completeEncounter ok", completedSave.ok === true);
+var completedRow = model.store.getEncounter(completeEnc.encounterId);
+check(
+  "complete writes a frozen snapshot",
+  completedRow.meta.markedComplete === true &&
+    completedRow.completed &&
+    completedRow.completed.schema === "copdocx.encounter-snapshot.v1" &&
+    completedRow.completed.pin &&
+    completedRow.completed.pin.latitude === "32.78"
+);
+completedRow.startedAt = "2026-09-05T11:00";
+model.store.saveEncounter(completedRow, { mode: "draft" });
+var afterEdit = model.store.getEncounter(completeEnc.encounterId);
+check(
+  "later draft does not replace the completed snapshot",
+  afterEdit.meta.markedComplete === true &&
+    afterEdit.completed.pin.latitude === "32.78" &&
+    afterEdit.startedAt === "2026-09-05T11:00"
+);
+var pinnedArrest = model.store.getLead(completeLead.leadId).person.arrests[0];
+check(
+  "complete stamps arrest coordinates from the stop",
+  pinnedArrest.latitude === "32.78" &&
+    pinnedArrest.longitude === "-96.80"
+);
+
+var pinEnc = model.createEncounterRecord({
+  team: "3",
+  existingIds: (model.store.listEncounters() || []).map(function (row) {
+    return row.encounterId;
+  })
+});
+pinEnc.startedAt = "2026-09-04T14:30";
+pinEnc.locations.push(
+  model.createLocation({
+    street: "12 Stop St",
+    city: "Dallas",
+    state: "TX",
+    latitude: "32.71",
+    longitude: "-96.81"
+  })
+);
+var pinLead = model.createLeadSnapshot();
+pinLead.person.name.lastName = "PIN";
+pinLead.person.name.firstName = "MAP";
+pinLead.person.arrests = [
+  model.createArrest({
+    encounterId: pinEnc.encounterId,
+    arrestDate: "2026-09-04"
+  })
+];
+model.store.saveLead(pinLead, { mode: "commit" });
+pinEnc.subjects.push(
+  model.createEncounterSubject({
+    leadId: pinLead.leadId,
+    personId: pinLead.person.personId,
+    lastName: "PIN",
+    firstName: "MAP"
+  })
+);
+model.store.saveEncounter(pinEnc, { mode: "commit" });
+check(
+  "applyEncounterLocationToArrests ok",
+  model.store.applyEncounterLocationToArrests(pinEnc.encounterId).ok === true
+);
+var mappedArrest = model.store.getLead(pinLead.leadId).person.arrests[0];
+check(
+  "book-in/encounter stop coordinates stamp the arrest without Complete",
+  mappedArrest.latitude === "32.71" && mappedArrest.longitude === "-96.81"
 );
 
 var blankCrim = model.createPerson();
@@ -1391,6 +1590,64 @@ check(
     bookinAgain.personId === bookinNew.personId
 );
 
+var encounterVehicle = model.createVehicle({
+  vehicleId: "veh_bookin_link",
+  licensePlate: "ABC1234",
+  plateState: "TX",
+  locations: [
+    model.createLocation({
+      locationId: "loc_bookin_link",
+      street: "100 Main St",
+      city: "Dallas",
+      state: "TX",
+      association: "known-parking"
+    })
+  ]
+});
+var encounterForBookin = model.createEncounterRecord({
+  encounterId: "DAL3-20260903-900",
+  startedAt: "2026-09-03T08:00",
+  vehicles: [encounterVehicle]
+});
+model.store.saveEncounter(encounterForBookin, { mode: "commit" });
+var linkedBookinVehicle = model.store.linkEncounterVehiclesToPerson({
+  encounterId: encounterForBookin.encounterId,
+  bookinRecordId: "bookin-link-1",
+  leadId: bookinNew.leadId,
+  personId: bookinNew.personId
+});
+var linkedBookinLead = model.store.getLead(bookinNew.leadId);
+var linkedAssociations = model.store.associationsFor("PERSON", bookinNew.personId);
+check(
+  "book-in links encounter vehicle into case",
+  linkedBookinVehicle.ok &&
+    linkedBookinLead.vehicles.some(function (row) {
+      return row.vehicleId === encounterVehicle.vehicleId;
+    })
+);
+check(
+  "book-in encounter link keeps event provenance",
+  linkedAssociations.some(function (row) {
+    return (
+      row.reason === "LE_ENCOUNTER_IN_VEHICLE" &&
+      row.source &&
+      row.source.encounterId === encounterForBookin.encounterId
+    );
+  })
+);
+var linkCountBeforeRepeat = linkedAssociations.length;
+model.store.linkEncounterVehiclesToPerson({
+  encounterId: encounterForBookin.encounterId,
+  bookinRecordId: "bookin-link-1",
+  leadId: bookinNew.leadId,
+  personId: bookinNew.personId
+});
+check(
+  "book-in encounter vehicle link is idempotent",
+  model.store.associationsFor("PERSON", bookinNew.personId).length ===
+    linkCountBeforeRepeat
+);
+
 var rapLead = model.createLeadSnapshot();
 rapLead.person.name.lastName = "RAMIREZ";
 rapLead.person.name.firstName = "ANA";
@@ -1434,6 +1691,153 @@ var historyCountAfter = (afterSecond.history || []).filter(function (row) {
   return /Detainee/.test(row.text);
 }).length;
 check("book-in does not repeat custody note", historyCountAfter === historyCount);
+
+var normalizedBookinInput = model.store.bookInPromotionInput({
+  age: "36",
+  countryOfCitizenship: "Mexico",
+  caseType: "HSI Criminal Arrest"
+});
+var normalizedBagAndBaggage = model.store.bookInPromotionInput({
+  caseType: "B&B"
+});
+check(
+  "book-in canonical values match lead-form representation",
+  normalizedBookinInput.age === 36 &&
+    normalizedBookinInput.citizenship === "MX" &&
+    normalizedBookinInput.disposition === "HCA" &&
+    normalizedBagAndBaggage.disposition === "B"
+);
+
+var schema3BookinRecord = {
+  id: "bookin-schema3-1",
+  createdAt: "2026-09-03T06:00:00.000Z",
+  updatedAt: "2026-09-03T06:00:00.000Z",
+  formState: {
+    first_name: { type: "text", value: "MARTA", checked: false },
+    last_name: { type: "text", value: "SILVA", checked: false },
+    a_number: { type: "text", value: "123456789", checked: false },
+    fbi_number: { type: "text", value: "FBI-7788", checked: false },
+    date_of_birth: { type: "date", value: "1988-04-12", checked: false },
+    gender: { type: "radio", value: "Female", checked: false },
+    country_of_citizenship: { type: "select-one", value: "BR", checked: false },
+    case_type: { type: "select-one", value: "REINST", checked: false },
+    ice_event: { type: "text", value: "DAL-26-100", checked: false },
+    encounter_number: { type: "text", value: "ENC-900", checked: false },
+    subject_role_target: { type: "radio", value: "Target", checked: true },
+    vehicle_position: { type: "select-one", value: "Passenger", checked: false },
+    officers_name: { type: "text", value: "M. Reyes", checked: false },
+    team: { type: "text", value: "DAL - 3 / Street", checked: false },
+    date_time: { type: "datetime-local", value: "2026-09-03T00:30", checked: false },
+    arrest_time: { type: "time", value: "23:30", checked: false },
+    foreign_warrants: { type: "select-one", value: "yes", checked: false },
+    foreign_warrant_country: { type: "text", value: "Brazil", checked: false },
+    cash: { type: "text", value: "$45.00", checked: false },
+    travel_docs: { type: "text", value: "Brazil passport", checked: false },
+    property_tag: { type: "text", value: "I-77-12", checked: false },
+    cell_num: { type: "text", value: "B-4", checked: false },
+    children: { type: "textarea", value: "One child", checked: false },
+    no_medical_issues: { type: "checkbox", value: "on", checked: false },
+    communication_yes: { type: "radio", value: "Yes", checked: true },
+    q1_yes: { type: "radio", value: "Yes", checked: true },
+    medical_issues: { type: "text", value: "Anxiety", checked: false },
+    q2_yes: { type: "radio", value: "Yes", checked: true },
+    medicine: { type: "text", value: "Medication in property", checked: false },
+    q3_no: { type: "radio", value: "No", checked: true },
+    q3_details: { type: "text", value: "None reported", checked: false },
+    additional_observations: {
+      type: "textarea",
+      value: "Alert and responsive",
+      checked: false
+    },
+    referral_yes: { type: "radio", value: "Yes", checked: true }
+  }
+};
+var schema3Promotion = model.store.promoteBookInRecord(schema3BookinRecord);
+var schema3Lead = model.store.getLead(schema3Promotion.leadId);
+var schema3Person = schema3Lead && schema3Lead.person;
+var schema3Arrest =
+  schema3Person &&
+  schema3Person.arrests.filter(function (row) {
+    return row.bookinRecordId === schema3BookinRecord.id;
+  })[0];
+check(
+  "schema 3 book-in creates canonical case and arrest",
+  schema3Promotion.ok &&
+    schema3Promotion.arrestId &&
+    schema3Lead.meta.status === "committed" &&
+    schema3Person.personId === schema3Promotion.personId &&
+    schema3Arrest &&
+    schema3Arrest.arrestId === schema3Promotion.arrestId
+);
+check(
+  "schema 3 book-in maps identity and warrant fields",
+  schema3Person.name.firstName === "MARTA" &&
+    schema3Person.name.lastName === "SILVA" &&
+    schema3Person.age === 38 &&
+    schema3Person.criminal.fbiNumber === "FBI-7788" &&
+    schema3Person.criminal.foreignWarrantsKnown === true &&
+    schema3Person.criminal.hasForeignWarrants === true &&
+    schema3Person.criminal.foreignWarrantCountry === "Brazil"
+);
+check(
+  "schema 3 book-in maps complete arrest data",
+  schema3Arrest.arrestDateTime === "2026-09-02T23:30" &&
+    schema3Arrest.bookInDateTime === "2026-09-03T00:30" &&
+    schema3Arrest.iceEventNumber === "DAL-26-100" &&
+    schema3Arrest.encounterNumber === "ENC-900" &&
+    schema3Arrest.subjectRole === "TARGET" &&
+    schema3Arrest.vehiclePosition === "Passenger" &&
+    schema3Arrest.arrestingOfficer === "M. Reyes" &&
+    schema3Arrest.booking.cash === "$45.00" &&
+    schema3Arrest.booking.travelDocuments === "Brazil passport" &&
+    schema3Arrest.booking.propertyTag === "I-77-12" &&
+    schema3Arrest.booking.holdingCellNumber === "B-4" &&
+    schema3Arrest.booking.children === "One child" &&
+    schema3Arrest.booking.medical.communicationAnswer === "Yes" &&
+    schema3Arrest.booking.medical.q1Answer === "Yes" &&
+    schema3Arrest.booking.medical.medicalIssues === "Anxiety" &&
+    schema3Arrest.booking.medical.q2Answer === "Yes" &&
+    schema3Arrest.booking.medical.medicine === "Medication in property" &&
+    schema3Arrest.booking.medical.q3Answer === "No" &&
+    schema3Arrest.booking.medical.q3Details === "None reported" &&
+    schema3Arrest.booking.medical.additionalObservations === "Alert and responsive" &&
+    schema3Arrest.booking.medical.referralAnswer === "Yes"
+);
+var schema3ArrestCount = schema3Person.arrests.length;
+var schema3Again = model.store.promoteBookInRecord(schema3BookinRecord);
+var schema3AgainLead = model.store.getLead(schema3Again.leadId);
+check(
+  "schema 3 book-in promotion is idempotent",
+  schema3Again.leadId === schema3Promotion.leadId &&
+    schema3Again.arrestId === schema3Promotion.arrestId &&
+    schema3AgainLead.person.arrests.length === schema3ArrestCount
+);
+var schema3SecondRecord = JSON.parse(JSON.stringify(schema3BookinRecord));
+schema3SecondRecord.id = "bookin-schema3-2";
+schema3SecondRecord.formState.date_time.value = "2026-09-04T11:00";
+schema3SecondRecord.formState.arrest_time.value = "10:00";
+var schema3Second = model.store.promoteBookInRecord(schema3SecondRecord);
+var schema3TwoArrests = model.store.getLead(schema3Promotion.leadId).person.arrests;
+check(
+  "second book-in reuses case and adds one canonical arrest",
+  schema3Second.ok &&
+    schema3Second.existing &&
+    schema3Second.leadId === schema3Promotion.leadId &&
+    schema3Second.arrestId !== schema3Promotion.arrestId &&
+    schema3TwoArrests.length === schema3ArrestCount + 1
+);
+var bulkBookin = model.store.promoteBookInRecords([
+  schema3BookinRecord,
+  schema3SecondRecord
+]);
+check(
+  "bulk book-in promotion writes canonical links onto packets",
+  bulkBookin.ok &&
+    bulkBookin.promoted === 2 &&
+    bulkBookin.rows.every(function (row) {
+      return row.leadId && row.personId && row.arrestId;
+    })
+);
 
 var invDate = new Date(2026, 8, 2);
 var invId = model.nextInvestigationId({
@@ -3055,6 +3459,216 @@ check(
   }).ok
 );
 
+var gatewayPerson = model.store.saveObjectRecord("PERSON", {
+  personId: model.newId("p"),
+  name: { lastName: "GATEWAY", firstName: "PAM" },
+  locations: null,
+  aliases: null
+});
+check(
+  "object gateway normalizes person shape",
+  gatewayPerson.ok &&
+    gatewayPerson.record.entityType === "PERSON" &&
+    Array.isArray(gatewayPerson.record.locations) &&
+    Array.isArray(gatewayPerson.record.aliases) &&
+    Array.isArray(gatewayPerson.record.immigration.baseballCards)
+);
+model.store.saveObjectRecord("PERSON", {
+  personId: gatewayPerson.objectId,
+  criminal: { fbiNumber: "FBI-GATEWAY" },
+  immigration: { status: "EWI" }
+});
+var partialPersonUpdate = model.store.saveObjectRecord("PERSON", {
+  personId: gatewayPerson.objectId,
+  immigration: { alienNumber: "A123456789" }
+});
+check(
+  "partial object updates preserve the complete person sections",
+  partialPersonUpdate.ok &&
+    partialPersonUpdate.record.criminal.fbiNumber === "FBI-GATEWAY" &&
+    partialPersonUpdate.record.immigration.status === "EWI" &&
+    partialPersonUpdate.record.immigration.alienNumber === "A123456789" &&
+    partialPersonUpdate.record.criminal.threatLevel === "none"
+);
+var gatewayParking = model.createLocation({
+  street: "77 Gateway Pkwy",
+  city: "Dallas",
+  state: "TX",
+  association: "known-parking"
+});
+var gatewayVehicle = model.store.createObjectRecord("VEHICLE", {
+  licensePlate: "FULL777",
+  plateState: "TX",
+  vehicleYear: "2024",
+  vehicleMake: "Ford",
+  vehicleModel: "Explorer",
+  vehicleColor: "Black",
+  vin: "1FULLGATEWAY00001",
+  notes: "Created from the canonical object card.",
+  locations: [gatewayParking]
+});
+var fullVehicleAssoc = model.store.associateCaseObject(nestCase.leadId, {
+  objectType: "VEHICLE",
+  objectRecord: gatewayVehicle,
+  objectId: gatewayVehicle.vehicleId,
+  reason: "REGISTERED_OWNER_OF",
+  notes: "Primary vehicle"
+});
+var gatewayVehicleSaved = model.store.getObjectRecord(
+  "VEHICLE",
+  fullVehicleAssoc.objectId
+);
+check(
+  "case object card saves the full canonical vehicle",
+  fullVehicleAssoc.ok &&
+    gatewayVehicleSaved &&
+    gatewayVehicleSaved.vehicleYear === "2024" &&
+    gatewayVehicleSaved.vehicleMake === "Ford" &&
+    gatewayVehicleSaved.vin === "1FULLGATEWAY00001" &&
+    gatewayVehicleSaved.notes === "Created from the canonical object card."
+);
+check(
+  "vehicle object gateway materializes nested location",
+  !!model.store.getObjectRecord("LOCATION", gatewayParking.locationId) &&
+    model.store.associationsFor("VEHICLE", gatewayVehicle.vehicleId).some(
+      function (row) {
+        return row &&
+          row.to &&
+          row.to.id === gatewayParking.locationId &&
+          row.reason === "VEHICLE_PARKING";
+      }
+    )
+);
+var associationCountBeforeEdit = Object.keys(
+  model.store.getState().associations
+).length;
+var editedFullVehicleAssoc = model.store.associateCaseObject(nestCase.leadId, {
+  objectType: "VEHICLE",
+  objectId: gatewayVehicle.vehicleId,
+  associationId: fullVehicleAssoc.associationId,
+  linkId: fullVehicleAssoc.linkId,
+  reason: "KNOWN_OPERATOR_OF",
+  notes: "Occasional operator"
+});
+var editedAssociation = model.store.getAssociation(
+  fullVehicleAssoc.associationId
+);
+check(
+  "editing a case relationship updates one association in place",
+  editedFullVehicleAssoc.ok &&
+    editedFullVehicleAssoc.associationId === fullVehicleAssoc.associationId &&
+    editedAssociation.reason === "KNOWN_OPERATOR_OF" &&
+    editedAssociation.notes === "Occasional operator" &&
+    Object.keys(model.store.getState().associations).length === associationCountBeforeEdit
+);
+var replacementVehicle = model.store.createObjectRecord("VEHICLE", {
+  licensePlate: "SWAP999",
+  plateState: "TX",
+  vehicleMake: "Chevrolet"
+});
+var movedFullVehicleAssoc = model.store.associateCaseObject(nestCase.leadId, {
+  objectType: "VEHICLE",
+  objectRecord: replacementVehicle,
+  associationId: fullVehicleAssoc.associationId,
+  linkId: fullVehicleAssoc.linkId,
+  reason: "REGISTERED_OWNER_OF"
+});
+var caseAfterAssociationMove = model.store.getLead(nestCase.leadId);
+check(
+  "editing an association endpoint does not recreate the old vehicle link",
+  movedFullVehicleAssoc.ok &&
+    model.store.getAssociation(fullVehicleAssoc.associationId).to.id ===
+      replacementVehicle.vehicleId &&
+    !(caseAfterAssociationMove.vehicles || []).some(function (row) {
+      return row && row.vehicleId === gatewayVehicle.vehicleId;
+    }) &&
+    (caseAfterAssociationMove.vehicles || []).some(function (row) {
+      return row && row.vehicleId === replacementVehicle.vehicleId;
+    }) &&
+    !model.store.associationsFor("PERSON", nestLead.subjectPersonId).some(
+      function (row) {
+        var other = row.from && row.from.id === nestLead.subjectPersonId
+          ? row.to
+          : row.from;
+        return other && other.type === "VEHICLE" &&
+          other.id === gatewayVehicle.vehicleId;
+      }
+    )
+);
+var droppedMovedVehicle = model.store.dropAssociation(
+  movedFullVehicleAssoc.associationId
+);
+check(
+  "removing an association also removes its stale case projection",
+  droppedMovedVehicle.ok &&
+    !(model.store.getLead(nestCase.leadId).vehicles || []).some(function (row) {
+      return row && row.vehicleId === replacementVehicle.vehicleId;
+    })
+);
+
+var linkedFromLeadForm = model.createPerson({
+  name: { lastName: "LINKED", firstName: "LEE" }
+});
+model.store.saveObjectRecord("PERSON", linkedFromLeadForm);
+var formLinkLead = model.createLeadSnapshot();
+formLinkLead.person.name.lastName = "FORM";
+formLinkLead.person.name.firstName = "FAY";
+formLinkLead.links = [
+  model.createLink({
+    from: { type: "PERSON", id: formLinkLead.subjectPersonId },
+    to: { type: "PERSON", id: linkedFromLeadForm.personId },
+    otherType: "PERSON",
+    reasons: ["ASSOCIATE_OF"],
+    label: "LINKED, LEE"
+  })
+];
+model.store.saveLead(formLinkLead, { mode: "commit" });
+var materializedFormLink = model.store.getLead(formLinkLead.leadId).links[0];
+check(
+  "lead-form link materializes the shared world association",
+  !!materializedFormLink.associationId &&
+    !!model.store.getAssociation(materializedFormLink.associationId)
+);
+
+var encounterCanonicalLocation = model.createLocation({
+  street: "88 Encounter Rd",
+  city: "Irving",
+  state: "TX"
+});
+var encounterCanonicalVehicle = model.createVehicle({
+  licensePlate: "ENC888",
+  plateState: "TX",
+  vehicleMake: "Toyota",
+  locations: [encounterCanonicalLocation]
+});
+var canonicalEncounter = model.createEncounterRecord({
+  vehicles: [encounterCanonicalVehicle],
+  locations: [encounterCanonicalLocation]
+});
+model.store.saveEncounter(canonicalEncounter, { mode: "commit" });
+check(
+  "encounter objects use the canonical object registries",
+  !!model.store.getObjectRecord("VEHICLE", encounterCanonicalVehicle.vehicleId) &&
+    !!model.store.getObjectRecord("LOCATION", encounterCanonicalLocation.locationId)
+);
+var partialEncounter = model.createEncounterRecord();
+partialEncounter.vehicles = [
+  { licensePlate: "RAW808", vehicleMake: "Honda", locations: null }
+];
+partialEncounter.locations = [{ street: "9 Raw Boundary Ave" }];
+partialEncounter.links = [{}];
+model.store.saveEncounter(partialEncounter, { mode: "commit" });
+var savedPartialEncounter = model.store.getEncounter(partialEncounter.encounterId);
+check(
+  "encounter save canonicalizes raw object payloads",
+  savedPartialEncounter.vehicles[0].entityType === "VEHICLE" &&
+    !!savedPartialEncounter.vehicles[0].vehicleId &&
+    Array.isArray(savedPartialEncounter.vehicles[0].locations) &&
+    savedPartialEncounter.locations[0].entityType === "LOCATION" &&
+    !!savedPartialEncounter.locations[0].locationId &&
+    !!savedPartialEncounter.links[0].linkId
+);
+
 var dropPal = model.store.dropAssociation(caseComposer.associationId);
 var afterDrop = model.store.getLead(nestCase.leadId);
 check("dropAssociation ok", dropPal.ok && dropPal.removed);
@@ -3434,6 +4048,132 @@ check(
   "officer brief includes rally",
   issued.order.officerBriefs.some(function (row) {
     return row && String(row.rally || "").indexOf("32.79") !== -1;
+  })
+);
+
+var arrestCase = model.createLeadSnapshot();
+arrestCase.person.name.lastName = "ROSTER";
+arrestCase.person.name.firstName = "ONE";
+arrestCase.person.arrests = [
+  {
+    arrestId: "arr_listed",
+    arrestDate: "2026-09-03",
+    arrestDateTime: "2026-09-03T09:00",
+    encounterId: "enc_listed",
+    iceEventNumber: "DAL-1"
+  }
+];
+model.store.saveLead(arrestCase, { mode: "commit" });
+var listed = model.store.listArrests({});
+check(
+  "listArrests includes committed case arrests without a packet",
+  listed.some(function (row) {
+    return row && row.arrestId === "arr_listed" && row.leadId === arrestCase.leadId;
+  })
+);
+check(
+  "listArrests filters by encounter",
+  model.store.listArrests({ encounterId: "enc_listed" }).some(function (row) {
+    return row && row.arrestId === "arr_listed";
+  }) &&
+    !model.store.listArrests({ encounterId: "enc_other" }).some(function (row) {
+      return row && row.arrestId === "arr_listed";
+    })
+);
+check(
+  "listArrests filters by date",
+  model.store.listArrests({ from: "2026-09-03", to: "2026-09-03" }).some(function (row) {
+    return row && row.arrestId === "arr_listed";
+  }) &&
+    !model.store.listArrests({ from: "2026-09-04", to: "2026-09-04" }).some(function (row) {
+      return row && row.arrestId === "arr_listed";
+    })
+);
+check(
+  "listArrests search matches ICE event",
+  model.store.listArrests({ q: "DAL-1" }).some(function (row) {
+    return row && row.arrestId === "arr_listed";
+  })
+);
+
+var enrichCase = model.createLeadSnapshot();
+enrichCase.person.name.lastName = "PACKET";
+enrichCase.person.name.firstName = "FILL";
+enrichCase.person.arrests = [
+  {
+    arrestId: "arr_enrich",
+    bookinRecordId: "book_enrich",
+    arrestDate: "2026-09-03",
+    arrestDateTime: "2026-09-03T10:00"
+  },
+  {
+    arrestId: "arr_keep",
+    bookinRecordId: "book_keep",
+    arrestDate: "2026-09-03",
+    arrestDateTime: "2026-09-03T11:00",
+    iceEventNumber: "DAL-KEEP"
+  },
+  {
+    arrestId: "arr_orphan",
+    bookinRecordId: "book_gone",
+    arrestDate: "2026-09-03",
+    arrestDateTime: "2026-09-03T12:00",
+    iceEventNumber: "DAL-ORPHAN"
+  }
+];
+model.store.saveLead(enrichCase, { mode: "commit" });
+context.localStorage.setItem(
+  "alien-book-in.saved-records.v1",
+  JSON.stringify([
+    {
+      id: "book_enrich",
+      encounterId: "enc_from_packet",
+      iceEvent: "DAL-ENRICH",
+      encounterNumber: "ENC-ENRICH",
+      officersName: "J. Packet",
+      team: "DAL-3"
+    },
+    {
+      id: "book_keep",
+      iceEvent: "DAL-PACKET"
+    }
+  ])
+);
+var fromDisk = model.store.listArrests({});
+var enrichRow = fromDisk.filter(function (row) {
+  return row && row.arrestId === "arr_enrich";
+})[0];
+check(
+  "listArrests reads packets from the Book-in store to fill blanks",
+  enrichRow &&
+    enrichRow.iceEvent === "DAL-ENRICH" &&
+    enrichRow.encounterNumber === "ENC-ENRICH" &&
+    enrichRow.encounterId === "enc_from_packet" &&
+    enrichRow.officer === "J. Packet" &&
+    enrichRow.team === "DAL-3"
+);
+check(
+  "listArrests keeps arrest ICE when the packet also has one",
+  fromDisk.some(function (row) {
+    return row && row.arrestId === "arr_keep" && row.iceEvent === "DAL-KEEP";
+  })
+);
+check(
+  "listArrests keeps an arrest whose packet is gone",
+  fromDisk.some(function (row) {
+    return row && row.arrestId === "arr_orphan" && row.iceEvent === "DAL-ORPHAN";
+  })
+);
+check(
+  "listArrests encounter filter uses packet encounter id",
+  model.store.listArrests({ encounterId: "enc_from_packet" }).some(function (row) {
+    return row && row.arrestId === "arr_enrich";
+  })
+);
+check(
+  "listArrests packets: [] skips Book-in enrich",
+  model.store.listArrests({ packets: [] }).some(function (row) {
+    return row && row.arrestId === "arr_enrich" && !row.iceEvent;
   })
 );
 

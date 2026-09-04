@@ -15,3 +15,10 @@ Thumbs.db
 *.log
 .env
 *.local
+
+# Legacy/reference artifacts are not product source.
+Alien_Book_In_Docs_v1_0_4.html
+Narrative_Builder.html
+address_old.js
+style-old.css
+docs/COPDoc_Oracle_Build_Package_v1.0.0.zip

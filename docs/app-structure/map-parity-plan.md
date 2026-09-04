@@ -1,6 +1,6 @@
-# Case map ↔ planning map — shared features (not built)
+# Case map ↔ planning map — shared feature ledger
 
-**Status:** PR-A shipped in 0.53.0 (shared pin card + planning/officer photos). PR-B / PR-C still proposed.  
+**Status:** Shared pin card, planning/officer photos, dual object/person photos, and the Encounters layer are shipped. PR-B and the remaining optional parity items are still proposed.
 **Goal:** Keep two maps with two jobs. Share the pin card (photo + facts) and a short list of other wins. Do not merge the engines.
 
 How to comment: under any **D#**, **PR#**, or **Q#**:
@@ -29,7 +29,7 @@ Do **not** replace one with the other. Do **not** put planning markup on a case.
 
 ### Case map (best)
 
-- **Photo on the pin card.** Click a pin (or legend row) → floating card. If the **object** has a photo, it shows above title / vehicle line / address. Load is lazy (`popupopen`), from IndexedDB thumbs. Owner order today: **LOCATION**, then **VEHICLE**.
+- **Dual photo pin card.** Click a pin (or legend row) → floating card. The mapped object photo is main and an associated person portrait is inset; either can stand alone. Load is lazy (`popupopen`) from IndexedDB thumbs.
 - Kind glyphs (residence / worksite / vehicle / parking) via `COPDoc.mapIcons`, plus pin color and vehicle color.
 - Primary ring. Occupancy: **current** places only.
 - Side list of every place (mapped or not). Click flies and opens the card. **Navigate** (Google Maps). Set primary / pin color on the case view.
@@ -39,7 +39,7 @@ Do **not** replace one with the other. Do **not** put planning markup on a case.
 ### Planning map (best)
 
 - Map-first shell: overlays on the tiles, one **Layers** dock, Brief / Print in the app bar.
-- Multi-lead layers with independent eyes: Active targets, Arrests, Officer homes, Origin / finds, Markup.
+- Multi-record layers with independent eyes: Active targets, Arrests, Encounters, Officer homes, Origin / finds, Markup.
 - Icon library (category default or one pin). Labels / arrows. Home view + presets.
 - Table of the selected layer; fly-to; ungeocoded rows stay in the list, italic.
 - Planning-only storage.
@@ -52,13 +52,10 @@ Basemap Map / Sat / Hyb (OSM + Esri). `COPDoc.mapIcons` badges. Leaflet 1.9.4.
 
 ---
 
-## 3. The gap you named
+## 3. Closed gap
 
-On the case map, a pin of a house/car opens a **card with that object’s photo**.
-
-On `map.html`, the same click is a Leaflet default popup: **name, address, association**. No photo. Catalog rows do not carry `photoOwners`. The page does not load `functions/model/media.js`.
-
-That is the first thing to copy.
+Both engines now use `functions/map-popup.js`, load media lazily, and apply the
+same dual object/person display rule. The planning map remains read-only.
 
 > Comment (gap):
 
@@ -68,26 +65,33 @@ That is the first thing to copy.
 
 ### D1 — Same pin card, two engines
 
-Extract the case-map popup (photo box + body + lazy `fillPopupPhoto`) to a shared helper, e.g. `COPDoc.mapPopup` in `functions/map-popup.js` (or a named export on `location-map.js` if you want one less file). Both maps bind that DOM node. CSS stays `.case-map-popup*` (rename later only if you want).
+The extracted `COPDoc.mapPopup` helper in `functions/map-popup.js` owns the card
+DOM and lazy media fill. Both maps bind it; CSS stays `.case-map-popup*`.
 
 Do **not** instantiate `locationMap.displayMany` inside `#map`.
 
 > Comment (D1):
 
-### D2 — Photo is of the object the pin is of
+### D2 — Show the mapped object and its associated person
 
 Same media rule as [data-models.md](data-models.md): mugshot → PERSON, house → LOCATION, plate/car → VEHICLE, portrait → OFFICER. **Never LEAD.**
 
-Recommended owner chain (first committed primary, else first photo):
+The popup has two independent owner groups. Each group chooses its first
+committed primary photo (or first committed photo):
 
-| Planning layer | Owners, in order |
-| --- | --- |
-| Active targets | LOCATION, then VEHICLE (if a vehicle place), then PERSON |
-| Origin / finds | VEHICLE, then LOCATION |
-| Arrests | PERSON (the arrest is of the subject) |
-| Officer homes | LOCATION, then OFFICER |
+| Planning layer | Main object owners | Person inset owners |
+| --- | --- | --- |
+| Active targets | LOCATION, then VEHICLE for a vehicle place | Case subject plus PERSON associations to that LOCATION/VEHICLE |
+| Origin / finds | VEHICLE, then LOCATION | Case subject plus linked PERSON records |
+| Encounters | LOCATION, then encounter VEHICLE | Encounter subjects |
+| Arrests | none | PERSON (rendered as the single main photo) |
+| Officer homes | LOCATION | OFFICER |
 
-Case map today is LOCATION then VEHICLE only. **PR-A** uses that same chain on the planning map. **PR-C** may add PERSON as last fallback on **both** maps so a house with no house shot still shows the face. Until then, no face on a location pin unless the location (or vehicle) owns a photo.
+When both groups resolve, the object is the main image and the person is an
+inset. Object-only stays one image. Person-only promotes the portrait to the
+main image. Case map and planning map use the same rule. Associated people are
+not additional media owners: every row remains on the PERSON, VEHICLE,
+LOCATION, or OFFICER it depicts.
 
 Lazy load on `popupopen`. Revoke blob URLs when markers rebuild. Do **not** prefetch every thumb at plot time.
 
@@ -103,7 +107,10 @@ Optional links on the card (recommended): **Open case** (`case.html?id={leadId}`
 
 ### D4 — Catalog rows carry owners, not bytes
 
-`map-targets.js` collect already has `locationId` / `leadId`. Add `personId`, `vehicleId`, `officerId`, `photoOwners[]`. No data-URLs on the catalog. Target sheet can keep prefetching `photoDataUrl` for saved HTML.
+Catalog rows carry `objectPhotoOwners[]` and `personPhotoOwners[]` plus their
+object ids. Legacy `photoOwners[]` remains a compatibility fallback. No
+data-URLs are stored in the catalog. Target sheet can keep prefetching a data
+URL for saved HTML.
 
 > Comment (D4):
 
@@ -148,9 +155,10 @@ Filed **targets** and **origin** skip historical occupancy, same as the case map
 pin click / legend or table row
   → open shared popup card (photo hidden)
   → popupopen
-  → media.list(owner) for each photoOwners[] until a committed photo
+  → resolve objectPhotoOwners[] and personPhotoOwners[] in parallel
+  → for each group: first committed primary, else first committed photo
   → blob(mediaId, "thumb") else "display"
-  → object URL into .case-map-popup-photo
+  → object URL into main and optional person-inset image
 ```
 
 `map.html` script order adds **read-only** media:
@@ -198,7 +206,7 @@ Navigate + Open case / Open officer on the planning card. Historical occupancy s
 
 Pick after comment:
 
-- PERSON last-fallback on both maps
+- Additional popup links (dual object/person display is already shipped)
 - Case-map legend eyes (home/work/vehicle/parking)
 - Planning glyphs tint from `pinColor` / vehicle color
 - Overlap nudge + vehicle-coord reuse on `map-targets.js`
@@ -209,11 +217,9 @@ Pick after comment:
 
 ## 8. Open questions
 
-### Q1 — PERSON as last fallback on a place pin?
+### Q1 — PERSON on a place pin?
 
-- [x] Later (PR-C). First ship LOCATION then VEHICLE, matching today’s case map. (Recommended)
-- [ ] Yes in PR-A, both maps
-- [ ] Never. Face only on arrest / officer pins
+- [x] Show it independently from the object: inset when both exist, single image when person-only.
 - [ ] Other:
 
 > Comment (Q1):
@@ -251,7 +257,7 @@ Pick after comment:
 | --- | --- |
 | Engines | Stay two |
 | First ship | PR-A photos only |
-| Owners | Same as case map; PERSON later |
+| Owners | Object main + associated PERSON/OFFICER inset; person-only falls back to one image |
 | Photo click | Display only |
 | Planning writes | Still none of leads/media |
 | Case map extras | Officer `photoOwners` in PR-A; legend eyes in PR-C |

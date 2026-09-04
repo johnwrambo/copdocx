@@ -4,25 +4,28 @@
 | --- | --- |
 | **Author** | TBD |
 | **Date** | 2026-08-30 |
-| **Status** | Draft (rev 3) |
+| **Status** | Historical design pass (rev 3); current rules are in the focused outline files |
 | **Product** | COPDoc (vanilla HTML/JS/CSS ICE/ERO field app) |
 | **Workspace** | `C:\Users\johnw\PycharmProjects\COPDocX` |
-| **Current stamp** | 0.5.2 (SemVer 0.x until save-shape freeze) |
+| **Snapshot stamp** | 0.5.2; current product version comes from `functions/workspace-config.js` (0.67.0) |
 | **Living outline (canonical tables)** | [`docs/app-structure/`](C:\Users\johnw\PycharmProjects\COPDocX\docs\app-structure\README.md) |
 
-This document is the design pass. It does not change application HTML/JS/CSS except `docs/app-structure/`. Book-in stays in its own store.
+This document preserves the original design pass and proposed PR sequence. Its
+"today," "current," File-menu, and pre-triad statements describe that old
+snapshot, not the current app. Use `chrome.md`, `taxonomy.md`, `records.md`, and
+`data-models.md` for implemented behavior. Book-in stays in its own store.
 
-**Where facts live:** File menu, triad names, `data-page`, lifecycle tables, and model fields are **only** in the outline. This document keeps decisions, current-state research, alternatives, risks, API sketches, and the PR file lists. If a table here and an outline file disagree, fix this document.
+**Where facts live:** Chrome/navigation, triad names, `data-page`, lifecycle tables, and model fields are **only** in the outline. This document keeps decisions, historical research, alternatives, risks, API sketches, and PR file lists. If a table here and an outline file disagree, follow and update the focused outline document.
 
 ---
 
-## Overview
+## Historical overview
 
-COPDoc is a static multi-page field app. Officers and vehicles already follow **list → view snapshot → edit form**. Leads do not: `lead.html` is the form, `index.html` dumps the user onto it, and File → Open is the only roster. Chrome is copy-pasted; Admin subpages occupy the **action** side of the nav row; File still means New/Save/Open. Autosave and Save both write the live store.
+At this design snapshot, COPDoc was a static multi-page field app where officers and vehicles followed **list → view snapshot → edit form**, while Leads had not yet been split. The case triad and shared chrome have since shipped; this paragraph is retained as design history.
 
 This design makes every record type follow the officer/vehicle template, splits **draft (autosave)** from **committed (Save)**, paints chrome from one helper, and gives officers and fleet vehicles real models. Stores stay split.
 
-**Until the lead triad ships**, `lead.html` remains the form (`data-page="lead-form"`). Save stays on that page; Cancel and Book-in are omitted; File New/Open stay. Hydrate **only** when `?id=` is present (not `currentLeadId`); File New/Open must `replaceState` the URL. See [records.md](C:\Users\johnw\PycharmProjects\COPDocX\docs\app-structure\records.md) Interim.
+The lead triad has shipped: `leads.html` is the collection, `case.html` is the view, `lead-form.html` is the editor, and `lead.html` redirects for compatibility.
 
 ---
 
@@ -126,7 +129,7 @@ flowchart LR
 3. Autosave writes **draft**. Save **commits**. Lists, exports, dashboard counts, shift pickers, and the people registry prefer committed data.
 4. Nav row 2: File (disk) · tabs including Admin ▾ · action slot (Add / Edit|Save / Book-in).
 5. Real `createOfficer`. Extend `createVehicle` with `governmentVehicle`. Reuse `createLocation` for officer address.
-6. Living outline in `docs/app-structure/` that future pages must follow — **one File menu, one triad table**.
+6. Living outline in `docs/app-structure/` that future pages must follow — **one chrome contract, one triad table**. Workspace transfer lives on Home, not in a global File menu.
 7. Ordered, independently mergeable PRs, including **interim** lead behavior.
 
 ### Non-goals

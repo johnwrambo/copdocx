@@ -512,6 +512,49 @@
   function collectSubjectPlaces(snapshot, subject) {
     var places = [];
     var personAddrIndex = {};
+    function pushPersonOwner(list, id) {
+      var key = String(id || "").trim();
+      if (!key || list.some(function (row) { return row.id === key; })) {
+        return;
+      }
+      list.push({ type: "PERSON", id: key });
+    }
+    function peopleForObject(type, id) {
+      var out = [];
+      pushPersonOwner(out, subject && (subject.personId || subject.id));
+      if (!id) {
+        return out;
+      }
+      var links = [];
+      var m = model();
+      if (m.store && typeof m.store.associationsFor === "function") {
+        links = links.concat(m.store.associationsFor(type, id) || []);
+      }
+      links = links.concat((snapshot && snapshot.links) || []);
+      links.forEach(function (link) {
+        if (!link || link.junked || !link.from || !link.to) {
+          return;
+        }
+        var fromType = String(link.from.type || "").toUpperCase();
+        var toType = String(link.to.type || "").toUpperCase();
+        var objectType = String(type || "").toUpperCase();
+        if (
+          fromType === "PERSON" &&
+          toType === objectType &&
+          String(link.to.id || "") === String(id)
+        ) {
+          pushPersonOwner(out, link.from.id);
+        }
+        if (
+          toType === "PERSON" &&
+          fromType === objectType &&
+          String(link.from.id || "") === String(id)
+        ) {
+          pushPersonOwner(out, link.to.id);
+        }
+      });
+      return out;
+    }
     function rememberPersonPair(loc, pair) {
       if (!pair) {
         return;
@@ -579,6 +622,15 @@
       if (vehicleId) {
         photoOwners.push({ type: "VEHICLE", id: vehicleId });
       }
+      var personPhotoOwners = [];
+      [
+        { type: "LOCATION", id: locationId },
+        { type: "VEHICLE", id: vehicleId }
+      ].forEach(function (ref) {
+        peopleForObject(ref.type, ref.id).forEach(function (owner) {
+          pushPersonOwner(personPhotoOwners, owner.id);
+        });
+      });
       var occupancy = occupancyLine(loc) || occupancyLine(vehicle) || "";
       var title =
         associationLabel(loc.association) || subjectPlaceKindLabel(kind);
@@ -606,6 +658,8 @@
         vehicleColor: vehicleColor || "",
         color: color,
         photoOwners: photoOwners,
+        objectPhotoOwners: photoOwners,
+        personPhotoOwners: personPhotoOwners,
         navigateUrl: mapsNavigateUrl(loc, pair)
       });
       if (!fromVehicle) {
@@ -3436,6 +3490,41 @@
     }
   }
 
+  function bindCaseListMode() {
+    var roster = byId("arrestRosterHost");
+    var files = byId("caseFilesPanel");
+    if (!roster || !files) {
+      return;
+    }
+    function show(mode) {
+      var arrests = mode !== "files";
+      roster.hidden = !arrests;
+      files.hidden = arrests;
+      document.querySelectorAll("[data-case-list-mode]").forEach(function (btn) {
+        btn.setAttribute(
+          "aria-pressed",
+          btn.getAttribute("data-case-list-mode") === (arrests ? "arrests" : "files")
+            ? "true"
+            : "false"
+        );
+      });
+    }
+    document.querySelectorAll("[data-case-list-mode]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        show(btn.getAttribute("data-case-list-mode") || "arrests");
+      });
+    });
+    show("arrests");
+  }
+
+  function mountArrestRoster() {
+    var host = byId("arrestRosterHost");
+    if (!host || !window.COPDoc || !COPDoc.arrestRoster) {
+      return;
+    }
+    COPDoc.arrestRoster.mount(host, { showGenerate: true });
+  }
+
   function bindFilters() {
     document.querySelectorAll("[data-record-filter]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -4952,10 +5041,12 @@
   }
 
   function boot() {
-    if (pageKey() === "leads") {
+    if (pageKey() === "leads" || pageKey() === "cases") {
       bindFilters();
       bindExports();
+      bindCaseListMode();
       paintList();
+      mountArrestRoster();
       return;
     }
     if (pageKey() === "lead" || pageKey() === "case") {

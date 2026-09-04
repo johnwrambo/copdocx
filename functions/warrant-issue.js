@@ -91,7 +91,9 @@
     try {
       var parsed = JSON.parse(localStorage.getItem(ADMIN_KEY) || "{}") || {};
       var officers = parsed.officers || [];
-      return officers.filter(isCommitted);
+      return officers.filter(function (row) {
+        return row && !row.junked && isCommitted(row);
+      });
     } catch (error) {
       return [];
     }

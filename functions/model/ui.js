@@ -259,6 +259,19 @@
 
   function saveCurrentLead(options) {
     var quiet = Boolean(options && options.quiet);
+    var foreignWarrants = byId("foreignWarrants");
+    var foreignWarrantCountry = byId("foreignWarrantCountry");
+    if (
+      !quiet &&
+      foreignWarrants &&
+      foreignWarrants.value === "yes" &&
+      foreignWarrantCountry &&
+      !String(foreignWarrantCountry.value || "").trim()
+    ) {
+      setStatus("Enter the country for the foreign warrant.");
+      foreignWarrantCountry.focus();
+      return null;
+    }
     var snapshot = model.collectLead();
     var result = model.store.saveLead(snapshot, {
       mode: quiet ? "draft" : "commit"
@@ -481,7 +494,7 @@
       a.href = "case.html?id=" + encodeURIComponent(snapshot.leadId);
       a.textContent = "Back to case";
     } else {
-      a.href = "leads.html";
+      a.href = "cases.html";
       a.textContent = "Back to cases";
     }
   }
@@ -546,6 +559,24 @@
     refreshSavedLeadSelect();
     bindLeadAutoSave();
     bindCriminalProfileLive();
+    var foreignWarrants = byId("foreignWarrants");
+    var foreignWarrantCountry = byId("foreignWarrantCountry");
+    function syncForeignWarrantCountry() {
+      if (!foreignWarrants || !foreignWarrantCountry) {
+        return;
+      }
+      var yes = foreignWarrants.value === "yes";
+      foreignWarrantCountry.disabled = !yes;
+      foreignWarrantCountry.required = yes;
+      foreignWarrantCountry.setAttribute("aria-required", yes ? "true" : "false");
+      if (!yes) {
+        foreignWarrantCountry.value = "";
+      }
+    }
+    if (foreignWarrants) {
+      foreignWarrants.addEventListener("change", syncForeignWarrantCountry);
+      syncForeignWarrantCountry();
+    }
     if (root.officers && typeof root.officers.bindAssign === "function") {
       var assignedSnap =
         qid && model.store ? model.store.getLead(qid) : null;

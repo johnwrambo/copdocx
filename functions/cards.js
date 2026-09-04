@@ -601,6 +601,9 @@ function cardSummary(card) {
 }
 
 function updateCardTitles(list, title, allowEmpty) {
+  if (!list) {
+    return;
+  }
   var cards = list.querySelectorAll(":scope > fieldset");
   cards.forEach(function (card, index) {
     var toggle = card.querySelector(":scope > legend .card-toggle");

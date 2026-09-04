@@ -95,6 +95,7 @@
           derivedAt: "",
           coverage: null
         },
+        completed: null,
         meta: {
           createdAt: now,
           updatedAt: now,

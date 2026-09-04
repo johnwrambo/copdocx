@@ -20,10 +20,44 @@
     return { lastName: "", firstName: "", middleName: "" };
   }
 
+  function blankCriminal() {
+    return {
+      isCriminal: false,
+      hasCriminalRecord: false,
+      hasCriminalWarrants: false,
+      foreignWarrantsKnown: false,
+      hasForeignWarrants: false,
+      foreignWarrantCountry: "",
+      sexOffender: false,
+      foreignFugitive: false,
+      armed: false,
+      threatLevel: "none",
+      fbiNumber: "",
+      ncicNumber: "",
+      stateId: "",
+      rapSheet: ""
+    };
+  }
+
+  function blankImmigration() {
+    return {
+      alienNumber: "",
+      finNumber: "",
+      disposition: "",
+      status: "",
+      finalOrder: false,
+      finalOrderDate: "",
+      firstDeportationDate: "",
+      lastDeportationDate: "",
+      baseballCards: []
+    };
+  }
+
   function createPerson(extra) {
-    return model.assign(
+    extra = extra || {};
+    var built = model.assign(
       {
-        personId: model.newId("p"),
+        personId: extra.personId || model.newId("p"),
         entityType: "PERSON",
         caseRole: "",
         junked: false,
@@ -38,37 +72,58 @@
         locations: [],
         aliases: [],
         documents: [],
-        criminal: {
-          isCriminal: false,
-          hasCriminalRecord: false,
-          hasCriminalWarrants: false,
-          sexOffender: false,
-          foreignFugitive: false,
-          armed: false,
-          threatLevel: "none",
-          fbiNumber: "",
-          ncicNumber: "",
-          stateId: "",
-          rapSheet: ""
-        },
+        criminal: blankCriminal(),
         encounters: [],
         arrests: [],
         convictions: [],
         warrants: [],
-        immigration: {
-          alienNumber: "",
-          finNumber: "",
-          disposition: "",
-          status: "",
-          finalOrder: false,
-          finalOrderDate: "",
-          firstDeportationDate: "",
-          lastDeportationDate: "",
-          baseballCards: []
-        }
+        immigration: blankImmigration()
       },
       extra
     );
+    built.entityType = "PERSON";
+    if (!built.personId) {
+      built.personId = model.newId("p");
+    }
+    built.name = model.assign(
+      blankName(),
+      built.name && typeof built.name === "object" && !Array.isArray(built.name)
+        ? built.name
+        : {}
+    );
+    [
+      "locations",
+      "aliases",
+      "documents",
+      "encounters",
+      "arrests",
+      "convictions",
+      "warrants"
+    ].forEach(function (key) {
+      if (!Array.isArray(built[key])) {
+        built[key] = [];
+      }
+    });
+    built.criminal = model.assign(
+      blankCriminal(),
+      built.criminal &&
+        typeof built.criminal === "object" &&
+        !Array.isArray(built.criminal)
+        ? built.criminal
+        : {}
+    );
+    built.immigration = model.assign(
+      blankImmigration(),
+      built.immigration &&
+        typeof built.immigration === "object" &&
+        !Array.isArray(built.immigration)
+        ? built.immigration
+        : {}
+    );
+    if (!Array.isArray(built.immigration.baseballCards)) {
+      built.immigration.baseballCards = [];
+    }
+    return built;
   }
 
   function createAlias(extra) {
@@ -121,12 +176,33 @@
       {
         arrestId: model.newId("arr"),
         arrestDate: "",
+        arrestTime: "",
+        arrestDateTime: "",
         arrestCharge: "",
         arrestStatute: "",
         arrestClass: "",
         arrestAgency: "",
         arrestAgencyCode: "",
-        arrestLocation: ""
+        arrestLocation: "",
+        latitude: "",
+        longitude: "",
+        arrestingOfficer: "",
+        team: "",
+        iceEventNumber: "",
+        encounterNumber: "",
+        encounterId: "",
+        subjectRole: "",
+        vehiclePosition: "",
+        bookinRecordId: "",
+        bookInDateTime: "",
+        booking: {
+          cash: "",
+          travelDocuments: "",
+          propertyTag: "",
+          holdingCellNumber: "",
+          children: "",
+          medical: {}
+        }
       },
       extra
     );
@@ -189,8 +265,14 @@
         cardId: model.newId("bbc"),
         generatedAt: model.nowIso ? model.nowIso() : "",
         text: "",
+        html: "",
+        photoMediaId: "",
         arrestDate: "",
-        disposition: ""
+        disposition: "",
+        bookinRecordId: "",
+        foreignWarrantsKnown: true,
+        hasForeignWarrants: false,
+        foreignWarrantCountry: ""
       },
       extra
     );

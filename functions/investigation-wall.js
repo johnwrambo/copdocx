@@ -784,14 +784,14 @@
       prev.vin = readField(card, "vin");
       prev.registeredOwnerName = readField(card, "registeredOwner");
       prev.governmentVehicle = false;
-      m.store.saveVehicleRecord(prev, { mode: "commit" });
+      m.store.saveObjectRecord("VEHICLE", prev, { mode: "commit" });
     } else if (type === "PERSON") {
       var person = m.store.getPerson(id) || m.createPerson({ personId: id, caseRole: "" });
       person.name = person.name || {};
       person.name.lastName = readField(card, "lastName");
       person.name.firstName = readField(card, "firstName");
       person.name.middleName = readField(card, "middleName");
-      m.store.upsertPerson(person);
+      m.store.saveObjectRecord("PERSON", person, { mode: "commit" });
     } else if (type === "LOCATION") {
       var loc = m.store.getLocationRecord(id) || m.createLocation({ locationId: id });
       loc.street = readField(card, "street");
@@ -799,21 +799,21 @@
       loc.city = readField(card, "city");
       loc.state = readField(card, "state").toUpperCase();
       loc.zip = readField(card, "zip");
-      m.store.saveLocationRecord(loc, { mode: "commit" });
+      m.store.saveObjectRecord("LOCATION", loc, { mode: "commit" });
     } else if (type === "BUSINESS") {
       var biz =
         (m.store.getBusinessRecord && m.store.getBusinessRecord(id)) ||
         m.createBusiness({ businessId: id });
       biz.name = readField(card, "name");
       biz.phone = readField(card, "phone");
-      m.store.saveBusinessRecord(biz, { mode: "commit" });
+      m.store.saveObjectRecord("BUSINESS", biz, { mode: "commit" });
     } else if (type === "ENTITY") {
       var ent =
         (m.store.getEntityRecord && m.store.getEntityRecord(id)) ||
         m.createCustomEntity({ entityId: id });
       ent.name = readField(card, "name");
       ent.kind = readField(card, "kind");
-      m.store.saveEntityRecord(ent, { mode: "commit" });
+      m.store.saveObjectRecord("ENTITY", ent, { mode: "commit" });
     }
     var invId = currentId();
     if (m.store.reuseInvestigationIdentity && invId && nodeId) {
@@ -1370,6 +1370,9 @@
     var record = loadRecord();
     if (!placeType) {
       return;
+    }
+    if (!record && typeof root.ensureInvestigationDraft === "function") {
+      record = root.ensureInvestigationDraft();
     }
     if (!m || !m.store || !record || !m.store.addInvestigationObject) {
       return;

@@ -1,5 +1,5 @@
 /**
- * Map location layers: active targets, arrests, officer homes, origin finds.
+ * Map location layers: active targets, arrests, encounters, officer homes, origin finds.
  * Icon library assigns a glyph to a category or a single pin.
  * Writes only copdocx.map.layers.v1 and copdocx.map.icons.v1.
  */
@@ -8,9 +8,13 @@
 
   var root = (global.COPDoc = global.COPDoc || {});
   var api = (root.map = root.map || {});
-  var LAYER_KEY = "copdocx.map.layers.v1";
-  var ICON_KEY = "copdocx.map.icons.v1";
-  var ADMIN_KEY = "copdoc.admin.v1";
+  var config = root.config;
+  var LAYER_KEY =
+    (config && config.storageKey("mapLayers")) || "copdocx.map.layers.v1";
+  var ICON_KEY =
+    (config && config.storageKey("mapIcons")) || "copdocx.map.icons.v1";
+  var ADMIN_KEY =
+    (config && config.storageKey("admin")) || "copdoc.admin.v1";
   var LEGACY_PALETTE = [
     "Crosshair",
     "MapPin",
@@ -27,24 +31,28 @@
   var DEFAULT_ICONS = {
     targets: "Target",
     arrests: "Arrest",
+    encounters: "Contact",
     officers: "OfficerHome",
     origin: "Origin"
   };
   var CATEGORY_COLORS = {
     targets: "#f0ad35",
     arrests: "#e96868",
+    encounters: "#b58bea",
     officers: "#68a8e8",
     origin: "#55c7bd"
   };
   var MARKER_LABELS = {
     targets: "Active target",
     arrests: "Arrest",
+    encounters: "Encounter",
     officers: "Officer home",
     origin: "Origin or find"
   };
   var DEFAULT_VISIBLE = {
     targets: true,
     arrests: true,
+    encounters: true,
     officers: true,
     origin: false,
     markup: true
@@ -52,6 +60,7 @@
   var HEADERS = {
     targets: ["Rank", "Subject", "Address", "Association"],
     arrests: ["Date", "Subject", "Charge", "Location"],
+    encounters: ["Date", "Encounter", "Subjects", "Location"],
     officers: ["Officer", "Address", "Duty"],
     origin: ["Subject", "Address", "Association"],
     markup: ["Type", "Text"]
@@ -59,6 +68,7 @@
   var EMPTY = {
     targets: "No ranked target locations.",
     arrests: "No arrest locations on filed cases.",
+    encounters: "No completed encounters yet.",
     officers: "No officer home addresses with coordinates.",
     origin: "No plate-check / origin locations.",
     markup: "No labels or arrows yet."
@@ -66,6 +76,7 @@
   var LAYER_ORDER = [
     ["targets", "Active targets"],
     ["arrests", "Arrests"],
+    ["encounters", "Encounters"],
     ["officers", "Officer homes"],
     ["origin", "Origin / finds"],
     ["markup", "Markup"]
@@ -74,6 +85,7 @@
   var catalog = {
     targets: [],
     arrests: [],
+    encounters: [],
     officers: [],
     origin: []
   };
@@ -290,6 +302,35 @@
     return owners;
   }
 
+  function linkedPersonOwners(storeState, snapshot, objectRefs, seedPersonId) {
+    var owners = [];
+    pushOwner(owners, "PERSON", seedPersonId);
+    var links = Object.keys((storeState && storeState.associations) || {}).map(function (id) {
+      return storeState.associations[id];
+    }).concat((snapshot && snapshot.links) || []);
+    (objectRefs || []).forEach(function (ref) {
+      if (!ref || !ref.id) {
+        return;
+      }
+      var type = String(ref.type || "").toUpperCase();
+      var id = String(ref.id);
+      links.forEach(function (link) {
+        if (!link || link.junked || !link.from || !link.to) {
+          return;
+        }
+        var fromType = String(link.from.type || "").toUpperCase();
+        var toType = String(link.to.type || "").toUpperCase();
+        if (fromType === "PERSON" && toType === type && String(link.to.id || "") === id) {
+          pushOwner(owners, "PERSON", link.from.id);
+        }
+        if (toType === "PERSON" && fromType === type && String(link.from.id || "") === id) {
+          pushOwner(owners, "PERSON", link.to.id);
+        }
+      });
+    });
+    return owners;
+  }
+
   function popupPinFor(row) {
     var extraBits = [];
     if (row.extra) {
@@ -298,15 +339,24 @@
     if (row.association && extraBits.indexOf(row.association) === -1) {
       extraBits.push(row.association);
     }
-    return {
+    var pin = {
       title: row.subject || "",
       extra: extraBits.join(" · "),
       address: row.address && row.address !== "(no street)" ? row.address : "",
       occupancy: row.occupancy || "",
       isPrimary: row.category === "targets" && Number(row.priority) === 1,
       photoOwners: row.photoOwners || [],
+      objectPhotoOwners: row.objectPhotoOwners,
+      personPhotoOwners: row.personPhotoOwners,
       photoDataUrl: row.photoDataUrl || ""
     };
+    if (row.category === "targets" && row.leadId) {
+      pin.caseUrl = "case.html?id=" + encodeURIComponent(row.leadId);
+      pin.caseWindowName =
+        "copdoc-case-" + String(row.leadId).replace(/[^A-Za-z0-9_-]/g, "_");
+      pin.caseLabel = "Open case";
+    }
+    return pin;
   }
 
   function revokePopupUrls() {
@@ -322,6 +372,193 @@
     popupUrls = [];
   }
 
+  function pinFromEncounter(encounter, storeState) {
+    if (!encounter) {
+      return null;
+    }
+    if (
+      encounter.completed &&
+      encounter.completed.pin &&
+      hasCoords(encounter.completed.pin.latitude, encounter.completed.pin.longitude)
+    ) {
+      return encounter.completed.pin;
+    }
+    var source = encounter.completed || encounter;
+    function fromLoc(loc) {
+      loc = hydrateMapLocation(loc, storeState);
+      if (!hasCoords(loc.latitude, loc.longitude)) {
+        return null;
+      }
+      return {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        arrestLocation: formatAddress(loc),
+        locationId: loc.locationId || ""
+      };
+    }
+    var i;
+    var pin;
+    var locations = source.locations || [];
+    for (i = 0; i < locations.length; i += 1) {
+      pin = fromLoc(locations[i]);
+      if (pin) {
+        return pin;
+      }
+    }
+    var vehicles = source.vehicles || [];
+    for (i = 0; i < vehicles.length; i += 1) {
+      var nested = (vehicles[i] && vehicles[i].locations) || [];
+      var j;
+      for (j = 0; j < nested.length; j += 1) {
+        pin = fromLoc(nested[j]);
+        if (pin) {
+          return pin;
+        }
+      }
+    }
+    return null;
+  }
+
+  function hydrateMapLocation(loc, storeState) {
+    loc = loc || {};
+    if (hasCoords(loc.latitude, loc.longitude)) {
+      return loc;
+    }
+    var canonical =
+      loc.locationId &&
+      storeState &&
+      storeState.locations &&
+      storeState.locations[loc.locationId];
+    if (canonical && hasCoords(canonical.latitude, canonical.longitude)) {
+      return Object.assign({}, loc, {
+        latitude: canonical.latitude,
+        longitude: canonical.longitude,
+        street: loc.street || canonical.street || "",
+        city: loc.city || canonical.city || "",
+        state: loc.state || canonical.state || "",
+        zip: loc.zip || canonical.zip || ""
+      });
+    }
+    var parsed = parseCoords(loc.latLong);
+    if (parsed) {
+      return Object.assign({}, loc, parsed);
+    }
+    return loc;
+  }
+
+  function collectEncounters(storeState) {
+    catalog.encounters = [];
+    var leads = (storeState && storeState.leads) || {};
+    var encounters = (storeState && storeState.encounters) || {};
+    Object.keys(encounters).forEach(function (encounterId) {
+      var encounter = encounters[encounterId];
+      if (!encounter) {
+        return;
+      }
+      var source = encounter.completed;
+      if (!source) {
+        return;
+      }
+      var subjectNames = [];
+      var personIds = [];
+      (source.subjects || encounter.subjects || []).forEach(function (subject) {
+        if (!subject) {
+          return;
+        }
+        var name = [subject.lastName, subject.firstName].filter(Boolean).join(", ");
+        if (name && subjectNames.indexOf(name) === -1) {
+          subjectNames.push(name);
+        }
+        var personId = subject.personId || "";
+        if (!personId && subject.leadId && leads[subject.leadId]) {
+          var person = subjectFor(leads[subject.leadId]);
+          personId = person && (person.personId || person.id) || "";
+        }
+        if (personId && personIds.indexOf(personId) === -1) {
+          personIds.push(personId);
+        }
+      });
+      var places = [];
+      (source.locations || []).forEach(function (location) {
+        places.push({
+          location: hydrateMapLocation(location, storeState),
+          vehicle: null
+        });
+      });
+      (source.vehicles || []).forEach(function (vehicle) {
+        (vehicle && vehicle.locations ? vehicle.locations : []).forEach(function (location) {
+          places.push({
+            location: hydrateMapLocation(location, storeState),
+            vehicle: vehicle
+          });
+        });
+      });
+      if (!places.length && source.pin) {
+        places.push({
+          location: {
+            locationId: source.pin.locationId || "",
+            latitude: source.pin.latitude,
+            longitude: source.pin.longitude,
+            street: source.pin.arrestLocation || ""
+          },
+          vehicle: null
+        });
+      }
+      if (!places.length) {
+        places.push({ location: null, vehicle: null });
+      }
+      var seen = Object.create(null);
+      places.forEach(function (place, index) {
+        var loc = place.location || {};
+        var vehicle = place.vehicle;
+        var vehicleId = vehicle && (vehicle.vehicleId || vehicle.id) || "";
+        var address = formatAddress(loc) || "(no location)";
+        var key = [loc.locationId || "", vehicleId, address, loc.latitude || "", loc.longitude || ""].join("|");
+        if (seen[key]) {
+          return;
+        }
+        seen[key] = true;
+        var objectOwners = [];
+        pushOwner(objectOwners, "LOCATION", loc.locationId);
+        pushOwner(objectOwners, "VEHICLE", vehicleId);
+        var owners = objectOwners.slice();
+        var people = [];
+        personIds.forEach(function (personId) {
+          pushOwner(people, "PERSON", personId);
+          pushOwner(owners, "PERSON", personId);
+        });
+        var subjectLine = subjectNames.join("; ") || "No booked subjects";
+        var date = String(source.startedAt || encounter.startedAt || "").slice(0, 10) || "—";
+        catalog.encounters.push({
+          category: "encounters",
+          id:
+            "encounters:" +
+            encounterId +
+            ":" +
+            (loc.locationId || vehicleId || String(index)),
+          encounterId: encounterId,
+          personId: personIds[0] || "",
+          locationId: loc.locationId || "",
+          vehicleId: vehicleId,
+          subject: subjectNames.join("; ") || "Encounter " + encounterId,
+          extra: [encounterId, date, vehicleSummary(vehicle)].filter(Boolean).join(" · "),
+          address: address,
+          association: "Encounter location",
+          latitude: loc.latitude || "",
+          longitude: loc.longitude || "",
+          hasCoords: hasCoords(loc.latitude, loc.longitude),
+          photoOwners: owners,
+          objectPhotoOwners: objectOwners,
+          personPhotoOwners: people,
+          cols: [date, encounterId, subjectLine, address]
+        });
+      });
+    });
+    catalog.encounters.sort(function (a, b) {
+      return String(b.cols[0]).localeCompare(String(a.cols[0]));
+    });
+  }
+
   function collectLeads() {
     catalog.targets = [];
     catalog.arrests = [];
@@ -331,7 +568,8 @@
       return;
     }
     model.store.loadFromDisk();
-    var leads = (model.store.getState() || {}).leads || {};
+    var storeState = model.store.getState() || {};
+    var leads = storeState.leads || {};
     Object.keys(leads).forEach(function (leadId) {
       var snap = leads[leadId];
       if (!committed(snap)) {
@@ -347,6 +585,15 @@
         }
         var assoc = loc.association || loc.locationAssociation || "";
         var vehicleId = row.vehicleId || "";
+        var personOwners = linkedPersonOwners(
+          storeState,
+          snap,
+          [
+            { type: "LOCATION", id: loc.locationId || "" },
+            { type: "VEHICLE", id: vehicleId }
+          ],
+          personId
+        );
         var base = {
           leadId: leadId,
           personId: personId,
@@ -369,6 +616,8 @@
               priority: Number(loc.targetPriority) || 99,
               priorityLabel: priorityLabel(loc.targetPriority),
               photoOwners: placePhotoOwners(loc.locationId, vehicleId, false),
+              objectPhotoOwners: placePhotoOwners(loc.locationId, vehicleId, false),
+              personPhotoOwners: personOwners,
               cols: [
                 priorityLabel(loc.targetPriority),
                 name,
@@ -384,6 +633,8 @@
               category: "origin",
               id: "origin:" + (loc.locationId || leadId),
               photoOwners: placePhotoOwners(loc.locationId, vehicleId, true),
+              objectPhotoOwners: placePhotoOwners(loc.locationId, vehicleId, true),
+              personPhotoOwners: personOwners,
               cols: [name, base.address, base.association]
             })
           );
@@ -393,6 +644,18 @@
         var parsed = parseCoords(arr.arrestLocation);
         var lat = arr.latitude || (parsed && parsed.latitude) || "";
         var lng = arr.longitude || (parsed && parsed.longitude) || "";
+        var pinAddress = arr.arrestLocation || "";
+        if (!hasCoords(lat, lng) && arr.encounterId && storeState.encounters) {
+          var pin = pinFromEncounter(
+            storeState.encounters[arr.encounterId],
+            storeState
+          );
+          if (pin && hasCoords(pin.latitude, pin.longitude)) {
+            lat = pin.latitude;
+            lng = pin.longitude;
+            pinAddress = pin.arrestLocation || pinAddress;
+          }
+        }
         var arrestOwners = [];
         pushOwner(arrestOwners, "PERSON", personId);
         catalog.arrests.push({
@@ -402,16 +665,18 @@
           personId: personId,
           subject: name,
           extra: arr.arrestCharge || "",
-          address: arr.arrestLocation || "(no location)",
+          address: pinAddress || "(no location)",
           latitude: lat,
           longitude: lng,
           hasCoords: hasCoords(lat, lng),
           photoOwners: arrestOwners,
+          objectPhotoOwners: [],
+          personPhotoOwners: arrestOwners,
           cols: [
             arr.arrestDate || "—",
             name,
             arr.arrestCharge || "—",
-            arr.arrestLocation || "(no location)"
+            pinAddress || "(no location)"
           ]
         });
       });
@@ -422,13 +687,14 @@
       }
       return String(a.subject).localeCompare(String(b.subject));
     });
+    collectEncounters(storeState);
   }
 
   function collectOfficers() {
     catalog.officers = [];
     var parsed = loadJson(ADMIN_KEY, { officers: [] });
     (parsed.officers || []).forEach(function (officer) {
-      if (!committed(officer)) {
+      if (!committed(officer) || officer.junked) {
         return;
       }
       var locs = officer.locations || [];
@@ -471,6 +737,12 @@
         longitude: home.longitude,
         hasCoords: hasCoords(home.latitude, home.longitude),
         photoOwners: officerOwners,
+        objectPhotoOwners: home.locationId
+          ? [{ type: "LOCATION", id: home.locationId }]
+          : [],
+        personPhotoOwners: officerId
+          ? [{ type: "OFFICER", id: officerId }]
+          : [],
         cols: [name || "Officer", formatAddress(home) || "(no street)", officer.duty || ""]
       });
     });
@@ -562,7 +834,7 @@
     if (!api.leaflet || !global.L) {
       return false;
     }
-    ["targets", "arrests", "officers", "origin"].forEach(function (key) {
+    ["targets", "arrests", "encounters", "officers", "origin"].forEach(function (key) {
       if (!groups[key]) {
         groups[key] = global.L.layerGroup();
       }
@@ -614,6 +886,38 @@
           popup.appendChild(document.createElement("br"));
           popup.appendChild(document.createTextNode(row.association));
         }
+        if (row.category === "targets" && row.leadId) {
+          popup.appendChild(document.createElement("br"));
+          var caseLink = document.createElement("a");
+          caseLink.className = "case-map-popup-case-link";
+          caseLink.href = "case.html?id=" + encodeURIComponent(row.leadId);
+          caseLink.target = "copdoc-case-view";
+          caseLink.textContent = "Open case";
+          caseLink.addEventListener("click", function (event) {
+            if (
+              event.defaultPrevented ||
+              event.button ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            ) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            if (root.mapPopup && root.mapPopup.openCasePopup) {
+              root.mapPopup.openCasePopup(caseLink.href, "copdoc-case-view");
+            } else {
+              window.open(
+                caseLink.href,
+                "copdoc-case-view",
+                "popup=yes,popup=true,width=880,height=760,left=200,top=60,scrollbars=yes,resizable=yes"
+              );
+            }
+          });
+          popup.appendChild(caseLink);
+        }
         marker.bindPopup(popup);
       }
       marker.on("click", function () {
@@ -633,7 +937,7 @@
     revokePopupUrls();
     markersById = {};
     var bounds = [];
-    ["targets", "arrests", "officers", "origin"].forEach(function (key) {
+    ["targets", "arrests", "encounters", "officers", "origin"].forEach(function (key) {
       var part = plotCategory(key);
       if (part && part.length) {
         bounds = bounds.concat(part);
@@ -914,7 +1218,7 @@
       );
     });
     var customSymbols = {};
-    ["targets", "arrests", "officers", "origin"].forEach(function (key) {
+    ["targets", "arrests", "encounters", "officers", "origin"].forEach(function (key) {
       if (!visible[key]) {
         return;
       }
@@ -1119,6 +1423,12 @@
 
   api.listTargets = function () {
     return catalog.targets;
+  };
+  api.listEncounters = function () {
+    return catalog.encounters;
+  };
+  api.listArrests = function () {
+    return catalog.arrests;
   };
   api.refreshTargets = refresh;
   api.selectTarget = function (id) {

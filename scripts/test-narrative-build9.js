@@ -252,6 +252,8 @@ dataLibraries.forEach((file) => {
 
 const scriptOrder = Array.from(page.matchAll(/<script\s+src="([^"]+)"/g), (match) => match[1]);
 assert.deepEqual(scriptOrder, [
+  "functions/workspace-config.js",
+  "functions/privacy-gate.js",
   "functions/app-bar.js",
   "functions/date.js",
   ...dataLibraries,
@@ -278,9 +280,6 @@ assert.match(narratives.ENGINE_MARKUP, /class="narrative-engine-workspace"/);
 assert.match(narratives.ENGINE_MARKUP, /class="narrative-input-column"/);
 assert.doesNotMatch(narratives.ENGINE_MARKUP, /<main\b/i, "embedded engine should not nest a main landmark");
 assert.doesNotMatch(narratives.ENGINE_MARKUP, /class="(?:container|workspace|input-column)"/);
-
-const legacyPage = fs.readFileSync(path.join(root, "Narrative_Builder.html"), "utf8");
-assert.match(legacyPage, /url=narrative\.html/i, "legacy Build 9 entry should redirect to the integrated page");
 
 const sharedCss = fs.readFileSync(path.join(root, "style/style.css"), "utf8");
 const narrativeBlockStart = sharedCss.indexOf("/* NARRATIVE BUILD 9 */");

@@ -30,16 +30,28 @@ function parseIsoDate(value) {
   return date;
 }
 
+/** Cross-realm Date check (tests and embedded views may have another global). */
+function isDateValue(value) {
+  return (
+    Object.prototype.toString.call(value) === "[object Date]" &&
+    typeof value.getTime === "function" &&
+    Number.isFinite(value.getTime())
+  );
+}
+
 /**
  * Whole years old as of `asOf` (defaults to today).
  * Returns null if DOB is missing, invalid, or in the future.
  */
 function calculateAge(dateOfBirth, asOf) {
-  var dob = dateOfBirth instanceof Date ? dateOfBirth : parseIsoDate(dateOfBirth);
+  var dob = isDateValue(dateOfBirth) ? dateOfBirth : parseIsoDate(dateOfBirth);
   if (!dob) {
     return null;
   }
-  var today = asOf instanceof Date ? asOf : new Date();
+  var today = typeof asOf === "undefined" ? new Date() : asOf;
+  if (!isDateValue(today)) {
+    return null;
+  }
   var age = today.getFullYear() - dob.getFullYear();
   var monthDelta = today.getMonth() - dob.getMonth();
   // Birthday has not happened yet this year → still last year's age.

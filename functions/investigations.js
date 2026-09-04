@@ -3,6 +3,7 @@
  */
 (function () {
   var recordFilter = "all";
+  var transientInvestigation = null;
 
   function model() {
     return window.COPDoc && COPDoc.model;
@@ -162,8 +163,10 @@
 
   function collectInvestigation() {
     var m = model();
+    var formId =
+      (byId("investigationId") && byId("investigationId").value) || queryId();
     var previous =
-      queryId() && m.store.getInvestigation(queryId());
+      (formId && m.store.getInvestigation(formId)) || transientInvestigation;
     var kind = (byId("investigationKind") && byId("investigationKind").value) || "tag";
     var mode = "";
     if (kind === "tag") {
@@ -265,6 +268,45 @@
     document.title = (record.investigationId || "Investigation") + " — COPDoc";
   }
 
+  function investigationHasMeaningfulData(record) {
+    if (!record) {
+      return false;
+    }
+    if (
+      String(record.title || "").trim() ||
+      record.parentInvestigationId ||
+      record.sourceLeadId ||
+      record.assignedOfficerId ||
+      (record.plates || []).length ||
+      (record.nodes || []).length ||
+      (record.links || []).length
+    ) {
+      return true;
+    }
+    if (!transientInvestigation) {
+      return true;
+    }
+    return (
+      record.kind !== transientInvestigation.kind ||
+      record.mode !== transientInvestigation.mode ||
+      String(record.team || "") !== String(transientInvestigation.team || "")
+    );
+  }
+
+  function rememberPersistedInvestigation(record) {
+    transientInvestigation = null;
+    if (window.history && window.history.replaceState && record.investigationId) {
+      window.history.replaceState(
+        {},
+        "",
+        "investigate.html?id=" + encodeURIComponent(record.investigationId)
+      );
+    }
+    if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
+      COPDoc.chrome.mount();
+    }
+  }
+
   function syncModeField() {
     var kind = byId("investigationKind") && byId("investigationKind").value;
     var wrap = byId("investigationModeField");
@@ -318,6 +360,7 @@
       setStatus((saved && saved.error) || "Could not save plates.");
       return null;
     }
+    rememberPersistedInvestigation(record);
     var fresh = m.store.getInvestigation(record.investigationId);
     paintPlateQueue(fresh);
     if (window.COPDoc && COPDoc.investigationWall && typeof COPDoc.investigationWall.paint === "function") {
@@ -916,14 +959,22 @@
     var host = byId("investigationFocusCardHost");
     var card = host && host.querySelector('[data-card="vehicle"]');
     var m = model();
-    if (!card || !m.store || !m.store.saveVehicleRecord) {
+    if (!card || !m.store || !m.store.saveObjectRecord) {
       return;
     }
     var vehicle = collectVehicleFromCard(card);
     if (!vehicle || !vehicle.vehicleId) {
       return;
     }
-    m.store.saveVehicleRecord(vehicle, { mode: "commit" });
+    var savedVehicle = m.store.saveObjectRecord("VEHICLE", vehicle, {
+      mode: "commit"
+    });
+    if (!savedVehicle || !savedVehicle.ok) {
+      setStatus(
+        (savedVehicle && savedVehicle.error) || "Could not save the vehicle."
+      );
+      return;
+    }
     var current = currentStoredInvestigation();
     if (!current || !m.readFields) {
       return;
@@ -1312,7 +1363,7 @@
       setStatus("Could not add that object.");
       return;
     }
-    if (saveDraftQuiet() === false) {
+    if (saveDraftQuiet({ force: true }) === false) {
       return;
     }
     var current = currentStoredInvestigation();
@@ -1503,17 +1554,22 @@
     }
   }
 
-  function saveDraftQuiet() {
+  function saveDraftQuiet(options) {
+    options = options || {};
     var m = model();
     var record = collectInvestigation();
     if (!record.investigationId) {
       return;
+    }
+    if (!options.force && !investigationHasMeaningfulData(record)) {
+      return true;
     }
     var saved = m.store.saveInvestigation(record, { mode: "draft" });
     if (saved && !saved.ok) {
       setStatus(saved.error || "Could not save the investigation.");
       return false;
     }
+    rememberPersistedInvestigation(record);
     return true;
   }
 
@@ -1529,6 +1585,7 @@
       setStatus(saved.error || "Could not save the investigation.");
       return;
     }
+    transientInvestigation = null;
     setStatus("Investigation filed.", true);
     if (window.history && window.history.replaceState && record.investigationId) {
       window.history.replaceState(
@@ -1569,22 +1626,7 @@
       team: (byId("investigationTeam") && byId("investigationTeam").value) || "3",
       existingIds: existingInvestigationIds("")
     });
-    var createdSave = m.store.saveInvestigation(created, { mode: "draft" });
-    if (createdSave && !createdSave.ok) {
-      setStatus(createdSave.error || "Could not save the investigation.");
-      hydrateInvestigation(created);
-      return created;
-    }
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(
-        {},
-        "",
-        "investigate.html?id=" + encodeURIComponent(created.investigationId)
-      );
-    }
-    if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
-      COPDoc.chrome.mount();
-    }
+    transientInvestigation = created;
     hydrateInvestigation(created);
     return created;
   }
@@ -1649,9 +1691,10 @@
           return;
         }
         m.store.loadFromDisk();
-        var current = m.store.getInvestigation(id);
+        var stored = m.store.getInvestigation(id);
+        var current = stored || transientInvestigation;
         if (!current || isCommitted(current)) {
-          if (isCommitted(current)) {
+          if (current && isCommitted(current)) {
             setStatus("Team is locked after the investigation is saved.");
             teamEl.value = current.team || "3";
           }
@@ -1669,19 +1712,16 @@
         });
         current.team = String(team);
         current.investigationId = nextId;
-        m.store.saveInvestigation(current, { mode: "draft" });
-        if (nextId !== id && m.store.deleteInvestigation) {
-          m.store.deleteInvestigation(id);
-        }
-        if (window.history && window.history.replaceState) {
-          window.history.replaceState(
-            {},
-            "",
-            "investigate.html?id=" + encodeURIComponent(nextId)
-          );
-        }
-        if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
-          COPDoc.chrome.mount();
+        if (stored) {
+          m.store.saveInvestigation(current, { mode: "draft" });
+          if (nextId !== id && m.store.deleteInvestigation) {
+            m.store.deleteInvestigation(id);
+          }
+          rememberPersistedInvestigation(current);
+        } else {
+          transientInvestigation = current;
+          hydrateInvestigation(current);
+          saveDraftQuiet({ force: true });
         }
         hydrateInvestigation(current);
         setStatus("Investigation ID updated for team " + team + ".", true);
@@ -1985,6 +2025,13 @@
   window.commitInvestigation = commitInvestigation;
   window.focusPlateImport = focusPlateImport;
   window.spawnChildInvestigation = spawnChildInvestigation;
+  window.COPDoc = window.COPDoc || {};
+  window.COPDoc.ensureInvestigationDraft = function () {
+    if (saveDraftQuiet({ force: true }) === false) {
+      return null;
+    }
+    return currentStoredInvestigation();
+  };
   function clearInvestigationWorkspace() {
     var m = model();
     if (!m || !m.store || !m.store.clearInvestigationWorkspace) {

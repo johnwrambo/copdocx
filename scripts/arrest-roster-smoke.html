@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Arrest roster smoke</title>
+    <link rel="stylesheet" href="../style/style.css" />
+  </head>
+  <body data-page="cases">
+    <p id="out">running</p>
+    <div id="casesHost"></div>
+    <div id="adminHost"></div>
+    <div id="encounterHost"></div>
+    <script src="../functions/workspace-config.js"></script>
+    <script src="../data/countries.js"></script>
+    <script src="../data/immigration.js"></script>
+    <script src="../functions/model/util.js"></script>
+    <script src="../functions/model/lead.js"></script>
+    <script src="../functions/model/person.js"></script>
+    <script src="../functions/model/location.js"></script>
+    <script src="../functions/model/store.js"></script>
+    <script src="../functions/arrest-report.js"></script>
+    <script src="../functions/arrest-roster.js"></script>
+    <script>
+      (function () {
+        var out = document.getElementById("out");
+        function fail(message) {
+          out.textContent = "FAIL " + message;
+        }
+        function todayKey() {
+          var now = new Date();
+          var m = String(now.getMonth() + 1);
+          var d = String(now.getDate());
+          if (m.length < 2) m = "0" + m;
+          if (d.length < 2) d = "0" + d;
+          return now.getFullYear() + "-" + m + "-" + d;
+        }
+        try {
+          var model = window.COPDoc && COPDoc.model;
+          if (!model || !model.store) {
+            fail("store missing");
+            return;
+          }
+          var snap = model.createLeadSnapshot();
+          snap.person.name.firstName = "Ana";
+          snap.person.name.lastName = "Garcia";
+          snap.person.citizenship = "MX";
+          snap.person.immigration.alienNumber = "123456789";
+          snap.person.immigration.disposition = "REINST";
+          snap.person.immigration.baseballCards = [
+            {
+              cardId: "bbc_smoke",
+              generatedAt: new Date().toISOString(),
+              arrestDate: todayKey(),
+              text:
+                "ICE Dallas arrested Ana GARCIA.\nINTERNAL Background Required for Privacy Review:\n• No foreign warrants.\n• photo from arrest in the field."
+            }
+          ];
+          snap.person.arrests = [
+            {
+              arrestId: "arr_smoke",
+              arrestDate: todayKey(),
+              arrestDateTime: todayKey() + "T09:15",
+              iceEventNumber: "DAL-SMOKE",
+              encounterId: "enc_smoke",
+              encounterNumber: "ENC-SMOKE"
+            }
+          ];
+          var saved = model.store.saveLead(snap, { mode: "commit" });
+          if (!saved || !saved.ok) {
+            fail("save failed");
+            return;
+          }
+          var cases = COPDoc.arrestRoster.mount(document.getElementById("casesHost"), {
+            showGenerate: true
+          });
+          var admin = COPDoc.arrestRoster.mount(document.getElementById("adminHost"), {
+            todayOnly: true,
+            showGenerate: true
+          });
+          COPDoc.arrestRoster.mount(document.getElementById("encounterHost"), {
+            encounterId: "enc_smoke",
+            showGenerate: true
+          });
+          var casesHtml = document.getElementById("casesHost").innerHTML;
+          var adminHtml = document.getElementById("adminHost").innerHTML;
+          var encounterHtml = document.getElementById("encounterHost").innerHTML;
+          var notes = [];
+          if (casesHtml.indexOf("arrestRosterSearch") === -1) notes.push("cases missing search");
+          if (casesHtml.indexOf("arrestRosterFrom") === -1) notes.push("cases missing dates");
+          if (casesHtml.indexOf("Generate report") === -1) notes.push("cases missing generate");
+          if (adminHtml.indexOf("Generate today's report") === -1) notes.push("admin missing today generate");
+          if (adminHtml.indexOf("arrestRosterFrom") !== -1) notes.push("admin should not have dates");
+          if (adminHtml.indexOf("arrest today") === -1) notes.push("admin missing today headline");
+          if (encounterHtml.indexOf("arrestRosterSearch") === -1) notes.push("encounter missing search");
+          if (encounterHtml.indexOf("arrestRosterFrom") !== -1) notes.push("encounter should not have dates");
+          if (encounterHtml.indexOf("Generate report") === -1) notes.push("encounter missing generate");
+          Promise.resolve(admin.generate()).then(function () {
+            var report = document.getElementById("arrestReportContent");
+            var dialog = document.getElementById("arrestReportDialog");
+            if (!dialog || dialog.hidden) notes.push("report dialog not opened");
+            var html = report ? report.innerHTML : "";
+            if (html.indexOf("Arrested 1 alien today") === -1) notes.push("today headline missing");
+            if (html.indexOf("arrest-card") === -1) notes.push("baseball card table missing");
+            if (html.indexOf("Ana Garcia") === -1 && html.indexOf("GARCIA") === -1) notes.push("subject missing");
+            if (html.indexOf("DAL-SMOKE") === -1) notes.push("ICE missing");
+            if (notes.length) {
+              fail(notes.join("; "));
+              return;
+            }
+            out.textContent = "PASS 0.67.0 roster smoke";
+          }).catch(function (error) {
+            fail(error && error.message ? error.message : String(error));
+          });
+        } catch (error) {
+          fail(error && error.message ? error.message : String(error));
+        }
+      })();
+    </script>
+  </body>
+</html>

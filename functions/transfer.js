@@ -5,19 +5,25 @@
 (function (global) {
   "use strict";
 
+  var config = global.COPDoc && global.COPDoc.config;
+  function registeredKey(id, fallback) {
+    var value = config && config.storageKey ? config.storageKey(id) : "";
+    return value || fallback;
+  }
+
   var FORMAT = "copdocx.transfer.v1";
-  var LEAD_KEY = "copdocx.store.v1";
-  var ADMIN_KEY = "copdoc.admin.v1";
-  var BOOKIN_KEY = "alien-book-in.saved-records.v1";
+  var LEAD_KEY = registeredKey("workspace", "copdocx.store.v1");
+  var ADMIN_KEY = registeredKey("admin", "copdoc.admin.v1");
+  var BOOKIN_KEY = registeredKey("bookin", "alien-book-in.saved-records.v1");
   var MAX_BYTES = 32 * 1024 * 1024;
-  var SETTINGS_KEY = "copdocx.settings.v1";
-  var MAP_MARKUP_KEY = "copdocx.map.markup.v1";
-  var MAP_VIEWS_KEY = "copdocx.map.views.v1";
-  var MAP_LAYERS_KEY = "copdocx.map.layers.v1";
-  var MAP_ICONS_KEY = "copdocx.map.icons.v1";
-  var MAP_BASEMAP_KEY = "copdocx.location-map.basemap";
-  var TEMPLATE_KEY = "opdoc.narrative.templates.v2";
-  var TEMPLATE_LEGACY_KEY = "opdoc.narrative.templates.v1";
+  var SETTINGS_KEY = registeredKey("settings", "copdocx.settings.v1");
+  var MAP_MARKUP_KEY = registeredKey("mapMarkup", "copdocx.map.markup.v1");
+  var MAP_VIEWS_KEY = registeredKey("mapViews", "copdocx.map.views.v1");
+  var MAP_LAYERS_KEY = registeredKey("mapLayers", "copdocx.map.layers.v1");
+  var MAP_ICONS_KEY = registeredKey("mapIcons", "copdocx.map.icons.v1");
+  var MAP_BASEMAP_KEY = registeredKey("mapBasemap", "copdocx.location-map.basemap");
+  var TEMPLATE_KEY = registeredKey("narrativeTemplates", "opdoc.narrative.templates.v2");
+  var TEMPLATE_LEGACY_KEY = registeredKey("narrativeTemplatesLegacy", "opdoc.narrative.templates.v1");
 
   var TYPE_META = [
     { key: "leads", label: "Cases" },
@@ -45,10 +51,14 @@
 
   function appVersion() {
     if (typeof document === "undefined") {
-      return "0.66.0";
+      return (config && config.productVersion) || "0.67.0";
     }
     var el = document.getElementById("appVersion");
-    return (el && el.getAttribute("data-version")) || "0.66.0";
+    return (
+      (config && config.productVersion) ||
+      (el && el.getAttribute("data-version")) ||
+      "0.67.0"
+    );
   }
 
   function todayStamp() {
@@ -869,15 +879,36 @@
         added += 1;
         return;
       }
-      if (jsonEqual(current, row)) {
+      var incomingRow = row;
+      if (type === "bookin") {
+        incomingRow = Object.assign({}, row);
+        ["leadId", "personId", "arrestId"].forEach(function (key) {
+          if (!incomingRow[key] && current[key]) {
+            incomingRow[key] = current[key];
+          }
+        });
+        var localComparable = Object.assign({}, current);
+        var incomingComparable = Object.assign({}, incomingRow);
+        ["leadId", "personId", "arrestId", "canonicalizedAt"].forEach(
+          function (key) {
+            delete localComparable[key];
+            delete incomingComparable[key];
+          }
+        );
+        if (jsonEqual(localComparable, incomingComparable)) {
+          skipped += 1;
+          return;
+        }
+      }
+      if (jsonEqual(current, incomingRow)) {
         skipped += 1;
         return;
       }
-      if (!incomingIsNewer(current, row)) {
+      if (!incomingIsNewer(current, incomingRow)) {
         skipped += 1;
         return;
       }
-      byId[id] = row;
+      byId[id] = incomingRow;
       updated += 1;
     });
     return {
@@ -917,8 +948,126 @@
     });
   }
 
+  function canonicalBookInStore() {
+    var model = global.COPDoc && global.COPDoc.model;
+    var store = model && model.store;
+    return store && typeof store.promoteBookInRecords === "function"
+      ? store
+      : null;
+  }
+
+  function promoteStoredBookInCases() {
+    var store = canonicalBookInStore();
+    if (!store) {
+      return null;
+    }
+    var stored = readStored(BOOKIN_KEY);
+    if (!stored.ok) {
+      return {
+        ok: false,
+        promoted: 0,
+        created: 0,
+        reused: 0,
+        failed: 0,
+        error: stored.error
+      };
+    }
+    var rows = Array.isArray(stored.value) ? stored.value : [];
+    store.loadFromDisk();
+    var summary = store.promoteBookInRecords(rows);
+    if (!writeJson(BOOKIN_KEY, summary.rows || rows)) {
+      summary.ok = false;
+      summary.error = "Cases were created, but Book-In links could not be saved.";
+    }
+    return summary;
+  }
+
+  function loadModelScript(src) {
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[src="' + src + '"]');
+      if (existing) {
+        if (existing.dataset.loaded === "true" || canonicalBookInStore()) {
+          resolve();
+          return;
+        }
+        existing.addEventListener("load", resolve, { once: true });
+        existing.addEventListener("error", reject, { once: true });
+        return;
+      }
+      var script = document.createElement("script");
+      script.src = src;
+      script.async = false;
+      script.addEventListener(
+        "load",
+        function () {
+          script.dataset.loaded = "true";
+          resolve();
+        },
+        { once: true }
+      );
+      script.addEventListener("error", reject, { once: true });
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensureCanonicalBookInStore() {
+    if (typeof document === "undefined") {
+      return canonicalBookInStore();
+    }
+    var catalogs = [];
+    if (!Array.isArray(global.COUNTRIES)) {
+      catalogs.push("data/countries.js");
+    }
+    if (!Array.isArray(global.IMMIGRATION_DISPOSITIONS)) {
+      catalogs.push("data/immigration.js");
+    }
+    var catalogIndex;
+    for (catalogIndex = 0; catalogIndex < catalogs.length; catalogIndex += 1) {
+      await loadModelScript(catalogs[catalogIndex]);
+    }
+    if (canonicalBookInStore()) {
+      return canonicalBookInStore();
+    }
+    var sources = [
+      "functions/model/util.js",
+      "functions/model/person.js",
+      "functions/model/lead.js",
+      "functions/model/store.js"
+    ];
+    var index;
+    for (index = 0; index < sources.length; index += 1) {
+      if (canonicalBookInStore()) {
+        break;
+      }
+      await loadModelScript(sources[index]);
+    }
+    return canonicalBookInStore();
+  }
+
+  function addPromotionStats(result, promotion) {
+    if (!promotion) {
+      return;
+    }
+    result.bookinPromotionAttempted = true;
+    result.casesCreated = promotion.created || 0;
+    result.casesReused = promotion.reused || 0;
+    result.casePromotionFailed = promotion.failed || 0;
+    if (promotion.error) {
+      result.error = result.error || promotion.error;
+    }
+  }
+
   function applyImport(parsed, types) {
-    var result = { added: 0, updated: 0, skipped: 0, error: "" };
+    var result = {
+      added: 0,
+      updated: 0,
+      skipped: 0,
+      error: "",
+      bookinPromotionAttempted: false,
+      casesCreated: 0,
+      casesReused: 0,
+      casePromotionFailed: 0
+    };
     types.forEach(function (type) {
       var cleaned = cleanList(type, parsed[type]);
       result.skipped += cleaned.skipped;
@@ -1080,6 +1229,7 @@
         result.added += mergedBook.added;
         result.updated += mergedBook.updated;
         result.skipped += mergedBook.skipped;
+        addPromotionStats(result, promoteStoredBookInCases());
         return;
       }
       var adminStored = readStored(ADMIN_KEY);
@@ -1434,7 +1584,7 @@
     byId("fileImportDialog").hidden = false;
   }
 
-  function runImport() {
+  async function runImport() {
     if (!pendingParsed) {
       setStatus("Choose a file to import.");
       return;
@@ -1456,11 +1606,48 @@
       return;
     }
     var parsed = pendingParsed;
+    if (types.indexOf("bookin") !== -1) {
+      try {
+        await ensureCanonicalBookInStore();
+      } catch (error) {
+        console.error(error);
+      }
+    }
     var result = applyImport(parsed, types);
+    if (
+      types.indexOf("bookin") !== -1 &&
+      !result.bookinPromotionAttempted
+    ) {
+      try {
+        await ensureCanonicalBookInStore();
+        addPromotionStats(result, promoteStoredBookInCases());
+        if (!result.bookinPromotionAttempted) {
+          result.error =
+            result.error ||
+            "Book-In records were imported, but the canonical case model could not be loaded.";
+        }
+      } catch (error) {
+        result.error =
+          result.error ||
+          "Book-In records were imported, but cases could not be created: " +
+            (error && error.message ? error.message : String(error));
+      }
+    }
     hideDialogs();
     pendingParsed = null;
     function finish(mediaNote) {
       var wrote = result.added > 0 || result.updated > 0 || Boolean(mediaNote);
+      var caseNote = result.bookinPromotionAttempted
+        ? " Cases: " +
+          result.casesCreated +
+          " created, " +
+          result.casesReused +
+          " updated" +
+          (result.casePromotionFailed
+            ? ", " + result.casePromotionFailed + " need identity data"
+            : "") +
+          "."
+        : "";
       if (result.error) {
         setStatus(
           result.error +
@@ -1469,7 +1656,8 @@
                 result.added +
                 " new, " +
                 result.updated +
-                " updated)."
+                " updated)." +
+                caseNote
               : "")
         );
       } else {
@@ -1481,6 +1669,7 @@
             ", skipped " +
             result.skipped +
             "." +
+            caseNote +
             (mediaNote || ""),
           true
         );

@@ -34,10 +34,20 @@
     if (!built.businessId) {
       built.businessId = built.id || model.newId("biz");
     }
-    if (!built.id) {
-      built.id = built.businessId;
-    }
+    built.id = built.businessId;
     built.name = String(built.name || "").trim();
+    built.meta = model.assign(
+      {
+        createdAt: now,
+        updatedAt: now,
+        markedComplete: false,
+        status: "draft",
+        committedAt: ""
+      },
+      built.meta && typeof built.meta === "object" && !Array.isArray(built.meta)
+        ? built.meta
+        : {}
+    );
     return built;
   }
 

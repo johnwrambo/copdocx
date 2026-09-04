@@ -1,12 +1,15 @@
 /**
- * Shared app-bar: File / tabs / Admin dropdown / action slot.
+ * Shared app-bar: tabs / Admin dropdown / page action slot.
  * Rules: docs/app-structure/chrome.md
  */
 (function () {
-  var WORKSPACE_FILE = [
-    { id: "fileImportButton", label: "Import", call: "openFileImport" },
-    { id: "fileExportButton", label: "Export", call: "openFileExport" }
-  ];
+  var config = window.COPDoc && window.COPDoc.config;
+  var PRODUCT_VERSION = (config && config.productVersion) || "0.67.0";
+  var ADMIN_STORAGE_KEY =
+    (config && config.storageKey("admin")) || "copdoc.admin.v1";
+  // Workspace import/export lives on Home. This empty collection remains the
+  // config marker for pages that have no page-specific download tools.
+  var WORKSPACE_FILE = [];
 
   var ADMIN_LINKS = [
     {
@@ -60,6 +63,7 @@
   function isLeadPage(page) {
     return (
       page === "leads" ||
+      page === "cases" ||
       page === "lead" ||
       page === "case" ||
       page === "lead-form" ||
@@ -129,7 +133,7 @@
       return false;
     }
     try {
-      var raw = localStorage.getItem("copdoc.admin.v1");
+      var raw = localStorage.getItem(ADMIN_STORAGE_KEY);
       var admin = raw ? JSON.parse(raw) : {};
       var list = kind === "officer" ? admin.officers : admin.vehicles;
       var i;
@@ -285,28 +289,64 @@
       };
     }
     if (page === "encounter-form") {
+      var encounterComplete = false;
+      try {
+        var store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+        if (store && id && typeof store.getEncounter === "function") {
+          if (typeof store.loadFromDisk === "function") {
+            store.loadFromDisk();
+          }
+          var enc = store.getEncounter(id);
+          encounterComplete = !!(enc && enc.meta && enc.meta.markedComplete);
+        }
+      } catch (error) {}
+      var encounterActions = encounterComplete
+        ? [
+            backAction("Back to encounters", "encounter.html"),
+            {
+              id: "generateI213Button",
+              label: "Generate I-213",
+              call: "generateEncounterNarrative"
+            },
+            {
+              id: "deleteEncounterButton",
+              label: "Delete",
+              call: "deleteCurrentEncounter"
+            }
+          ]
+        : [
+            {
+              label: "Save",
+              primary: true,
+              chromeAction: "save",
+              call: "commitEncounter"
+            },
+            {
+              id: "completeEncounterButton",
+              label: "Complete",
+              call: "completeCurrentEncounter"
+            },
+            backAction("Back to encounters", "encounter.html"),
+            {
+              id: "addEncounterSubjectsButton",
+              label: "Add subject",
+              call: "openEncounterBookIn"
+            },
+            {
+              id: "generateI213Button",
+              label: "Generate I-213",
+              call: "generateEncounterNarrative"
+            },
+            {
+              id: "deleteEncounterButton",
+              label: "Delete",
+              call: "deleteCurrentEncounter"
+            }
+          ];
       return {
         tab: "encounter",
         file: WORKSPACE_FILE,
-        actions: [
-          {
-            label: "Save",
-            primary: true,
-            chromeAction: "save",
-            call: "commitEncounter"
-          },
-          backAction("Back to encounters", "encounter.html"),
-          {
-            id: "addEncounterSubjectsButton",
-            label: "Add subject",
-            call: "openEncounterBookIn"
-          },
-          {
-            id: "generateI213Button",
-            label: "Generate I-213",
-            call: "generateEncounterNarrative"
-          }
-        ]
+        actions: encounterActions
       };
     }
     if (page === "operations") {
@@ -421,7 +461,7 @@
         actions: investigateActions
       };
     }
-    if (page === "leads") {
+    if (page === "leads" || page === "cases") {
       return {
         tab: "leads",
         file: WORKSPACE_FILE,
@@ -443,7 +483,7 @@
           primary: true,
           chromeAction: "edit"
         },
-        backAction("Back to cases", "leads.html")
+        backAction("Back to cases", "cases.html")
       ];
       if (id) {
         actions.push({
@@ -489,7 +529,7 @@
         });
         targetSheetActions.push(backAction("Back to case", recordIdHref("case.html", id)));
       } else {
-        targetSheetActions.push(backAction("Back to cases", "leads.html"));
+        targetSheetActions.push(backAction("Back to cases", "cases.html"));
       }
       return {
         tab: "leads",
@@ -528,7 +568,7 @@
           },
           id
             ? backAction("Back to case", recordIdHref("case.html", id))
-            : backAction("Back to cases", "leads.html")
+            : backAction("Back to cases", "cases.html")
         ]
       };
     }
@@ -543,7 +583,7 @@
           { label: "Save", primary: true, chromeAction: "save" },
           leadHasCommittedAt(id)
             ? backAction("Back to case", recordIdHref("case.html", id))
-            : backAction("Back to cases", "leads.html")
+            : backAction("Back to cases", "cases.html")
         ]
       };
     }
@@ -553,23 +593,22 @@
       var bookinActions = [
         {
           id: "saveRecordButton",
-          label: "Save",
+          label: encounterId ? "Save to encounter" : "Save",
           primary: true,
           chromeAction: "save",
           call: "saveCurrentRecord"
         }
       ];
       if (encounterId) {
-        bookinActions.push(
-          backAction(
-            "Back to encounter",
-            recordIdHref("encounter-form.html", encounterId)
-          )
-        );
         bookinActions.push({
           id: "addAnotherEncounterSubjectButton",
-          label: "Add another subject",
+          label: "Add another book-in",
           call: "addAnotherEncounterSubject"
+        });
+        bookinActions.push({
+          id: "cancelEncounterBookInButton",
+          label: "Cancel book-in",
+          call: "cancelEncounterBookIn"
         });
       } else if (bookinLeadId) {
         bookinActions.push(
@@ -659,11 +698,16 @@
     if (page === "baseballcard") {
       return {
         tab: "bookin",
-        file: [{ label: "Export", notBuilt: "Export" }],
+        file: [
+          {
+            label: "Export HTML",
+            call: "downloadBaseballCardHtml"
+          }
+        ],
         actions: [
           {
             id: "generatebaseballCard",
-            label: "Generate",
+            label: "Save card",
             primary: true,
             chromeAction: "save",
             call: "persistBaseballCard"
@@ -672,7 +716,8 @@
             "Back to book-in",
             withQuery("bookin.html", {
               encounterId: queryParam("encounterId"),
-              leadId: queryParam("leadId")
+              leadId: queryParam("leadId"),
+              recordId: queryParam("recordId")
             })
           )
         ]
@@ -862,6 +907,9 @@
     if (item.chromeAction) {
       el.setAttribute("data-chrome-action", item.chromeAction);
     }
+    if (item.notBuilt) {
+      el.setAttribute("data-not-built", item.notBuilt);
+    }
     if (item.hidden) {
       el.hidden = true;
     }
@@ -895,7 +943,7 @@
     }
 
     nav.appendChild(tabLink("home.html", "Home", tab === "home" || page === "home"));
-    nav.appendChild(tabLink("leads.html", "Cases", tab === "leads" || isLeadPage(page)));
+    nav.appendChild(tabLink("cases.html", "Cases", tab === "leads" || tab === "cases" || isLeadPage(page)));
     nav.appendChild(
       tabLink(
         "investigations.html",
@@ -945,32 +993,49 @@
     return nav;
   }
 
+  function appendPageTools(actions, file) {
+    var out = (actions || []).slice();
+    (file || []).forEach(function (item) {
+      if (!item || item.id === "fileImportButton" || item.id === "fileExportButton") {
+        return;
+      }
+      var duplicate = out.some(function (existing) {
+        if (item.id && existing.id === item.id) {
+          return true;
+        }
+        return !!(
+          item.call &&
+          existing.call === item.call &&
+          String(existing.label || "") === String(item.label || "")
+        );
+      });
+      if (!duplicate) {
+        out.push(item);
+      }
+    });
+    return out;
+  }
+
   function mount(options) {
     options = options || {};
     var page = pageKey();
     var fallback = configFor(page);
     var tab = options.tab || fallback.tab;
     var file = options.file || fallback.file || [];
-    var actions = options.actions || fallback.actions || [];
+    var actions = appendPageTools(
+      options.actions || fallback.actions || [],
+      file
+    );
     var row = document.getElementById("appBarNavRow");
     if (!row) {
       return;
     }
+    var version = document.getElementById("appVersion");
+    if (version) {
+      version.setAttribute("data-version", PRODUCT_VERSION);
+      version.textContent = "Version " + PRODUCT_VERSION;
+    }
     row.replaceChildren();
-
-    var fileMenu = document.createElement("details");
-    fileMenu.className = "app-bar-menu";
-    fileMenu.id = "fileMenu";
-    var fileSummary = document.createElement("summary");
-    fileSummary.textContent = "File";
-    fileMenu.appendChild(fileSummary);
-    var fileList = document.createElement("div");
-    fileList.className = "app-bar-menu-list";
-    file.forEach(function (item) {
-      fileList.appendChild(paintFileItem(item));
-    });
-    fileMenu.appendChild(fileList);
-    row.appendChild(fileMenu);
 
     row.appendChild(paintTabs(page, tab));
 

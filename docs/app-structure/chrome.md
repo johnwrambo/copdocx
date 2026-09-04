@@ -1,145 +1,119 @@
 # Chrome
 
-Two-row sticky app bar (`style/style.css`, painted by `COPDoc.chrome` in `functions/app-bar.js`).
+Two-row sticky app bar (`style/style.css`, painted by `COPDoc.chrome` in
+`functions/app-bar.js`).
 
-```
+```text
 Row 1  COPDoc     Version x.y.z     {date}                 .app-bar-info
-Row 2  [ File ▾ ]  Home | Cases | Investigate | Encounters | Operations | Book-in | Map | Admin ▾  [ ACTION SLOT ]
-       #fileMenu   ---------------- .app-bar-nav ----------------  .app-bar-actions
+Row 2  Home | Cases | Investigate | Encounters | Operations | Book-in | Map | Admin ▾  [ ACTION SLOT ]
+       --------------------------- .app-bar-nav ---------------------------  .app-bar-actions
 Status #appBarStatus
 ```
 
-Info row stays in HTML (product stamp in `data-version` + visible text). `#appBarNavRow` is painted from `COPDoc.chrome.mount`.
+There is no global File menu. Occasional workspace disk I/O lives in the
+**Tools / Utilities** card on Home. Page-specific downloads and print controls
+stay in that page's action slot.
 
-## Three zones (row 2)
+## Navigation
 
-| Zone | Owner | Holds |
-| --- | --- | --- |
-| Left | `#fileMenu` | Disk import / export only |
-| Center | `.app-bar-nav` | Page tabs and **Admin ▾** (`#adminMenu`). I-213 is an Encounter sub-page, not a tab. |
-| Right | `.app-bar-actions` | Record actions. **Not** page tabs. |
+`#appBarNavRow` contains two zones:
 
-Do not put Dashboard / Officers / Vehicles / Schedule on the right.
+| Zone | Holds |
+| --- | --- |
+| `.app-bar-nav` | Product tabs and **Admin ▾** (`#adminMenu`) |
+| `.app-bar-actions` | Actions for the current page or record |
 
-## File menu
+The Admin dropdown contains visible text links for Dashboard, Officers,
+Vehicles, and Schedule. `aria-current="page"` belongs on the Admin summary for
+any admin child; `.is-current` belongs on its matching link.
 
-**Allowed:** Import JSON, Export JSON, Download CSV, page-specific file exports (including Restore Backup).
+I-213, warrants, the Target sheet, media labs, and the operation brief are
+sub-pages, not tabs. The associated product tab stays current.
 
-**Forbidden (end state):** New, Open, Open-from-dropdown, in-app Save, Add officer / vehicle / lead.
+## Home tools
 
-Unimplemented items use `data-not-built`. Do not pretend they work.
+`home.html` owns the workspace transfer entry points:
 
-| Page | Items | Ships |
-| --- | --- | --- |
-| Home, Cases list, Encounter list/form, Admin pages, Book-in | **Import** / **Export** (`#fileImportButton` / `#fileExportButton`) | 0.10.0 — dialog: types, optional date range, JSON/CSV/both. Merge import with summary confirm. Encounter pages pre-check Encounters (0.11.0). |
-| Cases list (`leads.html`) | (old silent Export JSON / Download CSV) | replaced by the Export dialog (Cases pre-checked) |
-| Lead view | Export JSON / Download CSV (this lead if committed) | lead-split PR |
-| I-200 / I-205 form | Download PDF (`#downloadWarrantPdfButton`, unflattened fill, no writeback) | 0.8.0 |
-| Lead form (`lead.html` until split) | Download JSON (`#downloadLeadButton`), Download CSV (`#downloadLeadCsvButton`) | **today**; save-shape PR: no-op unless stored `meta.status === "committed"` (never `collectLead()` of a draft). Painter **must emit these ids** — `ui.js` / `lead-csv.js` bind them. |
-| Lead form | **New** (`#newLeadButton`), **Open** (`#openLeadButton` + `#savedLeadSelect` in `.app-bar-menu-open`) | **exception:** keep until `leads.html` ships. Painter **must emit these ids**. Open is a select+button row, not a lone button. Save-shape PR: New `replaceState`s to `lead.html` with **no** query; Open `replaceState`s `lead.html?id=` ([records.md](records.md) Interim). |
-| Officers / vehicles lists, views, dashboard, schedule | Import JSON, Export JSON (roster) | `data-not-built` (inherit the same two items so File is not empty) |
-| Officer / vehicle **view** | no extra items; inherit roster export | `data-not-built` |
-| **Vehicle form only** | in-app **Save** (`#adminSaveButton` → `addVehicle({ quiet: true })`) | **exception:** keep until shared autosave ships; then delete |
-| Other admin File Save | remove when chrome ships | officer already focusout-autosaves; dashboard `saveState()` is redundant |
-| Map | Print brief (working), Export KMZ / JSON / CSV `data-not-built` | Print brief = ops snapshot via browser print |
-| Narrative | Download JSON (`#downloadNarrativeJsonButton`), Download text (`#downloadNarrativeTextButton`) | Active I-213 or training draft |
-| Book-in | Import / Export plus File **New** / **Open**. Action-slot **Save** files the packet and a DETAINEE lead. | New/Open stay until a book-in triad. |
-| Baseball card | Export `data-not-built` only | Generate saves the card on the lead subject when `?leadId=` is present |
-| Photo picker | Download JSON / Clear library (lab only) | With `?ownerType=` / `?leadId=`: **Save photo** writes IDB. Lab library unchanged. |
-| File upload | Download JSON / Clear library (lab only) | With owner query: **Save file** writes IDB. |
-| Mobile Target sheet | Download Target sheet `data-not-built` | Live paint of the filed lead. Chrome: **Edit lead**, **Back to lead**. |
+- `#homeImportButton` calls `openFileImport` and accepts a COPDoc JSON backup.
+- `#homeExportButton` calls `openFileExport`; the dialog supports JSON, CSV, or
+  both, selected record types, and an optional inclusive date range.
+- `#homeLockButton` clears the tab unlock and immediately covers the workspace.
 
-**Exceptions (only these):**
-
-1. Lead File **New** and **Open** until `leads.html` exists.
-2. Vehicle-form File **Save** until `autosave.bind` exists on that form.
-
-Export is **committed records only** (Book-in and schedule shifts have no draft flag — export all of those). JSON bundle `copdocx.transfer.v1` is the backup; CSV is flat per type and is not imported.
-
-## Admin dropdown
-
-Inside `.app-bar-nav`:
-
-- Dashboard → `admin.html`
-- Officers → `officers.html`
-- Vehicles → `vehicles.html`
-- Schedule → `schedule.html`
-
-`aria-current` on the Admin summary for any admin child; `is-current` on the matching **link**.
+`functions/transfer.js` keeps the workspace, admin, and Book-in stores
+separate. Import merges by record id; it does not combine their schemas.
 
 ## Action slot
 
-One primary (`#appBarPrimaryAction`), optional secondaries, same physical place. **Edit and Save occupy that slot.**
+One action may be primary (`#appBarPrimaryAction`); secondary actions follow in
+the same physical area. Chrome paints controls and dispatches declared `call`
+handlers. Record scripts own validation and persistence.
 
-Chrome **paints** the control. It does **not** call `saveLead` / `addOfficer` / `addVehicle`. Page scripts bind **Save** clicks. Add/Edit are links (chrome fills `href`, including `?id=` from the query string for Edit).
-
-| Page kind | Primary | Secondaries |
+| Page kind | Primary | Typical secondaries |
 | --- | --- | --- |
-| Collection | **Add {record}** (`<a>`) | Cases list: **Add case** → `lead-form.html`. Investigate list: **Add investigation** → `investigate.html`. Encounter list: **Add encounter** → `encounter-form.html`. Operations list: **Add operation** → `operation-form.html`. No Back (tabs leave lists). |
-| View | **Edit** (`<a href="{record}-form.html?id=">`) | First secondary: **Back to {list}** (Cases list: **Back to cases**). Case view (`case.html`) then **Generate Target sheet** (new window, `mobile-target-sheet.html?id=`), Book-in / Issue I-200 / Issue I-205. Case board layout is static. |
-| Form | **Save** (`<button>`) | First secondary: **Back to {origin}**. `committedAt` → view; else list. Not `history.back()`. |
-| Encounter form | **Save** (`call: commitEncounter`) stays on the form | **Back to encounters**; **Add subject** (`call: openEncounterBookIn`) quiet-saves then `bookin.html?encounterId=`; **Generate I-213** → `narrative.html?encounterId=` |
-| Operation form | **Save** (`call: commitOperation`) | **Back to operations**. Quiet draft on change once name or dates exist. |
-| Operation view | **Edit** | **Back to operations**. **Generate brief** (needs filed operation with targets; opens `operation-brief.html?id=` with nested Target sheets). |
-| Operation brief | **Print** (`call: printOperationBrief`) | **Save brief** (`call: saveOperationBrief`) downloads `Operation_{name}.html`. **Back to operation**. |
-| Investigation workspace | **Save** (`call: commitInvestigation`) stays on `investigate.html?id=` | **Back to investigations**. **Import plates** (`call: focusPlateImport`) on plate-check — opens the Plates window. **Spawn** (`call: spawnChildInvestigation`) opens the child workspace. **Open as case** (`call: openInvestigationPersonAsCase`) mints or reuses a working lead for the focused PERSON, then `lead-form.html?id=` (working) or `case.html?id=` (filed). Requires a focused person. **Clear all** (`call: clearInvestigationWorkspace`) empties this wall and plate queue after confirm; shared objects and child investigations stay. Wall place/pan/connect and the Windows drawer (**Plates** / **Objects** / **Card**) overlay the wall (click the selected type chip to stop placing). Click a chip to focus; **Edit** / double-click / Enter opens the Card window (same photo/file row as other cards, **Associated** (person / vehicle / location / business / entity), **Remove from wall** / **Junk** / **Delete record**). An object photo is the wall chip face. **Find** / **Hits** live in the Objects window — not the action slot (same rule as map drawing tools). Esc closes Card. Delete/Backspace removes the focused chip when not typing. |
-| I-200 / I-205 form | **Issue** (`#appBarPrimaryAction`, `data-chrome-action="save"`) | **Back to case** (`case.html?id=`) |
-| Home, Dashboard, Schedule | empty | Home is not +Person. |
-| Map | **Print brief** (`#appBarPrimaryAction`, `call: printMapBrief`) | **Brief view** (`#mapBriefButton`). Drawing tools stay overlays on the map, not the slot. File also has Print brief. |
-| Photo picker | **Add photos**; with owner query **Save photo** + Back | File: Download JSON / Clear lab library. Not a chrome tab. |
-| File upload | **Add files**; with owner query **Save file** + Back | Same. |
-| I-213 (`narrative.html`, Encounter sub-page, not a tab) | **Save I-213** when `?encounterId=`; else **Update draft** | With `?encounterId=`: **Back to encounter**. Then **Copy**. Encounters tab current. |
-| Book-in (until split) | **Save** (`call: saveCurrentRecord`) — files the packet and a DETAINEE lead. With `?encounterId=`, then return to the encounter. | **Generate** (packet PDF). **Load from cases** always (committed cases only). With `?encounterId=`: **Back to encounter**, **Add another subject**. With `?leadId=` only: **Back to case**. Tab (no query): no Back. Then Clear, Baseball card. File: New / Open (Save is the action slot). Encounter ID banner is display-only (no in-page Back). |
-| Baseball card | **Generate** (`persistBaseballCard`) | **Back to book-in** (keep `encounterId` / `leadId`) |
-| Lead form extras | Save | **Back to cases** (or **Back to case** if `committedAt`); Follow-ups; **+Person / +Vehicle / +Location**. Never on Book-in or Map. |
+| Collection | Add record | None; tabs leave collections |
+| View | Edit | Back to list, record-specific output/actions |
+| Form | Save | Back to origin, form-specific actions |
+| Investigation | Save | Back, Import plates, Spawn, Open as case, Clear all |
+| Encounter | Save | Back, Add subject, Generate I-213 |
+| Operation brief | Print | Save brief, Back to operation |
+| Map | Print brief | Brief view and planned map exports |
+| Narrative | Save I-213 / Update draft | Back when live, Copy, downloads |
+| Book-in | Save | Contextual Back/Add subject, Generate, Load, Clear, Baseball card, New, Open |
+| Home / Admin dashboard / Schedule | none | Home uses its in-page Tools card |
 
-Six lead-form secondaries will wrap: at `max-width: 639px` `.app-bar-actions` is a full row, `justify-content: flex-end`. That crowding is accepted; do not move stubs onto other pages.
+Record-specific downloads remain available in this slot: case JSON/CSV,
+warrant PDF, Narrative JSON/text, Target sheet, media-lab JSON/clear, and map or
+operation printing. `data-not-built` continues to mark controls that are only
+reserved.
 
-Baseball card stays a **book-in** action, not a lead-view action.
+The `file` array in `COPDoc.chrome.mount` is now a compatibility input for
+page-specific tools. The painter merges those items into actions, de-duplicates
+matching handlers, ignores the old workspace `fileImportButton` and
+`fileExportButton`, and never creates `#fileMenu`.
 
-### Interim lead (`data-page="lead-form"` on today’s `lead.html`)
+## Media picker
 
-Primary **Save**, stay on the page. **Back to leads** (or **Back to lead** after commit). No Book-in. File still has New/Open.
+Owner-scoped Add photo links open `functions/photo-picker-modal.js` over the
+current page. The embedded `photo-picker.html` retains crop/tag behavior and
+writes only `copdocx.media.v1`; Save posts the owner back, closes, restores
+focus, and refreshes matching media cards without changing the parent URL.
+Standalone no-owner `photo-picker.html` remains the development lab.
 
-### Officer / vehicle forms after chrome
+File upload remains a page for now.
 
-Hide/remove in-form `#addOfficerButton` / `#addVehicleButton` in the chrome PR. Slot is the only visible Save.
+## Privacy lock
+
+Every active app page loads `workspace-config.js` and `privacy-gate.js` in the
+document head. Before chrome is visible, the gate requires the local unlock
+phrase. The first visit sets the phrase; its salted SHA-256 digest is stored in
+`copdocx.privacy-lock.v1`. A successful unlock is remembered only in
+`sessionStorage` for that tab (`copdocx.privacy-unlocked.v1`). This is a
+shoulder-surf screen lock, not encryption or authentication.
+
+Unreadable lock state fails closed. The record stores and media database are
+not encrypted, migrated, or re-keyed by this feature.
 
 ## Mobile
 
-`.app-bar-navrow` already wraps. On `max-width: 639px`:
+The nav row wraps. At narrow widths, `.app-bar-actions` receives its own row
+and remains right-aligned. Do not hide tabs or record actions.
 
-```css
-.app-bar-actions {
-  flex: 1 1 100%;
-  justify-content: flex-end;
-  margin-left: 0;
-}
-```
-
-Do not hide File, tabs, or the slot.
-
-## Painter
+## Painter contract
 
 ```js
 COPDoc.chrome.mount({
-  tab: "leads",       // home | leads | encounter | bookin | map | admin
-  adminChild: "",     // dashboard | officers | vehicles | schedule | ""
-  file: [
-    { id: "newLeadButton", label: "New" },
-    { id: "openLeadButton", label: "Open", selectId: "savedLeadSelect" },
-    { id: "downloadLeadButton", label: "Download JSON" },
-    { id: "downloadLeadCsvButton", label: "Download CSV" }
-  ],
+  tab: "leads", // home | leads | investigate | encounter | operations | bookin | map | admin
   actions: [
-    /* add/edit: { label, href, primary: true, chromeAction: "add"|"edit" } */
-    /* save:     { label, primary: true, chromeAction: "save" }  → <button> */
+    { label: "Save", primary: true, chromeAction: "save" },
+    { label: "Back to cases", href: "leads.html" }
+  ],
+  file: [
+    // Compatibility: page-specific downloads only; painted in the action slot.
+    { id: "downloadLeadButton", label: "Download JSON" }
   ]
 });
 ```
 
-Lead-form File **must emit** `#newLeadButton`, `#openLeadButton`, `#savedLeadSelect`, `#downloadLeadButton`, `#downloadLeadCsvButton` until New/Open die (triad PR) and until export ids move. Vehicle-form File Save **must emit** `#adminSaveButton` until autosave ships.
-
-Registry keyed by `data-page` (not `data-admin-page`). Keep menu dismiss, Escape, `data-not-built`, and `COPDoc.setAppBarStatus(message, { ok: true })` (must be able to set `.is-ok`; today the helper always removes it). Do not add `functions/chrome.js` unless the painter outgrows `app-bar.js`.
-
-`#appBarNav` is created by the painter; it does not exist in HTML today.
+The registry keys off `body[data-page]`, not `data-admin-page`. Preserve menu
+dismissal, Escape behavior, `data-not-built`, and
+`COPDoc.setAppBarStatus(message, { ok: true })`.

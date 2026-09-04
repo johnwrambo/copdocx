@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Case</title>
-    <link rel="stylesheet" href="style/style.css" />
+    <link rel="stylesheet" href="style/style.css?v=0.66.1-object-editor-2" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -19,9 +21,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -186,7 +188,6 @@
             No associations or linked cases.
           </p>
           <div id="caseAssociationsList" class="case-plain-list" hidden></div>
-          <div id="caseAssociationsComposer" class="investigation-associate-composer"></div>
         </fieldset>
       </div>
     </div>
@@ -287,7 +288,12 @@
         <button type="button" id="caseEditCancel" class="action-button-secondary">
           Cancel
         </button>
-        <button type="button" id="caseEditSave" class="action-button">Save</button>
+        <button type="button" id="caseEditApply" class="action-button-secondary">
+          Apply
+        </button>
+        <button type="button" id="caseEditSave" class="action-button">
+          Save &amp; Close
+        </button>
       </header>
       <div id="caseEditHost" class="case-edit-host"></div>
     </aside>
@@ -445,6 +451,18 @@
             <label>SID</label>
             <input type="text" data-field="stateId" />
           </div>
+          <div class="field">
+            <label>Foreign Warrants</label>
+            <select data-field="foreignWarrants">
+              <option value="">Select Yes or No</option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Foreign Warrant Country</label>
+            <input type="text" data-field="foreignWarrantCountry" autocomplete="off" />
+          </div>
         </div>
       </fieldset>
     </template>
@@ -572,6 +590,14 @@
               <option value="3">Tertiary</option>
             </select>
           </div>
+          <div class="field" data-show-association="registration" hidden>
+            <label>Known to park here?</label>
+            <select data-field="parksHere">
+              <option value="">Unknown</option>
+              <option value="yes">Yes</option>
+              <option value="no">No — add known parking</option>
+            </select>
+          </div>
         </div>
         <div class="row">
           <div class="field field-span-2">
@@ -686,56 +712,104 @@
       </fieldset>
     </template>
 
-    <template id="relationshipCardTemplate">
-      <fieldset data-card="relationship">
-        <legend>Association</legend>
+    <template id="businessCardTemplate">
+      <fieldset data-card="business">
+        <legend>Business</legend>
         <div class="row">
-          <div class="field">
-            <label>Name / plate / street</label>
-            <input type="text" data-field="associationLabel" autocomplete="off" />
+          <div class="field field-span-2">
+            <label>Name</label>
+            <input type="text" data-field="name" autocomplete="off" />
           </div>
           <div class="field">
-            <label>Type</label>
-            <select data-field="otherType">
-              <option value="">Select a type</option>
-              <option value="PERSON">Person</option>
-              <option value="VEHICLE">Vehicle</option>
-              <option value="LOCATION">Location</option>
-              <option value="BUSINESS">Business</option>
-              <option value="ENTITY">Entity</option>
-              <option value="OTHER">Other</option>
-            </select>
-          </div>
-        </div>
-        <div class="row">
-          <div class="field">
-            <label>Relationship</label>
-            <select data-field="relationshipType"></select>
-          </div>
-          <div class="field">
-            <label>Existing person (optional)</label>
-            <select data-field="relatedPersonId">
-              <option value="">Not linked yet</option>
-            </select>
+            <label>Phone</label>
+            <input type="tel" data-field="phone" autocomplete="off" />
           </div>
         </div>
         <div class="row">
           <div class="field field-span-2">
             <label>Notes</label>
-            <textarea data-field="notes" rows="2"></textarea>
+            <textarea data-field="notes" rows="3"></textarea>
           </div>
         </div>
-        <p class="section-note">
-          <button
-            type="button"
-            class="action-button-secondary compact"
-            data-open-associate-case
-            hidden
-          >
-            Open as new case
-          </button>
-        </p>
       </fieldset>
+    </template>
+
+    <template id="entityCardTemplate">
+      <fieldset data-card="entity">
+        <legend>Entity</legend>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Name</label>
+            <input type="text" data-field="name" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>Kind</label>
+            <input type="text" data-field="kind" autocomplete="off" placeholder="Crew, organization, asset…" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="field field-span-2">
+            <label>Notes</label>
+            <textarea data-field="notes" rows="3"></textarea>
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <template id="relationshipCardTemplate">
+      <section data-card="relationship" class="case-association-editor">
+        <fieldset>
+          <legend>Choose object</legend>
+          <div class="row row-3">
+          <div class="field">
+            <label>Object type</label>
+            <select data-field="otherType" autocomplete="off">
+              <option value="" selected>Select a type</option>
+              <option value="PERSON">Person</option>
+              <option value="VEHICLE">Vehicle</option>
+              <option value="LOCATION">Location</option>
+              <option value="BUSINESS">Business</option>
+              <option value="ENTITY">Entity</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Existing object</label>
+            <select data-field="relatedObjectId" autocomplete="off" disabled>
+              <option value="">Select an object type first</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Relationship</label>
+            <select data-field="relationshipType" autocomplete="off" disabled>
+              <option value="">Select an object type first</option>
+            </select>
+          </div>
+          </div>
+          <p class="section-note" data-association-object-help>
+            Choose a type, then select an existing object or create a complete new one.
+          </p>
+        </fieldset>
+        <div data-association-object-host></div>
+        <fieldset data-association-details hidden>
+          <legend>Association details</legend>
+          <div class="row">
+            <div class="field field-span-2">
+              <label>Notes</label>
+              <textarea data-field="notes" rows="3"></textarea>
+            </div>
+          </div>
+          <p class="section-note">
+            <button
+              type="button"
+              class="action-button-secondary compact"
+              data-open-associate-case
+              hidden
+            >
+              Open as new case
+            </button>
+          </p>
+        </fieldset>
+      </section>
     </template>
 
     <script src="functions/app-bar.js"></script>
@@ -777,9 +851,10 @@
     <script src="assets/icons/copdoc-icons.js"></script>
     <script src="functions/map-popup.js"></script>
     <script src="functions/location-map.js"></script>
-    <script src="functions/cards.js"></script>
+    <script src="functions/cards.js?v=0.66.1-object-editor"></script>
     <script src="functions/leads.js"></script>
     <script src="functions/lead-csv.js"></script>
-    <script src="functions/case-edit.js"></script>
+    <script src="functions/case-edit.js?v=0.66.1-object-editor"></script>
+    <script src="functions/photo-picker-modal.js"></script>
   </body>
 </html>

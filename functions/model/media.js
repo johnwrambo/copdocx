@@ -8,7 +8,8 @@
   var root = (global.COPDoc = global.COPDoc || {});
   var model = (root.model = root.model || {});
 
-  var DB_NAME = "copdocx.media.v1";
+  var DB_NAME =
+    (root.config && root.config.storageKey("media")) || "copdocx.media.v1";
   var DB_VERSION = 1;
   var PHOTO_MAX_BYTES = 15 * 1024 * 1024;
   var FILE_MAX_BYTES = 25 * 1024 * 1024;
@@ -1106,7 +1107,7 @@
       return "bookin.html?recordId=" + encodeURIComponent(owner.id);
     }
     if (owner.type === "PERSON") {
-      return "leads.html";
+      return "cases.html";
     }
     return "";
   }

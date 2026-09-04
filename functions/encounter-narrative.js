@@ -153,6 +153,9 @@
     var i;
     for (i = 0; i < officers.length; i++) {
       var row = officers[i];
+      if (!row || row.junked) {
+        continue;
+      }
       var label = officerLabel(row).toUpperCase();
       var flipped = [row.firstName, row.lastName].filter(Boolean).join(" ").toUpperCase();
       if (label === needle || flipped === needle || String(row.displayName || "").toUpperCase() === needle) {

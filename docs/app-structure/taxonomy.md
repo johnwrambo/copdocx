@@ -14,7 +14,7 @@ Always `?id=` in the URL even when the model field is `leadId` / `officerId` / `
 
 | Type | List | View | Form |
 | --- | --- | --- | --- |
-| Case (store: lead) | `leads.html` (tab **Cases**) | `case.html` (alias `lead.html` redirects) | `lead-form.html` |
+| Case (store: lead) | `cases.html` (tab **Cases**; `leads.html` redirects) | `case.html` (alias `lead.html` redirects) | `lead-form.html` |
 | Officer | `officers.html` | `officer.html` | `officer-form.html` |
 | Vehicle | `vehicles.html` | `vehicle.html` | `vehicle-form.html` |
 | Encounter | `encounter.html` | not split yet | `encounter-form.html` |
@@ -23,9 +23,9 @@ Always `?id=` in the URL even when the model field is `leadId` / `officerId` / `
 
 Officer pocket brief: `operation-brief.html?id=` (not a tab). Nested Target sheets (**0.66.0**).
 
-`index.html` must change **all three**: `http-equiv` refresh, `<link rel="canonical">`, and the fallback `<a>` — to **`home.html`**. The Home tab is the briefing hub; **Cases** is the records tab (`leads.html`, store still `leads{}`).
+`index.html` must change **all three**: `http-equiv` refresh, `<link rel="canonical">`, and the fallback `<a>` — to **`home.html`**. The Home tab is the briefing hub; **Cases** is `cases.html` (store still `leads{}`). `leads.html` redirects. The Cases tab defaults to the **Arrests** roster (search, dates, columns, report); **Case files** is the stage list. Arrest roster + daily report with baseball cards shipped **0.67.0**.
 
-Until the lead split ships, the form **stays** at `lead.html` with `data-page="lead-form"` (see Interim). Do not keep the form on `lead.html` after the split.
+The case triad has shipped. `lead.html` is only a compatibility redirect to `case.html`; all editing lives at `lead-form.html`.
 
 ### Reserved (not this program)
 
@@ -43,13 +43,13 @@ Until book-in is split, `bookin.html` is the working form. Prefill uses **`booki
 `i200-form.html` (`data-page="i200-form"`) and `i205-form.html` (`data-page="i205-form"`) are case-view issuance forms (`?id=` is the **leadId**). Cases tab stays current. They are not a warrant triad.
 Operations tab: `operations.html` / `operation.html` / `operation-form.html` (**0.62.0**). Pocket brief `operation-brief.html` (**0.66.0**). `encounter.html` is the 0.11.0 list.
 
-Home is a briefing hub, not a record triad. Action slot empty. Counts and lists are placeholders until a later painter (cross-store **reads** of committed leads, admin roster, book-in). Do not write any store from `home.html`.
+Home is a briefing hub, not a record triad. Its painter makes read-only cross-store projections for filed cases, available officers/fleet, weekly Book-ins, today's shifts, mapped priority targets, and open follow-ups. Its **Tools / Utilities** card owns workspace Import JSON, Export JSON/CSV, and Lock this tab. The transfer dialogs are the only Home actions that write stores.
 
-`photo-picker.html` is a development workspace for upload / crop / tags. Not a chrome tab. Isolated key `copdocx.photo-picker.v1`. Do not write leads, admin, or book-in from it.
+`photo-picker.html` remains a development workspace for upload / crop / tags with no owner. Owner-scoped Add photo links open it embedded in `photo-picker-modal.js`; Save closes the modal and leaves the parent URL/form/wall intact. It writes media only. Not a chrome tab. Isolated lab key `copdocx.photo-picker.v1`.
 
 `file-upload.html` is the same tagging workspace for any file, plus document type (identity catalog + case packets). Isolated key `copdocx.file-upload.v1`. Not a chrome tab. Do not write leads, admin, or book-in from it.
 
-**Product Save (planned):** both pickers accept `?ownerType=&id=` (see [data-models.md](data-models.md) Media). Primary becomes **Save photo** / **Save file** and writes IndexedDB `copdocx.media.v1`. No query → lab library only. Views show a **Photo** card (hero + thumbs) and a **Documents** list via `functions/media-card.js`.
+**Product Save:** both pickers accept `?ownerType=&id=` (see [data-models.md](data-models.md) Media). **Save photo** / **Save file** writes IndexedDB `copdocx.media.v1`. No query → lab library only. Views show a **Photo** card (hero + thumbs) and a **Documents** list via `functions/media-card.js`. Photos never use owner type `LEAD`; `leadId=` resolves the subject PERSON.
 
 Map is a planning board, not a record triad. Action slot: **Brief view** + primary **Print brief**. Writes: `copdocx.map.views.v1` (home/presets), `copdocx.map.layers.v1` (layer visibility), `copdocx.map.icons.v1` (assigned icons), `copdocx.map.markup.v1` (labels/arrows). Does not write leads/admin/book-in. Pin click uses the same photo card as the case map (`functions/map-popup.js`); it **reads** `copdocx.media.v1` and does not Save photo.
 
@@ -58,12 +58,13 @@ Map is a planning board, not a record triad. Action slot: **Brief view** + prima
 | Layer | Rule | Default |
 | --- | --- | --- |
 | Active targets | `targetPriority` set | on |
-| Arrests | `person.arrests[]` (plot only if lat/long on the row or `lat, lng` in the location string) | on |
+| Arrests | `person.arrests[]` with lat/long (from Complete / Book-in stop, or `lat, lng` in the location string) | on |
+| Encounters | `encounter.completed` snapshot locations (Complete), not the live working form | on |
 | Officer homes | committed officer `residence` / `home` location | on |
 | Origin / finds | vehicle/person `association === "plate-check"` | off |
 | Markup | labels and arrows | on |
 
-Icon library (Lucide set on the page, `<details>` closed by default) assigns a glyph to a **category** (click a layer icon/name while a swatch is picked) or a **row**. Overlay tools: Label, Arrow, Delete. **Brief view** hides chrome, overlays, and the dock; **Print brief** / File **Print brief** uses the browser print dialog (Save as PDF).
+Icon library (Lucide set on the page, `<details>` closed by default) assigns a glyph to a **category** (click a layer icon/name while a swatch is picked) or a **row**. Overlay tools: Label, Arrow, Delete. **Brief view** hides chrome, overlays, and the dock; action-slot **Print brief** uses the browser print dialog (Save as PDF).
 
 `narrative.html` (`data-page="narrative"`) is the I-213 / Build 9 workspace, not
 a chrome tab. Open it from the encounter form (**Generate I-213**). The Encounters
@@ -80,9 +81,8 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 
 | File | `data-page` | `data-admin-page` (until admin.js migrates) |
 | --- | --- | --- |
-| `lead.html` **until split** | `lead-form` | — (none today; do not invent) |
 | `leads.html` | `leads` | — |
-| `lead.html` **after split** | `lead` | — (redirects to `case.html`) |
+| `lead.html` | compatibility redirect | — (redirects to `case.html`) |
 | `case.html` | `case` | — |
 | `lead-form.html` | `lead-form` | — |
 | `officers.html` | `officers` | `officers` |
@@ -107,20 +107,12 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 
 `aria-current="page"`: Home tab for `home`; Cases tab for `leads|lead|case|lead-form|i200-form|i205-form|mobile-target-sheet`; Investigate tab for `investigations|investigate`; Encounters tab for `encounter|encounter-form`; Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
 
-## Interim: `lead.html` before the triad
-
-- `data-page="lead-form"` so chrome paints **Save**, not Edit/Book-in.
-- Primary Save **stays on** `lead.html`. No Cancel (no list/view yet). No Book-in.
-- Autosave/commit PR **must** hydrate **only when `?id=` is present** (not `currentLeadId`), `replaceState` after first draft, and keep File New/Open in sync with the URL — [records.md](records.md) Interim.
-- After the split: move the form body to `lead-form.html`; `lead.html` becomes the view (`#leadSnapshot` / `#leadMissing`, same idea as `#officerSnapshot` / `#officerMissing`). No `id` → empty state + Back to leads (not a redirect to the form). `lead.html?id=` with `meta.status === "draft"` → redirect to `lead-form.html?id=`.
-
 ## Buttons and IDs
 
 **One id on the primary control.** Never alias a second id onto `#appBarPrimaryAction`.
 
 | Role | ID | Label | Element |
 | --- | --- | --- | --- |
-| File menu | `#fileMenu` | File | `<details>` |
 | Page tabs | `#appBarNav` | — | painted `<nav>` |
 | Admin dropdown | `#adminMenu` | Admin | `<details>` inside `.app-bar-nav` |
 | Action cluster | `#appBarActions` | — | painted |
@@ -134,28 +126,29 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | Issue I-200 (lead **view** only) | `#issueI200Button` | Issue I-200 | `<a href="i200-form.html?id=">` |
 | Issue I-205 (lead **view** only) | `#issueI205Button` | Issue I-205 | `<a href="i205-form.html?id=">` |
 | Issue (I-200 / I-205 form) | `#appBarPrimaryAction` | Issue | button + `data-chrome-action="save"` |
-| Download filled warrant PDF | `#downloadWarrantPdfButton` | Download PDF | File-menu button |
+| Download filled warrant PDF | `#downloadWarrantPdfButton` | Download PDF | action-slot button |
 | Status | `#appBarStatus` | — | `<p>` |
 | Lead follow-up stubs (form only) | `#stubPersonButton`, `#stubVehicleButton`, `#stubLocationButton` | + Person / Vehicle / Location | buttons (`workflow.js`) |
 | Follow-ups | `#followUpsToggle` | Follow-ups | button |
 | Narrative save | `#appBarPrimaryAction` | Save I-213 / Update draft | button + `data-chrome-action="save"` |
 | Narrative copy | `#copyNarrativeButton` | Copy | button (plain text) |
-| Narrative downloads | `#downloadNarrativeJsonButton`, `#downloadNarrativeTextButton` | Download JSON / text | File-menu buttons |
-| Workspace Import | `#fileImportButton` | Import | File-menu button `call: openFileImport` |
-| Workspace Export | `#fileExportButton` | Export | File-menu button `call: openFileExport` |
+| Narrative downloads | `#downloadNarrativeJsonButton`, `#downloadNarrativeTextButton` | Download JSON / text | action-slot buttons |
+| Workspace Import | `#homeImportButton` | Import JSON | Home Tools button calling `openFileImport` |
+| Workspace Export | `#homeExportButton` | Export JSON / CSV | Home Tools button calling `openFileExport` |
+| Workspace lock | `#homeLockButton` | Lock this tab | Home Tools button calling `COPDoc.privacyGate.lock` |
 | Add encounter | `#appBarPrimaryAction` | Add encounter | `<a href="encounter-form.html">` |
 | Add subjects (encounter form) | `#addEncounterSubjectsButton` | Add subjects | `<a href="bookin.html?encounterId=">` |
 | Generate I-213 (encounter form) | `#generateI213Button` | Generate I-213 | button `call: generateEncounterNarrative` |
 | Add subject (book-in + `?encounterId=`) | `#addEncounterSubjectButton` | Add subject | button `call: addEncounterSubject` |
 | Load from leads (book-in) | `#loadLeadIntoEncounterButton` | Load from leads | button `call: openLoadLeadForEncounter`. Always on Book-in. |
 | Map views | `#mapHomeButton`, `#mapSetHomeButton`, `#mapSavePresetButton`, `#mapPresetSelect`, `#mapDeletePresetButton` | Home / Set home / presets | in `.map-toolbar`, not the action slot |
-| Map layers (planned) | layer toggles for active / arrest / origin | independent; default Active on | in `.map-toolbar`, not the action slot |
+| Map layers | active / arrest / encounter / officer / origin / markup toggles | independent visibility | in the map dock, not the action slot |
 | Map hint | `#mapViewHint` | view-mode status | in `.map-card` |
 | Map targets | `#targetsTableBody`, `#targetsEmpty` | ranked locations | `.targets-card` |
 | Photo picker add | `#appBarPrimaryAction` | Add photos | button `call: openPhotoPicker` |
-| Photo picker file | `#downloadPhotoLibraryButton`, `#clearPhotoLibraryButton` | Download JSON / Clear library | File menu |
+| Photo picker tools | `#downloadPhotoLibraryButton`, `#clearPhotoLibraryButton` | Download JSON / Clear library | standalone lab action slot |
 | File upload add | `#appBarPrimaryAction` | Add files | button `call: openFileUpload` |
-| File upload file | `#downloadFileLibraryButton`, `#clearFileLibraryButton` | Download JSON / Clear library | File menu |
+| File upload tools | `#downloadFileLibraryButton`, `#clearFileLibraryButton` | Download JSON / Clear library | page action slot |
 
 Retire `#leadSaveStatus`, `#quickSaveLeadButton`, `#addOfficerButton`, `#addVehicleButton`, `#officerEditLink`, `#vehicleEditLink` in the **chrome PR** (same PR the slot becomes the only visible Save/Edit). Page scripts bind **Save** to `#appBarPrimaryAction[data-chrome-action="save"]`.
 
@@ -166,7 +159,7 @@ List tables: `#{records}Body`, `#{records}Empty`, `#{records}TableWrap`.
 | Slot | Class |
 | --- | --- |
 | Bar | `.app-bar`, `.app-bar-info`, `.app-bar-navrow` (`style.css` ~114–165) |
-| File / Admin menus | `.app-bar-menu`, `.app-bar-menu-list` |
+| Admin menu | `.app-bar-menu`, `.app-bar-menu-list` |
 | Tabs | `.app-bar-nav` (~1848) |
 | Actions | `.app-bar-actions` (`margin-left: auto`, ~167) |
 | Primary / secondary | `.action-button` / `.action-button-secondary` |
@@ -178,7 +171,7 @@ List tables: `#{records}Body`, `#{records}Empty`, `#{records}TableWrap`.
 | Map planning board | `.map-shell`, `.map-stage`, `.map-overlay`, `.map-dock`, `.map-layer-list` |
 | Photo picker (test) | `.page-photo-picker`, `.photo-library`, `.photo-crop-stage`, `.photo-tag-list` |
 | File upload (test) | `.file-library`, `.file-row`, `.file-preview` |
-| Object view media | `.media-photo-card`, `.media-doc-list` (planned) |
+| Object view media | `.media-photo-card`, `.media-doc-list`, `.photo-picker-modal` |
 
 Do not add per-page stylesheets unless print/PDF requires it.
 
@@ -191,7 +184,7 @@ Do not add per-page stylesheets unless print/PDF requires it.
 | `functions/model/` | Factories, store, `media.js` (IDB photos/files), collect/hydrate, `util.js`, `autosave.js` — **singular** names |
 | `functions/leads.js` | Lead list + view painter (after split) |
 | `functions/app-bar.js` | `COPDoc.chrome` + menus + status |
-| `functions/transfer.js` | File Import / Export dialogs; reads the three stores directly |
+| `functions/transfer.js` | Home Tools Import / Export dialogs; reads the separate stores directly |
 | `functions/pdf/` | Warrant field maps + unflattened pdf-lib fill |
 | `functions/warrant-issue.js` | I-200 / I-205 form controller |
 | `functions/narratives/` | Narrative engine, packet projection, Build 9 domain, page controller |
@@ -210,10 +203,12 @@ Do not add per-page stylesheets unless print/PDF requires it.
 **Home** (`home.html`):
 
 ```
-app-bar.js → transfer.js → date.js → assets/icons/copdoc-icons.js → functions/home.js
+workspace-config.js → privacy-gate.js (head)
+app-bar.js → model/util.js → model/media.js → transfer.js
+→ date.js → assets/icons/copdoc-icons.js → functions/home.js
 ```
 
-Do **not** load `store.js`, `admin.js`, `collect.js`, `hydrate.js`, `workflow.js`, or `cards.js`. Skeleton does not write storage. A later painter may **read** committed leads / roster / book-in.
+Do **not** load `store.js`, `admin.js`, `collect.js`, `hydrate.js`, `workflow.js`, or `cards.js`. Home reads the record stores directly and writes only through explicit transfer dialogs. `media.js` is present so those dialogs include and restore the portable Media bundle.
 
 **Photo picker** (`photo-picker.html`):
 
@@ -221,7 +216,7 @@ Do **not** load `store.js`, `admin.js`, `collect.js`, `hydrate.js`, `workflow.js
 app-bar.js → date.js → model/util.js → model/store.js → model/media.js → photo-picker.js
 ```
 
-Not a chrome tab. Lab key `copdocx.photo-picker.v1`. Owner query **Save photo** writes IndexedDB. Do **not** write leads, admin, or book-in JSON.
+Not a chrome tab. Lab key `copdocx.photo-picker.v1`. Owner query **Save photo** writes IndexedDB; owner-scoped product use is hosted by `photo-picker-modal.js`. Do **not** write leads, admin, or book-in JSON.
 
 **File upload** (`file-upload.html`):
 
@@ -242,7 +237,7 @@ app-bar.js → date.js
 → map-views.js → map.js → map-targets.js → map-markup.js
 ```
 
-Do **not** load `cards.js`, `collect.js`, `hydrate.js`, `admin.js`, `media-card.js`, or `workflow.js`. Cross-store **read** of leads for ranked locations, admin officer homes, and media thumbs. Writes: `copdocx.map.views.v1`, `copdocx.map.layers.v1`, `copdocx.map.icons.v1`, `copdocx.map.markup.v1`. File **Print brief** works; KMZ/JSON/CSV stay `data-not-built`. Action slot: Brief view + Print brief.
+Do **not** load `cards.js`, `collect.js`, `hydrate.js`, `admin.js`, `media-card.js`, or `workflow.js`. Cross-store **read** of leads/encounters for mapped locations, admin officer homes, and media thumbs. Writes: `copdocx.map.views.v1`, `copdocx.map.layers.v1`, `copdocx.map.icons.v1`, `copdocx.map.markup.v1`. KMZ/JSON/CSV stay `data-not-built`. Action slot: Brief view + Print brief.
 
 **Admin pages** (officer/vehicle/dashboard/schedule/list/view):
 
@@ -256,7 +251,7 @@ app-bar.js → date.js
 
 Load `officer.js` only once it exists (officer-model PR). Load `autosave.js` from the save-shape PR. Until then admin keeps today’s stack plus `data-page`.
 
-**Lead form** (`lead.html` until split, then `lead-form.html`):
+**Lead form** (`lead-form.html`):
 
 ```
 app-bar.js → date.js → catalogs / cards helpers
@@ -265,14 +260,14 @@ app-bar.js → date.js → catalogs / cards helpers
 → cards.js → workflow.js → ui.js → lead-csv.js
 ```
 
-**Lead view / list** (after split): `app-bar.js`, `date.js`, `util.js`, `lead.js`, `person.js`, `location.js`, `store.js`, `leads.js`. **Do not** load `workflow.js`, `ui.js`, `baseballcard.js`, or `collect.js` on the view.
+**Lead view / list:** `app-bar.js`, `date.js`, `util.js`, `lead.js`, `person.js`, `location.js`, `store.js`, `leads.js`. **Do not** load `workflow.js`, `ui.js`, `baseballcard.js`, or `collect.js` on the view.
 
 **Baseball card** (`baseballcard.html`):
 
 ```
 app-bar.js → date.js → alien-number.js
 → data/countries.js → data/immigration.js
-→ model/util.js → model/lead.js → model/person.js → model/store.js
+→ model/util.js → model/lead.js → model/person.js → model/store.js → model/media.js
 → baseballcard.js → baseball-page.js
 ```
 
@@ -292,9 +287,10 @@ Do **not** load `admin.js`, `cards.js`, `collect.js`, `hydrate.js`, or `workflow
 **Book-in** (prefill PR; `getLead` / `subjectOf` / `formatPersonLabel`):
 
 ```
-app-bar.js → date.js → existing book-in catalogs
-→ model/util.js → model/lead.js → model/person.js → model/store.js
-→ book-in.js
+app-bar.js → transfer.js → date.js → existing book-in catalogs
+→ model/util.js → model/person.js → model/location.js → model/vehicle.js
+→ model/lead.js → model/encounter.js → association matrix → model/link.js
+→ model/store.js → model/media.js → arrest-report.js → book-in.js → baseballcard.js
 ```
 
 Do **not** load `officer.js`, `autosave.js`, `collect.js`, or `createLead` beyond `lead.js` + `store.js`. `lead.js` requires `util.js` after the extract.

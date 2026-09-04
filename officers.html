@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Officers</title>
     <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
   </head>
   <body data-page="officers" data-admin-page="officers">
     <header class="app-bar">
@@ -13,9 +15,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -31,6 +33,7 @@
           <button type="button" data-record-filter="all" aria-pressed="true">All</button>
           <button type="button" data-record-filter="draft" aria-pressed="false">Working</button>
           <button type="button" data-record-filter="committed" aria-pressed="false">Filed</button>
+          <button type="button" data-record-filter="junk" aria-pressed="false">Junk</button>
         </div>
         <div id="officersEmpty" class="records-empty">No officers yet.</div>
         <div id="officersTableWrap" class="records-table-wrap" hidden>
@@ -60,6 +63,7 @@
     <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/officer.js"></script>
     <script src="functions/model/autosave.js"></script>
+    <script src="functions/admin-disposition.js"></script>
     <script src="functions/admin.js"></script>
   </body>
 </html>

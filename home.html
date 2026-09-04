@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Home</title>
     <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
   </head>
   <body data-page="home">
     <!--
-      Briefing hub. Chrome only. Empty action slot.
-      Counts and lists are placeholders until a later painter reads
-      committed leads / admin roster / book-in (cross-store reads).
+      Briefing hub. Cross-store reads only; record stores are not written here.
     -->
     <header class="app-bar">
       <div class="app-bar-info">
@@ -18,9 +18,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -60,7 +60,7 @@
       </div>
 
       <nav class="home-modules" aria-label="Modules">
-        <a class="home-module" href="leads.html">
+        <a class="home-module" href="cases.html">
           <span class="home-module-icon" data-icon="Crosshair" data-icon-size="22"></span>
           <span class="home-module-label">Cases</span>
           <span class="home-module-hint">Case files</span>
@@ -69,6 +69,21 @@
           <span class="home-module-icon" data-icon="FileText" data-icon-size="22"></span>
           <span class="home-module-label">Book-in</span>
           <span class="home-module-hint">Packet / PDF</span>
+        </a>
+        <a class="home-module" href="investigations.html">
+          <span class="home-module-icon" data-icon="Search" data-icon-size="22"></span>
+          <span class="home-module-label">Investigate</span>
+          <span class="home-module-hint">Working walls</span>
+        </a>
+        <a class="home-module" href="encounter.html">
+          <span class="home-module-icon" data-icon="Users" data-icon-size="22"></span>
+          <span class="home-module-label">Encounters</span>
+          <span class="home-module-hint">Field contacts</span>
+        </a>
+        <a class="home-module" href="operations.html">
+          <span class="home-module-icon" data-icon="Radio" data-icon-size="22"></span>
+          <span class="home-module-label">Operations</span>
+          <span class="home-module-hint">Plans and briefs</span>
         </a>
         <a class="home-module" href="map.html">
           <span class="home-module-icon" data-icon="Map" data-icon-size="22"></span>
@@ -87,12 +102,36 @@
         </a>
       </nav>
 
+      <fieldset class="card-static home-tools-card">
+        <legend>Tools / Utilities</legend>
+        <div class="home-tools-row">
+          <div>
+            <strong>Workspace transfer</strong>
+            <p class="section-note">
+              Import a COPDoc JSON backup, or export selected records as JSON and CSV.
+              Each record store remains separate.
+            </p>
+          </div>
+          <div class="record-actions">
+            <button type="button" id="homeImportButton" class="action-button-secondary">
+              Import JSON
+            </button>
+            <button type="button" id="homeExportButton" class="action-button-secondary">
+              Export JSON / CSV
+            </button>
+            <button type="button" id="homeLockButton" class="action-button-secondary">
+              Lock this tab
+            </button>
+          </div>
+        </div>
+      </fieldset>
+
       <div class="home-split">
         <fieldset class="card-static">
           <legend>Recent cases</legend>
           <div class="dash-card-head">
             <p class="section-note" id="homeLeadsNote">No filed cases.</p>
-            <a href="leads.html" class="action-button-secondary">Open cases</a>
+            <a href="cases.html" class="action-button-secondary">Open cases</a>
           </div>
           <ul id="homeLeadsPreview" class="dash-preview" hidden></ul>
         </fieldset>
@@ -119,7 +158,7 @@
           <legend>Follow-ups</legend>
           <div class="dash-card-head">
             <p class="section-note" id="homeFollowUpsNote">No open follow-ups.</p>
-            <a href="leads.html" class="action-button-secondary">Open cases</a>
+            <a href="cases.html" class="action-button-secondary">Open cases</a>
           </div>
           <ul id="homeFollowUpsPreview" class="dash-preview" hidden></ul>
         </fieldset>
@@ -127,6 +166,8 @@
     </div>
 
     <script src="functions/app-bar.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/media.js"></script>
     <script src="functions/transfer.js"></script>
     <script src="functions/date.js"></script>
     <script src="assets/icons/copdoc-icons.js"></script>

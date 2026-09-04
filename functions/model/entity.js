@@ -34,11 +34,21 @@
     if (!built.entityId) {
       built.entityId = built.id || model.newId("ent");
     }
-    if (!built.id) {
-      built.id = built.entityId;
-    }
+    built.id = built.entityId;
     built.name = String(built.name || "").trim();
     built.kind = String(built.kind || "").trim();
+    built.meta = model.assign(
+      {
+        createdAt: now,
+        updatedAt: now,
+        markedComplete: false,
+        status: "draft",
+        committedAt: ""
+      },
+      built.meta && typeof built.meta === "object" && !Array.isArray(built.meta)
+        ? built.meta
+        : {}
+    );
     return built;
   }
 

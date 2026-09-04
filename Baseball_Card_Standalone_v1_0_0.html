@@ -1,0 +1,1948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ICE Dallas Baseball Card</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --navy-950: #0b1728;
+      --navy-900: #10233d;
+      --blue-700: #1d4ed8;
+      --blue-600: #2563eb;
+      --blue-100: #dbeafe;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748b;
+      --slate-400: #94a3b8;
+      --slate-300: #cbd5e1;
+      --slate-200: #e2e8f0;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --danger-700: #b91c1c;
+      --danger-100: #fee2e2;
+      --success-700: #166534;
+      --warning-700: #92400e;
+      --surface: #ffffff;
+      --page: #e7edf4;
+      --text: #111827;
+      --muted: #59616d;
+      --radius: 10px;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--page);
+    }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      min-height: 40px;
+      padding: 9px 15px;
+      border: 1px solid var(--blue-700);
+      border-radius: 7px;
+      background: var(--blue-700);
+      color: #ffffff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1e40af;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    [contenteditable="true"]:focus-visible {
+      outline: 3px solid #60a5fa;
+      outline-offset: 2px;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.58;
+    }
+
+    button.secondary {
+      border-color: var(--slate-400);
+      background: #ffffff;
+      color: var(--slate-700);
+    }
+
+    button.secondary:hover {
+      background: var(--slate-100);
+    }
+
+    button.danger {
+      border-color: #fecaca;
+      background: #ffffff;
+      color: var(--danger-700);
+    }
+
+    button.danger:hover {
+      background: var(--danger-100);
+    }
+
+    button.compact {
+      min-height: 36px;
+      padding: 7px 11px;
+      font-size: 0.88rem;
+    }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid #1e293b;
+      background: var(--navy-950);
+      color: #ffffff;
+      box-shadow: 0 5px 18px rgba(15, 23, 42, 0.22);
+    }
+
+    .app-header__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      width: min(1460px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 10px 0;
+    }
+
+    .app-title {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      gap: 12px;
+    }
+
+    .unit-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      place-items: center;
+      border: 1px solid #64748b;
+      border-radius: 7px;
+      background: var(--navy-900);
+      color: #ffffff;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    .app-title h1 {
+      margin: 0;
+      font-size: 1.26rem;
+      line-height: 1.2;
+    }
+
+    .app-title p {
+      margin: 2px 0 0;
+      color: #cbd5e1;
+      font-size: 0.82rem;
+    }
+
+    .app-header__actions {
+      display: flex;
+      flex: 0 0 auto;
+      gap: 8px;
+    }
+
+    .app-header__actions button {
+      border-color: #64748b;
+      background: #334155;
+    }
+
+    .app-header__actions button:hover {
+      background: #475569;
+    }
+
+    main {
+      width: min(1460px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 16px 0 28px;
+    }
+
+    .source-note {
+      margin: 0 0 12px;
+      padding: 9px 11px;
+      border: 1px solid #93c5fd;
+      border-radius: 7px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(430px, 0.82fr) minmax(610px, 1.18fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .form-pane,
+    .preview-pane {
+      min-width: 0;
+    }
+
+    fieldset {
+      min-width: 0;
+      margin: 0 0 12px;
+      padding: 16px;
+      border: 1px solid var(--slate-300);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    legend {
+      padding: 0 7px;
+      color: var(--navy-900);
+      font-size: 0.96rem;
+      font-weight: 800;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .field label {
+      color: var(--slate-700);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 42px;
+      padding: 8px 10px;
+      border: 1px solid #aeb4bc;
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    .field input:hover,
+    .field select:hover {
+      border-color: var(--slate-500);
+    }
+
+    .photo-field {
+      grid-column: 1 / -1;
+    }
+
+    .photo-controls {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .photo-controls input[type="file"] {
+      min-width: 0;
+      flex: 1 1 auto;
+      padding: 7px;
+    }
+
+    .photo-controls button {
+      flex: 0 0 auto;
+    }
+
+    .criminal-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 11px 0 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .criminal-indicator input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
+    .criminal-row {
+      display: grid;
+      grid-template-columns: minmax(155px, 1.4fr) 125px 1fr 80px 1fr auto;
+      gap: 8px;
+      align-items: end;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px dashed var(--slate-300);
+    }
+
+    .criminal-row:last-child {
+      margin-bottom: 14px;
+    }
+
+    .criminal-row .danger {
+      width: auto;
+      min-height: 42px;
+    }
+
+    .empty-history {
+      margin: 0 0 12px;
+      padding: 11px;
+      border: 1px dashed var(--slate-300);
+      border-radius: 7px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+
+    .preview-pane {
+      position: sticky;
+      top: 76px;
+      max-height: calc(100dvh - 92px);
+      overflow: auto;
+    }
+
+    .preview-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: normal;
+    }
+
+    .card-editor {
+      min-height: 260px;
+      overflow-x: auto;
+      border: 1px solid var(--slate-300);
+      border-radius: 7px;
+      background: #ffffff;
+      color: #171717;
+      white-space: normal;
+    }
+
+    .card-editor .arrest-card {
+      width: min(100%, 1050px);
+      margin: 0 auto;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #ffffff;
+      color: #171717;
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+      white-space: normal;
+    }
+
+    .card-editor .arrest-card th,
+    .card-editor .arrest-card td {
+      border: 1px solid #8a8a8a;
+    }
+
+    .card-editor .photo-cell {
+      width: 34%;
+      padding: 0;
+      vertical-align: top;
+      background: #ffffff;
+    }
+
+    .card-editor .photo-cell img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 570px;
+      object-fit: cover;
+      object-position: center top;
+    }
+
+    .card-editor .city-row {
+      height: 44px;
+      padding: 9px 16px;
+      text-align: left;
+      vertical-align: middle;
+      background: #ffffff;
+      font-size: 20px;
+      line-height: 24px;
+    }
+
+    .card-editor .narrative-cell {
+      padding: 18px 20px 22px;
+      vertical-align: top;
+      font-size: 16px;
+    }
+
+    .card-editor .narrative-cell p {
+      margin: 0 0 20px;
+    }
+
+    .card-editor .narrative-cell h2 {
+      margin: 4px 0 12px;
+      font-size: 16px;
+      line-height: 1.35;
+    }
+
+    .card-editor .narrative-cell ul {
+      margin: 0;
+      padding-left: 24px;
+    }
+
+    .card-editor .narrative-cell li + li {
+      margin-top: 9px;
+    }
+
+    .actions {
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      padding: 22px 0 2px;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #ffffff 18px);
+    }
+
+    .status {
+      min-height: 1.3em;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .status.success {
+      color: var(--success-700);
+    }
+
+    .status.warning {
+      color: var(--warning-700);
+    }
+
+    .status.error {
+      color: var(--danger-700);
+    }
+
+    @media (max-width: 1100px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .preview-pane {
+        position: static;
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .criminal-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .criminal-row .danger {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .app-header__inner,
+      main {
+        width: calc(100% - 20px);
+      }
+
+      .app-title p {
+        display: none;
+      }
+
+      .unit-mark {
+        width: 38px;
+        height: 38px;
+        flex-basis: 38px;
+      }
+
+      .app-header__actions button {
+        min-height: 42px;
+        padding-inline: 10px;
+      }
+
+      .field-grid,
+      .criminal-row {
+        grid-template-columns: 1fr;
+      }
+
+      .photo-controls {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .photo-controls button,
+      .actions button {
+        width: 100%;
+      }
+
+      .card-editor .arrest-card,
+      .card-editor .arrest-card tbody,
+      .card-editor .arrest-card tr,
+      .card-editor .arrest-card th,
+      .card-editor .arrest-card td {
+        display: block;
+        width: 100%;
+      }
+
+      .card-editor .photo-cell img {
+        min-height: 0;
+        max-height: 360px;
+        aspect-ratio: 4 / 5;
+      }
+
+      .card-editor .city-row {
+        height: auto;
+      }
+
+      .actions {
+        position: static;
+        padding-top: 12px;
+        background: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header__inner">
+      <div class="app-title">
+        <span class="unit-mark" aria-hidden="true">D3</span>
+        <div>
+          <h1>Baseball Card</h1>
+          <p>Standalone builder · fully offline · v1.0.0</p>
+        </div>
+      </div>
+
+      <div class="app-header__actions">
+        <button id="newCardButton" type="button">New Card</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <p class="source-note">
+      Complete the fields, add the arrest photo, then copy the formatted card into an email or download it as a standalone HTML file. The preview text can be edited directly before copying or downloading.
+    </p>
+
+    <div class="workspace">
+      <form id="baseballCardForm" class="form-pane" novalidate>
+        <fieldset>
+          <legend>Subject</legend>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="baseballLastName">Last name</label>
+              <input id="baseballLastName" type="text" autocomplete="off">
+            </div>
+
+            <div class="field">
+              <label for="baseballFirstName">First name</label>
+              <input id="baseballFirstName" type="text" autocomplete="off">
+            </div>
+
+            <div class="field">
+              <label for="baseballAge">Age</label>
+              <input id="baseballAge" type="number" min="0" max="130" inputmode="numeric">
+            </div>
+
+            <div class="field">
+              <label for="baseballGender">Gender</label>
+              <select id="baseballGender">
+                <option value="">Select</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="baseballCountry">Country</label>
+              <input id="baseballCountry" type="text" autocomplete="off">
+            </div>
+
+            <div class="field">
+              <label for="baseballAlienNumber">A-Number</label>
+              <input id="baseballAlienNumber" type="text" inputmode="numeric" autocomplete="off" placeholder="A000 000 000">
+            </div>
+
+            <div class="field">
+              <label for="baseballArrestDate">Arrest date</label>
+              <input id="baseballArrestDate" type="date">
+            </div>
+
+            <div class="field photo-field">
+              <label for="baseballPhotoInput">Photo from arrest in the field</label>
+
+              <div class="photo-controls">
+                <input id="baseballPhotoInput" type="file" accept="image/*">
+                <button id="clearBaseballPhotoButton" class="secondary compact" type="button">Remove Photo</button>
+              </div>
+            </div>
+          </div>
+
+          <label class="criminal-indicator" for="baseballIsCriminal">
+            <input id="baseballIsCriminal" type="checkbox" disabled>
+            Criminal history entered
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Immigration</legend>
+
+          <div class="field-grid">
+            <div class="field">
+              <label for="baseballDisposition">Disposition</label>
+              <input id="baseballDisposition" type="text" autocomplete="off">
+            </div>
+
+            <div class="field">
+              <label for="baseballFinalOrderDate">Final order date</label>
+              <input id="baseballFinalOrderDate" type="date">
+            </div>
+
+            <div class="field">
+              <label for="baseballFirstDeportationDate">First deportation date</label>
+              <input id="baseballFirstDeportationDate" type="date">
+            </div>
+
+            <div class="field">
+              <label for="baseballLastDeportationDate">Last deportation date</label>
+              <input id="baseballLastDeportationDate" type="date">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Criminal History</legend>
+          <div id="baseballCriminalHistoryList"></div>
+          <p id="emptyCriminalHistory" class="empty-history">No criminal-history entries.</p>
+          <button id="addBaseballCriminalHistory" class="secondary compact" type="button">Add Charge</button>
+        </fieldset>
+      </form>
+
+      <fieldset class="preview-pane">
+        <legend>Baseball Card</legend>
+
+        <label id="baseballCardPreviewLabel" class="preview-label" for="baseballCardEditor">
+          Live formatted preview. You can edit the narrative, heading, or bullets directly.
+        </label>
+
+        <div
+          id="baseballCardEditor"
+          class="card-editor"
+          contenteditable="true"
+          role="textbox"
+          aria-multiline="true"
+          aria-labelledby="baseballCardPreviewLabel"
+          spellcheck="true"
+        ></div>
+
+        <div class="actions">
+          <button id="downloadBaseballCardButton" type="button">Generate Baseball Card</button>
+          <button id="copyBaseballCardButton" class="secondary" type="button">Copy Baseball Card</button>
+          <button id="rebuildPreviewButton" class="secondary" type="button">Rebuild Preview</button>
+        </div>
+
+        <p id="baseballCardStatus" class="status" role="status" aria-live="polite"></p>
+      </fieldset>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var MAX_PHOTO_BYTES = 15 * 1024 * 1024;
+      var MAX_PHOTO_DATA_CHARS = 450000;
+      var MONTHS = Object.freeze([
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December"
+      ]);
+
+      var criminalHistorySerial = 0;
+      var photoDataUrl = "";
+      var photoLoadToken = 0;
+      var photoIsProcessing = false;
+
+      function byId(id) {
+        return document.getElementById(id);
+      }
+
+      function getValue(id) {
+        var element = byId(id);
+        return String(element && element.value || "").trim();
+      }
+
+      function setStatus(message, type) {
+        var status = byId("baseballCardStatus");
+
+        if (!status) {
+          return;
+        }
+
+        status.textContent = message || "";
+        status.className = "status" + (type ? " " + type : "");
+      }
+
+      function escapeHtml(value) {
+        return String(value == null ? "" : value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function toNormalNameCase(value) {
+        var titleCased = String(value || "")
+          .toLocaleLowerCase("en-US")
+          .replace(/(^|[\s.'’-])(\p{L})/gu, function (_, separator, letter) {
+            return separator + letter.toLocaleUpperCase("en-US");
+          });
+
+        return titleCased.replace(
+          /(^|[\s-])Mc(\p{L})/gu,
+          function (_, separator, letter) {
+            return separator + "Mc" + letter.toLocaleUpperCase("en-US");
+          }
+        );
+      }
+
+      function normalizeLastName(value) {
+        var cleaned = String(value || "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .replace(/\s*-\s*/g, "-");
+
+        if (!cleaned) {
+          return "";
+        }
+
+        if (cleaned.indexOf("-") !== -1) {
+          var hyphenatedParts = cleaned.split("-").filter(Boolean);
+
+          if (hyphenatedParts.length > 1) {
+            return hyphenatedParts
+              .map(function (part, index) {
+                return index === 0
+                  ? part.toLocaleUpperCase("en-US")
+                  : toNormalNameCase(part);
+              })
+              .join("-");
+          }
+        }
+
+        var spaceSeparatedParts = cleaned.split(" ").filter(Boolean);
+
+        if (spaceSeparatedParts.length === 2) {
+          return (
+            spaceSeparatedParts[0].toLocaleUpperCase("en-US") +
+            "-" +
+            toNormalNameCase(spaceSeparatedParts[1])
+          );
+        }
+
+        return cleaned.toLocaleUpperCase("en-US");
+      }
+
+      function formatFirstNameAsTyped(value) {
+        var raw = String(value || "");
+        var hasTrailingSpace = /\s$/.test(raw);
+        var cleaned = raw.trim().replace(/\s+/g, " ");
+        var formatted = toNormalNameCase(cleaned);
+        return formatted && hasTrailingSpace ? formatted + " " : formatted;
+      }
+
+      function formatLastNameAsTyped(value) {
+        var raw = String(value || "");
+        var hasTrailingSpace = /\s$/.test(raw);
+        var cleaned = raw
+          .trim()
+          .replace(/\s+/g, " ")
+          .replace(/\s*-\s*/g, "-");
+
+        if (!cleaned) {
+          return "";
+        }
+
+        if (cleaned.indexOf("-") !== -1) {
+          var hyphenParts = cleaned.split("-");
+
+          if (
+            hasTrailingSpace &&
+            hyphenParts.length === 2 &&
+            hyphenParts[1]
+          ) {
+            return (
+              hyphenParts[0].toLocaleUpperCase("en-US") +
+              " " +
+              toNormalNameCase(hyphenParts[1]) +
+              " "
+            );
+          }
+
+          return hyphenParts
+            .map(function (part, index) {
+              return index === 0
+                ? part.toLocaleUpperCase("en-US")
+                : toNormalNameCase(part);
+            })
+            .join("-");
+        }
+
+        var parts = cleaned.split(" ");
+
+        if (parts.length === 1) {
+          var formatted = parts[0].toLocaleUpperCase("en-US");
+          return hasTrailingSpace ? formatted + " " : formatted;
+        }
+
+        if (parts.length === 2) {
+          return (
+            parts[0].toLocaleUpperCase("en-US") +
+            "-" +
+            toNormalNameCase(parts[1])
+          );
+        }
+
+        return cleaned.toLocaleUpperCase("en-US");
+      }
+
+      function applyInputFormatter(input, formatter) {
+        if (!input) {
+          return "";
+        }
+
+        var originalValue = input.value;
+        var selectionStart = input.selectionStart;
+        var selectionEnd = input.selectionEnd;
+        var selectionWasAtEnd = selectionEnd === originalValue.length;
+        input.value = formatter(originalValue);
+
+        if (
+          selectionStart !== null &&
+          selectionEnd !== null &&
+          typeof input.setSelectionRange === "function"
+        ) {
+          var nextStart = selectionWasAtEnd
+            ? input.value.length
+            : Math.min(selectionStart, input.value.length);
+          var nextEnd = selectionWasAtEnd
+            ? input.value.length
+            : Math.min(selectionEnd, input.value.length);
+          input.setSelectionRange(nextStart, nextEnd);
+        }
+
+        return input.value;
+      }
+
+      function formatAlienNumber(value) {
+        var digits = String(value || "").replace(/\D/g, "").slice(0, 9);
+
+        if (!digits) {
+          return "";
+        }
+
+        var groups = [digits.slice(0, 3)];
+
+        if (digits.length > 3) {
+          groups.push(digits.slice(3, 6));
+        }
+
+        if (digits.length > 6) {
+          groups.push(digits.slice(6, 9));
+        }
+
+        return "A" + groups.join(" ");
+      }
+
+      function formatDate(dateValue) {
+        var match = String(dateValue || "").match(
+          /^(\d{4})-(\d{2})-(\d{2})$/
+        );
+
+        if (!match) {
+          return String(dateValue || "").trim();
+        }
+
+        var month = MONTHS[Number(match[2]) - 1];
+
+        if (!month) {
+          return String(dateValue || "").trim();
+        }
+
+        return month + " " + Number(match[3]) + ", " + match[1];
+      }
+
+      function formatState(value) {
+        var raw = String(value || "").trim();
+        return /^[A-Za-z]{2}$/.test(raw)
+          ? raw.toUpperCase()
+          : toNormalNameCase(raw);
+      }
+
+      function getSurnameParts() {
+        var formatted = normalizeLastName(getValue("baseballLastName"));
+        var primary = formatted
+          .split("-")[0]
+          .trim()
+          .toLocaleUpperCase("en-US");
+
+        return {
+          formatted: formatted,
+          primary: primary || "THE SUBJECT"
+        };
+      }
+
+      function getPhotoSource() {
+        if (photoDataUrl) {
+          return photoDataUrl;
+        }
+
+        var placeholder = [
+          '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="900" viewBox="0 0 680 900">',
+          '<rect width="680" height="900" fill="#f3f4f6"/>',
+          '<rect x="28" y="28" width="624" height="844" fill="none" stroke="#8a8a8a" stroke-width="2" stroke-dasharray="12 10"/>',
+          '<text x="340" y="430" text-anchor="middle" fill="#4b5563" font-family="Arial, Helvetica, sans-serif" font-size="28">Photo from arrest</text>',
+          '<text x="340" y="470" text-anchor="middle" fill="#4b5563" font-family="Arial, Helvetica, sans-serif" font-size="28">in the field</text>',
+          "</svg>"
+        ].join("");
+
+        return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(placeholder);
+      }
+
+      function setPhotoProcessing(isProcessing) {
+        photoIsProcessing = Boolean(isProcessing);
+        byId("downloadBaseballCardButton").disabled = photoIsProcessing;
+        byId("copyBaseballCardButton").disabled = photoIsProcessing;
+      }
+
+      function canOptimizePhoto() {
+        if (typeof window.Image !== "function") {
+          return false;
+        }
+
+        var canvas = document.createElement("canvas");
+        return Boolean(
+          canvas &&
+          typeof canvas.getContext === "function" &&
+          typeof canvas.toDataURL === "function"
+        );
+      }
+
+      function isValidImageDataUrl(dataUrl) {
+        var match = String(dataUrl || "").match(
+          /^data:image\/(jpeg|jpg|png|webp|gif);base64,([a-z0-9+/=\s]+)$/i
+        );
+
+        if (!match) {
+          return false;
+        }
+
+        try {
+          var header = atob(match[2].replace(/\s/g, "").slice(0, 64));
+          var mime = match[1].toLowerCase();
+          var byte = function (index) {
+            return header.charCodeAt(index);
+          };
+
+          if (mime === "png") {
+            return [137, 80, 78, 71, 13, 10, 26, 10].every(
+              function (value, index) {
+                return byte(index) === value;
+              }
+            );
+          }
+
+          if (mime === "jpeg" || mime === "jpg") {
+            return byte(0) === 255 && byte(1) === 216 && byte(2) === 255;
+          }
+
+          if (mime === "gif") {
+            return header.indexOf("GIF87a") === 0 || header.indexOf("GIF89a") === 0;
+          }
+
+          return (
+            header.indexOf("RIFF") === 0 &&
+            header.slice(8, 12) === "WEBP"
+          );
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function optimizePhoto(dataUrl) {
+        return new Promise(function (resolve, reject) {
+          var image = new window.Image();
+
+          image.onload = function () {
+            try {
+              var sourceWidth = Number(image.naturalWidth || image.width);
+              var sourceHeight = Number(image.naturalHeight || image.height);
+
+              if (!(sourceWidth > 0 && sourceHeight > 0)) {
+                throw new Error("The selected image has no usable dimensions.");
+              }
+
+              var canvas = document.createElement("canvas");
+              var context = canvas.getContext("2d");
+
+              if (!context) {
+                throw new Error("Photo optimization is unavailable.");
+              }
+
+              var initialScale = Math.min(
+                1,
+                900 / sourceWidth,
+                1200 / sourceHeight
+              );
+              var width = Math.max(1, Math.round(sourceWidth * initialScale));
+              var height = Math.max(1, Math.round(sourceHeight * initialScale));
+              var bestResult = "";
+
+              for (var attempt = 0; attempt < 8; attempt += 1) {
+                canvas.width = width;
+                canvas.height = height;
+                context.fillStyle = "#ffffff";
+                context.fillRect(0, 0, width, height);
+                context.drawImage(image, 0, 0, width, height);
+
+                var quality = Math.max(0.42, 0.82 - attempt * 0.06);
+                var candidate = canvas.toDataURL("image/jpeg", quality);
+
+                if (!bestResult || candidate.length < bestResult.length) {
+                  bestResult = candidate;
+                }
+
+                if (candidate.length <= MAX_PHOTO_DATA_CHARS) {
+                  resolve(candidate);
+                  return;
+                }
+
+                width = Math.max(1, Math.round(width * 0.82));
+                height = Math.max(1, Math.round(height * 0.82));
+              }
+
+              resolve(bestResult || dataUrl);
+            } catch (error) {
+              reject(error);
+            }
+          };
+
+          image.onerror = function () {
+            reject(new Error("The selected image could not be decoded."));
+          };
+          image.src = dataUrl;
+        });
+      }
+
+      function loadPhoto(event) {
+        var input = event.target;
+        var file = input.files && input.files[0];
+        var currentContent = getRenderedContent();
+        var loadToken = ++photoLoadToken;
+
+        if (!file) {
+          clearPhoto();
+          return;
+        }
+
+        if (String(file.type || "").indexOf("image/") !== 0) {
+          input.value = "";
+          setStatus("Choose an image file for the arrest photo.", "error");
+          return;
+        }
+
+        if (file.size > MAX_PHOTO_BYTES) {
+          input.value = "";
+          setStatus(
+            "The arrest photo is larger than 15 MB. Choose a smaller image.",
+            "error"
+          );
+          return;
+        }
+
+        setStatus("Loading arrest photo...");
+        setPhotoProcessing(true);
+
+        var reader = new FileReader();
+
+        reader.addEventListener("load", function () {
+          var result = String(reader.result || "");
+
+          if (
+            loadToken !== photoLoadToken ||
+            result.indexOf("data:image/") !== 0
+          ) {
+            if (loadToken === photoLoadToken) {
+              setPhotoProcessing(false);
+              input.value = "";
+              setStatus("The arrest photo could not be read.", "error");
+            }
+            return;
+          }
+
+          var finish = function (processed) {
+            if (loadToken !== photoLoadToken) {
+              return;
+            }
+
+            if (!isValidImageDataUrl(processed)) {
+              throw new Error("Photo processing returned an invalid image.");
+            }
+
+            photoDataUrl = processed;
+            setPhotoProcessing(false);
+            renderCard(currentContent);
+            setStatus(
+              "Arrest photo added and optimized for the Baseball Card.",
+              "success"
+            );
+          };
+
+          if (canOptimizePhoto()) {
+            setStatus("Preparing arrest photo for the Baseball Card...");
+            optimizePhoto(result)
+              .then(finish)
+              .catch(function (error) {
+                if (loadToken !== photoLoadToken) {
+                  return;
+                }
+
+                console.warn("The arrest photo could not be processed.", error);
+                setPhotoProcessing(false);
+                input.value = "";
+                setStatus(
+                  photoDataUrl
+                    ? "The new photo could not be decoded. The existing photo was kept."
+                    : "The arrest photo could not be decoded. Choose a valid image file.",
+                  "error"
+                );
+              });
+            return;
+          }
+
+          try {
+            finish(result);
+          } catch (error) {
+            setPhotoProcessing(false);
+            input.value = "";
+            setStatus("The arrest photo could not be decoded.", "error");
+          }
+        });
+
+        reader.addEventListener("error", function () {
+          if (loadToken !== photoLoadToken) {
+            return;
+          }
+
+          setPhotoProcessing(false);
+          input.value = "";
+          setStatus("The arrest photo could not be read.", "error");
+        });
+
+        reader.readAsDataURL(file);
+      }
+
+      function clearPhoto() {
+        var currentContent = getRenderedContent();
+        photoLoadToken += 1;
+        photoDataUrl = "";
+        byId("baseballPhotoInput").value = "";
+        setPhotoProcessing(false);
+        renderCard(currentContent);
+        setStatus("Arrest photo removed.");
+      }
+
+      function updateEmptyHistoryState() {
+        var list = byId("baseballCriminalHistoryList");
+        byId("emptyCriminalHistory").hidden = list.children.length > 0;
+      }
+
+      function addCriminalHistoryRow(values) {
+        var source = values || {};
+        var list = byId("baseballCriminalHistoryList");
+        criminalHistorySerial += 1;
+        var rowNumber = criminalHistorySerial;
+        var row = document.createElement("div");
+        row.className = "criminal-row";
+        row.dataset.baseballCriminalRow = String(rowNumber);
+
+        [
+          ["charge", "Charge", "text"],
+          ["convictionDate", "Conviction date", "date"],
+          ["county", "County", "text"],
+          ["state", "State", "text"],
+          ["court", "Court", "text"]
+        ].forEach(function (definition) {
+          var fieldName = definition[0];
+          var labelText = definition[1];
+          var type = definition[2];
+          var wrapper = document.createElement("div");
+          var inputId = "baseballCriminal" + rowNumber + fieldName;
+          var label = document.createElement("label");
+          var input = document.createElement("input");
+
+          wrapper.className = "field";
+          label.htmlFor = inputId;
+          label.textContent = labelText;
+          input.id = inputId;
+          input.type = type;
+          input.dataset.baseballField = fieldName;
+          input.autocomplete = "off";
+          input.value = String(source[fieldName] || "");
+          wrapper.append(label, input);
+          row.appendChild(wrapper);
+        });
+
+        var removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "danger compact";
+        removeButton.textContent = "Remove";
+        removeButton.setAttribute(
+          "aria-label",
+          "Remove criminal-history row " + rowNumber
+        );
+        removeButton.addEventListener("click", function () {
+          row.remove();
+          syncCriminalIndicator();
+          updateEmptyHistoryState();
+          renderCard();
+        });
+
+        row.appendChild(removeButton);
+        list.appendChild(row);
+        syncCriminalIndicator();
+        updateEmptyHistoryState();
+        renderCard();
+        return row;
+      }
+
+      function getCriminalHistory() {
+        return Array.from(
+          document.querySelectorAll(
+            "#baseballCriminalHistoryList .criminal-row"
+          )
+        ).map(function (row) {
+          var value = function (fieldName) {
+            var input = row.querySelector(
+              '[data-baseball-field="' + fieldName + '"]'
+            );
+            return String(input && input.value || "").trim();
+          };
+
+          return {
+            charge: value("charge"),
+            convictionDate: value("convictionDate"),
+            county: value("county"),
+            state: value("state"),
+            court: value("court")
+          };
+        });
+      }
+
+      function syncCriminalIndicator() {
+        byId("baseballIsCriminal").checked = getCriminalHistory().some(
+          function (item) {
+            return Boolean(item.charge);
+          }
+        );
+      }
+
+      function buildContent() {
+        var firstName = toNormalNameCase(getValue("baseballFirstName"));
+        var surname = getSurnameParts();
+        var displayName = [firstName, surname.formatted]
+          .filter(Boolean)
+          .join(" ");
+        var age = getValue("baseballAge");
+        var country = getValue("baseballCountry");
+        var alienNumber = formatAlienNumber(
+          getValue("baseballAlienNumber")
+        );
+        var arrestDate = formatDate(getValue("baseballArrestDate"));
+        var finalOrderDate = formatDate(
+          getValue("baseballFinalOrderDate")
+        );
+        var firstDeportationDate = formatDate(
+          getValue("baseballFirstDeportationDate")
+        );
+        var lastDeportationDate = formatDate(
+          getValue("baseballLastDeportationDate")
+        );
+        var disposition = getValue("baseballDisposition");
+        var gender = getValue("baseballGender");
+        var convictionPronoun =
+          gender === "Male"
+            ? "he"
+            : gender === "Female"
+              ? "she"
+              : "the subject";
+        var subjectDescription = [
+          age ? age + "-year-old" : "",
+          country ? "citizen and national of " + country : ""
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        var lead = displayName
+          ? "ICE Dallas arrested " + displayName
+          : "ICE Dallas arrested the subject";
+
+        if (alienNumber) {
+          lead += ", " + alienNumber;
+        }
+
+        if (subjectDescription) {
+          lead += ", a " + subjectDescription;
+        }
+
+        lead += ".";
+
+        var narrativeSentences = [lead];
+
+        if (finalOrderDate) {
+          narrativeSentences.push(
+            surname.primary +
+              " was ordered removed by an IJ on " +
+              finalOrderDate +
+              "."
+          );
+        }
+
+        if (firstDeportationDate && lastDeportationDate) {
+          narrativeSentences.push(
+            surname.primary +
+              " was initially deported on " +
+              firstDeportationDate +
+              ", and more recently deported on " +
+              lastDeportationDate +
+              "."
+          );
+        } else if (firstDeportationDate) {
+          narrativeSentences.push(
+            surname.primary +
+              " was initially deported on " +
+              firstDeportationDate +
+              "."
+          );
+        } else if (lastDeportationDate) {
+          narrativeSentences.push(
+            surname.primary +
+              " was most recently deported on " +
+              lastDeportationDate +
+              "."
+          );
+        }
+
+        var criminalHistorySentences = [];
+
+        getCriminalHistory().forEach(function (item) {
+          if (!item.charge) {
+            return;
+          }
+
+          var locationParts = [];
+
+          if (item.county) {
+            var county = toNormalNameCase(item.county);
+            locationParts.push(
+              /\bCounty$/i.test(county) ? county : county + " County"
+            );
+          }
+
+          if (item.state) {
+            locationParts.push(formatState(item.state));
+          }
+
+          var location = locationParts.length
+            ? " in " + locationParts.join(", ")
+            : "";
+
+          if (item.court) {
+            location += location
+              ? " (" + item.court + ")"
+              : " in " + item.court;
+          }
+
+          var convictionDate = formatDate(item.convictionDate);
+          var conviction = convictionDate
+            ? ", for which " +
+              convictionPronoun +
+              " was convicted on " +
+              convictionDate
+            : "";
+          var sentence =
+            surname.primary +
+            " has a criminal history of " +
+            item.charge +
+            location +
+            conviction +
+            ".";
+
+          criminalHistorySentences.push(sentence);
+          narrativeSentences.push(sentence);
+        });
+
+        var dispositionSentence = disposition
+          ? surname.primary +
+            " is now being processed under " +
+            disposition +
+            "."
+          : "";
+
+        if (dispositionSentence) {
+          narrativeSentences.push(dispositionSentence);
+        }
+
+        var identityBullet = [
+          displayName,
+          alienNumber,
+          subjectDescription ? "a " + subjectDescription : ""
+        ]
+          .filter(Boolean)
+          .join(", ");
+
+        var bullets = [
+          surname.primary + " has no T/U/VAWA visa applications.",
+          identityBullet ? identityBullet + "." : ""
+        ]
+          .concat(criminalHistorySentences)
+          .concat([
+            dispositionSentence,
+            arrestDate ? "Arrested on " + arrestDate + "." : "",
+            "Photo from arrest in the field."
+          ])
+          .filter(Boolean);
+
+        return {
+          narrative: narrativeSentences.join(" "),
+          heading: "INTERNAL Background Required for Privacy Review:",
+          bullets: bullets
+        };
+      }
+
+      function buildTableMarkup(content, photoSource) {
+        var source = photoSource || getPhotoSource();
+        var listItems = content.bullets
+          .map(function (item) {
+            return "            <li>" + escapeHtml(item) + "</li>";
+          })
+          .join("\n");
+        var photoAlt = /^data:image\/svg\+xml/i.test(String(source || ""))
+          ? "No arrest photo selected"
+          : "Photo from arrest in the field";
+
+        return [
+          '<table class="arrest-card" aria-label="ICE Dallas arrest information card">',
+          "  <tbody>",
+          "    <tr>",
+          '      <td class="photo-cell" rowspan="2">',
+          '        <img src="' + escapeHtml(source) + '" alt="' + photoAlt + '">',
+          "      </td>",
+          '      <th class="city-row" scope="row">Dallas</th>',
+          "    </tr>",
+          "    <tr>",
+          '      <td class="narrative-cell">',
+          "        <p>" + escapeHtml(content.narrative) + "</p>",
+          "        <h2>" + escapeHtml(content.heading) + "</h2>",
+          "        <ul>",
+          listItems,
+          "        </ul>",
+          "      </td>",
+          "    </tr>",
+          "  </tbody>",
+          "</table>"
+        ].join("\n");
+      }
+
+      function buildPlainText(content) {
+        var bullets = Array.isArray(content && content.bullets)
+          ? content.bullets
+          : [];
+
+        return [
+          "Dallas",
+          "",
+          String(content && content.narrative || "").trim(),
+          "",
+          String(content && content.heading || "").trim()
+        ]
+          .concat(
+            bullets.map(function (item) {
+              return "• " + String(item || "").trim();
+            })
+          )
+          .join("\n")
+          .trim();
+      }
+
+      function buildEmailMarkup(content, photoSource) {
+        var source = photoSource || getPhotoSource();
+        var bullets = Array.isArray(content && content.bullets)
+          ? content.bullets
+          : [];
+        var photoAlt = /^data:image\/svg\+xml/i.test(String(source || ""))
+          ? "No arrest photo selected"
+          : "Photo from arrest in the field";
+        var listItems = bullets
+          .map(function (item, index) {
+            return (
+              '<li style="margin:' +
+              (index === 0 ? "0" : "9px") +
+              ' 0 0;padding:0;">' +
+              escapeHtml(item) +
+              "</li>"
+            );
+          })
+          .join("");
+
+        return [
+          '<table role="presentation" aria-label="ICE Dallas arrest information card" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:1050px;margin:0;border-collapse:collapse;table-layout:fixed;background:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#171717;line-height:1.45;">',
+          "  <tbody>",
+          "    <tr>",
+          '      <td rowspan="2" width="34%" style="width:34%;padding:0;border:1px solid #8a8a8a;vertical-align:top;background:#ffffff;">',
+          '        <img src="' + escapeHtml(source) + '" alt="' + photoAlt + '" width="357" style="display:block;width:100%;max-width:357px;height:auto;min-height:570px;object-fit:cover;object-position:center top;border:0;">',
+          "      </td>",
+          '      <th scope="row" style="height:44px;padding:9px 16px;border:1px solid #8a8a8a;text-align:left;vertical-align:middle;font-size:20px;line-height:24px;font-weight:700;background:#ffffff;">Dallas</th>',
+          "    </tr>",
+          "    <tr>",
+          '      <td style="padding:18px 20px 22px;border:1px solid #8a8a8a;vertical-align:top;font-size:16px;background:#ffffff;">',
+          '        <p style="margin:0 0 20px;padding:0;color:#171717;">' + escapeHtml(content && content.narrative || "") + "</p>",
+          '        <h2 style="margin:4px 0 12px;padding:0;font-size:16px;line-height:1.35;font-weight:700;">' + escapeHtml(content && content.heading || "") + "</h2>",
+          '        <ul style="margin:0;padding:0 0 0 24px;max-height:none;overflow:visible;">' + listItems + "</ul>",
+          "      </td>",
+          "    </tr>",
+          "  </tbody>",
+          "</table>"
+        ].join("\n");
+      }
+
+      function getRenderedContent() {
+        var editor = byId("baseballCardEditor");
+        var narrative = editor.querySelector(".narrative-cell p");
+        var heading = editor.querySelector(".narrative-cell h2");
+        var bulletNodes = editor.querySelectorAll(".narrative-cell li");
+
+        if (!narrative || !heading) {
+          return buildContent();
+        }
+
+        return {
+          narrative: String(narrative.textContent || "").trim(),
+          heading: String(heading.textContent || "").trim(),
+          bullets: Array.from(bulletNodes)
+            .map(function (item) {
+              return String(item.textContent || "").trim();
+            })
+            .filter(Boolean)
+        };
+      }
+
+      function renderCard(contentOverride) {
+        var content = contentOverride || buildContent();
+        byId("baseballCardEditor").innerHTML = buildTableMarkup(content);
+        syncCriminalIndicator();
+        return buildPlainText(content);
+      }
+
+      var DOCUMENT_CSS = [
+        "*{box-sizing:border-box;}",
+        "body{margin:0;padding:32px;background:#fff;color:#171717;font-family:Arial,Helvetica,sans-serif;line-height:1.45;}",
+        ".arrest-card{width:min(100%,1050px);margin:0 auto;border-collapse:collapse;table-layout:fixed;background:#fff;}",
+        ".arrest-card th,.arrest-card td{border:1px solid #8a8a8a;}",
+        ".photo-cell{width:34%;padding:0;vertical-align:top;background:#fff;}",
+        ".photo-cell img{display:block;width:100%;height:100%;min-height:570px;object-fit:cover;object-position:center top;}",
+        ".city-row{height:44px;padding:9px 16px;text-align:left;vertical-align:middle;font-size:20px;line-height:24px;background:#fff;}",
+        ".narrative-cell{padding:18px 20px 22px;vertical-align:top;font-size:16px;}",
+        ".narrative-cell p{margin:0 0 20px;}",
+        ".narrative-cell h2{margin:4px 0 12px;font-size:16px;line-height:1.35;}",
+        ".narrative-cell ul{margin:0;padding-left:24px;}",
+        ".narrative-cell li+li{margin-top:9px;}",
+        "@media(max-width:700px){body{padding:12px}.photo-cell{width:38%}.photo-cell img{min-height:700px}.narrative-cell{padding:14px;font-size:14px}}",
+        "@media print{body{padding:0;background:#fff}.arrest-card{width:100%;box-shadow:none}}"
+      ].join("");
+
+      function buildDocumentHtml(content, photoSource) {
+        return [
+          "<!DOCTYPE html>",
+          '<html lang="en">',
+          "<head>",
+          '  <meta charset="UTF-8">',
+          '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+          "  <title>ICE Dallas Arrest Card</title>",
+          "  <style>" + DOCUMENT_CSS + "</style>",
+          "</head>",
+          "<body>",
+          buildTableMarkup(content, photoSource),
+          "</body>",
+          "</html>"
+        ].join("\n");
+      }
+
+      function safeFilenamePart(value) {
+        return String(value || "")
+          .trim()
+          .replace(/[^a-zA-Z0-9_-]/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, "");
+      }
+
+      function buildFilename() {
+        var surname =
+          safeFilenamePart(getValue("baseballLastName")) || "SUBJECT";
+        var alienNumber = safeFilenamePart(
+          formatAlienNumber(getValue("baseballAlienNumber")).replace(/\s/g, "")
+        );
+
+        return alienNumber
+          ? surname + "_" + alienNumber + "_Baseball_Card.html"
+          : surname + "_Baseball_Card.html";
+      }
+
+      function downloadCard() {
+        if (photoIsProcessing) {
+          setStatus(
+            "Wait for the arrest photo to finish processing.",
+            "warning"
+          );
+          return;
+        }
+
+        if (!photoDataUrl) {
+          setStatus(
+            "Add the arrest photo before generating the Baseball Card.",
+            "error"
+          );
+          byId("baseballPhotoInput").focus();
+          return;
+        }
+
+        var content = getRenderedContent();
+        var html = buildDocumentHtml(content, photoDataUrl);
+        var filename = buildFilename();
+        var blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(function () {
+          URL.revokeObjectURL(url);
+        }, 1500);
+        setStatus("Baseball Card generated: " + filename, "success");
+      }
+
+      function copyElementContents(content) {
+        if (
+          !content ||
+          typeof document.createRange !== "function" ||
+          typeof window.getSelection !== "function" ||
+          typeof document.execCommand !== "function"
+        ) {
+          return false;
+        }
+
+        var selection = window.getSelection();
+        var range = document.createRange();
+
+        try {
+          range.selectNodeContents(content);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          return Boolean(document.execCommand("copy"));
+        } finally {
+          selection.removeAllRanges();
+        }
+      }
+
+      function copyHtmlWithSelection(html) {
+        var copySurface = document.createElement("div");
+        copySurface.setAttribute("aria-hidden", "true");
+        copySurface.setAttribute(
+          "style",
+          "position:fixed;left:-100000px;top:0;width:1050px;background:#fff;pointer-events:none;"
+        );
+        copySurface.innerHTML = String(html || "");
+        document.body.appendChild(copySurface);
+
+        try {
+          return copyElementContents(copySurface);
+        } finally {
+          copySurface.remove();
+        }
+      }
+
+      function writeClipboardText(value) {
+        var text = String(value || "");
+
+        if (
+          window.isSecureContext &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.writeText === "function"
+        ) {
+          return navigator.clipboard.writeText(text);
+        }
+
+        return new Promise(function (resolve, reject) {
+          var copyBuffer = document.createElement("textarea");
+          copyBuffer.value = text;
+          copyBuffer.setAttribute("readonly", "");
+          copyBuffer.setAttribute("aria-hidden", "true");
+          copyBuffer.style.position = "fixed";
+          copyBuffer.style.left = "-9999px";
+          copyBuffer.style.top = "0";
+          copyBuffer.style.opacity = "0";
+          document.body.appendChild(copyBuffer);
+          copyBuffer.focus();
+          copyBuffer.select();
+          copyBuffer.setSelectionRange(0, copyBuffer.value.length);
+
+          var copied = false;
+
+          try {
+            copied = Boolean(
+              document.execCommand && document.execCommand("copy")
+            );
+          } finally {
+            copyBuffer.remove();
+          }
+
+          if (copied) {
+            resolve();
+          } else {
+            reject(new Error("The browser blocked clipboard access."));
+          }
+        });
+      }
+
+      function showCopyFeedback() {
+        var button = byId("copyBaseballCardButton");
+
+        if (!button.dataset.defaultCopyLabel) {
+          button.dataset.defaultCopyLabel = button.textContent.trim();
+        }
+
+        window.clearTimeout(button.copyFeedbackTimer);
+        button.textContent = "Copied";
+        button.copyFeedbackTimer = window.setTimeout(function () {
+          button.textContent = button.dataset.defaultCopyLabel;
+        }, 1400);
+      }
+
+      async function copyCard() {
+        if (photoIsProcessing) {
+          setStatus(
+            "Wait for the arrest photo to finish processing before copying.",
+            "warning"
+          );
+          return;
+        }
+
+        var content = getRenderedContent();
+        var plainText = buildPlainText(content);
+        var richHtml = buildEmailMarkup(content, photoDataUrl || getPhotoSource());
+
+        try {
+          if (
+            window.isSecureContext &&
+            navigator.clipboard &&
+            typeof navigator.clipboard.write === "function" &&
+            typeof window.ClipboardItem === "function"
+          ) {
+            var clipboardItem = new window.ClipboardItem({
+              "text/html": new Blob([richHtml], { type: "text/html" }),
+              "text/plain": new Blob([plainText], { type: "text/plain" })
+            });
+            await navigator.clipboard.write([clipboardItem]);
+            showCopyFeedback();
+            setStatus(
+              photoDataUrl
+                ? "Baseball Card copied with its photo and formatting."
+                : "Baseball Card copied with its formatting and photo placeholder.",
+              "success"
+            );
+            return;
+          }
+        } catch (error) {
+          console.warn(
+            "Rich clipboard access was unavailable; using the local fallback.",
+            error
+          );
+        }
+
+        try {
+          if (copyHtmlWithSelection(richHtml)) {
+            showCopyFeedback();
+            setStatus(
+              "Baseball Card copied with its visible formatting.",
+              "success"
+            );
+            return;
+          }
+
+          await writeClipboardText(plainText);
+          showCopyFeedback();
+          setStatus(
+            "The Baseball Card was copied as plain text because this browser blocked formatted copying.",
+            "warning"
+          );
+        } catch (error) {
+          console.error(error);
+          byId("baseballCardEditor").focus();
+          setStatus(
+            "Copy was blocked. Select the visible Baseball Card and copy it manually.",
+            "error"
+          );
+        }
+      }
+
+      function resetCard() {
+        if (
+          !window.confirm(
+            "Clear the current Baseball Card and start a new one?"
+          )
+        ) {
+          return;
+        }
+
+        byId("baseballCardForm").reset();
+        byId("baseballCriminalHistoryList").replaceChildren();
+        criminalHistorySerial = 0;
+        photoLoadToken += 1;
+        photoDataUrl = "";
+        setPhotoProcessing(false);
+        byId("baseballArrestDate").value = getLocalDateKey();
+        updateEmptyHistoryState();
+        renderCard();
+        setStatus("New blank card ready.");
+        byId("baseballLastName").focus();
+      }
+
+      function getLocalDateKey() {
+        var date = new Date();
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, "0");
+        var day = String(date.getDate()).padStart(2, "0");
+        return year + "-" + month + "-" + day;
+      }
+
+      function rebuildPreview() {
+        renderCard();
+        setStatus("Preview rebuilt from the form.", "success");
+      }
+
+      var form = byId("baseballCardForm");
+
+      form.addEventListener("input", function (event) {
+        var target = event.target;
+
+        if (target.id === "baseballPhotoInput") {
+          return;
+        }
+
+        if (target.id === "baseballAlienNumber") {
+          applyInputFormatter(target, formatAlienNumber);
+        } else if (target.id === "baseballFirstName") {
+          applyInputFormatter(target, formatFirstNameAsTyped);
+        } else if (target.id === "baseballLastName") {
+          applyInputFormatter(target, formatLastNameAsTyped);
+        }
+
+        if (target.matches("input, select")) {
+          setStatus("");
+          renderCard();
+        }
+      });
+
+      form.addEventListener("change", function (event) {
+        if (event.target.id !== "baseballPhotoInput") {
+          setStatus("");
+          renderCard();
+        }
+      });
+
+      byId("baseballLastName").addEventListener("blur", function (event) {
+        event.target.value = normalizeLastName(event.target.value);
+        renderCard();
+      });
+
+      byId("baseballFirstName").addEventListener("blur", function (event) {
+        event.target.value = toNormalNameCase(
+          String(event.target.value || "").trim()
+        );
+        renderCard();
+      });
+
+      byId("baseballCardEditor").addEventListener("input", function () {
+        setStatus(
+          "Preview edited manually. A form change or Rebuild Preview will regenerate it.",
+          "warning"
+        );
+      });
+
+      byId("baseballPhotoInput").addEventListener("change", loadPhoto);
+      byId("clearBaseballPhotoButton").addEventListener("click", clearPhoto);
+      byId("addBaseballCriminalHistory").addEventListener(
+        "click",
+        function () {
+          var row = addCriminalHistoryRow();
+          var firstInput = row && row.querySelector("input");
+          if (firstInput) {
+            firstInput.focus();
+          }
+        }
+      );
+      byId("downloadBaseballCardButton").addEventListener("click", downloadCard);
+      byId("copyBaseballCardButton").addEventListener("click", copyCard);
+      byId("rebuildPreviewButton").addEventListener("click", rebuildPreview);
+      byId("newCardButton").addEventListener("click", resetCard);
+
+      byId("baseballArrestDate").value = getLocalDateKey();
+      updateEmptyHistoryState();
+      renderCard();
+    })();
+  </script>
+</body>
+</html>

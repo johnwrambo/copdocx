@@ -287,6 +287,75 @@ check(
 );
 mem["copdocx.store.v1"] = leadBackup;
 
+var promotedBookinCalls = 0;
+context.COPDoc.model = {
+  store: {
+    loadFromDisk: function () {},
+    promoteBookInRecords: function (rows) {
+      promotedBookinCalls += 1;
+      return {
+        ok: true,
+        rows: rows.map(function (row) {
+          return Object.assign({}, row, {
+            leadId: row.leadId || "lead_for_" + row.id,
+            personId: row.personId || "person_for_" + row.id,
+            arrestId: row.arrestId || "arrest_for_" + row.id
+          });
+        }),
+        promoted: rows.length,
+        created: rows.filter(function (row) { return !row.leadId; }).length,
+        reused: rows.filter(function (row) { return !!row.leadId; }).length,
+        failed: 0,
+        errors: []
+      };
+    }
+  }
+};
+var bookinSchema3 = t.parseTransfer(
+  JSON.stringify({
+    format: "alien-book-in-records",
+    schemaVersion: 3,
+    appVersion: "1.10.0",
+    records: [
+      {
+        id: "bk_schema3",
+        firstName: "MARTA",
+        lastName: "SILVA",
+        updatedAt: "2026-09-03T10:00:00.000Z",
+        formState: {
+          first_name: { type: "text", value: "MARTA", checked: false },
+          last_name: { type: "text", value: "SILVA", checked: false }
+        }
+      }
+    ]
+  })
+);
+var bookinStats = t.applyImport(bookinSchema3, ["bookin"]);
+var linkedBookin = JSON.parse(mem["alien-book-in.saved-records.v1"]).filter(
+  function (row) { return row.id === "bk_schema3"; }
+)[0];
+check(
+  "book-in import promotes packets to canonical cases",
+  promotedBookinCalls === 1 &&
+    bookinStats.bookinPromotionAttempted &&
+    bookinStats.casesCreated >= 1 &&
+    linkedBookin.leadId === "lead_for_bk_schema3" &&
+    linkedBookin.personId === "person_for_bk_schema3" &&
+    linkedBookin.arrestId === "arrest_for_bk_schema3",
+  bookinStats
+);
+var repeatBookinStats = t.applyImport(bookinSchema3, ["bookin"]);
+var repeatedBookin = JSON.parse(mem["alien-book-in.saved-records.v1"]).filter(
+  function (row) { return row.id === "bk_schema3"; }
+)[0];
+check(
+  "book-in reimport preserves canonical links",
+  repeatBookinStats.skipped >= 1 &&
+    repeatedBookin.leadId === linkedBookin.leadId &&
+    repeatedBookin.personId === linkedBookin.personId &&
+    repeatedBookin.arrestId === linkedBookin.arrestId
+);
+
 if (fail) {
   process.exit(1);
 }

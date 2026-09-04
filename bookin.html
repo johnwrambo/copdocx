@@ -5,22 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Book-in</title>
     <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
   </head>
   <body data-page="bookin">
     <header class="app-bar">
       <!--
-        Chrome: info row on top. File is leftmost on the nav row.
-        Tabs must match the other pages; only File items and page actions differ.
-        Book-in records still use APP_RELEASE in functions/book-in.js for backup format.
+        Chrome: info row on top and shared tabs/actions below.
+        Book-in records use BOOKIN_FORMAT in functions/book-in.js for backup format.
       -->
       <div class="app-bar-info">
         <span class="app-bar-product">COPDoc</span>
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.66.0"
+          data-version="0.67.0"
         >
-          Version 0.66.0
+          Version 0.67.0
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -42,7 +43,7 @@
         Medical Questionnaire.
       </p>
 
-      <fieldset class="card-static" data-name-card data-card="lead">
+      <fieldset id="bookInDetails" class="card-static" data-name-card data-card="lead">
         <legend>Biographics</legend>
         <div class="row">
           <div class="field">
@@ -120,6 +121,29 @@
         </div>
         <div class="row">
           <div class="field">
+            <label for="fbiNumber">FBI Number</label>
+            <input
+              type="text"
+              id="fbiNumber"
+              name="fbiNumber"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+            />
+          </div>
+          <div class="field">
+            <label for="encounterNumber">Encounter Number</label>
+            <input
+              type="text"
+              id="encounterNumber"
+              name="encounterNumber"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+        </div>
+        <div class="row row-3">
+          <div class="field">
             <label for="officersName">Officer's name</label>
             <input type="text" id="officersName" name="officersName" />
           </div>
@@ -127,8 +151,39 @@
             <label for="dateTime">Date and time</label>
             <input type="datetime-local" id="dateTime" name="dateTime" />
           </div>
+          <div class="field">
+            <label for="arrestTime">Arrest time</label>
+            <input type="time" id="arrestTime" name="arrestTime" step="60" />
+            <input
+              type="hidden"
+              id="arrestTimeManual"
+              name="arrestTimeManual"
+              value="false"
+            />
+            <p class="field-caption">Defaults to one hour before Book-In.</p>
+          </div>
         </div>
         <div class="row">
+          <div class="field">
+            <label for="foreignWarrants">Foreign warrants</label>
+            <select id="foreignWarrants" name="foreignWarrants">
+              <option value="no" selected>No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="foreignWarrantCountry">Foreign warrant country</label>
+            <input
+              type="text"
+              id="foreignWarrantCountry"
+              name="foreignWarrantCountry"
+              autocomplete="off"
+              placeholder="Required when Yes"
+              disabled
+            />
+          </div>
+        </div>
+        <div class="row row-3">
           <div class="field checkbox-field">
             <input
               type="checkbox"
@@ -163,6 +218,15 @@
                 Collateral
               </label>
             </div>
+          </div>
+          <div class="field">
+            <label for="vehiclePosition">Vehicle position</label>
+            <select id="vehiclePosition" name="vehiclePosition">
+              <option value="">Select an option</option>
+              <option value="Driver">Driver</option>
+              <option value="Passenger">Passenger</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
         </div>
         <div class="row row-3">
@@ -277,7 +341,7 @@
         </div>
       </fieldset>
 
-      <fieldset class="card-static">
+      <fieldset id="medicalQuestionnaire" class="card-static">
         <legend>Medical Questionnaire</legend>
         <p class="section-note">
           These answers populate both the CAP tear sheet and the corresponding
@@ -352,7 +416,7 @@
           </div>
           <div class="field details">
             <label for="medicalIssues">Medical or mental-health details</label>
-            <textarea id="medicalIssues"></textarea>
+            <textarea id="medicalIssues" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -382,7 +446,7 @@
           </div>
           <div class="field details">
             <label for="medicine">Medication details</label>
-            <textarea id="medicine"></textarea>
+            <textarea id="medicine" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -412,7 +476,7 @@
           </div>
           <div class="field details">
             <label for="q3_details">Additional details</label>
-            <textarea id="q3_details"></textarea>
+            <textarea id="q3_details" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -442,7 +506,7 @@
           </div>
           <div class="field details">
             <label for="q4_details">Additional details</label>
-            <textarea id="q4_details"></textarea>
+            <textarea id="q4_details" rows="1"></textarea>
           </div>
         </div>        <div id="q5_question" class="medical-question female-only-question">
           <div class="question-text">
@@ -473,6 +537,7 @@
           <div class="field details">
             <label for="q5_details">Additional details</label>
             <textarea id="q5_details"
+              rows="1"
               placeholder="Example: Approximately 5 months"></textarea>
           </div>
         </div>        <div id="q6_question" class="medical-question female-only-question">
@@ -503,7 +568,7 @@
           </div>
           <div class="field details">
             <label for="q6_details">Additional details</label>
-            <textarea id="q6_details"></textarea>
+            <textarea id="q6_details" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -533,7 +598,7 @@
           </div>
           <div class="field details">
             <label for="q7_details">Additional details</label>
-            <textarea id="q7_details"></textarea>
+            <textarea id="q7_details" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -563,7 +628,7 @@
           </div>
           <div class="field details">
             <label for="q8_details">Additional details</label>
-            <textarea id="q8_details"></textarea>
+            <textarea id="q8_details" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -593,7 +658,7 @@
           </div>
           <div class="field details">
             <label for="q9_details">Additional details</label>
-            <textarea id="q9_details"></textarea>
+            <textarea id="q9_details" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -623,7 +688,7 @@
           </div>
           <div class="field details">
             <label for="q10_details">Additional details</label>
-            <textarea id="q10_details"></textarea>
+            <textarea id="q10_details" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -653,7 +718,7 @@
           </div>
           <div class="field details">
             <label for="q11_details">Additional details</label>
-            <textarea id="q11_details"></textarea>
+            <textarea id="q11_details" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -683,7 +748,7 @@
           </div>
           <div class="field details">
             <label for="q12_details">Additional details</label>
-            <textarea id="q12_details"></textarea>
+            <textarea id="q12_details" rows="1"></textarea>
           </div>
         </div>        <div class="medical-question">
           <div class="question-text">
@@ -713,7 +778,7 @@
           </div>
           <div class="field details">
             <label for="q13_details">Additional details</label>
-            <textarea id="q13_details"></textarea>
+            <textarea id="q13_details" rows="1"></textarea>
           </div>
         </div>
 
@@ -724,6 +789,7 @@
             </label>
             <textarea
               id="additionalObservations"
+              rows="1"
               placeholder="Document other observations or concerns."
             ></textarea>
           </div>
@@ -759,12 +825,13 @@
       </fieldset>
 
       <fieldset class="card-static records-panel">
-        <legend>Saved Records</legend>
+        <legend>Saved packets</legend>
         <p class="records-note">
-          Records are saved locally in this browser. Saving a record does not
-          generate a PDF. Export a backup before replacing or moving this file
-          or clearing browser data. Exported backups are unencrypted and may
-          contain biographic and medical information; store them securely.
+          This is the Book-in packet for the form on this page. Filter, columns,
+          and arrest reports live on Cases. Export a backup before replacing or
+          moving this file or clearing browser data. Exported backups are
+          unencrypted and may contain biographic and medical information; store
+          them securely.
         </p>
         <div class="records-toolbar">
           <button
@@ -799,22 +866,21 @@
             data-record-ignore="true"
             hidden
           />
+          <a href="cases.html" class="action-button compact">Open in Cases</a>
           <span id="activeRecordLabel" class="active-record-label">
             No saved record loaded
           </span>
         </div>
         <div id="recordsEmpty" class="records-empty">
-          No saved records yet.
+          No saved packets yet.
         </div>
         <div id="recordsTableWrap" class="records-table-wrap" hidden>
           <table class="records-table">
             <thead>
               <tr>
                 <th>Subject</th>
-                <th>A-Number</th>
-                <th>ICE Event</th>
-                <th>Last Saved</th>
-                <th>Actions</th>
+                <th>Last saved</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="savedRecordsBody"></tbody>
@@ -909,9 +975,14 @@
     <script src="functions/cards.js"></script>
     <script src="functions/model/util.js"></script>
     <script src="functions/model/person.js"></script>
+    <script src="functions/model/location.js"></script>
+    <script src="functions/model/vehicle.js"></script>
     <script src="functions/model/lead.js"></script>
     <script src="functions/model/encounter.js"></script>
+    <script src="data/association-matrix.js"></script>
+    <script src="functions/model/link.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="functions/model/media.js"></script>
     <script src="functions/book-in.js"></script>
     <script src="functions/baseballcard.js"></script>
 
@@ -935,4 +1006,3 @@
     </div>
   </body>
 </html>
-

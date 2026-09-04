@@ -2,7 +2,7 @@
 
 This folder is the **rule book** for COPDoc pages, chrome, records, and models. It is a project artifact, not scratch notes.
 
-The design document holds **decisions, alternatives, risks, and PR file lists**. It must **point here** for tables (File menu, triad names, `data-page`, lifecycle, models). If a table appears in both places, **this folder wins** — update the outline in the same PR as the behavior.
+The design document holds **decisions, alternatives, risks, and PR file lists**. It must **point here** for current tables (chrome, triad names, `data-page`, lifecycle, models). If a table appears in both places, the focused outline document wins — update it in the same change as the behavior.
 
 ## How to use this folder
 
@@ -21,6 +21,7 @@ If a PR disagrees with these files, change the files in that PR and say why.
 | [chrome.md](chrome.md) | App-bar zones, File items (incl. exceptions), Admin ▾, action slot, painter wiring |
 | [records.md](records.md) | List/view/form, working vs filed (`draft`/`committed` in store), list UX, export, book-in prefill |
 | [data-models.md](data-models.md) | Officer, vehicle (`governmentVehicle` vs fleet `status`), location, stores, migration |
+| [object-workflow-audit.md](object-workflow-audit.md) | Canonical object constructors, every creation path, projections, and Case editor save behavior |
 | [implementation-plan.md](implementation-plan.md) | Ordered PRs (index). File lists: [design.md](design.md). |
 | [design.md](design.md) | Decisions, alternatives, risks, detailed PR file lists |
 | [media-plan.md](media-plan.md) | Proposed: attach photos/files to the object they depict. Comment on D# / PR# / Q# before 0.17.x. |
