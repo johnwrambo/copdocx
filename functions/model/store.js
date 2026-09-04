@@ -2072,6 +2072,20 @@
     var i;
     var pin;
     var locations = encounter.locations || [];
+    var centerId =
+      encounter.centerLocationId ||
+      (encounter.completed && encounter.completed.centerLocationId) ||
+      "";
+    if (centerId) {
+      for (i = 0; i < locations.length; i += 1) {
+        if (locations[i] && locations[i].locationId === centerId) {
+          pin = locationPin(locations[i]);
+          if (pin) {
+            return pin;
+          }
+        }
+      }
+    }
     for (i = 0; i < locations.length; i += 1) {
       pin = locationPin(locations[i]);
       if (pin) {
@@ -2108,21 +2122,52 @@
       latitude: (pin && pin.latitude) || "",
       longitude: (pin && pin.longitude) || "",
       association:
-        (location && location.association) || (canon && canon.association) || ""
+        (location && location.association) || (canon && canon.association) || "",
+      isCenter: false
     };
+  }
+
+  function outcomeCountsFromSubjects(subjects) {
+    var counts = { arrested: 0, released: 0, fled: 0 };
+    (subjects || []).forEach(function (row) {
+      var outcome = String((row && row.outcome) || "").toUpperCase();
+      if (outcome === "ARRESTED") {
+        counts.arrested += 1;
+      } else if (outcome === "RELEASED") {
+        counts.released += 1;
+      } else if (outcome.indexOf("FLED") === 0) {
+        counts.fled += 1;
+      }
+    });
+    return counts;
   }
 
   function buildEncounterCompleted(encounter) {
     var pin = encounterPin(encounter);
+    var locations = (encounter.locations || []).map(function (location) {
+      var row = snapshotLocation(location);
+      row.isCenter = !!(
+        encounter.centerLocationId &&
+        row.locationId &&
+        row.locationId === encounter.centerLocationId
+      );
+      return row;
+    });
     return {
       schema: "copdocx.encounter-snapshot.v1",
       generatedAt: model.nowIso ? model.nowIso() : new Date().toISOString(),
       encounterId: encounter.encounterId,
       startedAt: encounter.startedAt || "",
+      eventType: encounter.eventType || "",
+      operationId: encounter.operationId || "",
+      officerIds: Array.isArray(encounter.officerIds)
+        ? encounter.officerIds.slice()
+        : [],
+      centerLocationId: encounter.centerLocationId || "",
       team: encounter.team || "",
       officeCode: encounter.officeCode || "",
       subjects: clone(encounter.subjects || []),
-      locations: (encounter.locations || []).map(snapshotLocation),
+      locations: locations,
       vehicles: (encounter.vehicles || []).map(function (vehicle) {
         return {
           vehicleId: (vehicle && (vehicle.vehicleId || vehicle.id)) || "",
@@ -2134,6 +2179,7 @@
           locations: ((vehicle && vehicle.locations) || []).map(snapshotLocation)
         };
       }),
+      outcomeCounts: outcomeCountsFromSubjects(encounter.subjects),
       supervisorSummary: clone(encounter.supervisorSummary || {
         text: "",
         derivedAt: "",
@@ -2317,8 +2363,43 @@
       saved.supervisorSummary = { text: "", derivedAt: "", coverage: null };
     }
     syncEncounterObjects(saved);
+    if (typeof model.sharedStopFromEncounter === "function") {
+      var sharedStop = model.sharedStopFromEncounter(saved);
+      saved.subjects = (saved.subjects || []).map(function (row) {
+        return model.stampSharedStop
+          ? model.stampSharedStop(row, sharedStop)
+          : row;
+      });
+      saved.subjects.forEach(function (subject) {
+        if (!subject || !subject.personId || !state.people[subject.personId]) {
+          return;
+        }
+        var person = clone(state.people[subject.personId]);
+        if (typeof model.upsertPersonLeEncounter === "function") {
+          person = model.upsertPersonLeEncounter(person, subject, sharedStop);
+        }
+        state.people[person.personId] = clone(
+          canonicalPersonRecord(person, state.people[person.personId])
+        );
+      });
+    }
+    if (!Array.isArray(saved.completedHistory)) {
+      saved.completedHistory = Array.isArray(previous && previous.completedHistory)
+        ? clone(previous.completedHistory)
+        : [];
+    }
     if (mode === "complete") {
+      if (previous && previous.completed) {
+        saved.completedHistory.push({
+          generatedAt: previous.completed.generatedAt || "",
+          unlockedAt: (previous.unlock && previous.unlock.unlockedAt) || "",
+          unlockedByAlias: (previous.unlock && previous.unlock.unlockedByAlias) || "",
+          reason: (previous.unlock && previous.unlock.reason) || "",
+          snapshot: clone(previous.completed)
+        });
+      }
       saved.completed = buildEncounterCompleted(saved);
+      saved.unlock = null;
       stampArrestsFromEncounter(saved);
     }
     state.encounters[saved.encounterId] = clone(saved);
@@ -2336,6 +2417,49 @@
   function getEncounter(encounterId) {
     var row = state.encounters[encounterId];
     return row ? clone(row) : null;
+  }
+
+  function unlockEncounter(encounterId, input) {
+    input = input || {};
+    var id = String(encounterId || "").trim();
+    var reason = String(input.reason || "").trim();
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return { ok: false, encounterId: id, error: fresh.error };
+    }
+    if (!id || !state.encounters[id]) {
+      return { ok: false, encounterId: id, error: "Encounter not found." };
+    }
+    if (!reason) {
+      return { ok: false, encounterId: id, error: "Unlock requires a reason." };
+    }
+    var row = clone(state.encounters[id]);
+    if (!row.meta || !row.meta.markedComplete) {
+      return {
+        ok: false,
+        encounterId: id,
+        error: "This encounter is not locked."
+      };
+    }
+    var now = model.nowIso ? model.nowIso() : new Date().toISOString();
+    row.meta = row.meta || {};
+    row.meta.markedComplete = false;
+    row.meta.updatedAt = now;
+    row.unlock = {
+      unlockedAt: now,
+      reason: reason,
+      unlockedByAlias: String(input.unlockedByAlias || "")
+    };
+    state.encounters[id] = row;
+    if (!writeDisk()) {
+      adoptDisk();
+      return {
+        ok: false,
+        encounterId: id,
+        error: "Could not write localStorage (quota or private mode)."
+      };
+    }
+    return { ok: true, encounterId: id, error: "" };
   }
 
   function dropOwnedMedia(encounter) {
@@ -7708,6 +7832,7 @@
     getPerson: getPerson,
     upsertPerson: upsertPerson,
     saveEncounter: saveEncounter,
+    unlockEncounter: unlockEncounter,
     completeEncounter: completeEncounter,
     applyEncounterLocationToArrests: applyEncounterLocationToArrests,
     getEncounter: getEncounter,

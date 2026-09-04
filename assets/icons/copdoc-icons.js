@@ -542,6 +542,51 @@
       color: "#71d7ce",
       shape: "circle",
       description: "Search or focus area"
+    },
+    {
+      id: "TargetFinalOrder",
+      label: "Final order",
+      glyph: "Flag",
+      group: "Target flags",
+      color: "#c45c26",
+      shape: "circle",
+      description: "Target with a final order of removal"
+    },
+    {
+      id: "TargetReinstate",
+      label: "Reinstatement",
+      glyph: "Import",
+      group: "Target flags",
+      color: "#8b5a2b",
+      shape: "square",
+      description: "Target eligible for reinstatement of removal"
+    },
+    {
+      id: "TargetCriminal",
+      label: "Criminal target",
+      glyph: "Handcuffs",
+      group: "Target flags",
+      color: "#e96868",
+      shape: "square",
+      description: "Target with a criminal record or warrant"
+    },
+    {
+      id: "EncounterFled",
+      label: "Fled",
+      glyph: "Navigation",
+      group: "Encounter flags",
+      color: "#b58bea",
+      shape: "wedge",
+      description: "Encounter where a subject fled"
+    },
+    {
+      id: "EncounterCollision",
+      label: "Collision",
+      glyph: "TriangleAlert",
+      group: "Encounter flags",
+      color: "#f0ad35",
+      shape: "diamond",
+      description: "Encounter with a vehicle collision"
     }
   ];
 
@@ -814,6 +859,26 @@
     return fallback || "#8aa0ad";
   }
 
+  function colorWithAlpha(hex, alpha) {
+    var color = safeMapColor(hex, "#8aa0ad");
+    var n = parseInt(color.slice(1), 16);
+    var a = Math.max(0, Math.min(1, Number(alpha)));
+    if (!isFinite(a)) {
+      a = 0.4;
+    }
+    return (
+      "rgba(" +
+      ((n >> 16) & 255) +
+      "," +
+      ((n >> 8) & 255) +
+      "," +
+      (n & 255) +
+      "," +
+      a +
+      ")"
+    );
+  }
+
   function mapColorIsLight(value) {
     var color = safeMapColor(value, "#8aa0ad");
     var n = parseInt(color.slice(1), 16);
@@ -853,13 +918,13 @@
     var sizeName = options.size || (options.primary ? "primary" : "standard");
     var pixels =
       typeof sizeName === "number"
-        ? Math.max(20, Math.min(48, sizeName))
+        ? Math.max(20, Math.min(56, sizeName))
         : sizeName === "compact"
           ? 24
           : sizeName === "primary"
             ? 38
             : 32;
-    var glyphSize = pixels <= 24 ? 13 : pixels >= 38 ? 20 : 17;
+    var glyphSize = Math.max(12, pixels - 2);
     var classes = [
       "copdoc-map-symbol",
       "is-library-" + library.id,
@@ -869,16 +934,31 @@
     if (options.primary) classes.push("is-primary");
     if (options.selected) classes.push("is-selected");
     if (options.editable) classes.push("is-editable");
-    if (mapColorIsLight(color)) classes.push("is-light");
     var badge = options.badge == null ? "" : String(options.badge).slice(0, 3);
+    var stroke =
+      typeof options.stroke === "number" && isFinite(options.stroke)
+        ? Math.max(1, Math.min(4, options.stroke))
+        : 2;
+    var inkWeight = (1.1 + stroke * 0.55).toFixed(2);
+    var fillOpacity =
+      typeof options.fillOpacity === "number" && isFinite(options.fillOpacity)
+        ? Math.max(0, Math.min(1, options.fillOpacity))
+        : 0.4;
+    var fill = colorWithAlpha(color, fillOpacity);
     return (
       '<span class="' +
       classes.filter(Boolean).join(" ") +
       '" style="--map-symbol-color:' +
       color +
-      ";--map-symbol-size:" +
+      ";--map-symbol-fill:" +
+      fill +
+      ";--map-symbol-line:#081018;--map-symbol-size:" +
       pixels +
-      'px">' +
+      "px;--map-symbol-stroke:" +
+      stroke +
+      "px;--map-symbol-ink-weight:" +
+      inkWeight +
+      '">' +
       html(glyph, glyphSize, "copdoc-map-symbol-glyph") +
       (badge
         ? '<i class="copdoc-map-symbol-badge">' + escapeMapText(badge) + "</i>"

@@ -5,7 +5,7 @@ Two-row sticky app bar (`style/style.css`, painted by `COPDoc.chrome` in
 
 ```text
 Row 1  COPDoc     Version x.y.z     {date}                 .app-bar-info
-Row 2  Home | Cases | Investigate | Encounters | Operations | Book-in | Map | Admin ▾  [ ACTION SLOT ]
+Row 2  Home | Cases | Investigate | Encounters | Operations | Map | Admin ▾  [ ACTION SLOT ]
        --------------------------- .app-bar-nav ---------------------------  .app-bar-actions
 Status #appBarStatus
 ```
@@ -27,8 +27,9 @@ The Admin dropdown contains visible text links for Dashboard, Officers,
 Vehicles, and Schedule. `aria-current="page"` belongs on the Admin summary for
 any admin child; `.is-current` belongs on its matching link.
 
-I-213, warrants, the Target sheet, media labs, and the operation brief are
-sub-pages, not tabs. The associated product tab stays current.
+I-213, warrants, the Target sheet, media labs, Book-in, and the operation brief are
+sub-pages, not tabs. The associated product tab stays current. Book-in is reached
+from encounter **Book** / Generate docs and case **Book-in**, not from the nav.
 
 ## Home tools
 
@@ -54,7 +55,10 @@ handlers. Record scripts own validation and persistence.
 | View | Edit | Back to list, record-specific output/actions |
 | Form | Save | Back to origin, form-specific actions |
 | Investigation | Save | Back, Import plates, Spawn, Open as case, Clear all |
-| Encounter | Save | Back, Add subject, Generate I-213 |
+| Encounter list | Add encounter | None |
+| Encounter form | none (quiet autosave) | Back to encounters. Confirm lives on Review. Add subject / Book-in are not chrome actions. |
+| Operation view | Edit | Back, Generate brief, Add encounter (`?operationId=`) |
+| Case view | Edit | Back, Add encounter (`?leadId=`), Book-in, Issue I-200 / I-205 |
 | Operation brief | Print | Save brief, Back to operation |
 | Map | Print brief | Brief view and planned map exports |
 | Narrative | Save I-213 / Update draft | Back when live, Copy, downloads |

@@ -11,10 +11,11 @@
   var liveEncounter = false;
   var liveEncounterId = "";
   var liveMiss = false;
+  var embedded = false;
   try {
-    liveEncounterId = new URLSearchParams(window.location.search).get(
-      "encounterId"
-    ) || "";
+    var params = new URLSearchParams(window.location.search);
+    embedded = params.get("embed") === "1";
+    liveEncounterId = params.get("encounterId") || "";
     if (liveEncounterId) {
       var live =
         global.COPDoc &&
@@ -61,6 +62,9 @@
   }
 
   function initNarrativePage() {
+  if (embedded) {
+    document.body.classList.add("narrative-embed");
+  }
   var host = document.getElementById("narrativeEngineHost");
   if (!host) {
     throw new Error("Narrative page host is missing.");
@@ -80,16 +84,23 @@
     if (emptyText) {
       emptyText.textContent = liveMiss
         ? "Encounter not found."
-        : "Add subjects on Book-in before writing an I-213.";
+        : embedded
+          ? "Add subjects on the Subjects tab before writing an I-213."
+          : "Add subjects before writing an I-213.";
     }
-    if (emptyLink && liveEmpty && liveEncounterId) {
+    if (emptyLink && liveEmpty && liveEncounterId && !embedded) {
       emptyLink.hidden = false;
-      emptyLink.href = "bookin.html?encounterId=" + encodeURIComponent(liveEncounterId);
-      emptyLink.textContent = "Add subjects";
+      emptyLink.href =
+        "encounter-form.html?id=" + encodeURIComponent(liveEncounterId);
+      emptyLink.textContent = "Back to encounter";
     }
     document.title = "I-213";
     showStatus(
-      liveMiss ? "Encounter not found." : "Add subjects on Book-in before writing an I-213.",
+      liveMiss
+        ? "Encounter not found."
+        : embedded
+          ? "Add subjects on the Subjects tab before writing an I-213."
+          : "Add subjects before writing an I-213.",
       false
     );
     return;
@@ -98,7 +109,7 @@
   document.body.classList.add(liveEncounter ? "narrative-live" : "narrative-training");
   if (liveEncounter) {
     document.title = "I-213";
-    if (liveHeader) liveHeader.hidden = false;
+    if (liveHeader) liveHeader.hidden = embedded;
     var pageHeader = byId("narrativePageHeader");
     if (pageHeader) pageHeader.hidden = true;
   }
@@ -129,6 +140,219 @@
 
   function byId(id) {
     return document.getElementById(id);
+  }
+
+  function bindDraftPopout() {
+    var hostEl = document.getElementById("narrativeEngineHost");
+    var actions = hostEl && hostEl.querySelector(".narrative-heading-actions");
+    var srcDraft = document.getElementById("narrativeDraft");
+    var srcResolved = document.getElementById("resolvedDraft");
+    if (!hostEl || !actions || !srcDraft) {
+      return;
+    }
+    var btn = document.getElementById("popoutDraftButton");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.id = "popoutDraftButton";
+      btn.type = "button";
+      btn.className = "compact";
+      btn.title = "Open the draft in a separate window so it stays on screen while the elements scroll";
+      actions.appendChild(btn);
+    }
+    if (btn.dataset.bound === "true") {
+      return;
+    }
+    btn.dataset.bound = "true";
+
+    var draftWindow = null;
+    var closedTimer = 0;
+
+    function stylesheetHref() {
+      var link = document.querySelector('link[href*="style/style.css"]');
+      if (link && link.href) {
+        return link.href;
+      }
+      try {
+        return new URL("style/style.css", window.location.href).href;
+      } catch (error) {
+        return "style/style.css";
+      }
+    }
+
+    function popupFeatures() {
+      var width = 720;
+      var height = Math.min(980, (window.screen && window.screen.availHeight) || 900);
+      var left = Math.max(0, (window.screenX || 0) + (window.outerWidth || 0) - 24);
+      var avail = (window.screen && window.screen.availWidth) || left + width;
+      if (left + width > avail) {
+        left = Math.max(0, avail - width - 16);
+      }
+      var top = Math.max(0, (window.screenY || 0) + 48);
+      return (
+        "popup=yes,width=" +
+        width +
+        ",height=" +
+        height +
+        ",left=" +
+        left +
+        ",top=" +
+        top +
+        ",menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes"
+      );
+    }
+
+    function setPopped(on) {
+      hostEl.classList.toggle("narrative-draft-popped", on);
+      document.body.classList.toggle("narrative-draft-popped", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.textContent = on ? "Dock" : "Pop out";
+      if (!on && closedTimer) {
+        global.clearTimeout(closedTimer);
+        closedTimer = 0;
+      }
+    }
+
+    function dockDraft() {
+      if (draftWindow && !draftWindow.closed) {
+        draftWindow.close();
+      }
+      draftWindow = null;
+      setPopped(false);
+    }
+
+    function watchClosed() {
+      if (!draftWindow || draftWindow.closed) {
+        draftWindow = null;
+        setPopped(false);
+        return;
+      }
+      closedTimer = global.setTimeout(watchClosed, 400);
+    }
+
+    function paintPopout() {
+      if (!draftWindow || draftWindow.closed) {
+        return;
+      }
+      var doc = draftWindow.document;
+      var destDraft = doc.getElementById("narrativeDraft");
+      var destResolved = doc.getElementById("resolvedDraft");
+      var label = doc.getElementById("popoutViewLabel");
+      if (destDraft) {
+        destDraft.innerHTML = srcDraft.innerHTML;
+        destDraft.hidden = !!srcDraft.hidden;
+      }
+      if (destResolved && srcResolved) {
+        destResolved.value = srcResolved.value;
+        destResolved.hidden = !!srcResolved.hidden;
+      }
+      if (label) {
+        var mode = document.getElementById("editorModeLabel");
+        label.textContent = mode ? String(mode.textContent || "").trim() : "";
+      }
+    }
+
+    function bindPopupChrome(win) {
+      var dockBtn = win.document.getElementById("popoutDockBtn");
+      var copyBtn = win.document.getElementById("popoutCopyBtn");
+      if (dockBtn) {
+        dockBtn.onclick = function () {
+          win.close();
+        };
+      }
+      if (copyBtn) {
+        copyBtn.onclick = function () {
+          var destResolved = win.document.getElementById("resolvedDraft");
+          var destDraft = win.document.getElementById("narrativeDraft");
+          var text =
+            destResolved && !destResolved.hidden
+              ? destResolved.value
+              : destDraft
+                ? destDraft.innerText
+                : "";
+          if (!text) {
+            return;
+          }
+          if (win.navigator.clipboard && win.navigator.clipboard.writeText) {
+            win.navigator.clipboard.writeText(text);
+          }
+        };
+      }
+    }
+
+    function openDraftWindow() {
+      var win = window.open("", "copdocxNarrativeDraft", popupFeatures());
+      if (!win) {
+        return null;
+      }
+      var href = stylesheetHref().replace(/"/g, "");
+      var html =
+        "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">" +
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+        "<title>I-213 Draft</title>" +
+        "<link rel=\"stylesheet\" href=\"" + href + "\">" +
+        "<style>html,body{height:100%;}body.narrative-draft-window{display:flex;flex-direction:column;overflow:hidden;}" +
+        ".draft-popout-bar{flex:0 0 auto;display:flex;align-items:center;gap:.65rem;padding:.45rem .75rem;border-bottom:1px solid var(--ns-line-strong);background:rgb(8 16 24 / .96);}" +
+        ".draft-popout-bar strong{margin-right:auto;}body.narrative-draft-window .narrative-engine-host{flex:1 1 auto;min-height:0;height:auto;}" +
+        "body.narrative-draft-window .narrative-panel{height:100%;max-height:none;border:0;border-radius:0;box-shadow:none;}" +
+        "</style></head><body class=\"narrative-draft-window\">" +
+        "<header class=\"draft-popout-bar\"><strong>I-213 Draft</strong>" +
+        "<span id=\"popoutViewLabel\"></span>" +
+        "<button type=\"button\" class=\"compact\" id=\"popoutCopyBtn\">Copy</button>" +
+        "<button type=\"button\" class=\"compact\" id=\"popoutDockBtn\">Dock</button></header>" +
+        "<div class=\"narrative-engine-host\"><section class=\"narrative-panel\">" +
+        "<div id=\"narrativeDraft\"></div>" +
+        "<textarea id=\"resolvedDraft\" hidden></textarea>" +
+        "</section></div></body></html>";
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      return win;
+    }
+
+    btn.addEventListener("click", function () {
+      if (draftWindow && !draftWindow.closed) {
+        dockDraft();
+        return;
+      }
+      draftWindow = openDraftWindow();
+      if (!draftWindow) {
+        showStatus("Allow popups to open the I-213 draft window.", false);
+        setPopped(false);
+        return;
+      }
+      setPopped(true);
+      global.setTimeout(function () {
+        if (!draftWindow || draftWindow.closed) {
+          return;
+        }
+        bindPopupChrome(draftWindow);
+        paintPopout();
+        try {
+          draftWindow.focus();
+        } catch (error) {}
+      }, 0);
+      watchClosed();
+    });
+
+    global.addEventListener(engine.events.narrativeChange, function () {
+      paintPopout();
+    });
+    if (typeof MutationObserver === "function") {
+      var observer = new MutationObserver(paintPopout);
+      observer.observe(srcDraft, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true
+      });
+      if (srcResolved) {
+        observer.observe(srcResolved, { attributes: true });
+        srcResolved.addEventListener("input", paintPopout);
+      }
+    }
+    global.addEventListener("pagehide", dockDraft);
+
+    setPopped(false);
   }
 
   function showStatus(message, ok) {
@@ -680,6 +904,8 @@
       headingActions.insertBefore(advanced, headingActions.firstChild);
     }
   }
+
+  bindDraftPopout();
 
   renderParticipantList();
   renderCoverageAndSummary();

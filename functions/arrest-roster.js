@@ -239,8 +239,14 @@
         var th = document.createElement("th");
         var btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "records-sort-button";
+        btn.className = "record-sort-button";
         btn.textContent = col.label;
+        if (sortKey === col.id) {
+          th.setAttribute(
+            "aria-sort",
+            sortDir === "asc" ? "ascending" : "descending"
+          );
+        }
         btn.addEventListener("click", function () {
           if (sortKey === col.id) {
             sortDir = sortDir === "asc" ? "desc" : "asc";
@@ -309,27 +315,17 @@
         var actions = document.createElement("td");
         var cluster = document.createElement("div");
         cluster.className = "record-actions";
-        if (row.leadId) {
+        var href = row.leadId
+          ? "case.html?id=" + encodeURIComponent(row.leadId)
+          : row.bookinRecordId
+            ? "bookin.html?recordId=" + encodeURIComponent(row.bookinRecordId)
+            : "";
+        if (href) {
           var open = document.createElement("a");
           open.className = "action-button-secondary compact";
-          open.href = "case.html?id=" + encodeURIComponent(row.leadId);
-          open.textContent = "Case";
+          open.href = href;
+          open.textContent = "Open";
           cluster.appendChild(open);
-        }
-        if (row.bookinRecordId) {
-          var packet = document.createElement("a");
-          packet.className = "action-button-secondary compact";
-          packet.href =
-            "bookin.html?recordId=" + encodeURIComponent(row.bookinRecordId);
-          packet.textContent = "Book-in";
-          cluster.appendChild(packet);
-        }
-        if (row.card && row.leadId) {
-          var card = document.createElement("a");
-          card.className = "action-button-secondary compact";
-          card.href = "baseballcard.html?leadId=" + encodeURIComponent(row.leadId);
-          card.textContent = "Card";
-          cluster.appendChild(card);
         }
         actions.appendChild(cluster);
         tr.appendChild(actions);

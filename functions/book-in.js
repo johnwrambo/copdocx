@@ -170,7 +170,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       return (
         (config && config.productVersion) ||
         (badge && badge.getAttribute("data-version")) ||
-        "0.67.0"
+        "0.69.2"
       );
     }
 
@@ -2531,20 +2531,46 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       if (!encounter) {
         return;
       }
-      encounter.subjects = recordsForEncounter(encounterId)
-        .filter(row => {
-          const role = String((row && row.encounterRole) || "").toUpperCase();
-          return role === "TARGET" || role === "COLLATERAL";
-        })
-        .map(row => ({
+      const packets = recordsForEncounter(encounterId);
+      const existing = Array.isArray(encounter.subjects)
+        ? encounter.subjects.slice()
+        : [];
+      packets.forEach(row => {
+        if (!row) {
+          return;
+        }
+        const role = String(row.encounterRole || "").toUpperCase();
+        if (role && role !== "TARGET" && role !== "COLLATERAL") {
+          return;
+        }
+        const idx = existing.findIndex(item =>
+          Boolean(
+            item &&
+              ((row.id && item.bookinRecordId === row.id) ||
+                (row.personId && item.personId === row.personId))
+          )
+        );
+        const patch = {
           personId: row.personId || "",
           leadId: row.leadId || "",
           bookinRecordId: row.id,
           lastName: row.lastName || "",
           firstName: row.firstName || "",
           alienNumber: row.aNumber || "",
-          encounterRole: row.encounterRole || ""
-        }));
+          encounterRole: row.encounterRole || role,
+          outcome: "ARRESTED",
+          custody: "IN_CUSTODY",
+          packetFiledAt: row.updatedAt || row.createdAt || ""
+        };
+        if (idx >= 0) {
+          existing[idx] = Object.assign({}, existing[idx], patch);
+        } else if (window.COPDoc && COPDoc.model && COPDoc.model.createEncounterSubject) {
+          existing.push(COPDoc.model.createEncounterSubject(patch));
+        } else {
+          existing.push(patch);
+        }
+      });
+      encounter.subjects = existing;
       const committed =
         COPDoc.model.isCommitted && COPDoc.model.isCommitted(encounter);
       const saved = store.saveEncounter(encounter, {

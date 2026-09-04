@@ -1378,12 +1378,11 @@
       cluster.className = "record-actions";
       var link = document.createElement("a");
       link.className = "action-button-secondary compact";
+      link.textContent = "Open";
       if (committed) {
         link.href = "case.html?id=" + encodeURIComponent(snap.leadId);
-        link.textContent = "View";
       } else {
         link.href = "lead-form.html?id=" + encodeURIComponent(snap.leadId);
-        link.textContent = "Edit";
       }
       cluster.appendChild(link);
       actions.appendChild(cluster);

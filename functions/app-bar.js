@@ -4,7 +4,7 @@
  */
 (function () {
   var config = window.COPDoc && window.COPDoc.config;
-  var PRODUCT_VERSION = (config && config.productVersion) || "0.67.0";
+  var PRODUCT_VERSION = (config && config.productVersion) || "0.69.2";
   var ADMIN_STORAGE_KEY =
     (config && config.storageKey("admin")) || "copdoc.admin.v1";
   // Workspace import/export lives on Home. This empty collection remains the
@@ -289,64 +289,10 @@
       };
     }
     if (page === "encounter-form") {
-      var encounterComplete = false;
-      try {
-        var store = window.COPDoc && COPDoc.model && COPDoc.model.store;
-        if (store && id && typeof store.getEncounter === "function") {
-          if (typeof store.loadFromDisk === "function") {
-            store.loadFromDisk();
-          }
-          var enc = store.getEncounter(id);
-          encounterComplete = !!(enc && enc.meta && enc.meta.markedComplete);
-        }
-      } catch (error) {}
-      var encounterActions = encounterComplete
-        ? [
-            backAction("Back to encounters", "encounter.html"),
-            {
-              id: "generateI213Button",
-              label: "Generate I-213",
-              call: "generateEncounterNarrative"
-            },
-            {
-              id: "deleteEncounterButton",
-              label: "Delete",
-              call: "deleteCurrentEncounter"
-            }
-          ]
-        : [
-            {
-              label: "Save",
-              primary: true,
-              chromeAction: "save",
-              call: "commitEncounter"
-            },
-            {
-              id: "completeEncounterButton",
-              label: "Complete",
-              call: "completeCurrentEncounter"
-            },
-            backAction("Back to encounters", "encounter.html"),
-            {
-              id: "addEncounterSubjectsButton",
-              label: "Add subject",
-              call: "openEncounterBookIn"
-            },
-            {
-              id: "generateI213Button",
-              label: "Generate I-213",
-              call: "generateEncounterNarrative"
-            },
-            {
-              id: "deleteEncounterButton",
-              label: "Delete",
-              call: "deleteCurrentEncounter"
-            }
-          ];
       return {
         tab: "encounter",
         file: WORKSPACE_FILE,
-        actions: encounterActions
+        actions: [backAction("Back to encounters", "encounter.html")]
       };
     }
     if (page === "operations") {
@@ -379,22 +325,29 @@
       };
     }
     if (page === "operation") {
+      var operationActions = [
+        {
+          label: "Edit",
+          href: recordIdHref("operation-form.html", id),
+          primary: true,
+          chromeAction: "edit"
+        },
+        backAction("Back to operations", "operations.html"),
+        {
+          label: "Generate brief",
+          call: "generateOperationBrief"
+        }
+      ];
+      if (id) {
+        operationActions.push({
+          label: "Add encounter",
+          href: "encounter-form.html?operationId=" + encodeURIComponent(id)
+        });
+      }
       return {
         tab: "operations",
         file: WORKSPACE_FILE,
-        actions: [
-          {
-            label: "Edit",
-            href: recordIdHref("operation-form.html", id),
-            primary: true,
-            chromeAction: "edit"
-          },
-          backAction("Back to operations", "operations.html"),
-          {
-            label: "Generate brief",
-            call: "generateOperationBrief"
-          }
-        ]
+        actions: operationActions
       };
     }
     if (page === "operation-brief") {
@@ -492,6 +445,10 @@
           href: recordIdHref("mobile-target-sheet.html", id),
           target: "_blank",
           rel: "noopener"
+        });
+        actions.push({
+          label: "Add encounter",
+          href: "encounter-form.html?leadId=" + encodeURIComponent(id)
         });
         actions.push({
           id: "bookInLeadButton",
@@ -667,6 +624,7 @@
     }
     if (page === "narrative") {
       var narrativeEncounterId = queryParam("encounterId");
+      var narrativeEmbedded = queryParam("embed") === "1";
       var narrativeActions = [
         {
           label: narrativeEncounterId ? "Save I-213" : "Update draft",
@@ -674,7 +632,7 @@
           chromeAction: "save"
         }
       ];
-      if (narrativeEncounterId) {
+      if (narrativeEncounterId && !narrativeEmbedded) {
         narrativeActions.push(
           backAction(
             "Back to encounter",
@@ -965,7 +923,6 @@
         tab === "operations" || isOperationPage(page)
       )
     );
-    nav.appendChild(tabLink("bookin.html", "Book-in", tab === "bookin"));
     nav.appendChild(tabLink("map.html", "Map", tab === "map"));
 
     var admin = document.createElement("details");

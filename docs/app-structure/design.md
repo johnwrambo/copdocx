@@ -7,7 +7,7 @@
 | **Status** | Historical design pass (rev 3); current rules are in the focused outline files |
 | **Product** | COPDoc (vanilla HTML/JS/CSS ICE/ERO field app) |
 | **Workspace** | `C:\Users\johnw\PycharmProjects\COPDocX` |
-| **Snapshot stamp** | 0.5.2; current product version comes from `functions/workspace-config.js` (0.67.0) |
+| **Snapshot stamp** | 0.5.2; current product version comes from `functions/workspace-config.js` (0.69.2) |
 | **Living outline (canonical tables)** | [`docs/app-structure/`](C:\Users\johnw\PycharmProjects\COPDocX\docs\app-structure\README.md) |
 
 This document preserves the original design pass and proposed PR sequence. Its
@@ -44,8 +44,8 @@ The lead triad has shipped: `leads.html` is the collection, `case.html` is the v
 | `vehicles.html` / `vehicle.html` / `vehicle-form.html` | List / view / form. View is `data-admin-page="vehicle-view"`. Form Save is `#addVehicleButton` in the body (~136–138). **No** focusout autosave. File Save on the vehicle form calls `addVehicle({ quiet: true })` (`admin.js` ~1587–1591). |
 | `schedule.html` | Week grid + add-shift on the same page. File is only `#adminSaveButton`. |
 | `home.html` | Briefing hub (`data-page="home"`). Chrome shell, empty action slot, no store writes. |
-| `encounter.html` | Encounter **list** (`data-page="encounter"`). 0.11.0. |
-| `encounter-form.html` | Encounter **form**. ID minted on Add. Subjects via Book-in `?encounterId=`. Generate I-213. |
+| `encounter.html` | Encounter **list** (`data-page="encounter"`). Filters, Edit/Open, Delete. Add encounter opens the workspace. |
+| `encounter-form.html` | Encounter **workspace**. Tabs Stop / Vehicles / Subjects / Evidence / Narrative / Review. Add existing / Add new are in-page floats. Subjects from `encounter.subjects[]`. Does not open Book-in from Add subject. |
 | `operation.html` | **Zero-byte** file, not a chrome shell. |
 | `baseballcard.html` | Chrome + playground. File: New/Save/Open `data-not-built`. |
 

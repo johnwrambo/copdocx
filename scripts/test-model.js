@@ -484,8 +484,13 @@ check(
     enc.vehicles.length === 0 &&
     enc.locations.length === 0 &&
     enc.links.length === 0 &&
-    enc.narratives.length === 0
+    enc.narratives.length === 0 &&
+    enc.officerIds.length === 0 &&
+    enc.completedHistory.length === 0
 );
+check("encounter operationId default", enc.operationId === "");
+check("encounter eventType default", enc.eventType === "");
+check("encounter centerLocationId default", enc.centerLocationId === "");
 check(
   "encounter subject factory",
   model.createEncounterSubject({ lastName: "LOKI" }).lastName === "LOKI"
@@ -493,6 +498,265 @@ check(
 check(
   "encounter subject role default",
   model.createEncounterSubject().encounterRole === ""
+);
+check(
+  "encounter subject id minted",
+  String(model.createEncounterSubject().subjectId).indexOf("sub_") === 0
+);
+check(
+  "encounter subject extra fields default empty",
+  model.createEncounterSubject().vehicleRole === "" &&
+    model.createEncounterSubject().citizenship === "" &&
+    model.createEncounterSubject().compliance === ""
+);
+var fromPerson = model.encounterSubjectFromPerson(
+  {
+    personId: "p_toop",
+    name: { lastName: "RUIZ", firstName: "Ana" },
+    citizenship: "MX",
+    immigration: { alienNumber: "A123" }
+  },
+  { encounterRole: "TARGET", outcome: "ARRESTED" }
+);
+check(
+  "subject from person copies identity",
+  fromPerson.personId === "p_toop" &&
+    fromPerson.lastName === "RUIZ" &&
+    fromPerson.alienNumber === "A123" &&
+    fromPerson.outcome === "ARRESTED"
+);
+var toop = model.createPerson({
+  name: { lastName: "RUIZ", firstName: "Ana" },
+  caseRole: ""
+});
+model.store.upsertPerson(toop);
+check("toop person saved without a lead", !!model.store.getPerson(toop.personId));
+check("toop person is not a detainee", model.store.getPerson(toop.personId).caseRole === "");
+check(
+  "toop person did not mint a case",
+  !(model.store.listLeads() || []).some(function (row) {
+    return row.subjectPersonId === toop.personId;
+  })
+);
+var stopEnc = model.createEncounterRecord({
+  existingIds: [],
+  date: new Date(2026, 8, 4)
+});
+stopEnc.startedAt = "2026-09-04T13:40";
+stopEnc.eventType = "VEHICLE_STOP";
+stopEnc.officerIds = ["ofc-1"];
+stopEnc.locations = [
+  model.createLocation({
+    street: "200 S Lamar",
+    city: "Dallas",
+    state: "TX",
+    latitude: "32.78",
+    longitude: "-96.80"
+  })
+];
+stopEnc.centerLocationId = stopEnc.locations[0].locationId;
+var fledSub = model.encounterSubjectFromPerson(toop, {
+  encounterRole: "TARGET",
+  outcome: "FLED_FOOT"
+});
+stopEnc.subjects = [fledSub];
+model.store.saveEncounter(stopEnc, { mode: "draft" });
+var storedStop = model.store.getEncounter(stopEnc.encounterId);
+var fledPerson = model.store.getPerson(toop.personId);
+var fledLe = (fledPerson.encounters || []).filter(function (row) {
+  return row && row.encounterId === stopEnc.encounterId;
+});
+check(
+  "shared stop stamps city onto subject",
+  storedStop.subjects[0] && storedStop.subjects[0].shared.city === "Dallas"
+);
+check("fled subject writes LE encounter on the person", fledLe.length === 1);
+check("fled LE encounter keeps outcome", fledLe[0].encounterDisposition === "FLED_FOOT");
+check("fled subject does not write an arrest", (fledPerson.arrests || []).length === 0);
+var arrested = model.createPerson({
+  name: { lastName: "GARCIA", firstName: "Luis" },
+  citizenship: "MX",
+  caseRole: ""
+});
+model.store.upsertPerson(arrested);
+var arrestedSub = model.stampSharedStop(
+  model.encounterSubjectFromPerson(arrested, {
+    encounterRole: "TARGET",
+    outcome: "ARRESTED",
+    arrestingOfficerId: "ofc-1",
+    vehicleRole: "DRIVER"
+  }),
+  model.sharedStopFromEncounter(stopEnc)
+);
+var bookInput = model.arrestInputFromSubject(arrestedSub, arrestedSub.shared, {
+  bookinRecordId: "pkt-c1",
+  bookInDateTime: "2026-09-04T14:10",
+  arrestingOfficer: "Reyes, J.",
+  booking: { cash: "None", travelDocuments: "None" }
+});
+var booked = model.store.promoteBookInToLead(bookInput);
+check("book files a detainee", booked.ok && !!booked.leadId);
+check(
+  "book detainee case role",
+  model.store.getLead(booked.leadId).caseRole === "DETAINEE"
+);
+check(
+  "book writes an arrest from the shared stop",
+  (model.store.getPerson(arrested.personId).arrests || []).some(function (row) {
+    return (
+      row &&
+      row.bookinRecordId === "pkt-c1" &&
+      row.encounterId === stopEnc.encounterId &&
+      row.arrestLocation.indexOf("Lamar") !== -1
+    );
+  })
+);
+context.localStorage.setItem(
+  "copdoc.admin.v1",
+  JSON.stringify({
+    officers: [
+      {
+        id: "ofc-1",
+        officerId: "ofc-1",
+        lastName: "Reyes",
+        firstName: "J",
+        badge: "1841",
+        meta: { status: "committed", committedAt: "2026-09-01T00:00:00.000Z" }
+      }
+    ]
+  })
+);
+check(
+  "officer field arrest records once",
+  context.COPDoc.officers.recordFieldArrest("ofc-1", {
+    arrestId: booked.arrestId,
+    encounterId: stopEnc.encounterId,
+    personId: arrested.personId
+  }).ok &&
+    context.COPDoc.officers.get("ofc-1").fieldArrests.length === 1
+);
+check(
+  "officer field arrest is idempotent",
+  context.COPDoc.officers.recordFieldArrest("ofc-1", {
+    arrestId: booked.arrestId,
+    encounterId: stopEnc.encounterId,
+    personId: arrested.personId
+  }).ok &&
+    context.COPDoc.officers.get("ofc-1").fieldArrests.length === 1
+);
+var seedCase = model.createLeadSnapshot();
+seedCase.person.caseRole = "TARGET";
+seedCase.person.name.lastName = "GARCIA";
+seedCase.person.name.firstName = "Luis";
+seedCase.person.locations = [
+  model.createLocation({
+    street: "1418 Willow St",
+    city: "Dallas",
+    state: "TX",
+    association: "residence"
+  })
+];
+seedCase.vehicles = [
+  model.createVehicle({
+    licensePlate: "7K3M19",
+    plateState: "TX",
+    vehicleColor: "White",
+    vehicleMake: "Honda",
+    vehicleModel: "Civic"
+  })
+];
+model.store.saveLead(seedCase, { mode: "commit" });
+var fromLead = model.seedEncounterFromLead(model.createEncounterRecord(), seedCase);
+check(
+  "seed from case adds target subject",
+  fromLead.subjects.length === 1 &&
+    fromLead.subjects[0].personId === seedCase.person.personId &&
+    fromLead.subjects[0].encounterRole === "TARGET"
+);
+check(
+  "seed from case copies target place and vehicle",
+  fromLead.locations.length === 1 &&
+    fromLead.locations[0].association === "target" &&
+    fromLead.locations[0].locationId !== seedCase.person.locations[0].locationId &&
+    fromLead.vehicles[0].licensePlate === "7K3M19"
+);
+var again = model.seedEncounterFromLead(fromLead, seedCase);
+check("seed from case does not duplicate the subject", again.subjects.length === 1);
+var seedOp = model.createOperation({
+  name: "GARCIA residence",
+  team: 3,
+  existingIds: []
+});
+seedOp.teams = [
+  {
+    teamId: "cell1",
+    members: [{ officerId: "ofc-1" }, { officerId: "ofc-2" }]
+  }
+];
+seedOp.targets = [
+  { leadId: seedCase.leadId, personId: seedCase.person.personId }
+];
+var opBefore = JSON.stringify(seedOp);
+var dutyBefore = JSON.stringify(context.COPDoc.officers.get("ofc-1"));
+var fromOp = model.seedEncounterFromOperation(
+  model.createEncounterRecord(),
+  seedOp,
+  {
+    getLead: function (id) {
+      return model.store.getLead(id);
+    }
+  }
+);
+check(
+  "seed from operation loads officers and target",
+  fromOp.operationId === seedOp.operationId &&
+    fromOp.officerIds.join(",") === "ofc-1,ofc-2" &&
+    fromOp.subjects[0].personId === seedCase.person.personId &&
+    fromOp.locations[0].association === "target"
+);
+check("seed from operation does not mutate the op", JSON.stringify(seedOp) === opBefore);
+check(
+  "seed from operation does not write officer duty",
+  JSON.stringify(context.COPDoc.officers.get("ofc-1")) === dutyBefore
+);
+var keepRoster = model.createEncounterRecord();
+keepRoster.officerIds = ["keep-me"];
+keepRoster.locations = [model.createLocation({ city: "Keep" })];
+keepRoster.subjects = [{ personId: "already" }];
+model.seedEncounterFromOperation(keepRoster, seedOp, {
+  getLead: function (id) {
+    return model.store.getLead(id);
+  }
+});
+check(
+  "seed does not replace an existing roster or places",
+  keepRoster.officerIds.join(",") === "keep-me" &&
+    keepRoster.locations.length === 1 &&
+    keepRoster.locations[0].city === "Keep" &&
+    keepRoster.subjects.length === 1 &&
+    keepRoster.subjects[0].personId === "already"
+);
+var opOfficers = model.officerIdsFromOperation({
+  teams: [
+    { teamId: "c1", members: [{ officerId: "ofc-1" }, { officerId: "ofc-2" }] },
+    { teamId: "c2", members: [{ officerId: "ofc-2" }, { officerId: "ofc-3" }] }
+  ]
+});
+check(
+  "operation cell officers dedupe",
+  opOfficers.join(",") === "ofc-1,ofc-2,ofc-3"
+);
+check(
+  "encounter location associations include arrest and target",
+  model.ENCOUNTER_LOCATION_ASSOCIATIONS.some(function (row) {
+    return row.value === "arrest";
+  }) &&
+    model.ENCOUNTER_LOCATION_ASSOCIATIONS.some(function (row) {
+      return row.value === "target";
+    }) &&
+    model.ENCOUNTER_LOCATION_ASSOCIATIONS.some(function (row) {
+      return row.value === "vehicle-left";
+    })
 );
 
 model.store.saveEncounter(enc, { mode: "draft" });
@@ -819,6 +1083,38 @@ check(
   pinnedArrest.latitude === "32.78" &&
     pinnedArrest.longitude === "-96.80"
 );
+check(
+  "unlock without reason fails",
+  model.store.unlockEncounter(completeEnc.encounterId, { reason: "" }).ok === false
+);
+var unlocked = model.store.unlockEncounter(completeEnc.encounterId, {
+  reason: "fix officers"
+});
+check("unlock ok", unlocked.ok === true);
+var unlockedRow = model.store.getEncounter(completeEnc.encounterId);
+check(
+  "unlock keeps snapshot and drops the lock",
+  unlockedRow.meta.markedComplete === false &&
+    unlockedRow.completed.pin.latitude === "32.78" &&
+    unlockedRow.unlock.reason === "fix officers"
+);
+unlockedRow.startedAt = "2026-09-06T09:00";
+model.store.saveEncounter(unlockedRow, { mode: "draft" });
+var staleSnap = model.store.getEncounter(completeEnc.encounterId);
+check(
+  "unlocked draft keeps the published snapshot",
+  staleSnap.meta.markedComplete === false &&
+    staleSnap.completed.pin.latitude === "32.78" &&
+    staleSnap.startedAt === "2026-09-06T09:00"
+);
+model.store.saveEncounter(staleSnap, { mode: "complete" });
+var reconfirmed = model.store.getEncounter(completeEnc.encounterId);
+check(
+  "reconfirm appends history",
+  reconfirmed.meta.markedComplete === true &&
+    reconfirmed.completedHistory.length === 1 &&
+    reconfirmed.completedHistory[0].reason === "fix officers"
+);
 
 var pinEnc = model.createEncounterRecord({
   team: "3",
@@ -863,6 +1159,56 @@ var mappedArrest = model.store.getLead(pinLead.leadId).person.arrests[0];
 check(
   "book-in/encounter stop coordinates stamp the arrest without Complete",
   mappedArrest.latitude === "32.71" && mappedArrest.longitude === "-96.81"
+);
+var groupEnc = model.createEncounterRecord({
+  team: "3",
+  existingIds: (model.store.listEncounters() || []).map(function (row) {
+    return row.encounterId;
+  })
+});
+groupEnc.startedAt = "2026-09-04T15:00";
+var targetLoc = model.createLocation({
+  street: "1418 Willow St",
+  city: "Dallas",
+  state: "TX",
+  latitude: "32.80",
+  longitude: "-96.82",
+  association: "target"
+});
+var arrestLoc = model.createLocation({
+  street: "I-35E @ Commerce",
+  city: "Dallas",
+  state: "TX",
+  latitude: "32.78",
+  longitude: "-96.80",
+  association: "arrest"
+});
+groupEnc.locations = [targetLoc, arrestLoc];
+groupEnc.centerLocationId = arrestLoc.locationId;
+groupEnc.subjects = [
+  model.createEncounterSubject({
+    lastName: "GARCIA",
+    firstName: "Luis",
+    outcome: "ARRESTED"
+  }),
+  model.createEncounterSubject({
+    lastName: "FLED",
+    firstName: "One",
+    outcome: "FLED_FOOT"
+  })
+];
+model.store.saveEncounter(groupEnc, { mode: "complete" });
+var grouped = model.store.getEncounter(groupEnc.encounterId);
+check(
+  "snapshot pin matches the center",
+  grouped.completed.pin.locationId === arrestLoc.locationId &&
+    grouped.completed.centerLocationId === arrestLoc.locationId &&
+    grouped.completed.pin.latitude === "32.78"
+);
+check(
+  "snapshot counts arrested and fled",
+  grouped.completed.outcomeCounts.arrested === 1 &&
+    grouped.completed.outcomeCounts.fled === 1
 );
 
 var blankCrim = model.createPerson();

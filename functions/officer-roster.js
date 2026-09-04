@@ -273,6 +273,51 @@
     });
   }
 
+  function recordFieldArrest(officerId, entry) {
+    entry = entry || {};
+    var id = String(officerId || "").trim();
+    if (!id) {
+      return { ok: false, error: "Officer is missing." };
+    }
+    var admin = readAdmin();
+    admin.officers = admin.officers || [];
+    var officer = null;
+    var i;
+    for (i = 0; i < admin.officers.length; i++) {
+      if (
+        admin.officers[i] &&
+        (admin.officers[i].id === id || admin.officers[i].officerId === id)
+      ) {
+        officer = admin.officers[i];
+        break;
+      }
+    }
+    if (!officer) {
+      return { ok: false, error: "Officer not found." };
+    }
+    officer.fieldArrests = Array.isArray(officer.fieldArrests)
+      ? officer.fieldArrests
+      : [];
+    var arrestId = String(entry.arrestId || "");
+    var exists = officer.fieldArrests.some(function (row) {
+      return arrestId && row && String(row.arrestId || "") === arrestId;
+    });
+    if (!exists) {
+      officer.fieldArrests.push({
+        arrestId: arrestId,
+        encounterId: String(entry.encounterId || ""),
+        personId: String(entry.personId || ""),
+        bookedAt: String(entry.bookedAt || new Date().toISOString())
+      });
+    }
+    try {
+      global.localStorage.setItem(ADMIN_KEY, JSON.stringify(admin));
+    } catch (error) {
+      return { ok: false, error: "Could not write the officer profile." };
+    }
+    return { ok: true, error: "" };
+  }
+
   root.officers = {
     listCommitted: listCommitted,
     listShifts: listShifts,
@@ -285,6 +330,7 @@
     label: label,
     display: display,
     search: search,
-    bindAssign: bindAssign
+    bindAssign: bindAssign,
+    recordFieldArrest: recordFieldArrest
   };
 })(typeof window !== "undefined" ? window : globalThis);

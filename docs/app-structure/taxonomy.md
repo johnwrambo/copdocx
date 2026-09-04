@@ -66,9 +66,11 @@ Map is a planning board, not a record triad. Action slot: **Brief view** + prima
 
 Icon library (Lucide set on the page, `<details>` closed by default) assigns a glyph to a **category** (click a layer icon/name while a swatch is picked) or a **row**. Overlay tools: Label, Arrow, Delete. **Brief view** hides chrome, overlays, and the dock; action-slot **Print brief** uses the browser print dialog (Save as PDF).
 
-`narrative.html` (`data-page="narrative"`) is the I-213 / Build 9 workspace, not
-a chrome tab. Open it from the encounter form (**Generate I-213**). The Encounters
-tab stays current. No query → synthetic training lab (Home tile). **`?encounterId=`**
+`narrative.html` (`data-page="narrative"`) is the I-213 / Build 9 engine, not
+a chrome tab. The encounter workspace **Narrative** tab embeds
+`narrative.html?encounterId=&embed=1`. **Pop out** opens the live draft with
+`window.open()` so left-side elements can scroll independently. Standalone
+`narrative.html?encounterId=` still works. The Encounters tab stays current. No query → synthetic training lab (Home tile). **`?encounterId=`**
 loads the live encounter via `encounter-narrative.js`. A missing encounter does
 **not** fall back to the demo. **Save I-213** writes `encounter.narratives[]` and
 `supervisorSummary`. Training **Update draft** stays in memory.
@@ -105,7 +107,7 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | `encounter.html` | `encounter` | — |
 | `encounter-form.html` | `encounter-form` | — |
 
-`aria-current="page"`: Home tab for `home`; Cases tab for `leads|lead|case|lead-form|i200-form|i205-form|mobile-target-sheet`; Investigate tab for `investigations|investigate`; Encounters tab for `encounter|encounter-form`; Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
+`aria-current="page"`: Home tab for `home`; Cases tab for `leads|lead|case|lead-form|i200-form|i205-form|mobile-target-sheet`; Investigate tab for `investigations|investigate`; Encounters tab for `encounter|encounter-form|narrative`; Operations for operation pages; Map for `map`. Book-in is not a product tab. Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
 
 ## Buttons and IDs
 
@@ -137,8 +139,14 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | Workspace Export | `#homeExportButton` | Export JSON / CSV | Home Tools button calling `openFileExport` |
 | Workspace lock | `#homeLockButton` | Lock this tab | Home Tools button calling `COPDoc.privacyGate.lock` |
 | Add encounter | `#appBarPrimaryAction` | Add encounter | `<a href="encounter-form.html">` |
-| Add subjects (encounter form) | `#addEncounterSubjectsButton` | Add subjects | `<a href="bookin.html?encounterId=">` |
-| Generate I-213 (encounter form) | `#generateI213Button` | Generate I-213 | button `call: generateEncounterNarrative` |
+| Add encounter from operation | action slot | Add encounter | `encounter-form.html?operationId=` |
+| Add encounter from case | action slot | Add encounter | `encounter-form.html?leadId=` |
+| Encounter workspace tabs | `.enc-tabs` | Stop / Vehicles / Subjects / Evidence / Narrative / Review | in-page, not chrome |
+| Add existing / Add new (encounter form) | `#openAddExisting`, `#openAddSubject` | Add existing / Add new | in-page `#encSubjectFloat`; do not open Book-in |
+| Generate I-213 (encounter form) | `#narrativeFrame` | I-213 engine | Narrative tab embeds `narrative.html?encounterId=&embed=1` |
+| Confirm encounter | `#confirmEncounter` | Confirm and close encounter | Review tab; `completeCurrentEncounter` |
+| Book arrested subject | `#confirmBookin` | Book-in | in-page `#encBookFloat`; Arrested only |
+| Unlock encounter | `#unlockEncounter` | Unlock | Review tab; reason required |
 | Add subject (book-in + `?encounterId=`) | `#addEncounterSubjectButton` | Add subject | button `call: addEncounterSubject` |
 | Load from leads (book-in) | `#loadLeadIntoEncounterButton` | Load from leads | button `call: openLoadLeadForEncounter`. Always on Book-in. |
 | Map views | `#mapHomeButton`, `#mapSetHomeButton`, `#mapSavePresetButton`, `#mapPresetSelect`, `#mapDeletePresetButton` | Home / Set home / presets | in `.map-toolbar`, not the action slot |

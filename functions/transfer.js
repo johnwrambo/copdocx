@@ -51,13 +51,13 @@
 
   function appVersion() {
     if (typeof document === "undefined") {
-      return (config && config.productVersion) || "0.67.0";
+      return (config && config.productVersion) || "0.69.2";
     }
     var el = document.getElementById("appVersion");
     return (
       (config && config.productVersion) ||
       (el && el.getAttribute("data-version")) ||
-      "0.67.0"
+      "0.69.2"
     );
   }
 

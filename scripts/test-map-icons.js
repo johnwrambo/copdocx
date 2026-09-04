@@ -65,7 +65,7 @@ var normalizedIds = ids.map(function (id) {
     .replace(/[^a-z0-9]+/g, "");
 });
 
-check("semantic catalog has 21 entries", entries.length === 21, entries.length);
+check("semantic catalog has 26 entries", entries.length === 26, entries.length);
 check(
   "semantic catalog publishes all names",
   mapIcons &&
@@ -140,10 +140,13 @@ var themeCss = fs.readFileSync(
   "utf8"
 );
 check(
-  "Tactical keeps glyph ink visible over its dark marker fill",
-  /\.copdoc-map-symbol\.is-library-tactical\s*\{[^}]*--map-symbol-ink:\s*#f7fbff;/s.test(
+  "map symbols paint fill and line instead of a circular plate",
+  /\.copdoc-map-symbol\s*>\s*\.od-icon\s*\{[^}]*fill:\s*var\(--map-symbol-fill\)/s.test(
     themeCss
-  )
+  ) &&
+    /\.copdoc-map-symbol\s*>\s*\.od-icon\s*\{[^}]*stroke:\s*var\(--map-symbol-line\)/s.test(
+      themeCss
+    )
 );
 
 var activeEntriesReference = mapIcons.entries;
@@ -222,7 +225,9 @@ check(
   has(standard, "copdoc-map-symbol") &&
     has(standard, "is-shape-circle") &&
     has(standard, "--map-symbol-size:32px") &&
-    has(standard, 'width="17"') &&
+    has(standard, 'width="30"') &&
+    has(standard, "--map-symbol-fill:rgba(") &&
+    !has(standard, "--map-symbol-opacity:") &&
     !has(standard, "is-compact") &&
     !has(standard, "is-primary")
 );
@@ -232,7 +237,7 @@ check(
   "compact badge uses compact sizing and class",
   has(compact, "is-compact") &&
     has(compact, "--map-symbol-size:24px") &&
-    has(compact, 'width="13"')
+    has(compact, 'width="22"')
 );
 
 var primary = mapIcons.badgeHtml("Target", {
@@ -243,7 +248,7 @@ check(
   "primary badge uses primary sizing and class",
   has(primary, "is-primary") &&
     has(primary, "--map-symbol-size:38px") &&
-    has(primary, 'width="20"') &&
+    has(primary, 'width="36"') &&
     has(primary, '<i class="copdoc-map-symbol-badge">12</i>')
 );
 
@@ -253,16 +258,18 @@ check("selected badge has selected state", has(selected, "is-selected"));
 var editable = mapIcons.badgeHtml("Target", { editable: true });
 check("editable badge has editable state", has(editable, "is-editable"));
 
-var light = mapIcons.badgeHtml("Target", { color: "#fff" });
+var light = mapIcons.badgeHtml("Target", { color: "#fff", fillOpacity: 0.5 });
 check(
-  "light badge expands shorthand color and gets light state",
-  has(light, "--map-symbol-color:#ffffff") && has(light, "is-light")
+  "light badge expands shorthand color into fill",
+  has(light, "--map-symbol-color:#ffffff") &&
+    has(light, "--map-symbol-fill:rgba(255,255,255,0.5)")
 );
 
-var dark = mapIcons.badgeHtml("Target", { color: "#123456" });
+var dark = mapIcons.badgeHtml("Target", { color: "#123456", fillOpacity: 0 });
 check(
-  "dark badge keeps a validated color without light state",
-  has(dark, "--map-symbol-color:#123456") && !has(dark, "is-light")
+  "dark badge fill can be fully transparent",
+  has(dark, "--map-symbol-color:#123456") &&
+    has(dark, "--map-symbol-fill:rgba(18,52,86,0)")
 );
 
 var selectedEditable = mapIcons.badgeHtml("Target", {
@@ -288,7 +295,7 @@ check(
 );
 check(
   "numeric badge size clamps to maximum",
-  has(numericLarge, "--map-symbol-size:48px") &&
+  has(numericLarge, "--map-symbol-size:56px") &&
     !has(numericLarge, "is-compact")
 );
 

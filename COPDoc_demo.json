@@ -13,12 +13,12 @@
     "from": "",
     "to": ""
   },
-  "note": "Demonstration workspace. File → Import. Avengers = officers; MCU villains = leads. DFW addresses include latitude/longitude for the map. Not loaded unless you import it.",
+  "note": "Demonstration workspace. File → Import. Avengers = officers; MCU villains = leads. DFW addresses include latitude/longitude for the map. Arrests are clustered around downtown Dallas, Stemmons, Fair Park, NorthPark, Fort Worth Stockyards, Irving, and Arlington so Arrest heat has local maxima. Not loaded unless you import it.",
   "leads": [
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6k_6qbr8y",
-      "subjectPersonId": "p_mtgh8f6k_g2dnxm",
+      "leadId": "lead_mtnjlphg_vdj1jo",
+      "subjectPersonId": "p_mtnjlphg_gzkalk",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "elite",
@@ -29,9 +29,11 @@
         "leadInfo": "Subject using the alias Loki of Asgard. Frequent no-show at ERO Dallas."
       },
       "person": {
-        "personId": "p_mtgh8f6k_g2dnxm",
+        "personId": "p_mtnjlphg_gzkalk",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "LAUFEYSON",
           "firstName": "Loki",
@@ -45,7 +47,7 @@
         "lexId": "LEX-LOKI",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6k_34jbyh",
+            "locationId": "loc_mtnjlphh_jjr1xf",
             "entityType": "LOCATION",
             "street": "2200 Ross Ave",
             "street2": "Ste 4800",
@@ -57,10 +59,19 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "1",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphh_jjr1xf",
             "latLong": "32.7874, -96.7970"
           },
           {
-            "locationId": "loc_mtgh8f6k_9k7rn8",
+            "locationId": "loc_mtnjlphh_7b4h3i",
             "entityType": "LOCATION",
             "street": "2403 Flora St",
             "street2": "",
@@ -72,20 +83,160 @@
             "association": "work",
             "parksHere": "",
             "targetPriority": "2",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphh_7b4h3i",
             "latLong": "32.7894, -96.7984"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphp_isyes7",
+            "arrestDate": "2026-06-02",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Administrative arrest",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78080",
+            "longitude": "-96.80650",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_obrbc4",
+            "arrestDate": "2026-07-18",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Administrative arrest",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Robert B Cullum Blvd, Dallas, TX 75210",
+            "latitude": "32.78160",
+            "longitude": "-96.76170",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_qc06p4",
+            "arrestDate": "2026-07-18",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Administrative arrest",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Stemmons Freeway, Dallas, TX 75247",
+            "latitude": "32.84480",
+            "longitude": "-96.87580",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_u12ahx",
+            "arrestDate": "2026-08-17",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Administrative arrest",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "W Las Colinas Blvd, Irving, TX 75039",
+            "latitude": "32.87940",
+            "longitude": "-96.94060",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -102,7 +253,7 @@
       },
       "vehicles": [
         {
-          "vehicleId": "veh_mtgh8f6l_jjrfvs",
+          "vehicleId": "veh_mtnjlphh_o9w4t5",
           "entityType": "VEHICLE",
           "licensePlate": "TRCKSTR",
           "plateState": "TX",
@@ -113,9 +264,11 @@
           "vehicleBodyStyle": "",
           "vin": "",
           "registeredOwnerName": "LAUFEYSON, LOKI",
+          "junked": false,
+          "junkedAt": "",
           "locations": [
             {
-              "locationId": "loc_mtgh8f6k_gqhxtu",
+              "locationId": "loc_mtnjlphg_t3qd70",
               "entityType": "LOCATION",
               "street": "2200 Ross Ave",
               "street2": "",
@@ -127,6 +280,15 @@
               "association": "known-parking",
               "parksHere": "",
               "targetPriority": "3",
+              "pinColor": "",
+              "junked": false,
+              "junkedAt": "",
+              "occupancy": "current",
+              "occupiedFrom": "",
+              "occupiedTo": "",
+              "notes": "",
+              "otherResidents": "",
+              "id": "loc_mtnjlphg_t3qd70",
               "latLong": "32.7874, -96.7970"
             }
           ],
@@ -137,6 +299,11 @@
           "driverNumber": "",
           "assignedOfficerIds": [],
           "equipment": [],
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
           "meta": {
             "createdAt": "2026-08-12T14:00:00.000Z",
             "updatedAt": "2026-08-12T14:00:00.000Z",
@@ -144,28 +311,33 @@
             "status": "committed",
             "committedAt": "2026-08-12T14:00:00.000Z"
           },
-          "id": "veh_mtgh8f6l_jjrfvs",
+          "id": "veh_mtnjlphh_o9w4t5",
           "plate": "TRCKSTR"
         }
       ],
       "links": [
         {
-          "linkId": "link_mtgh8f6l_hs5m9y",
+          "linkId": "link_mtnjlphh_590t1m",
+          "associationId": "",
           "from": {
             "type": "VEHICLE",
-            "id": "veh_mtgh8f6l_jjrfvs"
+            "id": "veh_mtnjlphh_o9w4t5"
           },
           "to": {
             "type": "PERSON",
-            "id": "p_mtgh8f6k_g2dnxm"
+            "id": "p_mtnjlphg_gzkalk"
           },
           "reasons": [
             "OPERATES"
           ],
-          "notes": ""
+          "notes": "",
+          "label": "",
+          "otherType": "PERSON"
         }
       ],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-12T14:00:00.000Z",
         "updatedAt": "2026-08-12T14:00:00.000Z",
@@ -176,8 +348,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6l_uhrez4",
-      "subjectPersonId": "p_mtgh8f6l_46896c",
+      "leadId": "lead_mtnjlphi_2ozi0m",
+      "subjectPersonId": "p_mtnjlphi_gmrsfw",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "otherLe",
@@ -188,9 +360,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6l_46896c",
+        "personId": "p_mtnjlphi_gmrsfw",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "THANOS",
           "firstName": "Dione",
@@ -204,7 +378,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6l_eof3c9",
+            "locationId": "loc_mtnjlphi_uiehpp",
             "entityType": "LOCATION",
             "street": "1300 Robert B Cullum Blvd",
             "street2": "",
@@ -216,23 +390,163 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "1",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphi_uiehpp",
             "latLong": "32.7816, -96.7617"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": true,
           "fbiNumber": "123456AA0",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": true,
+          "hasCriminalRecord": true,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "moderate"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphp_ejtzrz",
+            "arrestDate": "2026-06-14",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Immigration detainer pickup",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78200",
+            "longitude": "-96.80570",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_2btvli",
+            "arrestDate": "2026-08-03",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Immigration detainer pickup",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Robert B Cullum Blvd, Dallas, TX 75210",
+            "latitude": "32.78260",
+            "longitude": "-96.76090",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_g0gtmc",
+            "arrestDate": "2026-09-01",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Immigration detainer pickup",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Central Expy, Dallas, TX 75225",
+            "latitude": "32.86870",
+            "longitude": "-96.77360",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_350ayd",
+            "arrestDate": "2026-08-22",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Immigration detainer pickup",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "W Las Colinas Blvd, Irving, TX 75039",
+            "latitude": "32.87770",
+            "longitude": "-96.94070",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [
           {
-            "convictionId": "cnv_mtgh8f6l_d0gf51",
+            "convictionId": "cnv_mtnjlphi_j7e0vj",
             "crime": "Aggravated assault",
             "convictionStatute": "",
             "convictionClass": "felony",
@@ -260,6 +574,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-14T14:00:00.000Z",
         "updatedAt": "2026-08-14T14:00:00.000Z",
@@ -270,8 +586,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6l_oe31pk",
-      "subjectPersonId": "p_mtgh8f6l_7j1gdy",
+      "leadId": "lead_mtnjlphk_2sxwlv",
+      "subjectPersonId": "p_mtnjlphk_p37hep",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "tag",
@@ -282,9 +598,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6l_7j1gdy",
+        "personId": "p_mtnjlphk_p37hep",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "ULTRON",
           "firstName": "Victor",
@@ -298,7 +616,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6l_wzoskf",
+            "locationId": "loc_mtnjlphk_lom239",
             "entityType": "LOCATION",
             "street": "8687 N Central Expy",
             "street2": "",
@@ -310,20 +628,160 @@
             "association": "work",
             "parksHere": "",
             "targetPriority": "2",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphk_lom239",
             "latLong": "32.8687, -96.7736"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphp_iju2vb",
+            "arrestDate": "2026-07-01",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Illegal reentry",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.77990",
+            "longitude": "-96.80540",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_lqff4m",
+            "arrestDate": "2026-08-12",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Illegal reentry",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Robert B Cullum Blvd, Dallas, TX 75210",
+            "latitude": "32.78080",
+            "longitude": "-96.76070",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_gqygi9",
+            "arrestDate": "2026-06-02",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Illegal reentry",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Central Expy, Dallas, TX 75225",
+            "latitude": "32.86980",
+            "longitude": "-96.77300",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_7segv1",
+            "arrestDate": "2026-08-28",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Illegal reentry",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Stadium Dr, Arlington, TX 76011",
+            "latitude": "32.74730",
+            "longitude": "-97.08420",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -340,7 +798,7 @@
       },
       "vehicles": [
         {
-          "vehicleId": "veh_mtgh8f6l_znjbq7",
+          "vehicleId": "veh_mtnjlphk_kv6p94",
           "entityType": "VEHICLE",
           "licensePlate": "NTLGNC",
           "plateState": "TX",
@@ -351,9 +809,11 @@
           "vehicleBodyStyle": "",
           "vin": "",
           "registeredOwnerName": "ULTRON, VICTOR",
+          "junked": false,
+          "junkedAt": "",
           "locations": [
             {
-              "locationId": "loc_mtgh8f6l_ethbvl",
+              "locationId": "loc_mtnjlphk_x24szx",
               "entityType": "LOCATION",
               "street": "8687 N Central Expy",
               "street2": "",
@@ -365,6 +825,15 @@
               "association": "plate-check",
               "parksHere": "",
               "targetPriority": "",
+              "pinColor": "",
+              "junked": false,
+              "junkedAt": "",
+              "occupancy": "current",
+              "occupiedFrom": "",
+              "occupiedTo": "",
+              "notes": "",
+              "otherResidents": "",
+              "id": "loc_mtnjlphk_x24szx",
               "latLong": "32.8687, -96.7736"
             }
           ],
@@ -375,6 +844,11 @@
           "driverNumber": "",
           "assignedOfficerIds": [],
           "equipment": [],
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
           "meta": {
             "createdAt": "2026-08-15T14:00:00.000Z",
             "updatedAt": "2026-08-15T14:00:00.000Z",
@@ -382,28 +856,33 @@
             "status": "committed",
             "committedAt": "2026-08-15T14:00:00.000Z"
           },
-          "id": "veh_mtgh8f6l_znjbq7",
+          "id": "veh_mtnjlphk_kv6p94",
           "plate": "NTLGNC"
         }
       ],
       "links": [
         {
-          "linkId": "link_mtgh8f6l_lt8ppx",
+          "linkId": "link_mtnjlphk_ryhhkc",
+          "associationId": "",
           "from": {
             "type": "VEHICLE",
-            "id": "veh_mtgh8f6l_znjbq7"
+            "id": "veh_mtnjlphk_kv6p94"
           },
           "to": {
             "type": "PERSON",
-            "id": "p_mtgh8f6l_7j1gdy"
+            "id": "p_mtnjlphk_p37hep"
           },
           "reasons": [
             "OPERATES"
           ],
-          "notes": ""
+          "notes": "",
+          "label": "",
+          "otherType": "PERSON"
         }
       ],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-15T14:00:00.000Z",
         "updatedAt": "2026-08-15T14:00:00.000Z",
@@ -414,8 +893,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6l_2f2frp",
-      "subjectPersonId": "p_mtgh8f6l_1fmmcn",
+      "leadId": "lead_mtnjlphl_y85sag",
+      "subjectPersonId": "p_mtnjlphl_71mx81",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "discovered",
@@ -426,9 +905,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6l_1fmmcn",
+        "personId": "p_mtnjlphl_71mx81",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "ODINSDOTTIR",
           "firstName": "Hela",
@@ -442,7 +923,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6l_0akph7",
+            "locationId": "loc_mtnjlphl_0jwy29",
             "entityType": "LOCATION",
             "street": "131 E Exchange Ave",
             "street2": "",
@@ -454,20 +935,160 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "1",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphl_0jwy29",
             "latLong": "32.7887, -97.3473"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphp_rq0uny",
+            "arrestDate": "2026-07-18",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Overstay warrant",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78230",
+            "longitude": "-96.80710",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_34xee3",
+            "arrestDate": "2026-08-17",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Overstay warrant",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Robert B Cullum Blvd, Dallas, TX 75210",
+            "latitude": "32.78280",
+            "longitude": "-96.76240",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_tcgt8g",
+            "arrestDate": "2026-06-14",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Overstay warrant",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Central Expy, Dallas, TX 75225",
+            "latitude": "32.86780",
+            "longitude": "-96.77280",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_qejkyh",
+            "arrestDate": "2026-09-01",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Overstay warrant",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Stadium Dr, Arlington, TX 76011",
+            "latitude": "32.74820",
+            "longitude": "-97.08340",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -485,6 +1106,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-16T14:00:00.000Z",
         "updatedAt": "2026-08-16T14:00:00.000Z",
@@ -495,8 +1118,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6l_tsphkz",
-      "subjectPersonId": "p_mtgh8f6l_1z26hs",
+      "leadId": "lead_mtnjlphl_drz0om",
+      "subjectPersonId": "p_mtnjlphl_x0zksq",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "otherLe",
@@ -507,9 +1130,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6l_1z26hs",
+        "personId": "p_mtnjlphl_x0zksq",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "SCHMIDT",
           "firstName": "Johann",
@@ -523,7 +1148,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6l_ee3uof",
+            "locationId": "loc_mtnjlphl_2sh2sa",
             "entityType": "LOCATION",
             "street": "411 Elm St",
             "street2": "",
@@ -535,34 +1160,194 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "1",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphl_2sh2sa",
             "latLong": "32.7787, -96.8083"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": true,
           "fbiNumber": "999111BB1",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": true,
+          "hasCriminalRecord": true,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "moderate"
         },
         "encounters": [],
         "arrests": [
           {
-            "arrestId": "arr_mtgh8f6l_evkr43",
+            "arrestId": "arr_mtnjlphl_xik83p",
             "arrestDate": "2026-08-17",
+            "arrestTime": "",
+            "arrestDateTime": "",
             "arrestCharge": "Reentry after deportation",
             "arrestStatute": "",
             "arrestClass": "",
             "arrestAgency": "ICE ERO Dallas",
             "arrestAgencyCode": "",
-            "arrestLocation": ""
+            "arrestLocation": "411 Elm St, Dallas, TX 75202",
+            "latitude": "32.7787",
+            "longitude": "-96.8083",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphp_nro8y6",
+            "arrestDate": "2026-08-03",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Fugitive operations",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.77970",
+            "longitude": "-96.80740",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_hd7j2v",
+            "arrestDate": "2026-08-22",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Fugitive operations",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Robert B Cullum Blvd, Dallas, TX 75210",
+            "latitude": "32.78220",
+            "longitude": "-96.76060",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_2c74m8",
+            "arrestDate": "2026-07-01",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Fugitive operations",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Central Expy, Dallas, TX 75225",
+            "latitude": "32.86940",
+            "longitude": "-96.77460",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_wg96jy",
+            "arrestDate": "2026-06-14",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Fugitive operations",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "1520 K Ave, Plano, TX 75074",
+            "latitude": "33.01980",
+            "longitude": "-96.69890",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
           }
         ],
         "convictions": [
           {
-            "convictionId": "cnv_mtgh8f6l_7djt2a",
+            "convictionId": "cnv_mtnjlphl_swg479",
             "crime": "Unlawful possession of a firearm",
             "convictionStatute": "",
             "convictionClass": "felony",
@@ -590,6 +1375,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-17T14:00:00.000Z",
         "updatedAt": "2026-08-17T14:00:00.000Z",
@@ -600,8 +1387,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6m_p3cufo",
-      "subjectPersonId": "p_mtgh8f6l_0rykxt",
+      "leadId": "lead_mtnjlphm_906bnw",
+      "subjectPersonId": "p_mtnjlphm_nlsrvn",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "elite",
@@ -612,9 +1399,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6l_0rykxt",
+        "personId": "p_mtnjlphm_nlsrvn",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "STEVENS",
           "firstName": "Erik",
@@ -628,7 +1417,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6m_1k3eqq",
+            "locationId": "loc_mtnjlphm_qgjz1q",
             "entityType": "LOCATION",
             "street": "201 Main St",
             "street2": "",
@@ -640,10 +1429,19 @@
             "association": "work",
             "parksHere": "",
             "targetPriority": "2",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphm_qgjz1q",
             "latLong": "32.7555, -97.3308"
           },
           {
-            "locationId": "loc_mtgh8f6m_57flwd",
+            "locationId": "loc_mtnjlphm_0uw5yb",
             "entityType": "LOCATION",
             "street": "1500 Marilla St",
             "street2": "",
@@ -655,20 +1453,160 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "3",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphm_0uw5yb",
             "latLong": "32.7763, -96.7969"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphp_r367rs",
+            "arrestDate": "2026-08-12",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Reentry after deportation",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78120",
+            "longitude": "-96.80510",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_c90ywn",
+            "arrestDate": "2026-08-17",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Reentry after deportation",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Stemmons Freeway, Dallas, TX 75247",
+            "latitude": "32.84450",
+            "longitude": "-96.87500",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_y9kds1",
+            "arrestDate": "2026-07-01",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Reentry after deportation",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "E Exchange Ave, Fort Worth, TX 76164",
+            "latitude": "32.78870",
+            "longitude": "-97.34730",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_35m34p",
+            "arrestDate": "2026-08-03",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Reentry after deportation",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "2400 Aviation Dr, DFW Airport, TX 75261",
+            "latitude": "32.89980",
+            "longitude": "-97.04030",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -686,6 +1624,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-18T14:00:00.000Z",
         "updatedAt": "2026-08-18T14:00:00.000Z",
@@ -696,8 +1636,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6m_5e4y7h",
-      "subjectPersonId": "p_mtgh8f6m_61vbo5",
+      "leadId": "lead_mtnjlphm_otvwjz",
+      "subjectPersonId": "p_mtnjlphm_3g2ah2",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "discovered",
@@ -708,9 +1648,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6m_61vbo5",
+        "personId": "p_mtnjlphm_3g2ah2",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "ZEMO",
           "firstName": "Helmut",
@@ -724,7 +1666,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6m_j3hz8u",
+            "locationId": "loc_mtnjlphm_yiz3yr",
             "entityType": "LOCATION",
             "street": "1520 K Ave",
             "street2": "",
@@ -736,20 +1678,160 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "2",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphm_yiz3yr",
             "latLong": "33.0198, -96.6989"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphp_d8q12z",
+            "arrestDate": "2026-08-17",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Administrative arrest",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78260",
+            "longitude": "-96.80620",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_i28l08",
+            "arrestDate": "2026-08-22",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Administrative arrest",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Stemmons Freeway, Dallas, TX 75247",
+            "latitude": "32.84540",
+            "longitude": "-96.87430",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_e7sj08",
+            "arrestDate": "2026-07-18",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Administrative arrest",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "E Exchange Ave, Fort Worth, TX 76164",
+            "latitude": "32.78970",
+            "longitude": "-97.34640",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_nx7jq4",
+            "arrestDate": "2026-08-22",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Administrative arrest",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "9200 World Cup Way, Frisco, TX 75033",
+            "latitude": "33.15450",
+            "longitude": "-96.83530",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -767,6 +1849,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-19T14:00:00.000Z",
         "updatedAt": "2026-08-19T14:00:00.000Z",
@@ -777,8 +1861,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6m_cukrq9",
-      "subjectPersonId": "p_mtgh8f6m_1hwm4n",
+      "leadId": "lead_mtnjlphm_mmrrkn",
+      "subjectPersonId": "p_mtnjlphm_nyu1te",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "tag",
@@ -789,9 +1873,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6m_1hwm4n",
+        "personId": "p_mtnjlphm_nyu1te",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "RONAN",
           "firstName": "Kree",
@@ -805,7 +1891,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6m_1srcj7",
+            "locationId": "loc_mtnjlphm_w0qjdc",
             "entityType": "LOCATION",
             "street": "2400 Aviation Dr",
             "street2": "",
@@ -817,20 +1903,129 @@
             "association": "work",
             "parksHere": "",
             "targetPriority": "1",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphm_w0qjdc",
             "latLong": "32.8998, -97.0403"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphp_flau99",
+            "arrestDate": "2026-08-22",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Immigration detainer pickup",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78030",
+            "longitude": "-96.80580",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_qew210",
+            "arrestDate": "2026-08-28",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Immigration detainer pickup",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Stemmons Freeway, Dallas, TX 75247",
+            "latitude": "32.84380",
+            "longitude": "-96.87410",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_7q3vn5",
+            "arrestDate": "2026-08-03",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Immigration detainer pickup",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "E Exchange Ave, Fort Worth, TX 76164",
+            "latitude": "32.78790",
+            "longitude": "-97.34660",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -847,7 +2042,7 @@
       },
       "vehicles": [
         {
-          "vehicleId": "veh_mtgh8f6m_3u8h4f",
+          "vehicleId": "veh_mtnjlphm_8pbooz",
           "entityType": "VEHICLE",
           "licensePlate": "ACCSR1",
           "plateState": "TX",
@@ -858,6 +2053,8 @@
           "vehicleBodyStyle": "",
           "vin": "",
           "registeredOwnerName": "RONAN, KREE",
+          "junked": false,
+          "junkedAt": "",
           "locations": [],
           "governmentVehicle": false,
           "unit": "",
@@ -866,6 +2063,11 @@
           "driverNumber": "",
           "assignedOfficerIds": [],
           "equipment": [],
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
           "meta": {
             "createdAt": "2026-08-20T14:00:00.000Z",
             "updatedAt": "2026-08-20T14:00:00.000Z",
@@ -873,12 +2075,14 @@
             "status": "committed",
             "committedAt": "2026-08-20T14:00:00.000Z"
           },
-          "id": "veh_mtgh8f6m_3u8h4f",
+          "id": "veh_mtnjlphm_8pbooz",
           "plate": "ACCSR1"
         }
       ],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-20T14:00:00.000Z",
         "updatedAt": "2026-08-20T14:00:00.000Z",
@@ -889,8 +2093,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6m_hfmi3v",
-      "subjectPersonId": "p_mtgh8f6m_2oet4p",
+      "leadId": "lead_mtnjlphm_d0tweo",
+      "subjectPersonId": "p_mtnjlphm_w59fg5",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "otherLe",
@@ -901,9 +2105,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6m_2oet4p",
+        "personId": "p_mtnjlphm_w59fg5",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "MAW",
           "firstName": "Ebony",
@@ -917,7 +2123,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6m_4s8em7",
+            "locationId": "loc_mtnjlphm_tlmlca",
             "entityType": "LOCATION",
             "street": "8008 Herb Kelleher Way",
             "street2": "",
@@ -929,20 +2135,129 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "2",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphm_tlmlca",
             "latLong": "32.8471, -96.8518"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphp_stinke",
+            "arrestDate": "2026-08-28",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Illegal reentry",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78160",
+            "longitude": "-96.80770",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_e6yvdd",
+            "arrestDate": "2026-09-01",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Illegal reentry",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Stemmons Freeway, Dallas, TX 75247",
+            "latitude": "32.84560",
+            "longitude": "-96.87550",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_iwtpcj",
+            "arrestDate": "2026-08-12",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Illegal reentry",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "E Exchange Ave, Fort Worth, TX 76164",
+            "latitude": "32.79000",
+            "longitude": "-97.34790",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -960,6 +2275,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-21T14:00:00.000Z",
         "updatedAt": "2026-08-21T14:00:00.000Z",
@@ -970,8 +2287,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6m_mkj18b",
-      "subjectPersonId": "p_mtgh8f6m_mljzjm",
+      "leadId": "lead_mtnjlphn_vxw7w1",
+      "subjectPersonId": "p_mtnjlphn_go2zco",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "discovered",
@@ -982,9 +2299,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6m_mljzjm",
+        "personId": "p_mtnjlphn_go2zco",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "MIDNIGHT",
           "firstName": "Proxima",
@@ -998,7 +2317,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6m_8gskkm",
+            "locationId": "loc_mtnjlphn_5ihf2h",
             "entityType": "LOCATION",
             "street": "734 Stadium Dr",
             "street2": "",
@@ -1010,20 +2329,129 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "1",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphn_5ihf2h",
             "latLong": "32.7473, -97.0842"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphq_oujb6m",
+            "arrestDate": "2026-09-01",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Overstay warrant",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78210",
+            "longitude": "-96.80550",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_sc35wp",
+            "arrestDate": "2026-06-02",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Overstay warrant",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Stemmons Freeway, Dallas, TX 75247",
+            "latitude": "32.84500",
+            "longitude": "-96.87380",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_49dqje",
+            "arrestDate": "2026-08-17",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Overstay warrant",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "E Exchange Ave, Fort Worth, TX 76164",
+            "latitude": "32.78910",
+            "longitude": "-97.34610",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -1041,6 +2469,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-22T14:00:00.000Z",
         "updatedAt": "2026-08-22T14:00:00.000Z",
@@ -1051,8 +2481,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6m_dp36gf",
-      "subjectPersonId": "p_mtgh8f6m_5ix2b6",
+      "leadId": "lead_mtnjlphn_nn039o",
+      "subjectPersonId": "p_mtnjlphn_56ngt5",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "elite",
@@ -1063,9 +2493,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6m_5ix2b6",
+        "personId": "p_mtnjlphn_56ngt5",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "GLAIVE",
           "firstName": "Corvus",
@@ -1079,7 +2511,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6m_khob8z",
+            "locationId": "loc_mtnjlphn_kbs5hl",
             "entityType": "LOCATION",
             "street": "9200 World Cup Way",
             "street2": "",
@@ -1091,20 +2523,129 @@
             "association": "work",
             "parksHere": "",
             "targetPriority": "3",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphn_kbs5hl",
             "latLong": "33.1545, -96.8353"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphq_aup7qi",
+            "arrestDate": "2026-06-02",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Fugitive operations",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.77940",
+            "longitude": "-96.80610",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_9e2mra",
+            "arrestDate": "2026-06-14",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Fugitive operations",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Stemmons Freeway, Dallas, TX 75247",
+            "latitude": "32.84350",
+            "longitude": "-96.87460",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_mqn0vg",
+            "arrestDate": "2026-08-22",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Fugitive operations",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "E Exchange Ave, Fort Worth, TX 76164",
+            "latitude": "32.78760",
+            "longitude": "-97.34680",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -1122,6 +2663,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-23T14:00:00.000Z",
         "updatedAt": "2026-08-23T14:00:00.000Z",
@@ -1132,8 +2675,8 @@
     },
     {
       "schema": "copdocx.lead.v1",
-      "leadId": "lead_mtgh8f6m_o89308",
-      "subjectPersonId": "p_mtgh8f6m_6r7so0",
+      "leadId": "lead_mtnjlphn_2uptr9",
+      "subjectPersonId": "p_mtnjlphn_4ftusb",
       "caseRole": "LEAD",
       "source": {
         "leadSource": "discovered",
@@ -1144,9 +2687,11 @@
         "leadInfo": ""
       },
       "person": {
-        "personId": "p_mtgh8f6m_6r7so0",
+        "personId": "p_mtnjlphn_4ftusb",
         "entityType": "PERSON",
         "caseRole": "LEAD",
+        "junked": false,
+        "junkedAt": "",
         "name": {
           "lastName": "KANG",
           "firstName": "Nathaniel",
@@ -1160,7 +2705,7 @@
         "lexId": "",
         "locations": [
           {
-            "locationId": "loc_mtgh8f6m_tbyylp",
+            "locationId": "loc_mtnjlphn_axgt73",
             "entityType": "LOCATION",
             "street": "500 W Las Colinas Blvd",
             "street2": "",
@@ -1172,10 +2717,19 @@
             "association": "residence",
             "parksHere": "",
             "targetPriority": "1",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphn_axgt73",
             "latLong": "32.8786, -96.9413"
           },
           {
-            "locationId": "loc_mtgh8f6m_45f435",
+            "locationId": "loc_mtnjlphn_iae860",
             "entityType": "LOCATION",
             "street": "8101 N Stemmons Freeway",
             "street2": "",
@@ -1187,20 +2741,129 @@
             "association": "work",
             "parksHere": "",
             "targetPriority": "",
+            "pinColor": "",
+            "junked": false,
+            "junkedAt": "",
+            "occupancy": "current",
+            "occupiedFrom": "",
+            "occupiedTo": "",
+            "notes": "",
+            "otherResidents": "",
+            "id": "loc_mtnjlphn_iae860",
             "latLong": "32.8445, -96.8750"
           }
         ],
         "aliases": [],
         "documents": [],
         "criminal": {
-          "isCriminal": false,
           "fbiNumber": "",
           "ncicNumber": "",
           "stateId": "",
-          "rapSheet": ""
+          "rapSheet": "",
+          "isCriminal": false,
+          "hasCriminalRecord": false,
+          "hasCriminalWarrants": false,
+          "sexOffender": false,
+          "foreignFugitive": false,
+          "armed": false,
+          "threatLevel": "none"
         },
         "encounters": [],
-        "arrests": [],
+        "arrests": [
+          {
+            "arrestId": "arr_mtnjlphq_y5od9k",
+            "arrestDate": "2026-06-14",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Reentry after deportation",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "Elm St, Dallas, TX 75202",
+            "latitude": "32.78100",
+            "longitude": "-96.80700",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_4sykcp",
+            "arrestDate": "2026-07-01",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Reentry after deportation",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "N Stemmons Freeway, Dallas, TX 75247",
+            "latitude": "32.84590",
+            "longitude": "-96.87440",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          },
+          {
+            "arrestId": "arr_mtnjlphq_32sk2z",
+            "arrestDate": "2026-08-12",
+            "arrestTime": "",
+            "arrestDateTime": "",
+            "arrestCharge": "Reentry after deportation",
+            "arrestStatute": "",
+            "arrestClass": "",
+            "arrestAgency": "ICE ERO Dallas",
+            "arrestAgencyCode": "",
+            "arrestLocation": "W Las Colinas Blvd, Irving, TX 75039",
+            "latitude": "32.87860",
+            "longitude": "-96.94130",
+            "arrestingOfficer": "",
+            "team": "",
+            "iceEventNumber": "",
+            "encounterNumber": "",
+            "encounterId": "",
+            "subjectRole": "",
+            "vehiclePosition": "",
+            "bookinRecordId": "",
+            "bookInDateTime": "",
+            "booking": {
+              "cash": "",
+              "travelDocuments": "",
+              "propertyTag": "",
+              "holdingCellNumber": "",
+              "children": "",
+              "medical": {}
+            }
+          }
+        ],
         "convictions": [],
         "warrants": [],
         "immigration": {
@@ -1218,6 +2881,8 @@
       "vehicles": [],
       "links": [],
       "followUps": [],
+      "history": [],
+      "assignedOfficerId": "",
       "meta": {
         "createdAt": "2026-08-24T14:00:00.000Z",
         "updatedAt": "2026-08-24T14:00:00.000Z",
@@ -1229,7 +2894,7 @@
   ],
   "officers": [
     {
-      "officerId": "ofc_mtgh8f6h_80q1ds",
+      "officerId": "ofc_mtnjlphd_qysv9x",
       "entityType": "OFFICER",
       "lastName": "ROGERS",
       "firstName": "Steve",
@@ -1244,7 +2909,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f63_yi06hr",
+          "locationId": "loc_mtnjlpgy_sb4uuf",
           "entityType": "LOCATION",
           "street": "8101 N Stemmons Freeway",
           "street2": "",
@@ -1256,6 +2921,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlpgy_sb4uuf",
           "latLong": "32.8445, -96.8750"
         }
       ],
@@ -1279,8 +2953,9 @@
         "status": "committed",
         "committedAt": "2026-07-01T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6h_80q1ds",
+      "id": "ofc_mtnjlphd_qysv9x",
       "address": {
+        "locationId": "loc_mtnjlpgy_sb4uuf",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1296,7 +2971,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6i_7iupm8",
+      "officerId": "ofc_mtnjlphe_wzl415",
       "entityType": "OFFICER",
       "lastName": "STARK",
       "firstName": "Tony",
@@ -1311,7 +2986,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f6i_jcjib0",
+          "locationId": "loc_mtnjlphe_tgi8i4",
           "entityType": "LOCATION",
           "street": "2200 Ross Ave",
           "street2": "",
@@ -1323,6 +2998,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlphe_tgi8i4",
           "latLong": "32.7874, -96.7970"
         }
       ],
@@ -1344,8 +3028,9 @@
         "status": "committed",
         "committedAt": "2026-07-01T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6i_7iupm8",
+      "id": "ofc_mtnjlphe_wzl415",
       "address": {
+        "locationId": "loc_mtnjlphe_tgi8i4",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1361,7 +3046,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6i_fhhy7y",
+      "officerId": "ofc_mtnjlphe_lb0dw9",
       "entityType": "OFFICER",
       "lastName": "ROMANOFF",
       "firstName": "Natasha",
@@ -1376,7 +3061,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f63_yi06hr",
+          "locationId": "loc_mtnjlpgy_sb4uuf",
           "entityType": "LOCATION",
           "street": "8101 N Stemmons Freeway",
           "street2": "",
@@ -1388,6 +3073,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlpgy_sb4uuf",
           "latLong": "32.8445, -96.8750"
         }
       ],
@@ -1413,8 +3107,9 @@
         "status": "committed",
         "committedAt": "2026-07-02T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6i_fhhy7y",
+      "id": "ofc_mtnjlphe_lb0dw9",
       "address": {
+        "locationId": "loc_mtnjlpgy_sb4uuf",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1430,7 +3125,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6i_wzcu01",
+      "officerId": "ofc_mtnjlphe_vdk4na",
       "entityType": "OFFICER",
       "lastName": "BARTON",
       "firstName": "Clint",
@@ -1445,7 +3140,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f6i_k06wyn",
+          "locationId": "loc_mtnjlphe_z38jm3",
           "entityType": "LOCATION",
           "street": "2500 Victory Ave",
           "street2": "",
@@ -1457,6 +3152,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlphe_z38jm3",
           "latLong": "32.7905, -96.8103"
         }
       ],
@@ -1478,8 +3182,9 @@
         "status": "committed",
         "committedAt": "2026-07-02T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6i_wzcu01",
+      "id": "ofc_mtnjlphe_vdk4na",
       "address": {
+        "locationId": "loc_mtnjlphe_z38jm3",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1495,7 +3200,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6i_x39up4",
+      "officerId": "ofc_mtnjlphe_qlnzyx",
       "entityType": "OFFICER",
       "lastName": "BANNER",
       "firstName": "Bruce",
@@ -1510,7 +3215,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f63_yi06hr",
+          "locationId": "loc_mtnjlpgy_sb4uuf",
           "entityType": "LOCATION",
           "street": "8101 N Stemmons Freeway",
           "street2": "",
@@ -1522,6 +3227,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlpgy_sb4uuf",
           "latLong": "32.8445, -96.8750"
         }
       ],
@@ -1541,8 +3255,9 @@
         "status": "committed",
         "committedAt": "2026-07-03T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6i_x39up4",
+      "id": "ofc_mtnjlphe_qlnzyx",
       "address": {
+        "locationId": "loc_mtnjlpgy_sb4uuf",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1558,7 +3273,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6i_t8ofl2",
+      "officerId": "ofc_mtnjlphe_yw6di8",
       "entityType": "OFFICER",
       "lastName": "ODINSON",
       "firstName": "Thor",
@@ -1573,7 +3288,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f6i_dtb67u",
+          "locationId": "loc_mtnjlphe_tdgsgv",
           "entityType": "LOCATION",
           "street": "300 Reunion Blvd E",
           "street2": "",
@@ -1585,6 +3300,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlphe_tdgsgv",
           "latLong": "32.7756, -96.8089"
         }
       ],
@@ -1608,8 +3332,9 @@
         "status": "committed",
         "committedAt": "2026-07-03T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6i_t8ofl2",
+      "id": "ofc_mtnjlphe_yw6di8",
       "address": {
+        "locationId": "loc_mtnjlphe_tdgsgv",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1625,7 +3350,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6i_mjhvls",
+      "officerId": "ofc_mtnjlphe_2zgabb",
       "entityType": "OFFICER",
       "lastName": "WILSON",
       "firstName": "Sam",
@@ -1640,7 +3365,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f63_yi06hr",
+          "locationId": "loc_mtnjlpgy_sb4uuf",
           "entityType": "LOCATION",
           "street": "8101 N Stemmons Freeway",
           "street2": "",
@@ -1652,6 +3377,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlpgy_sb4uuf",
           "latLong": "32.8445, -96.8750"
         }
       ],
@@ -1674,8 +3408,9 @@
         "status": "committed",
         "committedAt": "2026-07-04T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6i_mjhvls",
+      "id": "ofc_mtnjlphe_2zgabb",
       "address": {
+        "locationId": "loc_mtnjlpgy_sb4uuf",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1691,7 +3426,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6i_epbk9g",
+      "officerId": "ofc_mtnjlphe_pdeo81",
       "entityType": "OFFICER",
       "lastName": "FURY",
       "firstName": "Nick",
@@ -1706,7 +3441,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f63_yi06hr",
+          "locationId": "loc_mtnjlpgy_sb4uuf",
           "entityType": "LOCATION",
           "street": "8101 N Stemmons Freeway",
           "street2": "",
@@ -1718,6 +3453,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlpgy_sb4uuf",
           "latLong": "32.8445, -96.8750"
         }
       ],
@@ -1740,8 +3484,9 @@
         "status": "committed",
         "committedAt": "2026-07-01T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6i_epbk9g",
+      "id": "ofc_mtnjlphe_pdeo81",
       "address": {
+        "locationId": "loc_mtnjlpgy_sb4uuf",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1757,7 +3502,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6i_ck2bj6",
+      "officerId": "ofc_mtnjlphe_4me0t5",
       "entityType": "OFFICER",
       "lastName": "DANVERS",
       "firstName": "Carol",
@@ -1772,7 +3517,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f6i_m8ow3s",
+          "locationId": "loc_mtnjlphe_e1oix5",
           "entityType": "LOCATION",
           "street": "8008 Herb Kelleher Way",
           "street2": "",
@@ -1784,6 +3529,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlphe_e1oix5",
           "latLong": "32.8471, -96.8518"
         }
       ],
@@ -1806,8 +3560,9 @@
         "status": "committed",
         "committedAt": "2026-07-05T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6i_ck2bj6",
+      "id": "ofc_mtnjlphe_4me0t5",
       "address": {
+        "locationId": "loc_mtnjlphe_e1oix5",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1823,7 +3578,7 @@
       }
     },
     {
-      "officerId": "ofc_mtgh8f6j_7in01w",
+      "officerId": "ofc_mtnjlphf_7c3sqr",
       "entityType": "OFFICER",
       "lastName": "RHODES",
       "firstName": "James",
@@ -1838,7 +3593,7 @@
       "phonePrivate": "",
       "locations": [
         {
-          "locationId": "loc_mtgh8f63_yi06hr",
+          "locationId": "loc_mtnjlpgy_sb4uuf",
           "entityType": "LOCATION",
           "street": "8101 N Stemmons Freeway",
           "street2": "",
@@ -1850,6 +3605,15 @@
           "association": "work",
           "parksHere": "",
           "targetPriority": "",
+          "pinColor": "",
+          "junked": false,
+          "junkedAt": "",
+          "occupancy": "current",
+          "occupiedFrom": "",
+          "occupiedTo": "",
+          "notes": "",
+          "otherResidents": "",
+          "id": "loc_mtnjlpgy_sb4uuf",
           "latLong": "32.8445, -96.8750"
         }
       ],
@@ -1872,8 +3636,9 @@
         "status": "committed",
         "committedAt": "2026-07-05T14:00:00.000Z"
       },
-      "id": "ofc_mtgh8f6j_7in01w",
+      "id": "ofc_mtnjlphf_7c3sqr",
       "address": {
+        "locationId": "loc_mtnjlpgy_sb4uuf",
         "locationAssociation": "work",
         "association": "work",
         "targetPriority": "",
@@ -1891,7 +3656,7 @@
   ],
   "vehicles": [
     {
-      "vehicleId": "veh_mtgh8f6j_ybz5uj",
+      "vehicleId": "veh_mtnjlphf_bbgcfv",
       "entityType": "VEHICLE",
       "licensePlate": "TX G0V031",
       "plateState": "TX",
@@ -1902,6 +3667,8 @@
       "vehicleBodyStyle": "SUV",
       "vin": "",
       "registeredOwnerName": "",
+      "junked": false,
+      "junkedAt": "",
       "locations": [],
       "governmentVehicle": true,
       "unit": "DAL-31",
@@ -1909,13 +3676,18 @@
       "barcode": "DAL31",
       "driverNumber": "D-31",
       "assignedOfficerIds": [
-        "ofc_mtgh8f6h_80q1ds"
+        "ofc_mtnjlphd_qysv9x"
       ],
       "equipment": [
         "radio",
         "emergency-lights",
         "caged"
       ],
+      "occupancy": "current",
+      "occupiedFrom": "",
+      "occupiedTo": "",
+      "notes": "",
+      "otherResidents": "",
       "meta": {
         "createdAt": "2026-07-10T14:00:00.000Z",
         "updatedAt": "2026-07-10T14:00:00.000Z",
@@ -1924,10 +3696,10 @@
         "committedAt": "2026-07-10T14:00:00.000Z"
       },
       "plate": "TX G0V031",
-      "id": "veh_mtgh8f6j_ybz5uj"
+      "id": "veh_mtnjlphf_bbgcfv"
     },
     {
-      "vehicleId": "veh_mtgh8f6j_hbcvq4",
+      "vehicleId": "veh_mtnjlphf_n5cqhj",
       "entityType": "VEHICLE",
       "licensePlate": "TX G0V032",
       "plateState": "TX",
@@ -1938,6 +3710,8 @@
       "vehicleBodyStyle": "SUV",
       "vin": "",
       "registeredOwnerName": "",
+      "junked": false,
+      "junkedAt": "",
       "locations": [],
       "governmentVehicle": true,
       "unit": "DAL-32",
@@ -1945,14 +3719,19 @@
       "barcode": "DAL32",
       "driverNumber": "",
       "assignedOfficerIds": [
-        "ofc_mtgh8f6i_fhhy7y",
-        "ofc_mtgh8f6i_wzcu01"
+        "ofc_mtnjlphe_lb0dw9",
+        "ofc_mtnjlphe_vdk4na"
       ],
       "equipment": [
         "radio",
         "emergency-lights",
         "gun-box"
       ],
+      "occupancy": "current",
+      "occupiedFrom": "",
+      "occupiedTo": "",
+      "notes": "",
+      "otherResidents": "",
       "meta": {
         "createdAt": "2026-07-10T14:00:00.000Z",
         "updatedAt": "2026-07-10T14:00:00.000Z",
@@ -1961,10 +3740,10 @@
         "committedAt": "2026-07-10T14:00:00.000Z"
       },
       "plate": "TX G0V032",
-      "id": "veh_mtgh8f6j_hbcvq4"
+      "id": "veh_mtnjlphf_n5cqhj"
     },
     {
-      "vehicleId": "veh_mtgh8f6j_9a1912",
+      "vehicleId": "veh_mtnjlphf_aiulq3",
       "entityType": "VEHICLE",
       "licensePlate": "TX G0V033",
       "plateState": "TX",
@@ -1975,6 +3754,8 @@
       "vehicleBodyStyle": "Van",
       "vin": "",
       "registeredOwnerName": "",
+      "junked": false,
+      "junkedAt": "",
       "locations": [],
       "governmentVehicle": true,
       "unit": "DAL-33",
@@ -1982,12 +3763,17 @@
       "barcode": "DAL33",
       "driverNumber": "",
       "assignedOfficerIds": [
-        "ofc_mtgh8f6j_7in01w"
+        "ofc_mtnjlphf_7c3sqr"
       ],
       "equipment": [
         "radio",
         "caged"
       ],
+      "occupancy": "current",
+      "occupiedFrom": "",
+      "occupiedTo": "",
+      "notes": "",
+      "otherResidents": "",
       "meta": {
         "createdAt": "2026-07-11T14:00:00.000Z",
         "updatedAt": "2026-07-11T14:00:00.000Z",
@@ -1996,10 +3782,10 @@
         "committedAt": "2026-07-11T14:00:00.000Z"
       },
       "plate": "TX G0V033",
-      "id": "veh_mtgh8f6j_9a1912"
+      "id": "veh_mtnjlphf_aiulq3"
     },
     {
-      "vehicleId": "veh_mtgh8f6j_ipokag",
+      "vehicleId": "veh_mtnjlphg_zlco7c",
       "entityType": "VEHICLE",
       "licensePlate": "TX G0V034",
       "plateState": "TX",
@@ -2010,6 +3796,8 @@
       "vehicleBodyStyle": "SUV",
       "vin": "",
       "registeredOwnerName": "",
+      "junked": false,
+      "junkedAt": "",
       "locations": [],
       "governmentVehicle": true,
       "unit": "DAL-34",
@@ -2017,12 +3805,17 @@
       "barcode": "DAL34",
       "driverNumber": "",
       "assignedOfficerIds": [
-        "ofc_mtgh8f6i_mjhvls"
+        "ofc_mtnjlphe_2zgabb"
       ],
       "equipment": [
         "radio",
         "emergency-lights"
       ],
+      "occupancy": "current",
+      "occupiedFrom": "",
+      "occupiedTo": "",
+      "notes": "",
+      "otherResidents": "",
       "meta": {
         "createdAt": "2026-07-11T14:00:00.000Z",
         "updatedAt": "2026-07-11T14:00:00.000Z",
@@ -2031,15 +3824,15 @@
         "committedAt": "2026-07-11T14:00:00.000Z"
       },
       "plate": "TX G0V034",
-      "id": "veh_mtgh8f6j_ipokag"
+      "id": "veh_mtnjlphg_zlco7c"
     }
   ],
   "shifts": [
     {
       "id": "sft_demo_1",
       "date": "2026-08-31",
-      "officerId": "ofc_mtgh8f6h_80q1ds",
-      "vehicleId": "veh_mtgh8f6j_ybz5uj",
+      "officerId": "ofc_mtnjlphd_qysv9x",
+      "vehicleId": "veh_mtnjlphf_bbgcfv",
       "start": "06:00",
       "end": "14:00",
       "assignment": "field"
@@ -2047,8 +3840,8 @@
     {
       "id": "sft_demo_2",
       "date": "2026-08-31",
-      "officerId": "ofc_mtgh8f6i_fhhy7y",
-      "vehicleId": "veh_mtgh8f6j_hbcvq4",
+      "officerId": "ofc_mtnjlphe_lb0dw9",
+      "vehicleId": "veh_mtnjlphf_n5cqhj",
       "start": "06:00",
       "end": "14:00",
       "assignment": "field"
@@ -2056,7 +3849,7 @@
     {
       "id": "sft_demo_3",
       "date": "2026-08-31",
-      "officerId": "ofc_mtgh8f6i_epbk9g",
+      "officerId": "ofc_mtnjlphe_pdeo81",
       "vehicleId": "",
       "start": "07:00",
       "end": "15:00",
@@ -2065,8 +3858,8 @@
     {
       "id": "sft_demo_4",
       "date": "2026-09-01",
-      "officerId": "ofc_mtgh8f6i_wzcu01",
-      "vehicleId": "veh_mtgh8f6j_hbcvq4",
+      "officerId": "ofc_mtnjlphe_vdk4na",
+      "vehicleId": "veh_mtnjlphf_n5cqhj",
       "start": "14:00",
       "end": "22:00",
       "assignment": "field"
@@ -2074,8 +3867,8 @@
     {
       "id": "sft_demo_5",
       "date": "2026-09-01",
-      "officerId": "ofc_mtgh8f6i_mjhvls",
-      "vehicleId": "veh_mtgh8f6j_ipokag",
+      "officerId": "ofc_mtnjlphe_2zgabb",
+      "vehicleId": "veh_mtnjlphg_zlco7c",
       "start": "06:00",
       "end": "14:00",
       "assignment": "field"
@@ -2083,8 +3876,8 @@
     {
       "id": "sft_demo_6",
       "date": "2026-09-02",
-      "officerId": "ofc_mtgh8f6i_t8ofl2",
-      "vehicleId": "veh_mtgh8f6j_ybz5uj",
+      "officerId": "ofc_mtnjlphe_yw6di8",
+      "vehicleId": "veh_mtnjlphf_bbgcfv",
       "start": "06:00",
       "end": "14:00",
       "assignment": "field"
@@ -2092,8 +3885,8 @@
     {
       "id": "sft_demo_7",
       "date": "2026-09-02",
-      "officerId": "ofc_mtgh8f6i_ck2bj6",
-      "vehicleId": "veh_mtgh8f6j_9a1912",
+      "officerId": "ofc_mtnjlphe_4me0t5",
+      "vehicleId": "veh_mtnjlphf_aiulq3",
       "start": "14:00",
       "end": "22:00",
       "assignment": "transport"
@@ -2101,8 +3894,8 @@
     {
       "id": "sft_demo_8",
       "date": "2026-09-03",
-      "officerId": "ofc_mtgh8f6j_7in01w",
-      "vehicleId": "veh_mtgh8f6j_9a1912",
+      "officerId": "ofc_mtnjlphf_7c3sqr",
+      "vehicleId": "veh_mtnjlphf_aiulq3",
       "start": "06:00",
       "end": "14:00",
       "assignment": "transport"
@@ -2110,7 +3903,7 @@
   ],
   "bookin": [
     {
-      "id": "bk_demo_lead_mtgh8f6k_6qbr8y",
+      "id": "bk_demo_lead_mtnjlphg_vdj1jo",
       "createdAt": "2026-08-12T14:00:00.000Z",
       "updatedAt": "2026-08-12T14:00:00.000Z",
       "createdWithVersion": "0.5.2",
@@ -2121,7 +3914,7 @@
       "iceEvent": "E260812001"
     },
     {
-      "id": "bk_demo_lead_mtgh8f6l_uhrez4",
+      "id": "bk_demo_lead_mtnjlphi_2ozi0m",
       "createdAt": "2026-08-14T14:00:00.000Z",
       "updatedAt": "2026-08-14T14:00:00.000Z",
       "createdWithVersion": "0.5.2",
@@ -2132,7 +3925,7 @@
       "iceEvent": "E260814002"
     },
     {
-      "id": "bk_demo_lead_mtgh8f6l_tsphkz",
+      "id": "bk_demo_lead_mtnjlphl_drz0om",
       "createdAt": "2026-08-17T14:00:00.000Z",
       "updatedAt": "2026-08-17T14:00:00.000Z",
       "createdWithVersion": "0.5.2",
@@ -2143,7 +3936,7 @@
       "iceEvent": "E260817005"
     },
     {
-      "id": "bk_demo_lead_mtgh8f6m_mkj18b",
+      "id": "bk_demo_lead_mtnjlphn_vxw7w1",
       "createdAt": "2026-08-22T14:00:00.000Z",
       "updatedAt": "2026-08-22T14:00:00.000Z",
       "createdWithVersion": "0.5.2",

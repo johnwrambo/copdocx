@@ -25,9 +25,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.67.0"
+          data-version="0.69.2"
         >
-          Version 0.67.0
+          Version 0.69.2
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -77,6 +77,62 @@
             </div>
           </details>
         </div>
+        <div class="map-overlay map-overlay-icon-size">
+          <div class="map-icon-size-row">
+            <label for="mapIconSizeSlider">Size</label>
+            <input
+              id="mapIconSizeSlider"
+              class="map-icon-size-slider"
+              type="range"
+              min="20"
+              max="56"
+              step="1"
+              value="32"
+              aria-valuemin="20"
+              aria-valuemax="56"
+              aria-valuenow="32"
+              aria-valuetext="32 pixels"
+              aria-label="Map icon size"
+            />
+            <span id="mapIconSizeValue" class="map-icon-size-value">32</span>
+          </div>
+          <div class="map-icon-size-row">
+            <label for="mapIconStrokeSlider">Line</label>
+            <input
+              id="mapIconStrokeSlider"
+              class="map-icon-size-slider"
+              type="range"
+              min="1"
+              max="4"
+              step="1"
+              value="2"
+              aria-valuemin="1"
+              aria-valuemax="4"
+              aria-valuenow="2"
+              aria-valuetext="2 pixels"
+              aria-label="Map icon line thickness"
+            />
+            <span id="mapIconStrokeValue" class="map-icon-size-value">2</span>
+          </div>
+          <div class="map-icon-size-row">
+            <label for="mapIconFillSlider">Trans</label>
+            <input
+              id="mapIconFillSlider"
+              class="map-icon-size-slider"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value="40"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="40"
+              aria-valuetext="40 percent fill"
+              aria-label="Map icon fill transparency"
+            />
+            <span id="mapIconFillValue" class="map-icon-size-value">40%</span>
+          </div>
+        </div>
         <p id="mapViewHint" class="map-view-hint" hidden></p>
         <div
           id="map"
@@ -86,47 +142,133 @@
         ></div>
       </div>
 
-      <aside class="map-dock targets-card" id="mapDock">
-        <button
-          type="button"
-          id="mapDockToggle"
-          class="map-dock-toggle"
-          aria-expanded="true"
-          aria-controls="mapDockBody"
-        >
-          Layers
-        </button>
+      <aside class="map-dock targets-card" id="mapDock" data-dock-tab="layers">
+        <div class="map-dock-header">
+          <div class="map-dock-tabs" role="tablist" aria-label="Map dock">
+            <button
+              type="button"
+              role="tab"
+              id="mapDockTabLayers"
+              data-dock-tab="layers"
+              aria-selected="true"
+              aria-controls="mapDockPanelLayers"
+            >
+              Layers
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="mapDockTabIcons"
+              data-dock-tab="icons"
+              aria-selected="false"
+              aria-controls="mapDockPanelIcons"
+            >
+              Icons
+            </button>
+          </div>
+          <button
+            type="button"
+            id="mapDockToggle"
+            class="map-dock-toggle"
+            aria-expanded="true"
+            aria-controls="mapDockBody"
+            title="Collapse dock"
+          >
+            <span class="map-dock-toggle-collapse" aria-hidden="true">«</span>
+            <span class="map-dock-toggle-edge">Layers</span>
+          </button>
+        </div>
         <div class="map-dock-body" id="mapDockBody">
           <div
-            id="mapLayerList"
-            class="map-layer-list"
-            role="list"
-            aria-label="Map layers"
-          ></div>
-          <p id="targetsEmpty" class="targets-empty">
-            No ranked locations with coordinates.
-          </p>
-          <div class="targets-table-wrap">
-            <table class="targets-table">
-              <thead id="mapListHead"></thead>
-              <tbody id="targetsTableBody"></tbody>
-            </table>
-          </div>
-          <details class="map-icon-library">
-            <summary>Icons</summary>
-            <div class="map-icon-library-picker" id="mapIconLibraryPicker">
-              <label for="mapIconLibrarySelect">Icon library</label>
-              <select
-                id="mapIconLibrarySelect"
-                aria-describedby="mapIconLibraryDescription"
-              ></select>
-              <p id="mapIconLibraryDescription"></p>
-            </div>
-            <div id="mapIconPalette" class="map-icon-palette"></div>
-            <p id="mapIconHint" class="section-note">
-              Select an icon, then a layer or a row.
+            id="mapDockPanelLayers"
+            class="map-dock-panel is-layers"
+            role="tabpanel"
+            aria-labelledby="mapDockTabLayers"
+          >
+            <div
+              id="mapLayerList"
+              class="map-layer-list"
+              role="list"
+              aria-label="Map layers"
+            ></div>
+            <p id="targetsEmpty" class="targets-empty">
+              No ranked locations with coordinates.
             </p>
-          </details>
+            <div class="map-list-tools">
+              <button
+                type="button"
+                class="map-reveal-all"
+                data-map-reveal-all
+              >
+                Reveal all
+              </button>
+            </div>
+            <div class="targets-table-wrap">
+              <table class="targets-table">
+                <thead id="mapListHead"></thead>
+                <tbody id="targetsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div
+            id="mapDockPanelIcons"
+            class="map-dock-panel is-icons"
+            role="tabpanel"
+            aria-labelledby="mapDockTabIcons"
+            hidden
+          >
+            <div class="map-icon-library">
+              <div
+                class="map-icon-options"
+                id="mapIconOptions"
+                role="group"
+                aria-label="Icon options"
+              >
+                <button
+                  type="button"
+                  data-icon-option="labels"
+                  aria-pressed="false"
+                >
+                  Names
+                </button>
+                <button
+                  type="button"
+                  data-icon-option="badges"
+                  aria-pressed="true"
+                >
+                  Rank
+                </button>
+                <button
+                  type="button"
+                  id="mapRevealAll"
+                  class="map-reveal-all"
+                  data-map-reveal-all
+                >
+                  Reveal all
+                </button>
+              </div>
+              <div
+                class="map-icon-filters"
+                id="mapIconFilters"
+                aria-label="Visual filters"
+              ></div>
+              <p id="mapIconFilterNote" class="section-note">
+                Eyes show or hide that class on the map. Regular is every target or encounter that is not on this list.
+              </p>
+              <div class="map-icon-library-picker" id="mapIconLibraryPicker">
+                <label for="mapIconLibrarySelect">Icon library</label>
+                <select
+                  id="mapIconLibrarySelect"
+                  aria-describedby="mapIconLibraryDescription"
+                ></select>
+                <p id="mapIconLibraryDescription"></p>
+              </div>
+              <div id="mapIconPalette" class="map-icon-palette"></div>
+              <p id="mapIconHint" class="section-note">
+                Select an icon, then a layer or a row.
+              </p>
+            </div>
+          </div>
         </div>
       </aside>
     </div>

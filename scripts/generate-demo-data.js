@@ -593,7 +593,14 @@ var leads = [
     convictions: [
       { crime: "Unlawful possession of a firearm", convictionDate: "2014-09-22", court: "Northern District of Texas", convictionClass: "felony" }
     ],
-    arrests: [{ arrestDate: "2026-08-17", arrestCharge: "Reentry after deportation", arrestAgency: "ICE ERO Dallas" }],
+    arrests: [{
+      arrestDate: "2026-08-17",
+      arrestCharge: "Reentry after deportation",
+      arrestAgency: "ICE ERO Dallas",
+      arrestLocation: "411 Elm St, Dallas, TX 75202",
+      latitude: "32.7787",
+      longitude: "-96.8083"
+    }],
     locations: [
       {
         street: "411 Elm St",
@@ -818,6 +825,183 @@ var leads = [
   })
 ];
 
+function seedArrestClusters() {
+  var charges = [
+    "Reentry after deportation",
+    "Administrative arrest",
+    "Immigration detainer pickup",
+    "Illegal reentry",
+    "Overstay warrant",
+    "Fugitive operations"
+  ];
+  var dates = [
+    "2026-06-02",
+    "2026-06-14",
+    "2026-07-01",
+    "2026-07-18",
+    "2026-08-03",
+    "2026-08-12",
+    "2026-08-17",
+    "2026-08-22",
+    "2026-08-28",
+    "2026-09-01"
+  ];
+  var clusters = [
+    {
+      street: "Elm St",
+      city: "Dallas",
+      zip: "75202",
+      lat: 32.7808,
+      lng: -96.8065,
+      offsets: [
+        [0, 0],
+        [0.0012, 0.0008],
+        [-0.0009, 0.0011],
+        [0.0015, -0.0006],
+        [-0.0011, -0.0009],
+        [0.0004, 0.0014],
+        [0.0018, 0.0003],
+        [-0.0005, 0.0007],
+        [0.0008, -0.0012],
+        [0.0013, 0.001],
+        [-0.0014, 0.0004],
+        [0.0002, -0.0005]
+      ]
+    },
+    {
+      street: "Robert B Cullum Blvd",
+      city: "Dallas",
+      zip: "75210",
+      lat: 32.7816,
+      lng: -96.7617,
+      offsets: [
+        [0, 0],
+        [0.001, 0.0008],
+        [-0.0008, 0.001],
+        [0.0012, -0.0007],
+        [0.0006, 0.0011]
+      ]
+    },
+    {
+      street: "N Stemmons Freeway",
+      city: "Dallas",
+      zip: "75247",
+      lat: 32.8445,
+      lng: -96.875,
+      offsets: [
+        [0, 0],
+        [0.0009, 0.0007],
+        [-0.0007, 0.0009],
+        [0.0011, -0.0005],
+        [0.0005, 0.0012],
+        [-0.001, 0.0004],
+        [0.0014, 0.0006],
+        [0.0003, -0.0008]
+      ]
+    },
+    {
+      street: "N Central Expy",
+      city: "Dallas",
+      zip: "75225",
+      lat: 32.8687,
+      lng: -96.7736,
+      offsets: [
+        [0, 0],
+        [0.0011, 0.0006],
+        [-0.0009, 0.0008],
+        [0.0007, -0.001]
+      ]
+    },
+    {
+      street: "E Exchange Ave",
+      city: "Fort Worth",
+      zip: "76164",
+      lat: 32.7887,
+      lng: -97.3473,
+      offsets: [
+        [0, 0],
+        [0.001, 0.0009],
+        [-0.0008, 0.0007],
+        [0.0013, -0.0006],
+        [0.0004, 0.0012],
+        [-0.0011, 0.0005]
+      ]
+    },
+    {
+      street: "W Las Colinas Blvd",
+      city: "Irving",
+      zip: "75039",
+      lat: 32.8786,
+      lng: -96.9413,
+      offsets: [
+        [0, 0],
+        [0.0008, 0.0007],
+        [-0.0009, 0.0006]
+      ]
+    },
+    {
+      street: "Stadium Dr",
+      city: "Arlington",
+      zip: "76011",
+      lat: 32.7473,
+      lng: -97.0842,
+      offsets: [
+        [0, 0],
+        [0.0009, 0.0008]
+      ]
+    }
+  ];
+  var isolated = [
+    {
+      street: "1520 K Ave",
+      city: "Plano",
+      zip: "75074",
+      lat: 33.0198,
+      lng: -96.6989,
+      offsets: [[0, 0]]
+    },
+    {
+      street: "2400 Aviation Dr",
+      city: "DFW Airport",
+      zip: "75261",
+      lat: 32.8998,
+      lng: -97.0403,
+      offsets: [[0, 0]]
+    },
+    {
+      street: "9200 World Cup Way",
+      city: "Frisco",
+      zip: "75033",
+      lat: 33.1545,
+      lng: -96.8353,
+      offsets: [[0, 0]]
+    }
+  ];
+  var n = 0;
+  function pushFrom(cluster, dlat, dlng, dateIndex) {
+    var snap = leads[n % leads.length];
+    n += 1;
+    snap.person.arrests.push(
+      model.createArrest({
+        arrestDate: dates[dateIndex % dates.length],
+        arrestCharge: charges[n % charges.length],
+        arrestAgency: "ICE ERO Dallas",
+        arrestLocation:
+          cluster.street + ", " + cluster.city + ", TX " + cluster.zip,
+        latitude: (cluster.lat + dlat).toFixed(5),
+        longitude: (cluster.lng + dlng).toFixed(5)
+      })
+    );
+  }
+  clusters.concat(isolated).forEach(function (cluster, clusterIndex) {
+    cluster.offsets.forEach(function (off, i) {
+      pushFrom(cluster, off[0], off[1], clusterIndex * 3 + i);
+    });
+  });
+}
+
+seedArrestClusters();
+
 function bookinFromLead(snap, iceEvent, updated) {
   var person = snap.person;
   var name = person.name || {};
@@ -851,7 +1035,7 @@ var bundle = {
     from: "",
     to: ""
   },
-  note: "Demonstration workspace. File → Import. Avengers = officers; MCU villains = leads. DFW addresses include latitude/longitude for the map. Not loaded unless you import it.",
+  note: "Demonstration workspace. File → Import. Avengers = officers; MCU villains = leads. DFW addresses include latitude/longitude for the map. Arrests are clustered around downtown Dallas, Stemmons, Fair Park, NorthPark, Fort Worth Stockyards, Irving, and Arlington so Arrest heat has local maxima. Not loaded unless you import it.",
   leads: leads,
   officers: officers,
   vehicles: vehicles,
@@ -862,6 +1046,9 @@ var bundle = {
 var out = path.join(__dirname, "..", "COPDoc_demo.json");
 fs.writeFileSync(out, JSON.stringify(bundle, null, 2));
 console.log("wrote", out);
+var arrestCount = leads.reduce(function (sum, snap) {
+  return sum + ((snap.person && snap.person.arrests) || []).length;
+}, 0);
 console.log(
   "officers",
   officers.length,
@@ -872,5 +1059,7 @@ console.log(
   "leads",
   leads.length,
   "bookin",
-  bookin.length
+  bookin.length,
+  "arrests",
+  arrestCount
 );

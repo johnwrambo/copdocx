@@ -42,7 +42,7 @@
 
   root.config = Object.freeze({
     productName: "COPDoc",
-    productVersion: "0.67.0",
+    productVersion: "0.69.2",
     storageEntries: Object.freeze(entries),
     storageKey: function (id) {
       return byId[id] ? byId[id].key : "";

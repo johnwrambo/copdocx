@@ -81,9 +81,11 @@
       var actions = document.createElement("div");
       actions.className = "case-map-popup-actions";
       var caseLink = document.createElement("a");
+      var winName = pin.caseWindowName || "copdoc-case-view";
       caseLink.className = "case-map-popup-case-link";
       caseLink.href = pin.caseUrl;
-      caseLink.target = "copdoc-case-view";
+      caseLink.target = winName;
+      caseLink.rel = "opener";
       caseLink.textContent = pin.caseLabel || "Open case";
       caseLink.addEventListener("click", function (event) {
         if (
@@ -98,7 +100,10 @@
         }
         event.preventDefault();
         event.stopPropagation();
-        openCasePopup(caseLink.href, "copdoc-case-view");
+        if (typeof event.stopImmediatePropagation === "function") {
+          event.stopImmediatePropagation();
+        }
+        openCasePopup(caseLink.href || pin.caseUrl, winName);
       });
       actions.appendChild(caseLink);
       body.appendChild(actions);
@@ -263,21 +268,31 @@
     };
   }
 
+  function resolveHref(url) {
+    var href = String(url || "");
+    if (!href) {
+      return "";
+    }
+    try {
+      var base = global.location && global.location.href;
+      if (typeof URL === "function" && base && /:/.test(String(base))) {
+        return new URL(href, base).href;
+      }
+    } catch (err) {}
+    return href;
+  }
+
   function openCaseWindow(url, name) {
+    var href = resolveHref(url);
     var winName = String(name || "copdoc-case-view");
     var size = popupFeatures();
     var win = null;
-    if (typeof global.open !== "function") {
+    if (!href || typeof global.open !== "function") {
       return null;
     }
     try {
-      win = global.open("about:blank", winName, size.text);
+      win = global.open(href, winName, size.text);
     } catch (err) {}
-    if (!win) {
-      try {
-        win = global.open(url, winName, size.text);
-      } catch (err2) {}
-    }
     if (!win) {
       return null;
     }
@@ -288,22 +303,22 @@
       if (typeof win.moveTo === "function") {
         win.moveTo(size.left, size.top);
       }
-    } catch (err3) {}
+    } catch (err2) {}
     try {
-      if (win.location) {
-        win.location.replace(url);
+      if (win.location && href) {
+        win.location.replace(href);
       }
-    } catch (err4) {}
+    } catch (err3) {}
     try {
       if (typeof win.focus === "function") {
         win.focus();
       }
-    } catch (err5) {}
+    } catch (err4) {}
     return win;
   }
 
   function openCasePopup(url, name) {
-    var href = String(url || "");
+    var href = resolveHref(url);
     if (!href) {
       return null;
     }
@@ -311,10 +326,12 @@
     if (win) {
       return win;
     }
-    if (global.location) {
-      global.location.href = href;
-    }
-    return null;
+    try {
+      if (typeof global.open === "function") {
+        win = global.open(href, "_blank", popupFeatures().text);
+      }
+    } catch (err) {}
+    return win || null;
   }
 
   function bind(marker, pin, urlBag) {

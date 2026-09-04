@@ -137,7 +137,7 @@ var caseLink = actions.children[0];
 assert.equal(caseLink.tagName, "A");
 assert.equal(caseLink.className, "case-map-popup-case-link");
 assert.equal(caseLink.href, "case.html?id=lead1");
-assert.equal(caseLink.target, "copdoc-case-view");
+assert.equal(caseLink.target, "copdoc-case-lead1");
 assert.equal(caseLink.textContent, "Open case");
 caseLink.listeners.click[0]({
   defaultPrevented: false,
@@ -147,16 +147,34 @@ caseLink.listeners.click[0]({
 });
 assert.equal(opened.length, 1);
 assert.equal(opened[0].url, "case.html?id=lead1");
-assert.equal(opened[0].name, "copdoc-case-view");
+assert.equal(opened[0].name, "copdoc-case-lead1");
 assert.ok(/popup=yes/.test(opened[0].features));
 assert.ok(/popup=true/.test(opened[0].features));
 assert.ok(/width=672/.test(opened[0].features));
 assert.ok(opened[0].resized[0] < 1000);
 assert.equal(opened[0].focused, true);
 
+var defaultCase = api.card({
+  title: "Subject",
+  caseUrl: "case.html?id=lead3"
+});
+var defaultActions = defaultCase.children[1].children.filter(function (child) {
+  return child.className === "case-map-popup-actions";
+})[0];
+assert.equal(defaultActions.children[0].target, "copdoc-case-view");
+defaultActions.children[0].listeners.click[0]({
+  defaultPrevented: false,
+  button: 0,
+  preventDefault: function () {},
+  stopPropagation: function () {}
+});
+assert.equal(opened[1].name, "copdoc-case-view");
+assert.equal(opened[1].url, "case.html?id=lead3");
+
 assert.equal(typeof api.openCasePopup, "function");
 api.openCasePopup("case.html?id=lead2", "copdoc-case-view");
-assert.equal(opened[1].url, "case.html?id=lead2");
-assert.equal(opened[1].name, "copdoc-case-view");
+assert.equal(opened[2].url, "case.html?id=lead2");
+assert.equal(opened[2].name, "copdoc-case-view");
+assert.ok(/popup=yes/.test(opened[2].features));
 
 console.log("test-map-popup: ok");

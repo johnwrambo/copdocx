@@ -6,6 +6,9 @@
 
   var transientEncounter = null;
   var recordFilter = "all";
+  var encounterOfficerIds = [];
+  var encounterSubjects = [];
+  var reviewMapInstance = null;
 
   function byId(id) {
     return document.getElementById(id);
@@ -18,6 +21,14 @@
   function queryId() {
     try {
       return new URLSearchParams(window.location.search).get("id") || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function queryParam(name) {
+    try {
+      return new URLSearchParams(window.location.search).get(name) || "";
     } catch (error) {
       return "";
     }
@@ -88,6 +99,1503 @@
       })
       .filter(Boolean)
       .join("; ");
+  }
+
+  function radioValue(rootEl, field) {
+    var checked = rootEl && rootEl.querySelector('[data-field="' + field + '"]:checked');
+    return checked ? String(checked.value || "").trim() : "";
+  }
+
+  function setRadioValue(rootEl, field, value) {
+    if (!rootEl) {
+      return;
+    }
+    var wanted = String(value || "");
+    Array.prototype.forEach.call(
+      rootEl.querySelectorAll('[data-field="' + field + '"]'),
+      function (el) {
+        el.checked = el.value === wanted;
+      }
+    );
+  }
+
+  function cloneSubject(row) {
+    var m = model();
+    if (m && typeof m.createEncounterSubject === "function") {
+      return m.createEncounterSubject(row || {});
+    }
+    return row ? Object.assign({}, row) : {};
+  }
+
+  function rosterFromPackets(encounterId) {
+    return subjectsForEncounter(encounterId).map(function (row) {
+      return cloneSubject(row);
+    });
+  }
+
+  function loadRoster(record) {
+    var rows = (record && Array.isArray(record.subjects) && record.subjects.length)
+      ? record.subjects
+      : rosterFromPackets(record && record.encounterId);
+    encounterSubjects = rows.map(cloneSubject);
+  }
+
+  function officerApi() {
+    return window.COPDoc && COPDoc.officers;
+  }
+
+  function officerRecord(id) {
+    var api = officerApi();
+    return api && typeof api.get === "function" ? api.get(id) : null;
+  }
+
+  function officerDisplayName(id) {
+    var api = officerApi();
+    var row = officerRecord(id);
+    if (api && row && typeof api.display === "function") {
+      return api.display(row);
+    }
+    if (row) {
+      return [row.lastName, row.firstName].filter(Boolean).join(", ") || id;
+    }
+    return id || "—";
+  }
+
+  function operationCellForOfficer(operation, officerId) {
+    var found = { assignment: "", cell: "" };
+    if (!operation || !officerId) {
+      return found;
+    }
+    (operation.teams || []).forEach(function (team) {
+      (team.members || []).forEach(function (member) {
+        if (!member || (member.officerId !== officerId && member.id !== officerId)) {
+          return;
+        }
+        found.assignment = member.assignmentRole || member.role || "";
+        found.cell = team.name || team.rosterKey || team.teamId || "";
+      });
+    });
+    return found;
+  }
+
+  function syncCenterRadioNames() {
+    document.querySelectorAll('#encounterLocationList [data-field="encounterCenter"]').forEach(
+      function (el) {
+        el.name = "encounterCenter";
+      }
+    );
+  }
+
+  function showEncounterTab(id) {
+    var narrative = id === "tab-narrative";
+    document.body.classList.toggle("enc-narrative-open", narrative);
+    if (narrative) {
+      setStatus("");
+    }
+    document.querySelectorAll(".enc-tabs button").forEach(function (btn) {
+      var on = btn.getAttribute("aria-controls") === id;
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    document.querySelectorAll(".enc-panel").forEach(function (panel) {
+      panel.hidden = panel.id !== id;
+    });
+    if (id === "tab-review") {
+      paintReview();
+    }
+    if (id === "tab-evidence") {
+      paintEvidence();
+    }
+    if (narrative) {
+      paintNarrativeTab();
+    }
+  }
+
+  function fillEventTypeSelect(selected) {
+    var sel = byId("eventType");
+    if (!sel) {
+      return;
+    }
+    var current = selected || sel.value || "";
+    var items =
+      (window.COPDoc && COPDoc.catalogs && COPDoc.catalogs.ENCOUNTER_TYPES) || [];
+    sel.replaceChildren();
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "Select an option";
+    sel.appendChild(blank);
+    items.forEach(function (item) {
+      var opt = document.createElement("option");
+      opt.value = item.code || item.value || "";
+      opt.textContent = item.label || opt.value;
+      sel.appendChild(opt);
+    });
+    sel.value = current;
+  }
+
+  function fillOperationSelect(selected) {
+    var sel = byId("operationId");
+    var m = model();
+    if (!sel || !m || !m.store || typeof m.store.listOperations !== "function") {
+      return;
+    }
+    var current = selected || sel.value || "";
+    sel.replaceChildren();
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "None";
+    sel.appendChild(blank);
+    (m.store.listOperations() || []).forEach(function (row) {
+      var opt = document.createElement("option");
+      opt.value = row.operationId || "";
+      var label = row.operationNumber || row.operationId || "";
+      if (row.name) {
+        label += " · " + row.name;
+      }
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+    sel.value = current;
+  }
+
+  function fillOfficerPick() {
+    var sel = byId("officerPick");
+    var api = officerApi();
+    if (!sel || !api || typeof api.listCommitted !== "function") {
+      return;
+    }
+    var taken = Object.create(null);
+    encounterOfficerIds.forEach(function (id) {
+      taken[id] = true;
+    });
+    sel.replaceChildren();
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "Select an officer";
+    sel.appendChild(blank);
+    api.listCommitted().forEach(function (row) {
+      var id = row.officerId || row.id;
+      if (!id || taken[id]) {
+        return;
+      }
+      var opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent =
+        typeof api.display === "function" ? api.display(row) : officerDisplayName(id);
+      sel.appendChild(opt);
+    });
+  }
+
+  function paintOfficers() {
+    var body = byId("officerBody");
+    if (!body) {
+      return;
+    }
+    body.replaceChildren();
+    if (!encounterOfficerIds.length) {
+      var empty = document.createElement("tr");
+      var td = document.createElement("td");
+      td.colSpan = 5;
+      td.textContent = "No officers yet. Pick an operation or add from the roster.";
+      empty.appendChild(td);
+      body.appendChild(empty);
+      fillOfficerPick();
+      return;
+    }
+    var m = model();
+    var opId = (byId("operationId") && byId("operationId").value) || "";
+    var op =
+      opId && m && m.store && typeof m.store.getOperation === "function"
+        ? m.store.getOperation(opId)
+        : null;
+    encounterOfficerIds.forEach(function (id) {
+      var row = officerRecord(id);
+      var cell = operationCellForOfficer(op, id);
+      var tr = document.createElement("tr");
+      [
+        officerDisplayName(id),
+        (row && row.badge) || "—",
+        cell.assignment || "—",
+        cell.cell || "—"
+      ].forEach(function (text) {
+        var cellTd = document.createElement("td");
+        cellTd.textContent = text;
+        tr.appendChild(cellTd);
+      });
+      var actions = document.createElement("td");
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "action-button-danger compact";
+      remove.setAttribute("aria-label", "Remove officer");
+      remove.textContent = "×";
+      remove.addEventListener("click", function () {
+        encounterOfficerIds = encounterOfficerIds.filter(function (other) {
+          return other !== id;
+        });
+        paintOfficers();
+        paintBanner();
+      });
+      actions.appendChild(remove);
+      tr.appendChild(actions);
+      body.appendChild(tr);
+    });
+    fillOfficerPick();
+  }
+
+  function loadOfficersFromOperation(operationId, options) {
+    options = options || {};
+    var m = model();
+    if (!operationId || !m || !m.store || typeof m.store.getOperation !== "function") {
+      return;
+    }
+    var op = m.store.getOperation(operationId);
+    if (!op) {
+      setStatus("That operation was not found.");
+      return;
+    }
+    var ids =
+      typeof m.officerIdsFromOperation === "function"
+        ? m.officerIdsFromOperation(op)
+        : [];
+    encounterOfficerIds = ids.slice();
+    paintOfficers();
+    if (!options.quiet) {
+      setStatus(
+        ids.length
+          ? "Loaded " +
+              ids.length +
+              " officer" +
+              (ids.length === 1 ? "" : "s") +
+              " from the operation. Last-minute changes stay on this encounter."
+          : "That operation has no cell officers.",
+        true
+      );
+    }
+  }
+
+  function locationLabel(loc) {
+    if (!loc) {
+      return "";
+    }
+    return formatAddress(loc) || [loc.association, loc.city].filter(Boolean).join(" · ");
+  }
+
+  function bannerVehicleText(record) {
+    var vehicles = (record && record.vehicles) || [];
+    var first = vehicles[0];
+    if (!first) {
+      return "";
+    }
+    var ymm = [first.vehicleColor, first.vehicleMake, first.vehicleModel]
+      .filter(Boolean)
+      .join(" ");
+    return ymm || vehicleLine(record);
+  }
+
+  function outcomeWords(code) {
+    var value = String(code || "").toUpperCase();
+    if (value === "ARRESTED") {
+      return "ARRESTED";
+    }
+    if (value === "RELEASED") {
+      return "RELEASED";
+    }
+    if (value === "FLED_VEHICLE") {
+      return "FLED IN VEHICLE";
+    }
+    if (value === "FLED_FOOT" || value === "FLED") {
+      return value === "FLED_FOOT" ? "FLED ON FOOT" : "FLED";
+    }
+    return value;
+  }
+
+  function paintBanner(record) {
+    record = record || (pageKey() === "encounter-form" ? collectEncounter() : null);
+    var idEl = byId("encBannerId");
+    var cityEl = byId("encBannerCity");
+    var factsEl = byId("encBannerFacts");
+    if (!idEl) {
+      return;
+    }
+    idEl.textContent = (record && record.encounterId) || "New encounter";
+    var centerId = record && record.centerLocationId;
+    var city = "";
+    ((record && record.locations) || []).forEach(function (loc) {
+      if (centerId && loc.locationId === centerId && loc.city) {
+        city = loc.city;
+      }
+    });
+    if (!city) {
+      var firstLoc = ((record && record.locations) || [])[0];
+      city = (firstLoc && firstLoc.city) || "";
+    }
+    if (cityEl) {
+      cityEl.textContent = city;
+    }
+    var bits = [];
+    var veh = bannerVehicleText(record);
+    if (veh) {
+      bits.push(veh);
+    }
+    var groups = Object.create(null);
+    var order = [];
+    (encounterSubjects || []).forEach(function (row) {
+      var adj = citizenAdjective(row && row.citizenship);
+      var out = String((row && row.outcome) || "").toUpperCase() || "PRESENT";
+      var key = adj + "|" + out;
+      if (!groups[key]) {
+        groups[key] = { adj: adj, out: out, n: 0 };
+        order.push(key);
+      }
+      groups[key].n += 1;
+    });
+    order.forEach(function (key) {
+      var g = groups[key];
+      var noun = g.n === 1 ? "national" : "nationals";
+      bits.push(
+        g.out === "PRESENT"
+          ? g.n + " " + g.adj + " " + noun
+          : g.n + " " + g.adj + " " + noun + " " + outcomeWords(g.out)
+      );
+    });
+    if (factsEl) {
+      factsEl.textContent = bits.join(" · ");
+    }
+  }
+
+  function paintReviewMap(record) {
+    var host = byId("reviewMap");
+    if (!host) {
+      return;
+    }
+    var points = [];
+    (record.locations || []).forEach(function (loc) {
+      var lat = parseFloat(loc.latitude);
+      var lng = parseFloat(loc.longitude);
+      if (!isFinite(lat) || !isFinite(lng)) {
+        return;
+      }
+      points.push({
+        loc: loc,
+        lat: lat,
+        lng: lng,
+        center: !!(record.centerLocationId && loc.locationId === record.centerLocationId)
+      });
+    });
+    if (reviewMapInstance && typeof reviewMapInstance.remove === "function") {
+      reviewMapInstance.remove();
+      reviewMapInstance = null;
+    }
+    if (!points.length || typeof window.L === "undefined") {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    reviewMapInstance = window.L.map(host, {
+      zoomControl: true,
+      attributionControl: false
+    });
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(reviewMapInstance);
+    var center = null;
+    points.forEach(function (point) {
+      if (point.center) {
+        center = point;
+      }
+    });
+    if (!center) {
+      center = points[0];
+    }
+    points.forEach(function (point) {
+      window.L.circleMarker([point.lat, point.lng], {
+        radius: point.center ? 10 : 6,
+        color: point.center ? "#e96868" : "#b58bea",
+        fillColor: point.center ? "#e96868" : "#b58bea",
+        fillOpacity: 0.9,
+        weight: 2
+      })
+        .bindTooltip(
+          (point.loc.association || "Location") + (point.center ? " (center)" : "")
+        )
+        .addTo(reviewMapInstance);
+      if (!point.center && center) {
+        window.L.polyline(
+          [
+            [point.lat, point.lng],
+            [center.lat, center.lng]
+          ],
+          { color: "#b58bea", weight: 2, opacity: 0.65 }
+        ).addTo(reviewMapInstance);
+      }
+    });
+    reviewMapInstance.fitBounds(
+      points.map(function (point) {
+        return [point.lat, point.lng];
+      }),
+      { padding: [28, 28], maxZoom: 16 }
+    );
+    setTimeout(function () {
+      if (reviewMapInstance && reviewMapInstance.invalidateSize) {
+        reviewMapInstance.invalidateSize();
+      }
+    }, 60);
+  }
+
+  function paintReviewHistory(record) {
+    var host = byId("reviewHistory");
+    if (!host) {
+      return;
+    }
+    var rows = (record && record.completedHistory) || [];
+    host.replaceChildren();
+    if (!rows.length && !(record && record.completed)) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    rows.forEach(function (row) {
+      var li = document.createElement("li");
+      var when = (row && row.generatedAt) || "";
+      var reason = (row && row.reason) || "";
+      li.textContent =
+        "Snapshot " +
+        (when ? when.slice(0, 16).replace("T", " ") : "") +
+        (reason ? " · unlocked: " + reason : "");
+      host.appendChild(li);
+    });
+    if (record && record.completed) {
+      var current = document.createElement("li");
+      current.textContent =
+        "Current snapshot copdocx.encounter-snapshot.v1" +
+        (record.completed.generatedAt
+          ? " · " + String(record.completed.generatedAt).slice(0, 16).replace("T", " ")
+          : "");
+      host.appendChild(current);
+    }
+  }
+
+  function paintReview() {
+    var record = collectEncounter();
+    var stored =
+      model() && model().store && record.encounterId
+        ? model().store.getEncounter(record.encounterId)
+        : null;
+    if (stored) {
+      record.completed = stored.completed || record.completed;
+      record.completedHistory = stored.completedHistory || record.completedHistory;
+      record.unlock = stored.unlock || record.unlock;
+      if (stored.meta) {
+        record.meta = stored.meta;
+      }
+    }
+    var stop = byId("reviewStop");
+    if (stop) {
+      var bits = [
+        record.encounterId,
+        record.startedAt,
+        record.eventType,
+        record.operationId
+      ].filter(Boolean);
+      stop.textContent = bits.length ? bits.join(" · ") : "No stop yet.";
+    }
+    var stale = byId("reviewStale");
+    if (stale) {
+      stale.hidden = !(record.completed && !isComplete(record));
+    }
+    var locHost = byId("reviewLocations");
+    if (locHost) {
+      locHost.replaceChildren();
+      (record.locations || []).forEach(function (loc) {
+        var li = document.createElement("li");
+        var label = (loc.association || "Location") + " · " + (locationLabel(loc) || "—");
+        if (loc.locationId && loc.locationId === record.centerLocationId) {
+          var strong = document.createElement("strong");
+          strong.textContent = label + " (center)";
+          li.appendChild(strong);
+        } else {
+          li.textContent = label;
+        }
+        locHost.appendChild(li);
+      });
+      if (!locHost.childNodes.length) {
+        var empty = document.createElement("li");
+        empty.textContent = "No locations.";
+        locHost.appendChild(empty);
+      }
+    }
+    paintReviewMap(record);
+    var vehEl = byId("reviewVehicles");
+    if (vehEl) {
+      var vehBits = (record.vehicles || []).map(function (veh) {
+        return (
+          [veh.vehicleColor, veh.vehicleMake, veh.vehicleModel].filter(Boolean).join(" ") ||
+          [veh.plateState, veh.licensePlate || veh.plate].filter(Boolean).join(" ") ||
+          "Vehicle"
+        );
+      });
+      vehEl.textContent = vehBits.length ? vehBits.join("; ") : "No vehicles.";
+    }
+    var ofcEl = byId("reviewOfficers");
+    if (ofcEl) {
+      ofcEl.textContent = encounterOfficerIds.length
+        ? encounterOfficerIds.map(officerDisplayName).join("; ")
+        : "No officers loaded.";
+    }
+    var subEl = byId("reviewSubjects");
+    if (subEl) {
+      subEl.textContent = encounterSubjects.length
+        ? encounterSubjects
+            .map(function (row) {
+              var name = [row.lastName, row.firstName].filter(Boolean).join(", ") || "Unidentified";
+              return name + (row.outcome ? " · " + outcomeWords(row.outcome) : "");
+            })
+            .join("; ")
+        : "No subjects.";
+    }
+    var evEl = byId("reviewEvidence");
+    if (evEl) {
+      evEl.textContent = "Scene files list on the Evidence tab.";
+    }
+    var confirmBtn = byId("confirmEncounter");
+    var unlockBlock = byId("reviewUnlock");
+    var locked = isComplete(record);
+    if (confirmBtn) {
+      confirmBtn.hidden = locked;
+      confirmBtn.textContent = record.completed
+        ? "Re-confirm snapshot"
+        : "Confirm and close encounter";
+    }
+    if (unlockBlock) {
+      unlockBlock.hidden = !locked;
+    }
+    paintReviewHistory(record);
+  }
+
+  function evidenceAssocOptions() {
+    var opts = [{ value: "scene", label: "Encounter (scene)" }];
+    encounterSubjects.forEach(function (row) {
+      if (!row || !row.bookinRecordId) {
+        return;
+      }
+      opts.push({
+        value: "subject:" + (row.subjectId || row.personId),
+        label:
+          ([row.lastName, row.firstName].filter(Boolean).join(", ") || "Subject") +
+          " (booked)"
+      });
+    });
+    var record = collectEncounter();
+    (record.vehicles || []).forEach(function (veh) {
+      var label =
+        [veh.plateState, veh.licensePlate || veh.plate].filter(Boolean).join(" ") ||
+        [veh.vehicleColor, veh.vehicleMake, veh.vehicleModel].filter(Boolean).join(" ") ||
+        "Vehicle";
+      opts.push({
+        value: "vehicle:" + (veh.vehicleId || ""),
+        label: label
+      });
+    });
+    return opts;
+  }
+
+  function fillEvidenceOwnerSelect(selected) {
+    var sel = byId("evOwner");
+    if (!sel) {
+      return;
+    }
+    var current = selected || sel.value || "scene";
+    sel.replaceChildren();
+    evidenceAssocOptions().forEach(function (item) {
+      var opt = document.createElement("option");
+      opt.value = item.value;
+      opt.textContent = item.label;
+      sel.appendChild(opt);
+    });
+    sel.value = current;
+    if (!sel.value) {
+      sel.value = "scene";
+    }
+  }
+
+  function evidenceTag(value) {
+    var text = String(value || "scene");
+    return text.indexOf("assoc:") === 0 ? text : "assoc:" + text;
+  }
+
+  function currentEvidenceTag(row) {
+    var tags = (row && row.tags) || [];
+    var i;
+    for (i = 0; i < tags.length; i++) {
+      if (String(tags[i]).indexOf("assoc:") === 0) {
+        return String(tags[i]).slice(6);
+      }
+    }
+    return "scene";
+  }
+
+  function setEvidenceLinks() {
+    var id = (byId("encounterId") && byId("encounterId").value) || queryId();
+    var photo = byId("addEncounterPhoto");
+    var file = byId("addEncounterFile");
+    if (!id) {
+      return;
+    }
+    saveDraftQuiet({ force: true });
+    var q =
+      "ownerType=ENCOUNTER&id=" +
+      encodeURIComponent(id) +
+      "&encounterId=" +
+      encodeURIComponent(id) +
+      "&return=" +
+      encodeURIComponent("encounter-form.html?id=" + id);
+    if (photo) {
+      photo.href = "photo-picker.html?" + q;
+    }
+    if (file) {
+      file.href = "file-upload.html?" + q;
+    }
+  }
+
+  function paintEvidence() {
+    fillEvidenceOwnerSelect();
+    setEvidenceLinks();
+    var grid = byId("evidenceGrid");
+    var media = window.COPDoc && COPDoc.media;
+    var id = (byId("encounterId") && byId("encounterId").value) || queryId();
+    if (!grid) {
+      return;
+    }
+    if (!media || typeof media.list !== "function" || !id) {
+      grid.replaceChildren();
+      return;
+    }
+    media.list({ type: "ENCOUNTER", id: id }).then(function (rows) {
+      grid.replaceChildren();
+      var options = evidenceAssocOptions();
+      if (!rows.length) {
+        var empty = document.createElement("div");
+        empty.className = "evidence-thumb";
+        empty.textContent = "No files yet";
+        grid.appendChild(empty);
+        var reviewEv = byId("reviewEvidence");
+        if (reviewEv) {
+          reviewEv.textContent = "No scene files.";
+        }
+        return;
+      }
+      var reviewEv = byId("reviewEvidence");
+      if (reviewEv) {
+        reviewEv.textContent = rows.length + " scene file" + (rows.length === 1 ? "" : "s");
+      }
+      rows.forEach(function (row) {
+        var thumb = document.createElement("div");
+        thumb.className = "evidence-thumb";
+        var name = document.createElement("span");
+        name.textContent = row.originalName || row.caption || row.kind || "File";
+        thumb.appendChild(name);
+        var sel = document.createElement("select");
+        options.forEach(function (item) {
+          var opt = document.createElement("option");
+          opt.value = item.value;
+          opt.textContent = item.label;
+          sel.appendChild(opt);
+        });
+        sel.value = currentEvidenceTag(row);
+        if (!sel.value) {
+          sel.value = "scene";
+        }
+        sel.addEventListener("change", function () {
+          if (typeof media.update !== "function") {
+            return;
+          }
+          var nextTags = (row.tags || []).filter(function (tag) {
+            return String(tag).indexOf("assoc:") !== 0;
+          });
+          nextTags.push(evidenceTag(sel.value));
+          media.update(row.mediaId, { tags: nextTags }).then(function () {
+            setStatus("Evidence association saved.", true);
+          });
+        });
+        thumb.appendChild(sel);
+        grid.appendChild(thumb);
+      });
+    }).catch(function () {
+      grid.replaceChildren();
+    });
+  }
+
+  function stubNext(message) {
+    setStatus(message);
+  }
+
+  var subjectFloatState = {
+    mode: "",
+    fromBrowse: false
+  };
+
+  function selectedRadio(name) {
+    var el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? String(el.value || "") : "";
+  }
+
+  function setNamedRadio(name, value) {
+    var wanted = String(value || "");
+    var matched = false;
+    document.querySelectorAll('input[name="' + name + '"]').forEach(function (el) {
+      el.checked = el.value === wanted;
+      if (el.checked) {
+        matched = true;
+      }
+    });
+    return matched;
+  }
+
+  function citizenAdjective(value) {
+    var key = String(value || "").trim();
+    if (!key) {
+      return "unknown";
+    }
+    var list = window.COUNTRIES || [];
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var row = list[i];
+      if (!row) {
+        continue;
+      }
+      if (
+        row.code === key ||
+        String(row.label || "").toLowerCase() === key.toLowerCase()
+      ) {
+        return row.demonym || row.label || key;
+      }
+    }
+    return key;
+  }
+
+  function personCity(person) {
+    var locs = (person && person.locations) || [];
+    var i;
+    for (i = 0; i < locs.length; i++) {
+      if (locs[i] && locs[i].city) {
+        return locs[i].city;
+      }
+    }
+    return "";
+  }
+
+  function stageLabel(role) {
+    var key = String(role || "").toUpperCase();
+    if (key === "TARGET") {
+      return "Target";
+    }
+    if (key === "DETAINEE") {
+      return "Detainee";
+    }
+    if (key === "LEAD") {
+      return "Lead";
+    }
+    return "Person";
+  }
+
+  function normalizeAlien(value) {
+    return String(value || "").replace(/\s/g, "").toUpperCase();
+  }
+
+  function encounterHasVehicles() {
+    if (document.querySelectorAll("#encounterVehicleList > fieldset").length) {
+      return true;
+    }
+    var record = collectEncounter();
+    return !!(record && record.vehicles && record.vehicles.length);
+  }
+
+  function findPersonByAlienNumber(aNumber) {
+    var needle = normalizeAlien(aNumber);
+    if (!needle) {
+      return null;
+    }
+    var m = model();
+    if (!m || !m.store || typeof m.store.allPeople !== "function") {
+      return null;
+    }
+    var people = m.store.allPeople() || [];
+    var i;
+    for (i = 0; i < people.length; i++) {
+      var have = normalizeAlien(
+        people[i] && people[i].immigration && people[i].immigration.alienNumber
+      );
+      if (have && have === needle) {
+        return people[i];
+      }
+    }
+    return null;
+  }
+
+  function subjectAlreadyOnEncounter(personId, exceptKey) {
+    if (!personId) {
+      return false;
+    }
+    return encounterSubjects.some(function (row) {
+      if (!row || row.personId !== personId) {
+        return false;
+      }
+      if (exceptKey && subjectKey(row) === exceptKey) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  function listExistingCandidates() {
+    var m = model();
+    if (!m || !m.store) {
+      return [];
+    }
+    m.store.loadFromDisk();
+    var seen = Object.create(null);
+    var rows = [];
+    (m.store.listLeads() || []).forEach(function (row) {
+      if (!row || row.metaStatus === "draft") {
+        return;
+      }
+      var lead = m.store.getLead(row.leadId);
+      if (!lead) {
+        return;
+      }
+      var person = m.subjectOf ? m.subjectOf(lead) : lead.person;
+      if (!person || !person.personId || seen[person.personId]) {
+        return;
+      }
+      seen[person.personId] = true;
+      var name = person.name || {};
+      rows.push({
+        personId: person.personId,
+        leadId: row.leadId,
+        lastName: name.lastName || "",
+        firstName: name.firstName || "",
+        alienNumber: (person.immigration && person.immigration.alienNumber) || "",
+        citizenship: person.citizenship || "",
+        dateOfBirth: person.dateOfBirth || "",
+        caseRole: person.caseRole || lead.caseRole || "",
+        city: personCity(person)
+      });
+    });
+    (m.store.allPeople() || []).forEach(function (person) {
+      if (!person || !person.personId || person.junked || seen[person.personId]) {
+        return;
+      }
+      seen[person.personId] = true;
+      var name = person.name || {};
+      rows.push({
+        personId: person.personId,
+        leadId: "",
+        lastName: name.lastName || "",
+        firstName: name.firstName || "",
+        alienNumber: (person.immigration && person.immigration.alienNumber) || "",
+        citizenship: person.citizenship || "",
+        dateOfBirth: person.dateOfBirth || "",
+        caseRole: person.caseRole || "",
+        city: personCity(person)
+      });
+    });
+    return rows;
+  }
+
+  function paintExistingCandidates(query) {
+    var body = byId("existingBody");
+    if (!body) {
+      return;
+    }
+    var q = String(query || "")
+      .trim()
+      .toLowerCase();
+    var rows = listExistingCandidates().filter(function (row) {
+      if (subjectAlreadyOnEncounter(row.personId)) {
+        return false;
+      }
+      if (!q) {
+        return true;
+      }
+      var hay = [
+        row.lastName,
+        row.firstName,
+        row.alienNumber,
+        row.city,
+        stageLabel(row.caseRole)
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+    body.replaceChildren();
+    if (!rows.length) {
+      var empty = document.createElement("tr");
+      var td = document.createElement("td");
+      td.colSpan = 5;
+      td.textContent = q
+        ? "No matching cases or people."
+        : "No committed cases or saved people yet.";
+      empty.appendChild(td);
+      body.appendChild(empty);
+      return;
+    }
+    rows.forEach(function (row) {
+      var tr = document.createElement("tr");
+      var name = [row.lastName, row.firstName].filter(Boolean).join(", ") || "—";
+      [name, stageLabel(row.caseRole), row.alienNumber || "—", row.city || "—"].forEach(
+        function (text) {
+          var cell = document.createElement("td");
+          cell.textContent = text;
+          tr.appendChild(cell);
+        }
+      );
+      var actions = document.createElement("td");
+      var select = document.createElement("button");
+      select.type = "button";
+      select.className = "action-button compact";
+      select.textContent = "Select";
+      select.addEventListener("click", function () {
+        openSubjectFields({
+          mode: "existing",
+          fromBrowse: true,
+          personId: row.personId,
+          leadId: row.leadId,
+          lastName: row.lastName,
+          firstName: row.firstName,
+          citizenship: row.citizenship,
+          alienNumber: row.alienNumber,
+          dateOfBirth: row.dateOfBirth,
+          caseRole: row.caseRole
+        });
+      });
+      actions.appendChild(select);
+      tr.appendChild(actions);
+      body.appendChild(tr);
+    });
+  }
+
+  function fillArrestingOfficerSelect(selected) {
+    var sel = byId("arrestingOfficer");
+    if (!sel) {
+      return;
+    }
+    sel.replaceChildren();
+    var blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = encounterOfficerIds.length
+      ? "Select an officer on this encounter"
+      : "No officers on this encounter — add them on Stop first";
+    sel.appendChild(blank);
+    encounterOfficerIds.forEach(function (id) {
+      var opt = document.createElement("option");
+      opt.value = id;
+      var row = officerRecord(id);
+      opt.textContent =
+        officerDisplayName(id) + (row && row.badge ? " · " + row.badge : "");
+      sel.appendChild(opt);
+    });
+    if (selected) {
+      sel.value = selected;
+    }
+  }
+
+  function fillCitizenshipSelect(selected) {
+    var sel = byId("subCitizen");
+    if (!sel) {
+      return;
+    }
+    if (typeof populateCitizenshipSelect === "function") {
+      populateCitizenshipSelect(sel, false);
+    } else if (!sel.options.length) {
+      var blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "Select a Country";
+      sel.appendChild(blank);
+    }
+    if (selected) {
+      sel.value = selected;
+      if (sel.value !== selected) {
+        var i;
+        for (i = 0; i < sel.options.length; i++) {
+          if (
+            String(sel.options[i].text || "").toLowerCase() ===
+            String(selected).toLowerCase()
+          ) {
+            sel.selectedIndex = i;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  function setSubjectPhotoHref(personId) {
+    var slot = byId("subjectPhoto");
+    if (!slot) {
+      return;
+    }
+    var encId = (byId("encounterId") && byId("encounterId").value) || queryId();
+    var parts = ["ownerType=PERSON"];
+    if (personId) {
+      parts.push("id=" + encodeURIComponent(personId));
+    }
+    if (encId) {
+      parts.push(
+        "return=" + encodeURIComponent("encounter-form.html?id=" + encId)
+      );
+    }
+    slot.href = "photo-picker.html?" + parts.join("&");
+    slot.textContent = personId ? "Add photo" : "Save subject to add photo";
+  }
+
+  function resetSubjectFields() {
+    ["subPersonId", "subLeadId", "subSubjectId", "subEditKey", "subLast", "subFirst", "subAlien", "subDob", "encounterRoleOther"].forEach(
+      function (id) {
+        if (byId(id)) {
+          byId(id).value = "";
+        }
+      }
+    );
+    setNamedRadio("subRole", "TARGET");
+    setNamedRadio("subOutcome", "ARRESTED");
+    setNamedRadio("subVehicleRole", "");
+    setNamedRadio("subCompliance", "COMPLIANT");
+    setNamedRadio("subUof", "no");
+    setNamedRadio("subForceLevel", "");
+    fillCitizenshipSelect("");
+    fillArrestingOfficerSelect("");
+    var vehField = byId("vehicleRoleField");
+    if (vehField) {
+      vehField.hidden = !encounterHasVehicles();
+    }
+    var save = byId("saveSubject");
+    if (save) {
+      save.textContent = "Add to encounter";
+    }
+  }
+
+  function showFloatPanel(which) {
+    var browse = byId("encFloatBrowse");
+    var fields = byId("encFloatFields");
+    if (browse) {
+      browse.hidden = which !== "browse";
+    }
+    if (fields) {
+      fields.hidden = which !== "fields";
+    }
+  }
+
+  function placeSubjectFloat() {
+    var floatEl = byId("encSubjectFloat");
+    if (!floatEl) {
+      return;
+    }
+    floatEl.style.left = "50%";
+    floatEl.style.top = "4.75rem";
+    floatEl.style.transform = "translateX(-50%)";
+    floatEl.hidden = false;
+  }
+
+  function closeSubjectFloat() {
+    var floatEl = byId("encSubjectFloat");
+    if (floatEl) {
+      floatEl.hidden = true;
+    }
+    subjectFloatState.mode = "";
+    subjectFloatState.fromBrowse = false;
+  }
+
+  function openSubjectBrowse() {
+    if (isComplete(collectEncounter())) {
+      setStatus("This encounter is completed and locked.");
+      return;
+    }
+    saveDraftQuiet({ force: true });
+    subjectFloatState.mode = "existing";
+    subjectFloatState.fromBrowse = true;
+    if (byId("encFloatTitle")) {
+      byId("encFloatTitle").textContent = "Add existing";
+    }
+    if (byId("caseSearch")) {
+      byId("caseSearch").value = "";
+    }
+    paintExistingCandidates("");
+    showFloatPanel("browse");
+    placeSubjectFloat();
+  }
+
+  function openSubjectFields(opts) {
+    opts = opts || {};
+    if (isComplete(collectEncounter())) {
+      setStatus("This encounter is completed and locked.");
+      return;
+    }
+    saveDraftQuiet({ force: true });
+    resetSubjectFields();
+    subjectFloatState.mode = opts.mode || "new";
+    subjectFloatState.fromBrowse = !!opts.fromBrowse;
+    var title = byId("encFloatTitle");
+    var note = byId("encFloatFieldsNote");
+    var save = byId("saveSubject");
+    if (opts.mode === "edit") {
+      if (title) {
+        title.textContent = "Edit subject";
+      }
+      if (note) {
+        note.textContent = "Encounter-specific fields. Edit does not open Book-in.";
+      }
+      if (save) {
+        save.textContent = "Save subject";
+      }
+    } else if (opts.mode === "existing") {
+      if (title) {
+        title.textContent = "Add existing";
+      }
+      if (note) {
+        note.textContent =
+          "Role and outcome are for this encounter. This does not open Book-in and does not mint a second person.";
+      }
+    } else {
+      if (title) {
+        title.textContent = "Add new";
+      }
+      if (note) {
+        note.textContent =
+          "Mints a Person only. Detainee and Book-in wait until Book if this person is arrested.";
+      }
+    }
+    var m = model();
+    var personId = opts.personId || "";
+    if (!personId && opts.mode === "new" && m && m.newId) {
+      personId = m.newId("p");
+    }
+    if (byId("subPersonId")) {
+      byId("subPersonId").value = personId;
+    }
+    if (byId("subLeadId")) {
+      byId("subLeadId").value = opts.leadId || "";
+    }
+    if (byId("subSubjectId")) {
+      byId("subSubjectId").value = opts.subjectId || "";
+    }
+    if (byId("subEditKey")) {
+      byId("subEditKey").value = opts.editKey || "";
+    }
+    if (byId("subLast")) {
+      byId("subLast").value = opts.lastName || "";
+    }
+    if (byId("subFirst")) {
+      byId("subFirst").value = opts.firstName || "";
+    }
+    if (byId("subAlien")) {
+      byId("subAlien").value = opts.alienNumber || "";
+    }
+    if (byId("subDob")) {
+      byId("subDob").value = opts.dateOfBirth || "";
+    }
+    fillCitizenshipSelect(opts.citizenship || "");
+    var defaultRole = "TARGET";
+    if (opts.encounterRole) {
+      defaultRole = opts.encounterRole;
+    } else if (opts.mode === "existing") {
+      var stage = String(opts.caseRole || "").toUpperCase();
+      defaultRole = stage === "LEAD" || stage === "TARGET" ? "TARGET" : "COLLATERAL";
+    }
+    setNamedRadio("subRole", defaultRole);
+    if (byId("encounterRoleOther")) {
+      byId("encounterRoleOther").value = opts.roleOther || "";
+    }
+    setNamedRadio("subOutcome", opts.outcome || "ARRESTED");
+    setNamedRadio("subVehicleRole", opts.vehicleRole || "");
+    setNamedRadio("subCompliance", opts.compliance || "COMPLIANT");
+    setNamedRadio("subUof", opts.useOfForce || "no");
+    setNamedRadio("subForceLevel", opts.forceLevel || "");
+    fillArrestingOfficerSelect(opts.arrestingOfficerId || "");
+    setSubjectPhotoHref(personId);
+    var vehField = byId("vehicleRoleField");
+    if (vehField) {
+      vehField.hidden = !encounterHasVehicles();
+    }
+    showFloatPanel("fields");
+    placeSubjectFloat();
+  }
+
+  function openNewSubject() {
+    openSubjectFields({ mode: "new" });
+  }
+
+  function openEditSubject(row) {
+    if (!row) {
+      return;
+    }
+    var person =
+      row.personId && model() && model().store && model().store.getPerson
+        ? model().store.getPerson(row.personId)
+        : null;
+    var name = (person && person.name) || {};
+    openSubjectFields({
+      mode: "edit",
+      fromBrowse: false,
+      editKey: subjectKey(row),
+      subjectId: row.subjectId || "",
+      personId: row.personId || "",
+      leadId: row.leadId || "",
+      lastName: row.lastName || name.lastName || "",
+      firstName: row.firstName || name.firstName || "",
+      citizenship: row.citizenship || (person && person.citizenship) || "",
+      alienNumber:
+        row.alienNumber ||
+        (person && person.immigration && person.immigration.alienNumber) ||
+        "",
+      dateOfBirth: (person && person.dateOfBirth) || "",
+      encounterRole: row.encounterRole || "",
+      roleOther: row.roleOther || "",
+      outcome: row.outcome || "",
+      vehicleRole: row.vehicleRole || "",
+      compliance: row.compliance || "",
+      useOfForce: row.useOfForce || "",
+      forceLevel: row.forceLevel || "",
+      arrestingOfficerId: row.arrestingOfficerId || ""
+    });
+  }
+
+  function upsertSubjectPerson(fields) {
+    var m = model();
+    if (!m || !m.store || typeof m.createPerson !== "function") {
+      return { ok: false, error: "Could not save the person." };
+    }
+    m.store.loadFromDisk();
+    var previous = fields.personId ? m.store.getPerson(fields.personId) : null;
+    if (fields.alienNumber) {
+      var hit = findPersonByAlienNumber(fields.alienNumber);
+      if (hit && hit.personId && hit.personId !== fields.personId) {
+        if (subjectAlreadyOnEncounter(hit.personId, fields.editKey)) {
+          return {
+            ok: false,
+            error: "That A-Number is already a subject on this encounter."
+          };
+        }
+        previous = hit;
+        fields.personId = hit.personId;
+        setStatus("Reused the existing person with that A-Number.", true);
+      }
+    }
+    var person = m.createPerson(
+      previous
+        ? Object.assign({}, previous, {
+            personId: previous.personId,
+            name: Object.assign({}, previous.name, {
+              lastName: fields.lastName,
+              firstName: fields.firstName
+            }),
+            citizenship: fields.citizenship || previous.citizenship || "",
+            dateOfBirth: fields.dateOfBirth || previous.dateOfBirth || "",
+            immigration: Object.assign({}, previous.immigration, {
+              alienNumber: fields.alienNumber || (previous.immigration && previous.immigration.alienNumber) || ""
+            })
+          })
+        : {
+            personId: fields.personId,
+            caseRole: "",
+            name: { lastName: fields.lastName, firstName: fields.firstName },
+            citizenship: fields.citizenship,
+            dateOfBirth: fields.dateOfBirth,
+            immigration: { alienNumber: fields.alienNumber }
+          }
+    );
+    if (!previous) {
+      person.caseRole = "";
+    } else if (previous.caseRole) {
+      person.caseRole = previous.caseRole;
+    }
+    var saved = m.store.upsertPerson(person);
+    if (!saved || !saved.ok) {
+      return { ok: false, error: (saved && saved.error) || "Could not save the person." };
+    }
+    return { ok: true, person: m.store.getPerson(person.personId) || person };
+  }
+
+  function saveSubjectToEncounter() {
+    var lastName = String((byId("subLast") && byId("subLast").value) || "").trim();
+    var firstName = String((byId("subFirst") && byId("subFirst").value) || "").trim();
+    var role = selectedRadio("subRole") || "TARGET";
+    var outcome = selectedRadio("subOutcome") || "";
+    var roleOther = String((byId("encounterRoleOther") && byId("encounterRoleOther").value) || "").trim();
+    if (!lastName && !firstName) {
+      setStatus("Enter a last name or first name.");
+      return;
+    }
+    if (role === "OTHER" && !roleOther) {
+      setStatus("Describe the other role.");
+      return;
+    }
+    if (!outcome) {
+      setStatus("Pick an outcome.");
+      return;
+    }
+    var editKey = (byId("subEditKey") && byId("subEditKey").value) || "";
+    var personId = (byId("subPersonId") && byId("subPersonId").value) || "";
+    if (personId && subjectAlreadyOnEncounter(personId, editKey)) {
+      setStatus("That person is already on this encounter.");
+      return;
+    }
+    var fields = {
+      personId: personId,
+      leadId: (byId("subLeadId") && byId("subLeadId").value) || "",
+      subjectId: (byId("subSubjectId") && byId("subSubjectId").value) || "",
+      editKey: editKey,
+      lastName: lastName,
+      firstName: firstName,
+      citizenship: (byId("subCitizen") && byId("subCitizen").value) || "",
+      alienNumber: String((byId("subAlien") && byId("subAlien").value) || "").trim(),
+      dateOfBirth: (byId("subDob") && byId("subDob").value) || ""
+    };
+    var personResult = upsertSubjectPerson(fields);
+    if (!personResult.ok) {
+      setStatus(personResult.error);
+      return;
+    }
+    var person = personResult.person;
+    if (subjectAlreadyOnEncounter(person.personId, editKey)) {
+      setStatus("That person is already on this encounter.");
+      return;
+    }
+    var useOfForce = selectedRadio("subUof") || "no";
+    var forceLevel = useOfForce === "yes" ? selectedRadio("subForceLevel") : "";
+    var techniques = forceLevel ? [forceLevel] : [];
+    var extra = {
+      subjectId: fields.subjectId,
+      personId: person.personId,
+      leadId: fields.leadId,
+      lastName: (person.name && person.name.lastName) || lastName,
+      firstName: (person.name && person.name.firstName) || firstName,
+      alienNumber: (person.immigration && person.immigration.alienNumber) || fields.alienNumber,
+      citizenship: person.citizenship || fields.citizenship,
+      encounterRole: role,
+      roleOther: role === "OTHER" ? roleOther : "",
+      vehicleRole: encounterHasVehicles() ? selectedRadio("subVehicleRole") : "",
+      outcome: outcome,
+      custody: outcome === "ARRESTED" ? "IN_CUSTODY" : "NOT_IN_CUSTODY",
+      arrestingOfficerId: outcome === "ARRESTED" ? ((byId("arrestingOfficer") && byId("arrestingOfficer").value) || "") : "",
+      compliance: selectedRadio("subCompliance") || "",
+      useOfForce: useOfForce,
+      forceLevel: forceLevel,
+      techniques: techniques
+    };
+    var subject =
+      model() && typeof model().encounterSubjectFromPerson === "function"
+        ? model().encounterSubjectFromPerson(person, extra)
+        : cloneSubject(extra);
+    if (editKey) {
+      var replaced = false;
+      encounterSubjects = encounterSubjects.map(function (row) {
+        if (subjectKey(row) === editKey) {
+          replaced = true;
+          subject.bookinRecordId = row.bookinRecordId || "";
+          subject.packetFiledAt = row.packetFiledAt || "";
+          subject.docsGeneratedAt = "";
+          subject.subjectId = row.subjectId || subject.subjectId;
+          return subject;
+        }
+        return row;
+      });
+      if (!replaced) {
+        encounterSubjects.push(subject);
+      }
+    } else {
+      encounterSubjects.push(subject);
+    }
+    saveDraftQuiet({ force: true });
+    paintSubjectsTable(
+      (byId("encounterId") && byId("encounterId").value) || queryId()
+    );
+    paintBanner();
+    closeSubjectFloat();
+    showEncounterTab("tab-subjects");
+    setStatus(
+      editKey ? "Subject updated." : "Subject added to this encounter.",
+      true
+    );
+  }
+
+  function bindSubjectFloat() {
+    var floatEl = byId("encSubjectFloat");
+    var bar = byId("encFloatBar");
+    if (floatEl && bar && bar.dataset.dragBound !== "true") {
+      bar.dataset.dragBound = "true";
+      var drag = { on: false, x: 0, y: 0, left: 0, top: 0 };
+      bar.addEventListener("mousedown", function (event) {
+        if (event.button !== 0 || event.target.closest("button")) {
+          return;
+        }
+        var rect = floatEl.getBoundingClientRect();
+        drag.on = true;
+        drag.x = event.clientX;
+        drag.y = event.clientY;
+        drag.left = rect.left;
+        drag.top = rect.top;
+        floatEl.style.left = rect.left + "px";
+        floatEl.style.top = rect.top + "px";
+        floatEl.style.transform = "none";
+        event.preventDefault();
+      });
+      document.addEventListener("mousemove", function (event) {
+        if (!drag.on) {
+          return;
+        }
+        floatEl.style.left = drag.left + event.clientX - drag.x + "px";
+        floatEl.style.top = drag.top + event.clientY - drag.y + "px";
+      });
+      document.addEventListener("mouseup", function () {
+        drag.on = false;
+      });
+    }
+    var closeBtn = byId("encFloatClose");
+    if (closeBtn && closeBtn.dataset.bound !== "true") {
+      closeBtn.dataset.bound = "true";
+      closeBtn.addEventListener("click", closeSubjectFloat);
+    }
+    var cancelExisting = byId("cancelExisting");
+    if (cancelExisting && cancelExisting.dataset.bound !== "true") {
+      cancelExisting.dataset.bound = "true";
+      cancelExisting.addEventListener("click", closeSubjectFloat);
+    }
+    var cancelSubject = byId("cancelSubject");
+    if (cancelSubject && cancelSubject.dataset.bound !== "true") {
+      cancelSubject.dataset.bound = "true";
+      cancelSubject.addEventListener("click", function () {
+        if (subjectFloatState.fromBrowse && subjectFloatState.mode !== "edit") {
+          if (byId("encFloatTitle")) {
+            byId("encFloatTitle").textContent = "Add existing";
+          }
+          paintExistingCandidates((byId("caseSearch") && byId("caseSearch").value) || "");
+          showFloatPanel("browse");
+          return;
+        }
+        closeSubjectFloat();
+      });
+    }
+    var save = byId("saveSubject");
+    if (save && save.dataset.bound !== "true") {
+      save.dataset.bound = "true";
+      save.addEventListener("click", saveSubjectToEncounter);
+    }
+    var search = byId("caseSearch");
+    if (search && search.dataset.bound !== "true") {
+      search.dataset.bound = "true";
+      search.addEventListener("input", function () {
+        paintExistingCandidates(search.value);
+      });
+    }
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        var open = byId("encSubjectFloat");
+        if (open && !open.hidden) {
+          event.preventDefault();
+          closeSubjectFloat();
+        }
+      }
+    });
   }
 
   var BOOKIN_KEY =
@@ -218,16 +1726,8 @@
       var link = document.createElement("a");
       link.className = "action-button-secondary compact";
       link.href = "encounter-form.html?id=" + encodeURIComponent(full.encounterId);
-      link.textContent = complete ? "Open" : "Edit";
+      link.textContent = "Open";
       cluster.appendChild(link);
-      var del = document.createElement("button");
-      del.type = "button";
-      del.className = "action-button-danger compact";
-      del.textContent = "Delete";
-      del.addEventListener("click", function () {
-        deleteEncounterRecord(full.encounterId);
-      });
-      cluster.appendChild(del);
       actions.appendChild(cluster);
       tr.appendChild(actions);
       body.appendChild(tr);
@@ -356,6 +1856,8 @@
     if (!vehicle.vehicleId && m.newId) {
       vehicle.vehicleId = m.newId("veh");
     }
+    vehicle.encounterDisposition = radioValue(card, "encounterDisposition");
+    vehicle.parkedLocationText = f.parkedLocationText || "";
     if (card) {
       card.dataset.entityId = vehicle.vehicleId || "";
     }
@@ -382,10 +1884,16 @@
       record = Object.assign({}, previous, record);
       record.meta = previous.meta;
       record.completed = previous.completed || null;
+      record.completedHistory = Array.isArray(previous.completedHistory)
+        ? previous.completedHistory.slice()
+        : [];
     }
     record.startedAt = (byId("encounterStartedAt") && byId("encounterStartedAt").value) || "";
     record.team = (byId("encounterTeam") && byId("encounterTeam").value) || record.team || "3";
     record.officeCode = record.officeCode || "DAL";
+    record.eventType = (byId("eventType") && byId("eventType").value) || "";
+    record.operationId = (byId("operationId") && byId("operationId").value) || "";
+    record.officerIds = encounterOfficerIds.slice();
     record.vehicles = [];
     record.links = [];
     Array.prototype.forEach.call(
@@ -401,7 +1909,15 @@
         record.locations.push(collectLocation(card));
       }
     );
-    record.subjects = subjectsForEncounter(record.encounterId);
+    var center = document.querySelector(
+      '#encounterLocationList [data-field="encounterCenter"]:checked'
+    );
+    record.centerLocationId = "";
+    if (center) {
+      var centerCard = center.closest("fieldset");
+      record.centerLocationId = (centerCard && centerCard.dataset.entityId) || "";
+    }
+    record.subjects = encounterSubjects.map(cloneSubject);
     if (previous) {
       record.narratives = Array.isArray(previous.narratives)
         ? previous.narratives.slice()
@@ -463,6 +1979,7 @@
       );
       setCardValue(card, "locationAssociation", location.association || "");
     }
+    syncCenterRadioNames();
   }
 
   function hydrateEncounter(record) {
@@ -478,6 +1995,12 @@
     if (byId("encounterTeam")) {
       byId("encounterTeam").value = record.team || "3";
     }
+    fillEventTypeSelect(record.eventType || "");
+    fillOperationSelect(record.operationId || "");
+    encounterOfficerIds = Array.isArray(record.officerIds)
+      ? record.officerIds.slice()
+      : [];
+    loadRoster(record);
     var vehList = byId("encounterVehicleList");
     if (vehList) {
       vehList.replaceChildren();
@@ -510,6 +2033,8 @@
           setCardValue(card, "vehicleBodyStyle", vehicle.vehicleBodyStyle);
         }
         setCardValue(card, "registeredOwner", vehicle.registeredOwnerName || "");
+        setRadioValue(card, "encounterDisposition", vehicle.encounterDisposition || "");
+        setCardValue(card, "parkedLocationText", vehicle.parkedLocationText || "");
         if (window.COPDoc && COPDoc.cards && COPDoc.cards.paintMedia) {
           COPDoc.cards.paintMedia(card, "VEHICLE");
         }
@@ -540,9 +2065,23 @@
         }
         fillEncounterLocation(card, location);
       });
+      syncCenterRadioNames();
+      (record.locations || []).forEach(function (location) {
+        if (!record.centerLocationId || !location || location.locationId !== record.centerLocationId) {
+          return;
+        }
+        document.querySelectorAll("#encounterLocationList > fieldset").forEach(function (card) {
+          if (card.dataset.entityId === location.locationId) {
+            setRadioValue(card, "encounterCenter", "1");
+          }
+        });
+      });
     }
+    paintOfficers();
     paintSubjectsTable(record.encounterId);
     paintSupervisorSummary(record);
+    paintBanner(record);
+    paintEvidence();
     lockEncounterForm(isComplete(record));
   }
 
@@ -553,27 +2092,27 @@
     }
     form.classList.toggle("is-encounter-locked", !!locked);
     Array.prototype.forEach.call(
-      form.querySelectorAll("input, select, textarea, button.add-card-btn"),
+      form.querySelectorAll("input, select, textarea, button"),
       function (el) {
         if (el.id === "encounterId") {
           el.readOnly = true;
+          el.disabled = false;
           return;
         }
-        if (el.tagName === "BUTTON") {
+        if (el.getAttribute("role") === "tab") {
+          return;
+        }
+        if (el.id === "unlockEncounter" || el.id === "unlockReason") {
+          el.disabled = !locked;
+          return;
+        }
+        if (el.id === "confirmEncounter") {
           el.disabled = !!locked;
           return;
         }
         el.disabled = !!locked;
-        if (el.id === "encounterId") {
-          el.disabled = false;
-          el.readOnly = true;
-        }
       }
     );
-    var addSubject = byId("addEncounterSubjectTableButton");
-    if (addSubject) {
-      addSubject.hidden = !!locked;
-    }
     if (window.COPDoc && COPDoc.chrome && typeof COPDoc.chrome.mount === "function") {
       COPDoc.chrome.mount();
     }
@@ -581,11 +2120,6 @@
 
   function paintSupervisorSummary(record) {
     var el = byId("encounterSupervisorSummary");
-    var link = byId("openEncounterNarrativesButton");
-    if (link && record && record.encounterId) {
-      link.href =
-        "narrative.html?encounterId=" + encodeURIComponent(record.encounterId);
-    }
     if (!el) {
       return;
     }
@@ -617,37 +2151,14 @@
     return parts.length ? "bookin.html?" + parts.join("&") : "bookin.html";
   }
 
-  function rebuildEncounterSubjects(encounterId) {
-    var m = model();
-    if (!encounterId || !m || !m.store) {
-      return;
-    }
-    m.store.loadFromDisk();
-    var encounter = m.store.getEncounter(encounterId);
-    if (!encounter) {
-      return;
-    }
-    encounter.subjects = subjectsForEncounter(encounterId).map(function (row) {
-      return {
-        personId: row.personId || "",
-        leadId: row.leadId || "",
-        bookinRecordId: row.bookinRecordId || "",
-        lastName: row.lastName || "",
-        firstName: row.firstName || "",
-        alienNumber: row.alienNumber || "",
-        encounterRole: row.encounterRole || ""
-      };
-    });
-    m.store.saveEncounter(encounter, {
-      mode: isCommitted(encounter) ? "commit" : "draft"
-    });
+  function subjectKey(row) {
+    return (row && (row.subjectId || row.bookinRecordId || row.personId)) || "";
   }
 
-  function unlinkEncounterSubject(encounterId, bookinRecordId) {
-    var rows = subjectsForEncounter(encounterId);
+  function unlinkEncounterSubject(encounterId, key) {
     var row = null;
-    rows.forEach(function (item) {
-      if (item && item.bookinRecordId === bookinRecordId) {
+    encounterSubjects.forEach(function (item) {
+      if (item && subjectKey(item) === key) {
         row = item;
       }
     });
@@ -660,201 +2171,442 @@
     ) {
       return;
     }
-    if (bookinRecordId) {
+    encounterSubjects = encounterSubjects.filter(function (item) {
+      return subjectKey(item) !== key;
+    });
+    if (row && row.bookinRecordId) {
       var list = bookinRecords().map(function (item) {
-        if (item && item.id === bookinRecordId) {
+        if (item && item.id === row.bookinRecordId) {
           item.encounterId = "";
         }
         return item;
       });
       writeBookinRecords(list);
-    } else {
-      var m = model();
-      var encounter = m && m.store && m.store.getEncounter(encounterId);
-      if (encounter && Array.isArray(encounter.subjects)) {
-        encounter.subjects = encounter.subjects.filter(function (item) {
-          return item && item.bookinRecordId;
-        });
-        m.store.saveEncounter(encounter, {
-          mode: isCommitted(encounter) ? "commit" : "draft"
-        });
-      }
     }
-    rebuildEncounterSubjects(encounterId);
+    saveDraftQuiet({ force: true });
     paintSubjectsTable(encounterId);
+    paintBanner();
     setStatus("Subject removed from this encounter.", true);
   }
 
-  var subjectsRoster = null;
-  var subjectsRosterEncounter = "";
+  function packetCell(row) {
+    var outcome = String((row && row.outcome) || "").toUpperCase();
+    if (outcome && outcome !== "ARRESTED") {
+      return "—";
+    }
+    if (row && row.docsGeneratedAt) {
+      return "generated";
+    }
+    if (row && row.bookinRecordId) {
+      return "booked";
+    }
+    return "";
+  }
 
-  function paintSubjectsTable(encounterId) {
-    var host = byId("arrestRosterHost");
-    var rows = subjectsForEncounter(encounterId);
-    if (host) {
-      host.replaceChildren();
-      subjectsRoster = null;
-      subjectsRosterEncounter = "";
-      if (!rows.length) {
-        var emptyNote = document.createElement("p");
-        emptyNote.className = "records-empty";
-        emptyNote.textContent = "No subjects on this encounter yet.";
-        host.appendChild(emptyNote);
-      } else {
-        var wrap = document.createElement("div");
-        wrap.className = "records-table-wrap";
-        var table = document.createElement("table");
-        table.className = "records-table";
-        var head = document.createElement("thead");
-        var headRow = document.createElement("tr");
-        ["Subject", "Role", "A-Number", "Case", ""].forEach(function (label) {
-          var th = document.createElement("th");
-          th.textContent = label;
-          headRow.appendChild(th);
-        });
-        head.appendChild(headRow);
-        table.appendChild(head);
-        var body = document.createElement("tbody");
-        rows.forEach(function (row) {
-          var tr = document.createElement("tr");
-          var name = [row.lastName, row.firstName].filter(Boolean).join(", ");
-          var role = String(row.encounterRole || "").toUpperCase();
-          var roleLabel =
-            role === "COLLATERAL"
-              ? "Collateral"
-              : role === "TARGET"
-                ? "Target"
-                : "—";
-          [name || "—", roleLabel, row.alienNumber || "—", row.leadId ? "Filed" : "Packet"].forEach(
-            function (text) {
-              var td = document.createElement("td");
-              td.textContent = text;
-              tr.appendChild(td);
-            }
-          );
-          var actions = document.createElement("td");
-          var cluster = document.createElement("div");
-          cluster.className = "record-actions";
-          if (row.bookinRecordId) {
-            var edit = document.createElement("a");
-            edit.className = "action-button-secondary compact";
-            edit.href = bookinHref(encounterId, row.bookinRecordId);
-            edit.textContent = "Open";
-            cluster.appendChild(edit);
-          }
-          if (row.leadId) {
-            var caseLink = document.createElement("a");
-            caseLink.className = "action-button-secondary compact";
-            caseLink.href = "case.html?id=" + encodeURIComponent(row.leadId);
-            caseLink.textContent = "Case";
-            cluster.appendChild(caseLink);
-          }
-          var m = model();
-          var stored =
-            m && m.store && encounterId
-              ? m.store.getEncounter(encounterId)
-              : null;
-          if (!isComplete(stored)) {
-            var remove = document.createElement("button");
-            remove.type = "button";
-            remove.className = "action-button-danger compact";
-            remove.setAttribute("aria-label", "Remove " + subjectLabel(row));
-            remove.textContent = "×";
-            remove.addEventListener("click", function () {
-              unlinkEncounterSubject(encounterId, row.bookinRecordId || "");
-            });
-            cluster.appendChild(remove);
-          }
-          actions.appendChild(cluster);
-          tr.appendChild(actions);
-          body.appendChild(tr);
-        });
-        table.appendChild(body);
-        wrap.appendChild(table);
-        host.appendChild(wrap);
-      }
-      if (rows.length && window.COPDoc && COPDoc.arrestRoster) {
-        var reportHost = document.createElement("div");
-        reportHost.className = "card-list-actions";
-        var reportBtn = document.createElement("button");
-        reportBtn.type = "button";
-        reportBtn.className = "action-button compact";
-        reportBtn.textContent = "Generate report";
-        reportBtn.addEventListener("click", function () {
-          var scratch = document.createElement("div");
-          scratch.hidden = true;
-          host.appendChild(scratch);
-          var widget = COPDoc.arrestRoster.mount(scratch, {
-            encounterId: encounterId,
-            showGenerate: true
-          });
-          if (widget && widget.generate) {
-            widget.generate();
-          }
-        });
-        reportHost.appendChild(reportBtn);
-        host.appendChild(reportHost);
-      }
-      var href = bookinHref(encounterId);
-      var tableAdd = byId("addEncounterSubjectTableButton");
-      if (tableAdd && encounterId) {
-        tableAdd.href = href;
-      }
+  function bookFormStateField(value, type) {
+    return {
+      type: type || "text",
+      value: String(value == null ? "" : value),
+      checked: false
+    };
+  }
+
+  function closeBookFloat() {
+    var floatEl = byId("encBookFloat");
+    if (floatEl) {
+      floatEl.hidden = true;
+    }
+  }
+
+  function openBookFloat(row) {
+    if (!row) {
       return;
     }
-    var body = byId("encounterSubjectsBody");
-    var empty = byId("encounterSubjectsEmpty");
-    var wrap = byId("encounterSubjectsTableWrap");
-    if (!body || !empty || !wrap) {
+    if (String(row.outcome || "").toUpperCase() !== "ARRESTED") {
+      setStatus("Book-in is only for arrested subjects.");
+      return;
+    }
+    if (row.bookinRecordId) {
+      setStatus("This subject is already booked-in.");
+      return;
+    }
+    if (isComplete(collectEncounter())) {
+      setStatus("This encounter is completed and locked.");
+      return;
+    }
+    saveDraftQuiet({ force: true });
+    if (byId("bookSubjectKey")) {
+      byId("bookSubjectKey").value = subjectKey(row);
+    }
+    if (byId("encBookTitle")) {
+      byId("encBookTitle").textContent = "Book-in";
+    }
+    if (byId("bookinWho")) {
+      byId("bookinWho").textContent =
+        "Book-in " +
+        subjectLabel(row) +
+        " · ARRESTED. Medical, children, cash, ID.";
+    }
+    if (byId("bookMedical")) {
+      byId("bookMedical").value = "good";
+    }
+    if (byId("bookChildren")) {
+      byId("bookChildren").value = "none";
+    }
+    if (byId("bookCash")) {
+      byId("bookCash").value = "None";
+    }
+    if (byId("bookId")) {
+      byId("bookId").value = "";
+    }
+    var floatEl = byId("encBookFloat");
+    if (floatEl) {
+      floatEl.style.left = "50%";
+      floatEl.style.top = "4.75rem";
+      floatEl.style.transform = "translateX(-50%)";
+      floatEl.hidden = false;
+    }
+  }
+
+  function generateSubjectDocs(row) {
+    if (!row || !row.bookinRecordId) {
+      setStatus("Book the subject before generating docs.");
+      return;
+    }
+    row.docsGeneratedAt = new Date().toISOString();
+    encounterSubjects = encounterSubjects.map(function (item) {
+      if (subjectKey(item) === subjectKey(row)) {
+        item.docsGeneratedAt = row.docsGeneratedAt;
+      }
+      return item;
+    });
+    saveDraftQuiet({ force: true });
+    paintSubjectsTable(
+      (byId("encounterId") && byId("encounterId").value) || queryId()
+    );
+    var encId = (byId("encounterId") && byId("encounterId").value) || queryId();
+    window.location.href =
+      "bookin.html?encounterId=" +
+      encodeURIComponent(encId) +
+      "&recordId=" +
+      encodeURIComponent(row.bookinRecordId);
+  }
+
+  function saveBookToEncounter() {
+    var key = (byId("bookSubjectKey") && byId("bookSubjectKey").value) || "";
+    var row = null;
+    encounterSubjects.forEach(function (item) {
+      if (item && subjectKey(item) === key) {
+        row = item;
+      }
+    });
+    if (!row) {
+      setStatus("Subject was not found.");
+      return;
+    }
+    if (String(row.outcome || "").toUpperCase() !== "ARRESTED") {
+      setStatus("Book-in is only for arrested subjects.");
+      return;
+    }
+    if (saveDraftQuiet({ force: true }) === false) {
+      return;
+    }
+    var m = model();
+    var encounter = collectEncounter();
+    var shared =
+      m && typeof m.sharedStopFromEncounter === "function"
+        ? m.sharedStopFromEncounter(encounter)
+        : {};
+    row = m && typeof m.stampSharedStop === "function"
+      ? m.stampSharedStop(row, shared)
+      : row;
+    var medical = (byId("bookMedical") && byId("bookMedical").value) || "good";
+    var children = (byId("bookChildren") && byId("bookChildren").value) || "none";
+    var cash = String((byId("bookCash") && byId("bookCash").value) || "").trim();
+    var travelDocs = String((byId("bookId") && byId("bookId").value) || "").trim();
+    var now = new Date().toISOString();
+    var packetId =
+      window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : "record-" + Date.now().toString(16);
+    var officerName = officerDisplayName(row.arrestingOfficerId);
+    var booking = {
+      cash: cash,
+      travelDocuments: travelDocs,
+      children: children === "none" ? "" : children,
+      medical: {
+        noMedicalIssues: medical === "good",
+        medicalIssues: medical === "issues" ? "Issues" : ""
+      }
+    };
+    var input =
+      m && typeof m.arrestInputFromSubject === "function"
+        ? m.arrestInputFromSubject(row, shared, {
+            bookinRecordId: packetId,
+            bookInDateTime: now,
+            arrestingOfficer: officerName,
+            booking: booking
+          })
+        : {};
+    var promoted =
+      m && m.store && typeof m.store.promoteBookInToLead === "function"
+        ? m.store.promoteBookInToLead(input)
+        : { ok: false, error: "Could not file the case." };
+    if (!promoted || !promoted.ok) {
+      setStatus((promoted && promoted.error) || "Could not book this subject.");
+      return;
+    }
+    var packet = {
+      id: packetId,
+      createdAt: now,
+      updatedAt: now,
+      firstName: row.firstName || "",
+      lastName: row.lastName || "",
+      aNumber: row.alienNumber || "",
+      dateOfBirth: "",
+      countryOfCitizenship: row.citizenship || "",
+      dateTime: now,
+      arrestTime: input.arrestTime || "",
+      encounterId: encounter.encounterId,
+      encounterRole: row.encounterRole || "",
+      subjectRole: row.encounterRole || "",
+      vehiclePosition: input.vehiclePosition || "",
+      team: shared.team || encounter.team || "",
+      officersName: officerName,
+      personId: promoted.personId || row.personId || "",
+      leadId: promoted.leadId || "",
+      arrestId: promoted.arrestId || "",
+      formState: {
+        lastName: bookFormStateField(row.lastName),
+        firstName: bookFormStateField(row.firstName),
+        alienNumber: bookFormStateField(row.alienNumber),
+        citizenship: bookFormStateField(row.citizenship),
+        cash: bookFormStateField(cash),
+        children: bookFormStateField(children === "none" ? "" : children),
+        travelDocs: bookFormStateField(travelDocs),
+        officersName: bookFormStateField(officerName),
+        team: bookFormStateField(shared.team || encounter.team || ""),
+        encounterNumber: bookFormStateField(encounter.encounterId),
+        noMedicalIssues: {
+          type: "checkbox",
+          value: "",
+          checked: medical === "good"
+        },
+        medicalIssues: bookFormStateField(
+          medical === "issues" ? "Issues" : ""
+        )
+      }
+    };
+    var packets = bookinRecords();
+    packets.push(packet);
+    writeBookinRecords(packets);
+    row.bookinRecordId = packetId;
+    row.packetFiledAt = now;
+    row.leadId = promoted.leadId || row.leadId || "";
+    row.personId = promoted.personId || row.personId || "";
+    row.docsGeneratedAt = "";
+    encounterSubjects = encounterSubjects.map(function (item) {
+      return subjectKey(item) === key ? row : item;
+    });
+    if (encounter.encounterId && row.personId && m.store.linkEncounterVehiclesToPerson) {
+      m.store.linkEncounterVehiclesToPerson({
+        encounterId: encounter.encounterId,
+        bookinRecordId: packetId,
+        leadId: row.leadId,
+        personId: row.personId
+      });
+    }
+    if (
+      row.arrestingOfficerId &&
+      window.COPDoc &&
+      COPDoc.officers &&
+      typeof COPDoc.officers.recordFieldArrest === "function"
+    ) {
+      COPDoc.officers.recordFieldArrest(row.arrestingOfficerId, {
+        arrestId: promoted.arrestId || "",
+        encounterId: encounter.encounterId,
+        personId: row.personId,
+        bookedAt: now
+      });
+    }
+    saveDraftQuiet({ force: true });
+    closeBookFloat();
+    paintSubjectsTable(encounter.encounterId);
+    paintBanner();
+    setStatus("Booked-in " + subjectLabel(row) + ".", true);
+  }
+
+  function bindBookFloat() {
+    var floatEl = byId("encBookFloat");
+    var bar = byId("encBookBar");
+    if (floatEl && bar && bar.dataset.dragBound !== "true") {
+      bar.dataset.dragBound = "true";
+      var drag = { on: false, x: 0, y: 0, left: 0, top: 0 };
+      bar.addEventListener("mousedown", function (event) {
+        if (event.button !== 0 || event.target.closest("button")) {
+          return;
+        }
+        var rect = floatEl.getBoundingClientRect();
+        drag.on = true;
+        drag.x = event.clientX;
+        drag.y = event.clientY;
+        drag.left = rect.left;
+        drag.top = rect.top;
+        floatEl.style.left = rect.left + "px";
+        floatEl.style.top = rect.top + "px";
+        floatEl.style.transform = "none";
+        event.preventDefault();
+      });
+      document.addEventListener("mousemove", function (event) {
+        if (!drag.on) {
+          return;
+        }
+        floatEl.style.left = drag.left + event.clientX - drag.x + "px";
+        floatEl.style.top = drag.top + event.clientY - drag.y + "px";
+      });
+      document.addEventListener("mouseup", function () {
+        drag.on = false;
+      });
+    }
+    ["encBookClose", "cancelBookin"].forEach(function (id) {
+      var btn = byId(id);
+      if (!btn || btn.dataset.bound === "true") {
+        return;
+      }
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", closeBookFloat);
+    });
+    var confirmBtn = byId("confirmBookin");
+    if (confirmBtn && confirmBtn.dataset.bound !== "true") {
+      confirmBtn.dataset.bound = "true";
+      confirmBtn.addEventListener("click", saveBookToEncounter);
+    }
+  }
+
+  function paintSubjectsTable(encounterId) {
+    var body = byId("subjectBody");
+    if (!body) {
       return;
     }
     body.replaceChildren();
-    empty.hidden = rows.length > 0;
-    wrap.hidden = rows.length === 0;
+    var rows = encounterSubjects;
+    if (!rows.length) {
+      var empty = document.createElement("tr");
+      var td = document.createElement("td");
+      td.colSpan = 6;
+      td.textContent = "No subjects. Add existing or mint new.";
+      empty.appendChild(td);
+      body.appendChild(empty);
+      paintBanner();
+      return;
+    }
+    var m = model();
+    var stored =
+      m && m.store && encounterId ? m.store.getEncounter(encounterId) : null;
+    var locked = isComplete(stored);
     rows.forEach(function (row) {
       var tr = document.createElement("tr");
-      var name = [row.lastName, row.firstName].filter(Boolean).join(", ");
+      var name =
+        [row.lastName, row.firstName].filter(Boolean).join(", ") ||
+        (row.unidentified ? "Unidentified" : "—");
       var role = String(row.encounterRole || "").toUpperCase();
       var roleLabel =
-        role === "COLLATERAL" ? "Collateral" : role === "TARGET" ? "Target" : "—";
-      [
-        name || "—",
-        roleLabel,
-        row.alienNumber || "—",
-        (row.updatedAt || "").slice(0, 16) || "—"
-      ].forEach(function (text) {
-        var td = document.createElement("td");
-        td.textContent = text;
-        tr.appendChild(td);
+        role === "OTHER"
+          ? "Other"
+          : role === "COLLATERAL"
+            ? "Collateral"
+            : role === "TARGET"
+              ? "Target"
+              : "—";
+      var outcome = String(row.outcome || "").toUpperCase();
+      var photo = document.createElement("td");
+      photo.textContent = row.personId ? "▣" : "";
+      tr.appendChild(photo);
+      [name, roleLabel].forEach(function (text) {
+        var cell = document.createElement("td");
+        cell.textContent = text;
+        tr.appendChild(cell);
       });
+      var outcomeTd = document.createElement("td");
+      if (outcome === "ARRESTED") {
+        outcomeTd.className = "outcome-A";
+        outcomeTd.textContent = "ARRESTED";
+      } else if (outcome === "RELEASED") {
+        outcomeTd.className = "outcome-R";
+        outcomeTd.textContent = "RELEASED";
+      } else if (outcome === "FLED_VEHICLE") {
+        outcomeTd.className = "outcome-F";
+        outcomeTd.textContent = "FLED IN VEHICLE";
+      } else if (outcome === "FLED_FOOT" || outcome === "FLED") {
+        outcomeTd.className = "outcome-F";
+        outcomeTd.textContent = outcome === "FLED_FOOT" ? "FLED ON FOOT" : "FLED";
+      } else {
+        outcomeTd.textContent = "—";
+      }
+      tr.appendChild(outcomeTd);
+      var packetTd = document.createElement("td");
+      var packet = packetCell(row);
+      if (packet === "generated") {
+        var genChip = document.createElement("span");
+        genChip.className = "status-chip is-generated";
+        genChip.textContent = "Generated";
+        packetTd.appendChild(genChip);
+      } else if (packet === "booked") {
+        var chip = document.createElement("span");
+        chip.className = "status-chip is-booked";
+        chip.textContent = "Booked-in";
+        packetTd.appendChild(chip);
+      } else {
+        packetTd.textContent = "—";
+      }
+      tr.appendChild(packetTd);
       var actions = document.createElement("td");
       var cluster = document.createElement("div");
-      cluster.className = "record-actions";
-      if (row.bookinRecordId) {
-        var edit = document.createElement("a");
-        edit.className = "action-button-secondary compact";
-        edit.href = bookinHref(encounterId, row.bookinRecordId);
-        edit.textContent = "Edit";
-        cluster.appendChild(edit);
-      }
-      var remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "action-button-danger compact";
-      remove.setAttribute("aria-label", "Remove " + subjectLabel(row));
-      remove.textContent = "×";
-      remove.addEventListener("click", function () {
-        unlinkEncounterSubject(encounterId, row.bookinRecordId || "");
+      cluster.className = "row-actions";
+      var edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "action-button-secondary compact";
+      edit.textContent = "Edit";
+      edit.addEventListener("click", function () {
+        openEditSubject(row);
       });
-      cluster.appendChild(remove);
+      cluster.appendChild(edit);
+      if (outcome === "ARRESTED" && packet !== "booked" && packet !== "generated") {
+        var book = document.createElement("button");
+        book.type = "button";
+        book.className = "action-button compact";
+        book.textContent = "Book";
+        book.addEventListener("click", function () {
+          openBookFloat(row);
+        });
+        cluster.appendChild(book);
+      }
+      if (outcome === "ARRESTED" && packet === "booked") {
+        var docs = document.createElement("button");
+        docs.type = "button";
+        docs.className = "action-button compact";
+        docs.textContent = "Generate docs";
+        docs.addEventListener("click", function () {
+          generateSubjectDocs(row);
+        });
+        cluster.appendChild(docs);
+      }
+      if (!locked) {
+        var remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "action-button-danger compact";
+        remove.setAttribute("aria-label", "Remove " + subjectLabel(row));
+        remove.textContent = "×";
+        remove.addEventListener("click", function () {
+          unlinkEncounterSubject(encounterId, subjectKey(row));
+        });
+        cluster.appendChild(remove);
+      }
       actions.appendChild(cluster);
       tr.appendChild(actions);
       body.appendChild(tr);
     });
-    var href = bookinHref(encounterId);
-    var tableAdd = byId("addEncounterSubjectTableButton");
-    if (tableAdd && encounterId) {
-      tableAdd.href = href;
-    }
+    paintBanner();
   }
 
   function encounterHasMeaningfulData(record) {
@@ -863,6 +2615,9 @@
     }
     if (
       record.startedAt ||
+      record.eventType ||
+      record.operationId ||
+      (record.officerIds || []).length ||
       (record.vehicles || []).length ||
       (record.locations || []).length ||
       (record.subjects || []).length ||
@@ -958,22 +2713,52 @@
     window.location.href = bookinHref(id);
   }
 
-  function generateEncounterNarrative() {
+  function paintNarrativeTab() {
+    var need = byId("narrativeNeedSubjects");
+    var frame = byId("narrativeFrame");
     var id = (byId("encounterId") && byId("encounterId").value) || queryId();
-    if (!id) {
-      setStatus("Create the encounter first.");
+    var subjects =
+      encounterSubjects.length
+        ? encounterSubjects
+        : ((model() &&
+            model().store &&
+            id &&
+            model().store.getEncounter(id) &&
+            model().store.getEncounter(id).subjects) ||
+          []);
+    if (!id || !subjects.length) {
+      if (frame) {
+        frame.hidden = true;
+      }
+      if (need) {
+        need.hidden = false;
+        need.textContent = !id
+          ? "Create the encounter first."
+          : "Add subjects before writing an I-213.";
+      }
       return;
     }
     if (saveDraftQuiet({ force: true }) === false) {
       return;
     }
-    var subjects = subjectsForEncounter(id);
-    if (!subjects.length) {
-      setStatus("Add subjects on Book-in before generating an I-213.");
+    if (need) {
+      need.hidden = true;
+    }
+    if (!frame) {
       return;
     }
-    window.location.href =
-      "narrative.html?encounterId=" + encodeURIComponent(id);
+    var url =
+      "narrative.html?encounterId=" +
+      encodeURIComponent(id) +
+      "&embed=1";
+    if (frame.getAttribute("src") !== url) {
+      frame.src = url;
+    }
+    frame.hidden = false;
+  }
+
+  function generateEncounterNarrative() {
+    showEncounterTab("tab-narrative");
   }
 
   function unlinkBookinPacketsFromEncounter(encounterId) {
@@ -1072,7 +2857,11 @@
     if (
       typeof window.confirm === "function" &&
       !window.confirm(
-        "Mark this encounter complete?\n\nThis saves a snapshot for Map and analytics and locks the form. Later edits will not change that record."
+        "Review all facts before confirming.\n\n" +
+          "Officers, locations, vehicles, subjects, evidence, and narrative should be complete and correct.\n\n" +
+          "Confirm locks this encounter and saves the snapshot used for the map, stats, and the daily report.\n\n" +
+          "Later changes require Unlock and are logged.\n\n" +
+          "Confirm and close this encounter?"
       )
     ) {
       return;
@@ -1095,17 +2884,103 @@
     var pin = fresh && fresh.completed && fresh.completed.pin;
     setStatus(
       pin
-        ? "Encounter completed and locked. Snapshot filed for Map and analytics."
-        : "Encounter completed and locked. Add a mapped stop and complete again is not available; re-open only as a locked record.",
+        ? "Encounter confirmed and locked. Snapshot filed for Map and analytics."
+        : "Encounter confirmed and locked. Snapshot has no map pin yet.",
       true
     );
   }
 
+  function unlockCurrentEncounter() {
+    var m = model();
+    var id = (byId("encounterId") && byId("encounterId").value) || queryId();
+    var reason = String((byId("unlockReason") && byId("unlockReason").value) || "").trim();
+    if (!id) {
+      setStatus("Create the encounter first.");
+      return;
+    }
+    if (!reason) {
+      setStatus("Enter a reason to unlock.");
+      return;
+    }
+    if (!m || !m.store || typeof m.store.unlockEncounter !== "function") {
+      setStatus("Could not unlock the encounter.");
+      return;
+    }
+    var result = m.store.unlockEncounter(id, { reason: reason });
+    if (!result || !result.ok) {
+      setStatus((result && result.error) || "Could not unlock the encounter.");
+      return;
+    }
+    var fresh = m.store.getEncounter(id);
+    hydrateEncounter(fresh);
+    showEncounterTab("tab-review");
+    setStatus("Encounter unlocked. Snapshot stays until you re-confirm.", true);
+  }
+
   window.commitEncounter = commitEncounter;
   window.completeCurrentEncounter = completeCurrentEncounter;
+  window.unlockCurrentEncounter = unlockCurrentEncounter;
   window.generateEncounterNarrative = generateEncounterNarrative;
   window.openEncounterBookIn = openEncounterBookIn;
   window.deleteCurrentEncounter = deleteCurrentEncounter;
+
+  function applyEntrySeeds(record) {
+    var m = model();
+    if (!record || !m || !m.store) {
+      return { seeded: false, message: "" };
+    }
+    var operationId = queryParam("operationId");
+    var leadId = queryParam("leadId");
+    var personId = queryParam("personId");
+    if (!operationId && !leadId && !personId) {
+      return { seeded: false, message: "" };
+    }
+    var bits = [];
+    if (operationId && typeof m.seedEncounterFromOperation === "function") {
+      var op = m.store.getOperation(operationId);
+      if (op) {
+        m.seedEncounterFromOperation(record, op, {
+          getLead: function (id) {
+            return m.store.getLead(id);
+          }
+        });
+        bits.push(op.operationNumber || operationId);
+      }
+    }
+    if (leadId && typeof m.seedEncounterFromLead === "function") {
+      var lead = m.store.getLead(leadId);
+      if (lead) {
+        m.seedEncounterFromLead(record, lead, {
+          seedPlaces: !(record.locations || []).length,
+          seedVehicles: !(record.vehicles || []).length
+        });
+        if (!operationId) {
+          bits.push(leadId);
+        }
+      }
+    }
+    if (personId && typeof m.seedEncounterFromPerson === "function") {
+      var person = m.store.getPerson(personId);
+      if (person) {
+        m.seedEncounterFromPerson(record, person, {
+          leadId: leadId,
+          seedPlaces: !(record.locations || []).length,
+          seedVehicles: !(record.vehicles || []).length
+        });
+        if (!operationId && !leadId) {
+          bits.push("saved person");
+        }
+      }
+    }
+    return {
+      seeded: bits.length > 0,
+      message: bits.length
+        ? "Loaded from " +
+          bits.join(" · ") +
+          ". Last-minute changes stay on this encounter."
+        : ""
+    };
+  }
 
   function ensureNewEncounter() {
     var m = model();
@@ -1126,7 +3001,12 @@
       existingIds: existingIds
     });
     transientEncounter = created;
+    var seed = applyEntrySeeds(created);
     hydrateEncounter(created);
+    if (seed.seeded) {
+      saveDraftQuiet({ force: true });
+      setStatus(seed.message, true);
+    }
     return created;
   }
 
@@ -1205,21 +3085,130 @@
     });
   }
 
+  function bindEncounterWorkspace() {
+    var tabs = document.querySelector(".enc-tabs");
+    if (tabs && tabs.dataset.bound !== "true") {
+      tabs.dataset.bound = "true";
+      tabs.addEventListener("click", function (event) {
+        var btn = event.target.closest("[role='tab']");
+        if (!btn) {
+          return;
+        }
+        showEncounterTab(btn.getAttribute("aria-controls"));
+      });
+    }
+    var op = byId("operationId");
+    if (op && op.dataset.bound !== "true") {
+      op.dataset.bound = "true";
+      op.addEventListener("change", function () {
+        if (op.value) {
+          loadOfficersFromOperation(op.value);
+          var rec = collectEncounter();
+          var m = model();
+          var operation = m && m.store && m.store.getOperation(op.value);
+          if (rec && operation && typeof m.seedEncounterFromOperation === "function") {
+            m.seedEncounterFromOperation(rec, operation, {
+              getLead: function (id) {
+                return m.store.getLead(id);
+              }
+            });
+            hydrateEncounter(rec);
+          }
+        }
+        paintBanner();
+      });
+    }
+    var addOfficer = byId("addOfficer");
+    if (addOfficer && addOfficer.dataset.bound !== "true") {
+      addOfficer.dataset.bound = "true";
+      addOfficer.addEventListener("click", function () {
+        var pick = byId("officerPick");
+        var id = pick && pick.value;
+        if (!id) {
+          setStatus("Pick an officer from the roster.");
+          return;
+        }
+        if (encounterOfficerIds.indexOf(id) === -1) {
+          encounterOfficerIds.push(id);
+        }
+        paintOfficers();
+        paintBanner();
+      });
+    }
+    bindSubjectFloat();
+    bindBookFloat();
+    var addExisting = byId("openAddExisting");
+    if (addExisting && addExisting.dataset.bound !== "true") {
+      addExisting.dataset.bound = "true";
+      addExisting.addEventListener("click", openSubjectBrowse);
+    }
+    var addNew = byId("openAddSubject");
+    if (addNew && addNew.dataset.bound !== "true") {
+      addNew.dataset.bound = "true";
+      addNew.addEventListener("click", openNewSubject);
+    }
+    var confirmBtn = byId("confirmEncounter");
+    if (confirmBtn && confirmBtn.dataset.bound !== "true") {
+      confirmBtn.dataset.bound = "true";
+      confirmBtn.addEventListener("click", function () {
+        completeCurrentEncounter();
+      });
+    }
+    var unlockBtn = byId("unlockEncounter");
+    if (unlockBtn && unlockBtn.dataset.bound !== "true") {
+      unlockBtn.dataset.bound = "true";
+      unlockBtn.addEventListener("click", unlockCurrentEncounter);
+    }
+    if (document.documentElement.dataset.evidenceBound !== "true") {
+      document.documentElement.dataset.evidenceBound = "true";
+      document.addEventListener("copdoc:media-changed", function () {
+        paintEvidence();
+      });
+    }
+    var narrativeBtn = byId("openEncounterNarrativesButton");
+    if (narrativeBtn && narrativeBtn.dataset.bound !== "true") {
+      narrativeBtn.dataset.bound = "true";
+      narrativeBtn.addEventListener("click", function () {
+        showEncounterTab("tab-narrative");
+      });
+    }
+    var locList = byId("encounterLocationList");
+    if (locList && locList.dataset.centerBound !== "true") {
+      locList.dataset.centerBound = "true";
+      locList.addEventListener("click", syncCenterRadioNames);
+      locList.addEventListener("change", function () {
+        syncCenterRadioNames();
+        paintBanner();
+      });
+      if (typeof MutationObserver === "function") {
+        new MutationObserver(function () {
+          syncCenterRadioNames();
+        }).observe(locList, { childList: true });
+      }
+    }
+    var form = byId("encounterForm");
+    if (form && form.dataset.bannerBound !== "true") {
+      form.dataset.bannerBound = "true";
+      form.addEventListener("change", function () {
+        paintBanner();
+      });
+      form.addEventListener("input", function () {
+        paintBanner();
+      });
+    }
+  }
+
   function bootForm() {
     var m = model();
     if (!m || !m.store) {
       return;
     }
+    m.store.loadFromDisk();
+    fillEventTypeSelect();
+    fillOperationSelect();
+    bindEncounterWorkspace();
     ensureNewEncounter();
     bindTeamRemint();
-    var tableAdd = byId("addEncounterSubjectTableButton");
-    if (tableAdd && tableAdd.dataset.openBound !== "true") {
-      tableAdd.dataset.openBound = "true";
-      tableAdd.addEventListener("click", function (event) {
-        event.preventDefault();
-        openEncounterBookIn();
-      });
-    }
     if (m.autosave && typeof m.autosave.bind === "function") {
       m.autosave.bind({
         key: "encounter-form",

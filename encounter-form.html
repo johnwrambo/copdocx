@@ -21,9 +21,9 @@
         <span
           id="appVersion"
           class="app-version"
-          data-version="0.67.0"
+          data-version="0.69.2"
         >
-          Version 0.67.0
+          Version 0.69.2
         </span>
         <span id="currentDate" class="app-bar-date"></span>
       </div>
@@ -33,121 +33,445 @@
 
     <main class="page page-wide">
       <form id="encounterForm" autocomplete="off" novalidate>
-        <fieldset class="card-static">
-          <legend>Encounter details</legend>
+        <input
+          type="hidden"
+          id="encounterId"
+          name="encounterId"
+          data-field="encounterId"
+        />
+
+        <p class="enc-banner">
+          <span class="enc-banner-id" id="encBannerId">New encounter</span>
+          <span class="enc-banner-city" id="encBannerCity"></span>
+          <span class="enc-banner-facts" id="encBannerFacts"></span>
+        </p>
+
+        <ul class="enc-tabs" role="tablist">
+          <li><button type="button" role="tab" aria-selected="true" aria-controls="tab-stop" id="tabbtn-stop">Stop</button></li>
+          <li><button type="button" role="tab" aria-selected="false" aria-controls="tab-vehicles" id="tabbtn-vehicles">Vehicles</button></li>
+          <li><button type="button" role="tab" aria-selected="false" aria-controls="tab-subjects" id="tabbtn-subjects">Subjects</button></li>
+          <li><button type="button" role="tab" aria-selected="false" aria-controls="tab-evidence" id="tabbtn-evidence">Evidence</button></li>
+          <li><button type="button" role="tab" aria-selected="false" aria-controls="tab-narrative" id="tabbtn-narrative">Narrative</button></li>
+          <li><button type="button" role="tab" aria-selected="false" aria-controls="tab-review" id="tabbtn-review">Review</button></li>
+        </ul>
+
+        <section class="enc-panel" id="tab-stop" role="tabpanel" aria-labelledby="tabbtn-stop">
+          <fieldset class="card-static">
+            <legend>Stop</legend>
+            <div class="row">
+              <div class="field">
+                <label for="encounterStartedAt">Date / time of stop</label>
+                <input
+                  type="datetime-local"
+                  id="encounterStartedAt"
+                  name="encounterStartedAt"
+                  data-field="startedAt"
+                />
+              </div>
+              <div class="field">
+                <label for="encounterTeam">Team</label>
+                <input
+                  type="number"
+                  id="encounterTeam"
+                  name="encounterTeam"
+                  data-field="team"
+                  min="1"
+                  step="1"
+                  value="3"
+                />
+              </div>
+              <div class="field">
+                <label for="eventType">Event type</label>
+                <select id="eventType" name="eventType" data-field="eventType">
+                  <option value="">Select an option</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="operationId">Operation</label>
+                <select id="operationId" name="operationId" data-field="operationId">
+                  <option value="">None</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="card-static">
+            <legend>Officers</legend>
+            <p class="section-note">
+              Choosing an operation loads that cell. Add or remove after that stays on this encounter. Does not write officer duty.
+            </p>
+            <div class="row">
+              <div class="field field-span-2 search-field">
+                <label for="officerPick">Add from roster</label>
+                <select id="officerPick">
+                  <option value="">Select an officer</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="addOfficer" class="field-label-spacer">Add</label>
+                <button type="button" class="action-button-secondary" id="addOfficer">Add from roster</button>
+              </div>
+            </div>
+            <div class="records-table-wrap">
+              <table class="records-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Badge</th>
+                    <th>Assignment</th>
+                    <th>Cell</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="officerBody">
+                  <tr>
+                    <td colspan="5">No officers yet. Pick an operation or add from the roster.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </fieldset>
+
+          <fieldset class="card-static">
+            <legend>Locations</legend>
+            <p class="section-note">Add each place and label it. Pick one Encounter center for the map group.</p>
+            <div
+              id="encounterLocationList"
+              class="card-list"
+              data-location-owner="encounter"
+              aria-live="polite"
+            ></div>
+            <div class="card-list-actions">
+              <button
+                type="button"
+                id="addEncounterLocationButton"
+                class="add-card-btn"
+                aria-controls="encounterLocationList"
+              >
+                <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+                Add location
+              </button>
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="enc-panel" id="tab-vehicles" role="tabpanel" aria-labelledby="tabbtn-vehicles" hidden>
+          <fieldset class="card-static">
+            <legend>Vehicles</legend>
+            <p class="section-note">Subject vehicles. Disposition is encounter-specific.</p>
+            <div id="encounterVehicleList" class="card-list" aria-live="polite"></div>
+            <div class="card-list-actions">
+              <button
+                type="button"
+                id="addEncounterVehicleButton"
+                class="add-card-btn"
+                aria-controls="encounterVehicleList"
+              >
+                <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+                Add vehicle
+              </button>
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="enc-panel" id="tab-subjects" role="tabpanel" aria-labelledby="tabbtn-subjects" hidden>
+          <fieldset class="card-static">
+            <legend>Subjects</legend>
+            <p class="section-note">
+              Tabular roster from this encounter. Add existing or new here — not through Book-in.
+              Book-in is custody paperwork for an arrested row, later.
+            </p>
+            <div class="records-table-wrap">
+              <table class="records-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Outcome</th>
+                    <th>Packet</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="subjectBody"></tbody>
+              </table>
+            </div>
+            <div class="card-list-actions">
+              <button type="button" class="add-card-btn" id="openAddExisting">
+                <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+                Add existing
+              </button>
+              ·
+              <button type="button" class="add-card-btn" id="openAddSubject">
+                <span class="card-icon-btn card-add" aria-hidden="true">+</span>
+                Add new
+              </button>
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="enc-panel" id="tab-evidence" role="tabpanel" aria-labelledby="tabbtn-evidence" hidden>
+          <fieldset class="card-static">
+            <legend>Evidence</legend>
+            <p class="section-note">
+              Scene files on this encounter. Associate each with a booked subject or a vehicle.
+            </p>
+            <div class="evidence-grid" id="evidenceGrid"></div>
+            <div class="row">
+              <div class="field">
+                <label for="evOwner">Associate new files with</label>
+                <select id="evOwner">
+                  <option value="scene">Encounter (scene)</option>
+                </select>
+              </div>
+            </div>
+            <div class="card-list-actions">
+              <a class="add-card-btn" id="addEncounterPhoto" href="photo-picker.html">Add photo</a>
+              ·
+              <a class="add-card-btn" id="addEncounterFile" href="file-upload.html">Add file</a>
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="enc-panel" id="tab-narrative" role="tabpanel" aria-labelledby="tabbtn-narrative" hidden>
+          <p id="narrativeNeedSubjects" class="section-note" hidden>
+            Add subjects before writing an I-213.
+          </p>
+          <iframe
+            id="narrativeFrame"
+            class="enc-narrative-frame"
+            title="I-213"
+            scrolling="yes"
+            hidden
+          ></iframe>
+        </section>
+
+        <section class="enc-panel" id="tab-review" role="tabpanel" aria-labelledby="tabbtn-review" hidden>
+          <fieldset class="card-static">
+            <legend>Stop</legend>
+            <p id="reviewStop" class="section-note">No stop yet.</p>
+            <p id="reviewStale" class="section-note" hidden>Unlocked — snapshot is stale until you re-confirm.</p>
+          </fieldset>
+          <fieldset class="card-static">
+            <legend>Locations</legend>
+            <div class="case-map-layout">
+              <div id="reviewMap" class="lead-case-map" hidden></div>
+              <div class="case-map-legend">
+                <ul class="walk-list" id="reviewLocations"></ul>
+              </div>
+            </div>
+          </fieldset>
+          <fieldset class="card-static">
+            <legend>Vehicles</legend>
+            <p id="reviewVehicles" class="section-note">No vehicles.</p>
+          </fieldset>
+          <fieldset class="card-static">
+            <legend>Officers</legend>
+            <p id="reviewOfficers" class="section-note">No officers loaded.</p>
+          </fieldset>
+          <fieldset class="card-static">
+            <legend>Subjects</legend>
+            <p id="reviewSubjects" class="section-note">No subjects.</p>
+          </fieldset>
+          <fieldset class="card-static">
+            <legend>Evidence</legend>
+            <p id="reviewEvidence" class="section-note">No scene files.</p>
+          </fieldset>
+          <fieldset class="card-static">
+            <legend>Confirm</legend>
+            <p class="section-note">
+              Review every fact on this encounter — officers, locations, vehicles, subjects, evidence, and narrative — before you confirm. Confirm locks the record and mints the snapshot. Later edits require Unlock and are logged.
+            </p>
+            <p class="form-actions">
+              <button type="button" class="action-button" id="confirmEncounter">Confirm and close encounter</button>
+            </p>
+            <div id="reviewUnlock" hidden>
+              <div class="field">
+                <label for="unlockReason">Reason to unlock</label>
+                <input id="unlockReason" type="text" maxlength="200" />
+              </div>
+              <p class="form-actions">
+                <button type="button" class="action-button-secondary" id="unlockEncounter">Unlock</button>
+              </p>
+            </div>
+            <ol class="history-list" id="reviewHistory" hidden></ol>
+          </fieldset>
+        </section>
+      </form>
+
+      <fieldset class="card-static enc-float" id="encSubjectFloat" hidden>
+        <div class="enc-float-bar" id="encFloatBar">
+          <span id="encFloatTitle">Add subject</span>
+          <button type="button" id="encFloatClose" aria-label="Close">×</button>
+        </div>
+        <div class="enc-float-body">
+          <div id="encFloatBrowse">
+            <p class="section-note">
+              Browse committed cases and saved people. Select one to set encounter role and outcome. This does not open Book-in.
+            </p>
+            <div class="field">
+              <label for="caseSearch">Search</label>
+              <input id="caseSearch" type="search" placeholder="Name, A-number, city" />
+            </div>
+            <div class="records-table-wrap">
+              <table class="records-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Stage</th>
+                    <th>A-Number</th>
+                    <th>City</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="existingBody"></tbody>
+              </table>
+            </div>
+            <p class="form-actions">
+              <button type="button" class="action-button-secondary" id="cancelExisting">Cancel</button>
+            </p>
+          </div>
+
+          <div id="encFloatFields" class="enc-float-fields" hidden>
+            <p class="section-note" id="encFloatFieldsNote">
+              Encounter-specific fields. Add new mints a Person only — not a Detainee and not a Book-in packet.
+            </p>
+            <input type="hidden" id="subPersonId" />
+            <input type="hidden" id="subLeadId" />
+            <input type="hidden" id="subSubjectId" />
+            <input type="hidden" id="subEditKey" />
+            <div class="row">
+              <a class="photo-slot" id="subjectPhoto" href="photo-picker.html">Add photo</a>
+              <div class="field field-span-2">
+                <label for="subLast">Last name</label>
+                <input id="subLast" type="text" autocomplete="off" />
+              </div>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="subFirst">First name</label>
+                <input id="subFirst" type="text" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="subCitizen">Citizenship</label>
+                <select id="subCitizen"></select>
+              </div>
+              <div class="field">
+                <label for="subAlien">A-Number</label>
+                <input id="subAlien" type="text" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="subDob">Date of birth</label>
+                <input id="subDob" type="date" />
+              </div>
+            </div>
+            <div class="choice-field">
+              <span class="field-caption">Role</span>
+              <div class="choice-list">
+                <label class="choice"><input type="radio" name="subRole" value="TARGET" /> Target</label>
+                <label class="choice"><input type="radio" name="subRole" value="COLLATERAL" /> Collateral</label>
+                <label class="choice"><input type="radio" name="subRole" value="OTHER" /> Other</label>
+              </div>
+              <div class="choice-reveal role-other-reveal">
+                <label class="field-caption" for="encounterRoleOther">Other role</label>
+                <input id="encounterRoleOther" type="text" maxlength="80" placeholder="e.g. unrelated person in the area" />
+              </div>
+            </div>
+            <div class="choice-field" id="vehicleRoleField">
+              <span class="field-caption">Vehicle role</span>
+              <div class="choice-list is-2">
+                <label class="choice"><input type="radio" name="subVehicleRole" value="DRIVER" /> Driver</label>
+                <label class="choice"><input type="radio" name="subVehicleRole" value="PASSENGER" /> Passenger</label>
+              </div>
+            </div>
+            <div class="choice-field">
+              <span class="field-caption">Outcome</span>
+              <div class="choice-list">
+                <label class="choice"><input type="radio" name="subOutcome" value="ARRESTED" /> Arrested</label>
+                <label class="choice"><input type="radio" name="subOutcome" value="RELEASED" /> Released</label>
+                <label class="choice"><input type="radio" name="subOutcome" value="FLED_FOOT" /> Fled on foot</label>
+                <label class="choice"><input type="radio" name="subOutcome" value="FLED_VEHICLE" /> Fled in vehicle</label>
+              </div>
+            </div>
+            <div class="choice-field" id="arrestingOfficerField">
+              <label class="field-caption" for="arrestingOfficer">Arresting officer</label>
+              <select id="arrestingOfficer">
+                <option value="">Select an officer on this encounter</option>
+              </select>
+              <p class="field-caption">
+                Stored on this subject. Officer arrest counts update when the person is booked.
+              </p>
+            </div>
+            <div class="choice-field">
+              <span class="field-caption">Compliant</span>
+              <div class="choice-list is-2">
+                <label class="choice"><input type="radio" name="subCompliance" value="COMPLIANT" /> Compliant</label>
+                <label class="choice"><input type="radio" name="subCompliance" value="NON_COMPLIANT" /> Non-compliant</label>
+              </div>
+            </div>
+            <div class="choice-field">
+              <span class="field-caption">Use of force</span>
+              <div class="choice-list is-2">
+                <label class="choice"><input type="radio" name="subUof" value="no" /> No</label>
+                <label class="choice"><input type="radio" name="subUof" value="yes" /> Yes</label>
+              </div>
+              <div class="choice-reveal uof-reveal">
+                <span class="field-caption">Technique</span>
+                <div class="choice-list">
+                  <label class="choice"><input type="radio" name="subForceLevel" value="SOFT" /> Soft</label>
+                  <label class="choice"><input type="radio" name="subForceLevel" value="HARD" /> Hard</label>
+                  <label class="choice"><input type="radio" name="subForceLevel" value="LETHAL" /> Lethal</label>
+                </div>
+              </div>
+            </div>
+            <p class="form-actions">
+              <button type="button" class="action-button" id="saveSubject">Add to encounter</button>
+              <button type="button" class="action-button-secondary" id="cancelSubject">Cancel</button>
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static enc-float" id="encBookFloat" hidden>
+        <div class="enc-float-bar" id="encBookBar">
+          <span id="encBookTitle">Book-in</span>
+          <button type="button" id="encBookClose" aria-label="Close">×</button>
+        </div>
+        <div class="enc-float-body">
+          <p class="section-note" id="bookinWho">
+            Post-arrest packet. Medical, children, cash, ID. This does not add a subject.
+          </p>
+          <input type="hidden" id="bookSubjectKey" />
           <div class="row">
             <div class="field">
-              <label for="encounterId">Encounter ID</label>
-              <input
-                type="text"
-                id="encounterId"
-                name="encounterId"
-                data-field="encounterId"
-                readonly
-              />
+              <label for="bookMedical">Medical</label>
+              <select id="bookMedical">
+                <option value="good">Good</option>
+                <option value="issues">Issues</option>
+              </select>
             </div>
             <div class="field">
-              <label for="encounterTeam">Team</label>
-              <input
-                type="number"
-                id="encounterTeam"
-                name="encounterTeam"
-                data-field="team"
-                min="1"
-                step="1"
-                value="3"
-              />
+              <label for="bookChildren">Children</label>
+              <select id="bookChildren">
+                <option value="none">None</option>
+                <option value="yes">Yes</option>
+              </select>
             </div>
             <div class="field">
-              <label for="encounterStartedAt">Date and time of stop / encounter</label>
-              <input
-                type="datetime-local"
-                id="encounterStartedAt"
-                name="encounterStartedAt"
-                data-field="startedAt"
-              />
+              <label for="bookCash">Cash on hand</label>
+              <input id="bookCash" type="text" value="None" />
             </div>
           </div>
-        </fieldset>
-
-        <fieldset class="card-static">
-          <legend>Vehicles</legend>
-          <p class="section-note">Add the vehicle or vehicles involved in this encounter.</p>
-          <div id="encounterVehicleList" class="card-list" aria-live="polite"></div>
-          <div class="card-list-actions">
-            <button
-              type="button"
-              id="addEncounterVehicleButton"
-              class="add-card-btn"
-              aria-controls="encounterVehicleList"
-            >
-              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
-              Add vehicle
-            </button>
+          <div class="field">
+            <label for="bookId">Identification</label>
+            <input id="bookId" type="text" placeholder="Documents on person" />
           </div>
-        </fieldset>
-
-        <fieldset class="card-static">
-          <legend>Address / location</legend>
-          <p class="section-note">Add the primary stop or encounter location.</p>
-          <div
-            id="encounterLocationList"
-            class="card-list"
-            data-location-owner="encounter"
-            aria-live="polite"
-          ></div>
-          <div class="card-list-actions">
-            <button
-              type="button"
-              id="addEncounterLocationButton"
-              class="add-card-btn"
-              aria-controls="encounterLocationList"
-            >
-              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
-              Add address / location
-            </button>
-          </div>
-        </fieldset>
-
-        <fieldset class="card-static">
-          <legend>Arrested subjects</legend>
-          <p class="section-note">
-            Book-in Save subject attaches the packet to this encounter and files the case.
-            Stop date/time and mapped lat/long carry into Book-in and the arrest map.
-            Complete freezes the encounter snapshot for the Encounters layer.
+          <p class="form-actions">
+            <button type="button" class="action-button" id="confirmBookin">Book-in</button>
+            <button type="button" class="action-button-secondary" id="cancelBookin">Cancel</button>
           </p>
-          <div id="arrestRosterHost"></div>
-          <div class="card-list-actions">
-            <a
-              id="addEncounterSubjectTableButton"
-              class="add-card-btn"
-              href="bookin.html"
-            >
-              <span class="card-icon-btn card-add" aria-hidden="true">+</span>
-              Add subject
-            </a>
-          </div>
-        </fieldset>
-
-        <fieldset class="card-static">
-          <legend>Supervisor summary</legend>
-          <p class="section-note">
-            Built from this encounter’s I-213 coverage. Open narratives to update it.
-          </p>
-          <p id="encounterSupervisorSummary" class="section-note">
-            No supervisor summary yet. Generate I-213 and update a draft.
-          </p>
-          <div class="card-list-actions">
-            <a
-              id="openEncounterNarrativesButton"
-              class="add-card-btn"
-              href="narrative.html"
-            >
-              Open narratives
-            </a>
-          </div>
-        </fieldset>
-      </form>
+        </div>
+      </fieldset>
     </main>
 
     <template id="vehicleCardTemplate">
@@ -203,6 +527,17 @@
             <input type="text" id="registeredOwner" data-field="registeredOwner" autocomplete="off" />
           </div>
         </div>
+        <div class="choice-field encounter-vehicle-disposition">
+          <span class="field-caption">Disposition</span>
+          <div class="choice-list is-2" role="radiogroup">
+            <label class="choice"><input type="radio" data-field="encounterDisposition" value="LEFT" /> Left at scene</label>
+            <label class="choice"><input type="radio" data-field="encounterDisposition" value="MOVED" /> Moved for public safety</label>
+          </div>
+          <div class="choice-reveal">
+            <label class="field-caption" for="parkedLocationText">Parked at</label>
+            <input id="parkedLocationText" type="text" data-field="parkedLocationText" placeholder="Add location" />
+          </div>
+        </div>
         <div class="nested-block">
           <div class="card-list" data-nested-list="location" data-location-owner="vehicle"></div>
           <div class="card-list-actions">
@@ -238,7 +573,7 @@
         </div>
         <div class="row">
           <div class="field">
-            <label for="locationAssociation">Association</label>
+            <label for="locationAssociation">Label</label>
             <select id="locationAssociation" data-field="locationAssociation">
               <option value="">Select an Option</option>
             </select>
@@ -251,6 +586,12 @@
               <option value="2">Secondary</option>
               <option value="3">Tertiary</option>
             </select>
+          </div>
+          <div class="field">
+            <label class="radio-field">
+              <input type="radio" name="encounterCenter" data-field="encounterCenter" value="1" />
+              Encounter center
+            </label>
           </div>
         </div>
         <div class="row">
@@ -365,6 +706,8 @@
     <script src="data/vehicles.js"></script>
     <script src="functions/vehicles.js"></script>
     <script src="data/link-reasons.js"></script>
+    <script src="data/countries.js"></script>
+    <script src="data/encounter-catalogs.js"></script>
     <script src="functions/model/util.js"></script>
     <script src="functions/model/location.js"></script>
     <script src="functions/model/vehicle.js"></script>
@@ -372,10 +715,9 @@
     <script src="functions/model/lead.js"></script>
     <script src="functions/model/link.js"></script>
     <script src="functions/model/encounter.js"></script>
+    <script src="functions/model/operation.js"></script>
     <script src="functions/model/store.js"></script>
-    <script src="functions/baseballcard.js"></script>
-    <script src="functions/arrest-report.js"></script>
-    <script src="functions/arrest-roster.js"></script>
+    <script src="functions/officer-roster.js"></script>
     <script src="functions/model/media.js"></script>
     <script src="functions/model/autosave.js"></script>
     <script src="functions/media-card.js"></script>

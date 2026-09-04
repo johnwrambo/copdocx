@@ -29,8 +29,11 @@
   ];
 
   model.ENCOUNTER_LOCATION_ASSOCIATIONS = [
-    { value: "stop", label: "Stop / encounter location" },
-    { value: "staging", label: "Staging / processing" },
+    { value: "stop", label: "Stop" },
+    { value: "arrest", label: "Arrest" },
+    { value: "target", label: "Target" },
+    { value: "vehicle-left", label: "Vehicle left" },
+    { value: "staging", label: "Staging" },
     { value: "other", label: "Other" }
   ];
 
