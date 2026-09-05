@@ -20,6 +20,10 @@ const dataLibraries = [
 
 dataLibraries.forEach((file) => require(path.join(root, file)));
 require(path.join(root, "functions/narratives/narrative-markup.js"));
+const workspaceUi = require(path.join(
+  root,
+  "functions/narratives/narrative-workspace-ui.js"
+));
 require(path.join(root, "functions/narratives/packet-builder.js"));
 const build9 = require(path.join(root, "functions/narratives/build9/index.js"));
 require(path.join(root, "data/narratives/build9/demo-fixtures.js"));
@@ -29,6 +33,12 @@ const fixture = global.COPDocNarrativeDemoFixture;
 const master = narratives.MASTER_NARRATIVE_SECTIONS;
 const fields = master.flatMap((section) => section.fields || []);
 const options = fields.flatMap((field) => field.options || []);
+
+assert.equal(
+  typeof workspaceUi.enhanceWorkspace,
+  "function",
+  "workspace enhancement should expose a host adapter"
+);
 
 assert.equal(master.length, 10, "master library should include all 10 sections");
 assert.deepEqual(
@@ -108,6 +118,31 @@ const completeCoverage = build9.validateCoverage({
   narratives: completeNarratives
 });
 assert.equal(completeCoverage.coverageComplete, true);
+
+const revisionTarget = completeNarratives[0];
+const revisionTargetBase = Number(revisionTarget.revision) || 0;
+const revisionSave = build9.saveNarrativeById(
+  completeNarratives,
+  revisionTarget.narrativeId,
+  { title: revisionTarget.title + " updated" },
+  { expectedRevision: revisionTargetBase }
+);
+assert.equal(
+  revisionSave.record.revision,
+  revisionTargetBase + 1,
+  "per-narrative saves should advance only the requested record revision"
+);
+assert.equal(revisionSave.narratives.length, completeNarratives.length);
+assert.throws(
+  () => build9.saveNarrativeById(
+    revisionSave.narratives,
+    revisionTarget.narrativeId,
+    { title: "stale write" },
+    { expectedRevision: revisionTargetBase }
+  ),
+  (error) => error && error.code === "REVISION_CONFLICT",
+  "stale narrative tabs should not silently overwrite a newer revision"
+);
 
 const finalizedNarratives = completeNarratives.map((narrative) =>
   narrative.narrativeKind === build9.NARRATIVE_KINDS.PRIMARY_SUBJECT
@@ -246,6 +281,7 @@ assert.match(page, /<body data-page="narrative">/);
 assert.match(page, /data-version="0\.\d+\.\d+"/);
 assert.doesNotMatch(page, /<style\b/i, "narrative page should use shared CSS");
 assert.doesNotMatch(page, /<script(?![^>]*\bsrc=)/i, "narrative page should use extracted scripts");
+assert.match(page, /id="appBarStatus"[\s\S]*?role="status"[\s\S]*?aria-live="polite"/);
 dataLibraries.forEach((file) => {
   assert.match(page, new RegExp(`src=["']${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));
 });
@@ -257,6 +293,7 @@ assert.deepEqual(scriptOrder, [
   ...dataLibraries,
   "functions/narratives/narrative-markup.js",
   "functions/narratives/narrative-builder-engine.js",
+  "functions/narratives/narrative-workspace-ui.js",
   "functions/narratives/packet-builder.js",
   "functions/narratives/build9/narrative-domain.js",
   "functions/narratives/build9/narrative-coverage.js",
@@ -279,13 +316,57 @@ assert.match(narratives.ENGINE_MARKUP, /class="narrative-input-column"/);
 assert.doesNotMatch(narratives.ENGINE_MARKUP, /<main\b/i, "embedded engine should not nest a main landmark");
 assert.doesNotMatch(narratives.ENGINE_MARKUP, /class="(?:container|workspace|input-column)"/);
 
+const workspaceSource = fs.readFileSync(
+  path.join(root, "functions/narratives/narrative-workspace-ui.js"),
+  "utf8"
+);
+assert.match(workspaceSource, /narrativeSectionFilter/);
+assert.match(workspaceSource, /narrative-section-selection-count/);
+assert.match(workspaceSource, /narrative-ui-collapsed/);
+assert.match(workspaceSource, /advanced-tools-open/);
+assert.match(workspaceSource, /if \(badge\.textContent !== label\)/);
+assert.match(workspaceSource, /button\.setAttribute\("aria-label", button\.title\)/);
+
+const engineSource = fs.readFileSync(
+  path.join(root, "functions/narratives/narrative-builder-engine.js"),
+  "utf8"
+);
+assert.match(engineSource, /canComposeNarrative:\s*true/);
+assert.match(
+  engineSource,
+  /field-add-button, \.field-remove-button, \.field-drag-handle/
+);
+assert.match(engineSource, /editButton\.hidden = !moduleConfig\.canEditTemplates/);
+assert.match(engineSource, /addButton\.hidden = !moduleConfig\.canComposeNarrative/);
+assert.match(engineSource, /fieldHandle\.hidden = !moduleConfig\.canComposeNarrative/);
+
+const pageControllerSource = fs.readFileSync(
+  path.join(root, "functions/narratives/narrative-page.js"),
+  "utf8"
+);
+assert.match(pageControllerSource, /domain\.saveNarrativeById/);
+assert.match(pageControllerSource, /expectedRevision: change\.expectedRevision/);
+assert.match(pageControllerSource, /model\.store\.updateEncounter/);
+assert.match(pageControllerSource, /conflictedParticipantIds\.has\(activeParticipantId\)/);
+assert.match(pageControllerSource, /Object\.assign\(\{\}, summary/);
+assert.match(pageControllerSource, /FINALIZED_NARRATIVE_IMMUTABLE/);
+
 const legacyPage = fs.readFileSync(path.join(root, "Narrative_Builder.html"), "utf8");
 assert.match(legacyPage, /url=narrative\.html/i, "legacy Build 9 entry should redirect to the integrated page");
 
 const sharedCss = fs.readFileSync(path.join(root, "style/style.css"), "utf8");
-const narrativeAllCss = sharedCss.slice(sharedCss.indexOf("/* NARRATIVE BUILD 9 */"));
-const narrativeCss = sharedCss.slice(sharedCss.indexOf("/* Scoped narrative engine */"));
+const narrativeStart = sharedCss.indexOf("/* NARRATIVE BUILD 9 */");
+const narrativeEnd = sharedCss.indexOf("/* END NARRATIVE BUILD 9 */");
+assert.ok(narrativeStart >= 0 && narrativeEnd > narrativeStart, "narrative CSS should have scoped boundaries");
+const narrativeAllCss = sharedCss.slice(narrativeStart, narrativeEnd);
+const narrativeCss = sharedCss.slice(
+  sharedCss.indexOf("/* Scoped narrative engine */", narrativeStart),
+  narrativeEnd
+);
 assert.ok(narrativeCss.length > 1000, "scoped narrative engine CSS should be present");
+assert.match(narrativeCss, /\.narrative-section-filter/);
+assert.match(narrativeCss, /\.narrative-input-pane/);
+assert.match(narrativeCss, /\.advanced-tools-open/);
 assert.doesNotMatch(narrativeAllCss, /#[0-9a-f]{3,8}\b/i, "narrative styles should use app theme tokens");
 assert.doesNotMatch(narrativeCss, /var\(--card-background\)[0-9a-f]/i);
 assert.doesNotMatch(narrativeCss, /\.token-dialog-\.token-dialog/);

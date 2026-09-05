@@ -33,6 +33,7 @@
           location: live.location,
           officers: live.officers || [],
           vehicles: live.vehicles || [],
+          unassignedParticipantCount: live.unassignedParticipantCount || 0,
           narrativesInitial: live.narrativesInitial || []
         };
       } else {
@@ -73,6 +74,7 @@
   var workspace = byId("narrativeWorkspace");
   var liveHeader = byId("narrativeLiveHeader");
   if (liveMiss || liveEmpty) {
+    var needsRoles = liveEmpty && Number(fixture.unassignedParticipantCount) > 0;
     document.body.classList.add("narrative-empty");
     if (workspace) workspace.hidden = true;
     if (liveHeader) liveHeader.hidden = true;
@@ -80,16 +82,22 @@
     if (emptyText) {
       emptyText.textContent = liveMiss
         ? "Encounter not found."
-        : "Add subjects on Book-in before writing an I-213.";
+        : needsRoles
+          ? "Assign each Book-in subject a Target or Collateral role before writing an I-213."
+          : "Add subjects on Book-in before writing an I-213.";
     }
     if (emptyLink && liveEmpty && liveEncounterId) {
       emptyLink.hidden = false;
       emptyLink.href = "bookin.html?encounterId=" + encodeURIComponent(liveEncounterId);
-      emptyLink.textContent = "Add subjects";
+      emptyLink.textContent = needsRoles ? "Assign subject roles" : "Add subjects";
     }
     document.title = "I-213";
     showStatus(
-      liveMiss ? "Encounter not found." : "Add subjects on Book-in before writing an I-213.",
+      liveMiss
+        ? "Encounter not found."
+        : needsRoles
+          ? "Assign Target or Collateral roles on Book-in before writing an I-213."
+          : "Add subjects on Book-in before writing an I-213.",
       false
     );
     return;
@@ -109,22 +117,22 @@
     enableTestPacket: false,
     enableJsonImport: false,
     enableLocalStorage: false,
-    canEditTemplates: false,
+    // The no-query training lab keeps the recovered Build 9 authoring tools.
+    // Live I-213s may compose repeated incidents without changing Master prose.
+    canEditTemplates: !liveEncounter,
+    canComposeNarrative: true,
     canEditSourceValues: false,
     requireResolvedBeforeCopy: false,
     allowUnknownFields: false
   };
   host.innerHTML = narratives.ENGINE_MARKUP;
   var engine = global.__opdocNarrativeBootstrap();
-  var store = domain.createNarrativeStore(fixture.narrativesInitial);
-  if (liveEncounter && liveEncounterId && global.COPDoc && COPDoc.model && COPDoc.model.store) {
-    COPDoc.model.store.loadFromDisk();
-    var storedEncounter = COPDoc.model.store.getEncounter(liveEncounterId);
-    if (storedEncounter && Array.isArray(storedEncounter.narratives) && storedEncounter.narratives.length) {
-      store.replaceAll(storedEncounter.narratives);
-    }
+  if (typeof narratives.enhanceWorkspace === "function") {
+    narratives.enhanceWorkspace({ host: host, engine: engine });
   }
+  var store = domain.createNarrativeStore(fixture.narrativesInitial);
   var unsavedDraftStateByParticipant = new Map();
+  var conflictedParticipantIds = new Set();
   var activeParticipantId = null;
 
   function byId(id) {
@@ -189,36 +197,92 @@
     return selections;
   }
 
-  function persistLiveEncounter() {
+  function isNarrativeConflict(error) {
+    return error && [
+      "REVISION_CONFLICT",
+      "NARRATIVE_ID_DUPLICATE",
+      "NARRATIVE_LOGICAL_DUPLICATE"
+    ].indexOf(error.code) !== -1;
+  }
+
+  function narrativeErrorMessage(error) {
+    if (isNarrativeConflict(error)) {
+      return "This subject's narrative changed in another window. Reload this page before editing it again.";
+    }
+    if (error && error.code === "FINALIZED_NARRATIVE_IMMUTABLE") {
+      return "This narrative is finalized. Create a supplement or a new version instead of changing it.";
+    }
+    return (error && error.message) || "The narrative could not be saved.";
+  }
+
+  function persistLiveEncounter(change) {
     if (!liveEncounter || !liveEncounterId) {
-      return;
+      return true;
+    }
+    if (!change || !change.record) {
+      return true;
     }
     var model = global.COPDoc && COPDoc.model;
-    if (!model || !model.store) {
-      return;
+    if (
+      !model ||
+      !model.store ||
+      typeof model.store.updateEncounter !== "function"
+    ) {
+      showStatus("Narrative storage is unavailable.", false);
+      return false;
     }
-    model.store.loadFromDisk();
-    var enc = model.store.getEncounter(liveEncounterId);
-    if (!enc) {
-      return;
-    }
-    enc.narratives = store.all();
-    var coverage = currentCoverage();
-    var summary = domain.deriveEncounterSummary(demoBundle(), {
-      narrativeCoverage: coverage,
-      now: new Date().toISOString()
+    var result = model.store.updateEncounter(liveEncounterId, function (enc) {
+      var diskNarratives = Array.isArray(enc.narratives) ? enc.narratives : [];
+      var mergeResult = change.kind === "create"
+        ? domain.addNarrative(diskNarratives, change.record, {
+            now: change.record.updatedAt
+          })
+        : domain.saveNarrativeById(
+            diskNarratives,
+            change.record.narrativeId,
+            change.record,
+            {
+              expectedRevision: change.expectedRevision,
+              now: change.record.updatedAt
+            }
+          );
+      var coverage = coverageFor(mergeResult.narratives);
+      var summaryBundle = demoBundle();
+      summaryBundle.narratives = mergeResult.narratives;
+      var summary = domain.deriveEncounterSummary(summaryBundle, {
+        narrativeCoverage: coverage,
+        now: change.record.updatedAt || new Date().toISOString()
+      });
+      enc.narratives = mergeResult.narratives;
+      enc.supervisorSummary = Object.assign({}, summary, {
+        text: summary.generatedSupervisorText || "",
+        derivedAt: summary.generatedAt,
+        coverage: {
+          complete: !!(coverage && coverage.coverageComplete),
+          missing: (coverage && coverage.missingParticipantIds) || []
+        }
+      });
+      return enc;
     });
-    enc.supervisorSummary = {
-      text: (summary && summary.generatedSupervisorText) || "",
-      derivedAt: new Date().toISOString(),
-      coverage: {
-        complete: !!(coverage && coverage.coverageComplete),
-        missing: (coverage && coverage.missingParticipantIds) || []
+    if (!result || !result.ok) {
+      var error = result && result.cause;
+      var persisted = result && result.encounter;
+      if (persisted && Array.isArray(persisted.narratives)) {
+        store.replaceAll(persisted.narratives);
       }
-    };
-    model.store.saveEncounter(enc, {
-      mode: model.isCommitted && model.isCommitted(enc) ? "commit" : "draft"
-    });
+      if (isNarrativeConflict(error) && change.record.focusEncounterParticipantId) {
+        conflictedParticipantIds.add(change.record.focusEncounterParticipantId);
+      }
+      showStatus(
+        error
+          ? narrativeErrorMessage(error)
+          : (result && result.error) || "The narrative could not be saved.",
+        false
+      );
+      return false;
+    }
+    store.replaceAll(result.encounter.narratives);
+    return true;
   }
 
   function primaryFor(participantId) {
@@ -266,12 +330,16 @@
     return fixture.vehicles.find(function (vehicle) { return vehicle.vehicleId === vehicleId; }) || null;
   }
 
-  function currentCoverage() {
+  function coverageFor(narrativeRecords) {
     return domain.validateCoverage({
       encounterId: fixture.encounter.encounterId,
       participants: fixture.participants,
-      narratives: store.all()
+      narratives: narrativeRecords || []
     });
+  }
+
+  function currentCoverage() {
+    return coverageFor(store.all());
   }
 
   function renderParticipantList() {
@@ -285,6 +353,10 @@
       button.className = "narrative-participant" +
         (participant.encounterParticipantId === activeParticipantId ? " is-active" : "");
       button.dataset.participantId = participant.encounterParticipantId;
+      button.setAttribute(
+        "aria-pressed",
+        participant.encounterParticipantId === activeParticipantId ? "true" : "false"
+      );
 
       var code = document.createElement("span");
       code.className = "narrative-role-code";
@@ -296,10 +368,24 @@
       name.textContent = participantName(participant);
       var meta = document.createElement("span");
       meta.className = "narrative-participant-meta";
-      meta.textContent = (primary ? primary.workflowStatus || "DRAFT" : "MISSING") +
-        " · " + participant.finalOutcome.replaceAll("_", " ") +
+      var narrativeStatus = primary ? primary.workflowStatus || "DRAFT" : "MISSING";
+      var outcome = String(participant.finalOutcome || "UNKNOWN").replaceAll("_", " ");
+      meta.textContent = narrativeStatus +
+        " · " + outcome +
         (participant.iceEventNumber ? " · " + participant.iceEventNumber : "") +
         (supplements.length ? " · +" + supplements.length : "");
+      button.setAttribute(
+        "aria-label",
+        [
+          roleCode(participant),
+          participantName(participant),
+          narrativeStatus,
+          outcome,
+          supplements.length
+            ? supplements.length + " supplement" + (supplements.length === 1 ? "" : "s")
+            : ""
+        ].filter(Boolean).join(", ")
+      );
       text.append(name, document.createElement("br"), meta);
 
       var dot = document.createElement("span");
@@ -437,56 +523,85 @@
     var participant = fixture.participants.find(function (row) {
       return row.encounterParticipantId === activeParticipantId;
     });
-    if (existing) {
-      store.save(existing.narrativeId, {
-        engine: {
-          version: engine.version,
-          build: engine.build,
-          stateSchema: engine.schemas.state,
-          state: state
-        },
-        output: output,
-        bindings: output.bindings,
-        factsManifest: output.factsManifest,
-        validationSnapshot: output.validation,
-        freshnessStatus: "CURRENT"
-      });
-      if (!options.silent) showStatus("Dynamic narrative updated for " + participantName(participant) + ".");
-    } else if (options.createMissing) {
-      store.create({
-        narrativeId: liveEncounter
-          ? "nar_" + liveEncounterId + "_" + activeParticipantId + "_primary"
-          : "nar_demo_" + activeParticipantId + "_primary",
-        encounterId: fixture.encounter.encounterId,
-        narrativeKind: domain.NARRATIVE_KINDS.PRIMARY_SUBJECT,
-        focusEncounterParticipantId: activeParticipantId,
-        relatedEncounterParticipantIds: fixture.participants.map(function (row) {
-          return row.encounterParticipantId;
-        }),
-        title: participantName(participant) + " — Primary subject narrative",
-        workflowStatus: "DRAFT",
-        freshnessStatus: "CURRENT",
-        engine: {
-          version: engine.version,
-          build: engine.build,
-          stateSchema: engine.schemas.state,
-          state: state
-        },
-        output: output,
-        bindings: output.bindings,
-        factsManifest: output.factsManifest,
-        validationSnapshot: output.validation,
-        sourceSnapshot: {
-          encounterId: fixture.encounter.encounterId,
-          iceEventNumber: participant.iceEventNumber || ""
-        }
-      });
-      unsavedDraftStateByParticipant.delete(activeParticipantId);
-      if (!options.silent) showStatus("Primary narrative created for " + participantName(participant) + ".");
-    } else {
-      unsavedDraftStateByParticipant.set(activeParticipantId, state);
+    if (conflictedParticipantIds.has(activeParticipantId)) {
+      showStatus(
+        "This subject's narrative changed in another window. Reload this page before editing it again.",
+        false
+      );
+      return false;
     }
-    persistLiveEncounter();
+    var successMessage = "";
+    var persistenceChange = null;
+    try {
+      if (existing) {
+        var updated = store.save(existing.narrativeId, {
+          engine: {
+            version: engine.version,
+            build: engine.build,
+            stateSchema: engine.schemas.state,
+            state: state
+          },
+          output: output,
+          bindings: output.bindings,
+          factsManifest: output.factsManifest,
+          validationSnapshot: output.validation,
+          freshnessStatus: "CURRENT"
+        });
+        persistenceChange = {
+          kind: "save",
+          record: updated,
+          expectedRevision: Number(existing.revision) || 0
+        };
+        successMessage = "Dynamic narrative updated for " + participantName(participant) + ".";
+      } else if (options.createMissing) {
+        var created = store.create({
+          narrativeId: liveEncounter
+            ? "nar_" + liveEncounterId + "_" + activeParticipantId + "_primary"
+            : "nar_demo_" + activeParticipantId + "_primary",
+          encounterId: fixture.encounter.encounterId,
+          narrativeKind: domain.NARRATIVE_KINDS.PRIMARY_SUBJECT,
+          focusEncounterParticipantId: activeParticipantId,
+          relatedEncounterParticipantIds: fixture.participants.map(function (row) {
+            return row.encounterParticipantId;
+          }),
+          title: participantName(participant) + " — Primary subject narrative",
+          workflowStatus: "DRAFT",
+          freshnessStatus: "CURRENT",
+          engine: {
+            version: engine.version,
+            build: engine.build,
+            stateSchema: engine.schemas.state,
+            state: state
+          },
+          output: output,
+          bindings: output.bindings,
+          factsManifest: output.factsManifest,
+          validationSnapshot: output.validation,
+          sourceSnapshot: {
+            encounterId: fixture.encounter.encounterId,
+            iceEventNumber: participant.iceEventNumber || ""
+          }
+        });
+        persistenceChange = { kind: "create", record: created };
+        unsavedDraftStateByParticipant.delete(activeParticipantId);
+        successMessage = "Primary narrative created for " + participantName(participant) + ".";
+      } else {
+        unsavedDraftStateByParticipant.set(activeParticipantId, state);
+      }
+    } catch (error) {
+      showStatus(narrativeErrorMessage(error), false);
+      return false;
+    }
+    var persisted = persistLiveEncounter(persistenceChange);
+    if (!persisted) {
+      renderParticipantList();
+      renderCoverageAndSummary();
+      renderOutputAudit();
+      return false;
+    }
+    if (!options.silent && successMessage) {
+      showStatus(successMessage);
+    }
     renderParticipantList();
     renderCoverageAndSummary();
     renderOutputAudit();
@@ -499,7 +614,16 @@
       return row.encounterParticipantId === participantId;
     });
     if (!participant) return;
-    if (activeParticipantId) captureCurrent({ silent: true, createMissing: false });
+    var currentRecord = activeParticipantId
+      ? primaryFor(activeParticipantId)
+      : null;
+    if (
+      activeParticipantId &&
+      !(currentRecord && currentRecord.workflowStatus === "FINALIZED") &&
+      captureCurrent({ silent: true, createMissing: false }) === false
+    ) {
+      return;
+    }
     activeParticipantId = participantId;
     var existing = primaryFor(participantId);
     var packet = narratives.buildPacketFromBundle(demoBundle(), participantId, {
@@ -663,23 +787,6 @@
   byId("libraryVerification").textContent =
     "Prose libraries verified · " + master.length + "/" + fields.length + "/" + options.length;
   byId("libraryVerification").className = "narrative-status is-ok";
-
-  if (liveEncounter) {
-    var headingActions = document.querySelector(".narrative-heading-actions");
-    if (headingActions && !document.getElementById("narrativeAdvancedButton")) {
-      var advanced = document.createElement("button");
-      advanced.id = "narrativeAdvancedButton";
-      advanced.type = "button";
-      advanced.className = "compact ghost";
-      advanced.textContent = "Advanced";
-      advanced.setAttribute("aria-pressed", "false");
-      advanced.addEventListener("click", function () {
-        var on = document.body.classList.toggle("narrative-advanced");
-        advanced.setAttribute("aria-pressed", on ? "true" : "false");
-      });
-      headingActions.insertBefore(advanced, headingActions.firstChild);
-    }
-  }
 
   renderParticipantList();
   renderCoverageAndSummary();

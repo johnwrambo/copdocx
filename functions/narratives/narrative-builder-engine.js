@@ -491,6 +491,7 @@ const MASTER_SECTION_BY_ID = new Map(
         enableJsonImport: true,
         enableLocalStorage: true,
         canEditTemplates: true,
+        canComposeNarrative: true,
         canEditSourceValues: true,
         requireResolvedBeforeCopy: false,
         allowUnknownFields: false,
@@ -1160,6 +1161,7 @@ const MASTER_SECTION_BY_ID = new Map(
       fieldHandle.className = "drag-handle field-drag-handle";
       fieldHandle.setAttribute("aria-label", `Reorder ${displayLabel} event`);
       fieldHandle.textContent = "⠿";
+      fieldHandle.hidden = !moduleConfig.canComposeNarrative;
 
       const label = document.createElement("label");
       label.htmlFor = fieldId;
@@ -1250,6 +1252,7 @@ const MASTER_SECTION_BY_ID = new Map(
       editButton.textContent = "✎";
       editButton.title = `Edit ${displayLabel} wording and variables`;
       editButton.setAttribute("aria-label", `Edit ${displayLabel} wording and variables`);
+      editButton.hidden = !moduleConfig.canEditTemplates;
       editButton.addEventListener("click", () => openElementEditor(wrapper));
       repeatActions.appendChild(editButton);
 
@@ -1259,6 +1262,7 @@ const MASTER_SECTION_BY_ID = new Map(
       addButton.textContent = "+";
       addButton.title = `Add another ${field.label} input`;
       addButton.setAttribute("aria-label", `Add another ${field.label} input`);
+      addButton.hidden = !moduleConfig.canComposeNarrative;
       addButton.addEventListener("click", () => duplicateFieldRow(wrapper));
       repeatActions.appendChild(addButton);
 
@@ -1269,11 +1273,14 @@ const MASTER_SECTION_BY_ID = new Map(
         removeButton.textContent = "−";
         removeButton.title = `Remove ${displayLabel}`;
         removeButton.setAttribute("aria-label", `Remove ${displayLabel}`);
+        removeButton.hidden = !moduleConfig.canComposeNarrative;
         removeButton.addEventListener("click", () => removeRepeatedField(wrapper));
         repeatActions.appendChild(removeButton);
       }
 
       wrapper.appendChild(repeatActions);
+      repeatActions.hidden = !Array.from(repeatActions.querySelectorAll("button"))
+        .some((button) => !button.hidden);
       select.addEventListener("change", () => {
         markRepeatedFieldDirty(wrapper);
 
@@ -5816,9 +5823,13 @@ const MASTER_SECTION_BY_ID = new Map(
         activeTemplateStatus.hidden = !moduleConfig.canEditTemplates;
       }
       detectTokensButton.hidden = moduleConfig.mode === "embedded";
-      form.querySelectorAll(".field-edit-button, .field-add-button, .field-remove-button, .drag-handle")
+      form.querySelectorAll(".field-edit-button, .section-drag-handle")
         .forEach((control) => {
           control.hidden = !moduleConfig.canEditTemplates;
+        });
+      form.querySelectorAll(".field-add-button, .field-remove-button, .field-drag-handle")
+        .forEach((control) => {
+          control.hidden = !moduleConfig.canComposeNarrative;
         });
       form.querySelectorAll(".field-repeat-actions").forEach((group) => {
         const buttons = Array.from(group.querySelectorAll("button"));
@@ -5826,6 +5837,7 @@ const MASTER_SECTION_BY_ID = new Map(
       });
       const hostRoot = form.closest(".narrative-engine-host") || form;
       hostRoot.classList.toggle("narrative-authoring", moduleConfig.canEditTemplates);
+      hostRoot.classList.toggle("narrative-composition", moduleConfig.canComposeNarrative);
       const toolbar = document.querySelector(".editor-toolbar");
       if (toolbar) {
         toolbar.querySelectorAll(".toolbar-group").forEach((group) => {
@@ -5852,12 +5864,14 @@ const MASTER_SECTION_BY_ID = new Map(
         enableJsonImport: false,
         enableLocalStorage: false,
         canEditTemplates: false,
+        canComposeNarrative: false,
         canEditSourceValues: false,
         requireResolvedBeforeCopy: true
       } : {};
       const booleanKeys = [
         "enableDemo", "enableTestPacket", "enableJsonImport", "enableLocalStorage",
-        "canEditTemplates", "canEditSourceValues", "requireResolvedBeforeCopy", "allowUnknownFields"
+        "canEditTemplates", "canComposeNarrative", "canEditSourceValues",
+        "requireResolvedBeforeCopy", "allowUnknownFields"
       ];
       /*
         An explicit mode transition starts from that mode's defaults. Without
@@ -5891,6 +5905,7 @@ const MASTER_SECTION_BY_ID = new Map(
       emitIntegrationEvent("opdoc:narrative-configuration-change", {
         mode: moduleConfig.mode,
         canEditTemplates: moduleConfig.canEditTemplates,
+        canComposeNarrative: moduleConfig.canComposeNarrative,
         canEditSourceValues: moduleConfig.canEditSourceValues
       });
       return cloneTemplateData(moduleConfig);

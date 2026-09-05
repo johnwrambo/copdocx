@@ -78,8 +78,20 @@ into the Build 9 bundle (identity, TARGET/COLLATERAL, immigration, closing, loca
 vehicles, reporting officer). Live pages omit training `narrativeFacts`. Do not rewrite
 the narrative engine, section libraries, or demo fixtures. **Save I-213** writes
 `encounter.narratives[]` and `supervisorSummary` only — not leads, admin, or book-in
-storage. A missing `?encounterId=` does not load the demo fixture. Events/conduct stay
-operator-entered until an encounter event log exists.
+storage. The stored summary retains the full `copdoc.encounter-summary.v1` fingerprint,
+manifest, metrics, coverage, and warnings, plus `text` / `derivedAt` compatibility
+aliases. Narrative saves merge one revision-checked record into the latest Encounter
+snapshot read at save time, so an ordinarily stale subject tab preserves newer work
+for other subjects. Browser `localStorage` is not transactional; truly simultaneous
+cross-tab writes remain last-writer-wins. A missing `?encounterId=` does not load the
+demo fixture. Events/conduct stay operator-entered until an encounter event log exists.
+
+`functions/narratives/narrative-workspace-ui.js` owns the presentation-only host
+controls: fact search, section collapse/expand, selected counts, and the Advanced
+disclosure. Live I-213s set `canComposeNarrative: true` so an officer can add/remove
+repeated incidents and reorder event rows while `canEditTemplates: false` protects
+Master wording and section layout. The no-query training lab enables template
+authoring for Build 9 review; local template storage remains off.
 
 ## Person warrants — `createWarrant`
 

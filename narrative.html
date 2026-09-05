@@ -17,7 +17,14 @@
         <span id="currentDate" class="app-bar-date"></span>
       </div>
       <div class="app-bar-navrow" id="appBarNavRow"></div>
-      <p id="appBarStatus" class="app-bar-status" hidden></p>
+      <p
+        id="appBarStatus"
+        class="app-bar-status"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        hidden
+      ></p>
     </header>
 
     <main class="page page-wide narrative-page">
@@ -123,6 +130,7 @@
     <script src="data/narratives/narrative-master.js"></script>
     <script src="functions/narratives/narrative-markup.js"></script>
     <script src="functions/narratives/narrative-builder-engine.js"></script>
+    <script src="functions/narratives/narrative-workspace-ui.js"></script>
     <script src="functions/narratives/packet-builder.js"></script>
     <script src="functions/narratives/build9/narrative-domain.js"></script>
     <script src="functions/narratives/build9/narrative-coverage.js"></script>
