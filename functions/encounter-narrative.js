@@ -4,32 +4,38 @@
 (function (global) {
   "use strict";
 
-  function bookinRecords() {
+  function bookinRecords(unavailable) {
     try {
       var raw = localStorage.getItem("alien-book-in.saved-records.v1");
       var list = raw ? JSON.parse(raw) : [];
-      return Array.isArray(list) ? list : [];
+      if (!Array.isArray(list)) throw new Error("Book-In store is not an array.");
+      return list;
     } catch (error) {
+      if (unavailable) unavailable.push("bookin");
       return [];
     }
   }
 
-  function readAdmin() {
+  function readAdmin(unavailable) {
     try {
       var raw = localStorage.getItem("copdoc.admin.v1");
       var data = raw ? JSON.parse(raw) : {};
-      return data && typeof data === "object" ? data : {};
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Admin store is not an object.");
+      return data;
     } catch (error) {
+      if (unavailable) unavailable.push("admin");
       return {};
     }
   }
 
-  function readSettings() {
+  function readSettings(unavailable) {
     try {
       var raw = localStorage.getItem("copdocx.settings.v1");
       var data = raw ? JSON.parse(raw) : {};
-      return data && typeof data === "object" ? data : {};
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Settings store is not an object.");
+      return data;
     } catch (error) {
+      if (unavailable) unavailable.push("settings");
       return {};
     }
   }
@@ -52,6 +58,9 @@
   function formValue(record, id) {
     var entry = formEntry(record, id);
     if (!entry) {
+      if (record && record.formState && Object.prototype.hasOwnProperty.call(record.formState, id)) {
+        return "";
+      }
       return record && record[id] != null ? String(record[id]).trim() : "";
     }
     var type = String(entry.type || "").toLowerCase();
@@ -141,7 +150,7 @@
     return [first, last].filter(Boolean).join(" ") || String(officer.displayName || "").trim();
   }
 
-  function matchRosterOfficer(name) {
+  function matchRosterOfficer(name, officers) {
     var needle = String(name || "")
       .replace(/\s+/g, " ")
       .trim()
@@ -149,23 +158,18 @@
     if (!needle) {
       return null;
     }
-    var officers = readAdmin().officers || [];
-    var i;
-    for (i = 0; i < officers.length; i++) {
-      var row = officers[i];
-      if (!row || row.junked) {
-        continue;
-      }
+    var matches = (Array.isArray(officers) ? officers : []).filter(function (row) {
+      if (!row) return false;
       var label = officerLabel(row).toUpperCase();
       var flipped = [row.firstName, row.lastName].filter(Boolean).join(" ").toUpperCase();
-      if (label === needle || flipped === needle || String(row.displayName || "").toUpperCase() === needle) {
-        return row;
-      }
-    }
-    return null;
+      return label === needle || flipped === needle || String(row.displayName || "").toUpperCase() === needle;
+    });
+    return matches.length === 1 ? matches[0] : null;
   }
 
-  function enforcementBasis(person) {
+  function enforcementBasis(person, subject) {
+    var explicit = text(subject && subject.enforcementBasisCode).toUpperCase();
+    if (explicit) return explicit;
     var model = global.COPDoc && COPDoc.model;
     var warrants = (person && person.warrants) || [];
     var i;
@@ -174,11 +178,168 @@
         return warrants[i].formType === "I-205" ? "I_205" : "I_200";
       }
     }
-    return "WARRANTLESS_ADMINISTRATIVE";
+    return "UNKNOWN";
   }
 
   function text(value) {
     return String(value == null ? "" : value).trim();
+  }
+
+  function owns(object, key) {
+    return !!object && Object.prototype.hasOwnProperty.call(object, key);
+  }
+
+  function canonicalValue(object, key, fallback) {
+    return owns(object, key) ? text(object[key]) : text(fallback);
+  }
+
+  // An explicit clear is a value, not permission to revive an older snapshot.
+  function packetValue(record, id, aliases, fallback) {
+    if (record && owns(record.formState, id)) return formValue(record, id);
+    var fields = [id].concat(aliases || []);
+    for (var i = 0; i < fields.length; i += 1) {
+      if (owns(record, fields[i])) return text(record[fields[i]]);
+    }
+    return text(fallback);
+  }
+
+  function packetSex(record) {
+    if (record && (owns(record.formState, "sexMale") || owns(record.formState, "sexFemale"))) {
+      return formSex(record);
+    }
+    return packetValue(record, "gender");
+  }
+
+  function packetHas(record, id) {
+    return !!record && (owns(record.formState, id) || owns(record, id));
+  }
+
+  function participantOutcomeTime(subject, record, outcome, started) {
+    if (owns(subject, "outcomeAt")) return text(subject.outcomeAt);
+    if (owns(subject, "finalOutcomeAt")) return text(subject.finalOutcomeAt);
+    if (outcome.indexOf("FLED") === 0) return text(subject.fledAt) || started;
+    if (outcome !== "ARRESTED") return started;
+    if (packetHas(record, "arrestDateTime")) return packetValue(record, "arrestDateTime");
+    var arrestTime = packetValue(record, "arrestTime");
+    if (packetHas(record, "arrestTime") && !arrestTime) return "";
+    var bookingDay = packetValue(record, "dateTime").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(bookingDay) && /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(arrestTime)) {
+      return bookingDay + "T" + arrestTime;
+    }
+    // Booking time alone is not an arrest timestamp.
+    return started;
+  }
+
+  function detached(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function coordinate(value, limit) {
+    if (value == null || typeof value === "boolean" || text(value) === "") return null;
+    var number = Number(value);
+    return Number.isFinite(number) && Math.abs(number) <= limit ? number : null;
+  }
+
+  function centerLocation(enc) {
+    var locations = Array.isArray(enc.locations) ? enc.locations : [];
+    var centerId = text(enc.centerLocationId);
+    var matches = centerId ? locations.filter(function (row) {
+      return row && text(row.locationId) === centerId;
+    }) : [];
+    return matches.length === 1 ? matches[0] : locations[0] || {};
+  }
+
+  function encounterEvents(enc, participants) {
+    function remapReferences(value) {
+      if (!value || typeof value !== "object") return;
+      Object.keys(value).forEach(function (key) {
+        var current = value[key];
+        if (key === "encounterParticipantId" || key === "subjectEncounterParticipantId") {
+          value[key] = resolveEncounterParticipantId(participants, current) || current;
+        } else if (key === "encounterParticipantIds" && Array.isArray(current)) {
+          value[key] = current.map(function (id) {
+            return resolveEncounterParticipantId(participants, id) || id;
+          });
+        } else if (current && typeof current === "object") {
+          remapReferences(current);
+        }
+      });
+    }
+    return (Array.isArray(enc.events) ? enc.events : []).filter(function (row) {
+      return row && typeof row === "object" && !Array.isArray(row) &&
+        (!text(row.encounterId) || text(row.encounterId) === text(enc.encounterId));
+    }).map(function (row) {
+      var event = detached(row);
+      remapReferences(event);
+      return event;
+    });
+  }
+
+  function encounterOfficers(enc, subjects, events, unavailable) {
+    var admin = readAdmin(unavailable);
+    if (owns(admin, "officers") && !Array.isArray(admin.officers)) unavailable.push("admin.officers");
+    var roster = Array.isArray(admin.officers) ? admin.officers : [];
+    var officers = [];
+    var byId = Object.create(null);
+    var legacyNameIds = Object.create(null);
+    var reportingOfficerId = text(enc.reportingOfficerId);
+
+    function add(id, role, suppliedName) {
+      id = text(id);
+      if (!id) return null;
+      var found = roster.filter(function (row) {
+        return row && text(row.officerId || row.id) === id;
+      });
+      var profile = found.length === 1 ? found[0] : null;
+      if (!byId[id]) {
+        var label = profile ? officerLabel(profile) : text(suppliedName);
+        byId[id] = {
+          officerProfileId: id,
+          personId: text(profile && profile.personId),
+          displayName: label,
+          fullName: label,
+          title: text(profile && (profile.title || profile.role)),
+          badgeNumber: text(profile && (profile.badgeNumber || profile.badge)),
+          team: text(profile && profile.team),
+          roles: []
+        };
+        officers.push(byId[id]);
+      }
+      var code = text(role).toUpperCase() || "OFFICER";
+      if (byId[id].roles.indexOf(code) < 0) byId[id].roles.push(code);
+      return byId[id];
+    }
+
+    (Array.isArray(enc.officerIds) ? enc.officerIds : []).forEach(function (id) {
+      add(id, "OFFICER");
+    });
+    if (reportingOfficerId) add(reportingOfficerId, "REPORTING");
+    subjects.forEach(function (source) {
+      var subject = source.subject || {};
+      var packet = source.bookin || {};
+      var officerId = text(subject.arrestingOfficerId || packet.arrestingOfficerId);
+      if (officerId) add(officerId, "ARRESTING");
+      var name = packetValue(packet, "officersName");
+      if (name) {
+        // A packet's text cannot retarget a subject's explicit officer ID.
+        var matched = officerId ? null : matchRosterOfficer(name, roster);
+        var nameKey = name.replace(/\s+/g, " ").trim().toUpperCase();
+        var resolvedId = officerId || text(matched && (matched.officerId || matched.id));
+        if (!resolvedId) {
+          resolvedId = legacyNameIds[nameKey] || (!reportingOfficerId ? "ofc_reporting" : "ofc_legacy_" + encodeURIComponent(nameKey));
+          legacyNameIds[nameKey] = resolvedId;
+        }
+        var role = !reportingOfficerId ? "REPORTING" : "OFFICER";
+        if (!reportingOfficerId) reportingOfficerId = resolvedId;
+        add(resolvedId, role, officerId ? "" : name);
+      }
+    });
+    events.forEach(function (event) {
+      (Array.isArray(event.officerLinks) ? event.officerLinks : []).forEach(function (link) {
+        if (link) add(link.officerProfileId || link.officerId, link.role);
+      });
+    });
+    return { officers: officers, reportingOfficerId: reportingOfficerId };
   }
 
   function uniqueStrings(values) {
@@ -243,10 +404,9 @@
       leadId: text(record.leadId),
       bookingId: text(record.bookingId || record.bookinRecordId || record.id),
       bookinRecordId: text(record.bookingId || record.bookinRecordId || record.id),
-      lastName: formValue(record, "lastName") || record.lastName || "",
-      firstName: formValue(record, "firstName") || record.firstName || "",
-      alienNumber:
-        formValue(record, "alienNumber") || record.aNumber || record.alienNumber || "",
+      lastName: packetValue(record, "lastName"),
+      firstName: packetValue(record, "firstName"),
+      alienNumber: packetValue(record, "alienNumber", ["aNumber"]),
       role: role,
       encounterRole: role,
       occupantRole: record.occupantRole || record.vehiclePosition || "",
@@ -497,11 +657,12 @@
     if (!model || !model.store || !encounterId) {
       return null;
     }
-    var loc = (enc.locations && enc.locations[0]) || {};
-    var started = enc.startedAt || (enc.meta && enc.meta.createdAt) || "";
+    var loc = centerLocation(enc);
+    var started = text(enc.startedAt);
+    var unavailable = [];
     var packetSource = Array.isArray(options.bookinRecords)
       ? options.bookinRecords
-      : bookinRecords();
+      : bookinRecords(unavailable);
     var linkedBookinSubjects = packetSource.filter(function (row) {
       return (
         row &&
@@ -549,38 +710,33 @@
     if (firstTarget < 0 && subjects.length) {
       firstTarget = 0;
     }
-    var reportingName = "";
     var participants = subjects.map(function (source, index) {
       var row = source.subject || {};
       var bookin = source.bookin || {};
       var leadId = text(row.leadId || bookin.leadId);
-      var lead = leadId && model.store.getLead(leadId);
-      var person = row.personId && model.store.getPerson
-        ? model.store.getPerson(row.personId)
+      var lead = leadId && model.store.getLead && model.store.getLead(leadId);
+      var personId = text(row.personId);
+      var person = personId && model.store.getPerson
+        ? model.store.getPerson(personId)
         : null;
-      if (!person && lead && model.subjectOf) {
+      if (person && text(person.personId) !== personId) person = null;
+      if (!personId && lead && model.subjectOf) {
         var leadPerson = model.subjectOf(lead);
-        if (
-          leadPerson &&
-          (!text(row.personId) || text(leadPerson.personId) === text(row.personId))
-        ) {
-          person = leadPerson;
+        if (leadPerson && text(leadPerson.personId)) {
+          personId = text(leadPerson.personId);
+          person = model.store.getPerson && model.store.getPerson(personId);
+          if (person && text(person.personId) !== personId) person = null;
         }
       }
       var immigration = (person && person.immigration) || {};
       var seq = sequences[index];
-      var lastName = formValue(bookin, "lastName") || bookin.lastName || row.lastName || "";
-      var firstName = formValue(bookin, "firstName") || bookin.firstName || row.firstName || "";
-      var aNumber =
-        formValue(bookin, "alienNumber") ||
-        bookin.aNumber ||
-        row.aNumber ||
-        row.alienNumber ||
-        immigration.alienNumber ||
-        "";
-      var dob =
-        formValue(bookin, "dateOfBirth") || row.dateOfBirth || (person && person.dateOfBirth) || "";
-      var sex = formSex(bookin) || bookin.gender || String((person && person.sex) || "").toUpperCase();
+      var personName = (person && person.name) || {};
+      var lastName = canonicalValue(personName, "lastName", packetValue(bookin, "lastName", [], row.lastName));
+      var firstName = canonicalValue(personName, "firstName", packetValue(bookin, "firstName", [], row.firstName));
+      var aNumber = canonicalValue(immigration, "alienNumber", packetValue(bookin, "alienNumber", ["aNumber"], row.aNumber || row.alienNumber));
+      var dob = canonicalValue(person, "dateOfBirth", packetValue(bookin, "dateOfBirth", [], row.dateOfBirth));
+      var sex = canonicalValue(person, "sex", packetSex(bookin));
+      sex = String(sex || "").toUpperCase();
       if (sex === "M") {
         sex = "MALE";
       }
@@ -588,43 +744,25 @@
         sex = "FEMALE";
       }
       sex = String(sex || "").toUpperCase();
-      var countryCode =
-        formValue(bookin, "citizenship") ||
-        bookin.countryOfCitizenship ||
-        row.citizenship ||
-        (person && person.citizenship) ||
-        "";
-      var iceEvent = formValue(bookin, "iceEvent") || bookin.iceEvent || row.iceEvent || "";
+      var countryCode = canonicalValue(person, "citizenship", packetValue(bookin, "citizenship", ["countryOfCitizenship"], row.citizenship));
+      var iceEvent = packetValue(bookin, "iceEvent", [], row.iceEvent);
       var outcome = text(row.outcome || row.outcomeCategory).toUpperCase() || "UNKNOWN";
-      var outcomeAt = row.outcomeAt || row.finalOutcomeAt || started;
-      if (outcome.indexOf("FLED") === 0) {
-        outcomeAt = row.fledAt || outcomeAt;
-      } else if (outcome === "ARRESTED") {
-        outcomeAt = formValue(bookin, "dateTime") || bookin.dateTime || outcomeAt;
-      }
-      var officerName = formValue(bookin, "officersName") || bookin.officersName || "";
-      if (!reportingName && officerName) {
-        reportingName = officerName;
-      }
-      var cash = formValue(bookin, "cash") || bookin.cash || "";
-      var medicine = formValue(bookin, "medicine") || bookin.medicine || "";
-      var children = formValue(bookin, "children") || bookin.children || "";
-      var medical = formValue(bookin, "medicalIssues") || bookin.medicalIssues || "";
-      var travelDocs = formValue(bookin, "travelDocs") || bookin.travelDocs || "";
-      var disposition =
-        formValue(bookin, "immigrationDisposition") ||
-        bookin.caseType ||
-        immigration.disposition ||
-        "";
+      var outcomeAt = participantOutcomeTime(row, bookin, outcome, started);
+      var cash = packetValue(bookin, "cash");
+      var medicine = packetValue(bookin, "medicine");
+      var children = packetValue(bookin, "children");
+      var medical = packetValue(bookin, "medicalIssues");
+      var travelDocs = packetValue(bookin, "travelDocs");
+      var disposition = packetValue(bookin, "immigrationDisposition", ["caseType"], immigration.disposition);
       var display =
         person && model.formatPersonLabel
           ? model.formatPersonLabel({
               name: {
-                lastName: lastName || (person.name && person.name.lastName) || "",
-                firstName: firstName || (person.name && person.name.firstName) || ""
+                lastName: lastName,
+                firstName: firstName
               }
             })
-          : displayName({ lastName: lastName, firstName: firstName });
+          : lastName || firstName ? displayName({ lastName: lastName, firstName: firstName }) : "";
       var subjectId = text(row.subjectId);
       var bookingId = subjectBookingId(row) || text(bookin.id || bookin.bookingId);
       var legacyParticipantIds = uniqueStrings(
@@ -638,7 +776,7 @@
         encounterParticipantId: subjectId,
         subjectId: subjectId,
         encounterId: enc.encounterId,
-        personId: text(row.personId || (person && person.personId)),
+        personId: personId,
         leadId: leadId,
         bookingId: bookingId,
         bookinRecordId: bookingId,
@@ -647,7 +785,7 @@
         roleSequence: seq.sequence,
         primaryForReport: index === firstTarget,
         identitySnapshot: {
-          displayName: display || displayName(row),
+          displayName: display,
           dateOfBirth: dob,
           aNumber: String(aNumber).replace(/\D/g, ""),
           nationalityCountryCode: countryCode,
@@ -657,13 +795,13 @@
         },
         finalOutcome: outcome,
         finalOutcomeAt: outcomeAt,
-        enforcementBasisCode: enforcementBasis(person),
+        enforcementBasisCode: enforcementBasis(person, row),
         iceEventNumber: iceEvent || null,
         immigrationSnapshot: {
           statusCode: immigration.status || null,
           dispositionCode: disposition || "UNKNOWN",
           earmDispositionCode: immigration.disposition || disposition || "UNKNOWN",
-          displayText: dispositionLabel(disposition || immigration.disposition),
+          displayText: dispositionLabel(disposition),
           finalOrder: {
             statusCode: immigration.finalOrder ? "CONFIRMED" : "UNKNOWN",
             orderDate: immigration.finalOrderDate || null
@@ -722,68 +860,102 @@
       };
     });
     var locationId = loc.locationId || "loc_" + enc.encounterId;
-    var officers = [];
-    if (reportingName) {
-      var roster = matchRosterOfficer(reportingName);
-      officers.push({
-        officerProfileId: (roster && (roster.officerId || roster.id)) || "ofc_reporting",
-        personId: (roster && (roster.officerId || roster.id)) || "",
-        displayName: roster ? officerLabel(roster) : reportingName,
-        fullName: roster ? officerLabel(roster) : reportingName,
-        title: (roster && roster.role) || "",
-        badgeNumber: (roster && roster.badge) || "",
-        team: (roster && roster.team) || "",
-        roles: ["REPORTING"]
-      });
-    }
-    var settings = readSettings();
+    var events = encounterEvents(enc, participants);
+    var officerContext = encounterOfficers(enc, subjects, events, unavailable);
+    var settings = readSettings(unavailable);
+    var operationId = text(enc.operationId);
+    var operation = operationId && model.store.getOperation
+      ? model.store.getOperation(operationId)
+      : null;
+    if (operation && text(operation.operationId) !== operationId) operation = null;
+    var sourceSubjects = Object.create(null);
+    subjects.forEach(function (source, index) {
+      var row = source.subject;
+      var participant = participants[index];
+      sourceSubjects[participant.subjectId] = {
+        subjectId: participant.subjectId,
+        outcome: participant.finalOutcome,
+        citizenship: participant.identitySnapshot.nationalityCountryCode,
+        flightMode: text(row.flightMode).toUpperCase(),
+        compliance: text(row.compliance).toUpperCase(),
+        useOfForce: text(row.useOfForce).toLowerCase(),
+        forceLevel: text(row.forceLevel).toUpperCase()
+      };
+    });
+    var meta = enc.meta || {};
     return {
       encounter: {
         schema: "copdoc.encounter.v1",
         recordType: "ENCOUNTER",
         encounterId: enc.encounterId,
-        encounterNumber: enc.encounterId,
-        eventType: vehicles.length ? "VEHICLE_STOP" : "OTHER",
-        status: "COMPLETED",
+        encounterNumber: text(enc.encounterNumber) || enc.encounterId,
+        eventType: text(enc.eventType).toUpperCase() || "UNKNOWN",
+        status: meta.markedComplete === true
+          ? "COMPLETED"
+          : text(enc.status || meta.status).toUpperCase() || "UNKNOWN",
         startedAt: started,
-        endedAt: started,
+        endedAt: text(enc.endedAt),
         primaryLocationId: locationId,
         primaryEncounterParticipantId: primaryParticipantId,
-        reportingOfficerId: (officers[0] && officers[0].officerProfileId) || "",
-        notes: ""
+        reportingOfficerId: officerContext.reportingOfficerId,
+        language: text(enc.language),
+        action: text(enc.action),
+        disposition: text(enc.disposition),
+        notes: text(enc.notes)
       },
       operation: {
-        operationId: "",
-        operationNumber: "",
-        displayName: "",
-        fieldOffice: settings.issuingOffice || "",
-        date: String(started).slice(0, 10)
+        operationId: operationId,
+        operationNumber: text(operation && operation.operationNumber),
+        displayName: text(operation && (operation.displayName || operation.name)),
+        fieldOffice: text(operation && (operation.fieldOffice || operation.fieldOfficeName)) || settings.issuingOffice || "",
+        iceOffice: text(operation && (operation.iceOffice || operation.iceOfficeName)),
+        date: text(operation && (operation.date || operation.plannedStart)).slice(0, 10) || String(started).slice(0, 10),
+        plannedStart: text(operation && operation.plannedStart),
+        plannedEnd: text(operation && operation.plannedEnd),
+        team: text(operation && operation.team)
       },
       participants: participants,
-      events: [],
+      events: events,
       encounterVehicles: encounterVehicles,
       vehicles: vehicles,
       location: {
         schema: "copdoc.location.v1",
         recordType: "LOCATION",
         locationId: locationId,
-        generatedDisplayName: [loc.street, loc.city, loc.state, loc.zip]
+        generatedDisplayName: [loc.street, loc.street2, loc.city, loc.state, loc.zip]
           .filter(Boolean)
           .join(", "),
-        locationTypeCode: locationTypeCode(loc.association),
+        locationTypeCode: locationTypeCode(loc.association || loc.locationAssociation),
         postalAddress: {
           addressLine1: loc.street || "",
+          addressLine2: loc.street2 || "",
           city: loc.city || "",
           stateOrRegion: loc.state || "",
           postalCode: loc.zip || "",
-          countryCode: "US"
+          countryCode: loc.countryCode || "US"
         },
         coordinates: {
-          latitude: Number(loc.latitude) || 0,
-          longitude: Number(loc.longitude) || 0
+          latitude: coordinate(loc.latitude, 90),
+          longitude: coordinate(loc.longitude, 180)
         }
       },
-      officers: officers,
+      officers: officerContext.officers,
+      encounterLocked: meta.markedComplete === true,
+      sourceUnavailable: unavailable.length > 0,
+      sourceFacts: {
+        encounter: {
+          eventType: text(enc.eventType).toUpperCase(),
+          centerLocationId: text(loc.locationId),
+          centerAssociation: text(loc.association || loc.locationAssociation).toLowerCase()
+        },
+        vehicles: (Array.isArray(enc.vehicles) ? enc.vehicles : []).map(function (vehicle, index) {
+          return {
+            vehicleId: text(vehicle.vehicleId) || vehicles[index].vehicleId,
+            encounterDisposition: text(vehicle.encounterDisposition).toUpperCase()
+          };
+        }),
+        subjects: sourceSubjects
+      },
       unassignedParticipantCount: unassignedParticipantCount,
       narrativesInitial: Array.isArray(enc.narratives) ? enc.narratives : []
     };
@@ -795,6 +967,7 @@
       return null;
     }
     model.store.loadFromDisk();
+    if (typeof model.store.diskError === "function" && model.store.diskError()) return null;
     var enc = model.store.getEncounter(encounterId);
     return enc ? bundleFromEncounterRecord(enc) : null;
   }

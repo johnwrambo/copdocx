@@ -628,7 +628,7 @@ function exerciseNarrativeProjection() {
   assert.strictEqual(target.bookinRecordId, "bk_narrative_target");
   assert.strictEqual(target.encounterRole, "TARGET");
   assert.strictEqual(target.finalOutcome, "ARRESTED");
-  assert.strictEqual(target.identitySnapshot.aNumber, "999888777", "Book-In may enrich identity");
+  assert.strictEqual(target.identitySnapshot.aNumber, "111222333", "canonical Person identity takes precedence over the stale Book-In copy");
   assert.strictEqual(released.subjectId, "sub_narrative_released");
   assert.strictEqual(released.personId, releasedLead.person.personId);
   assert.strictEqual(released.encounterRole, "COLLATERAL");

@@ -987,6 +987,7 @@ context.localStorage.setItem(
       aNumber: "A000111001",
       iceEvent: "DAL-1",
       encounterRole: "TARGET",
+      arrestDateTime: "2026-08-31T12:22",
       formState: {
         lastName: { value: "LOKI", type: "text" },
         firstName: { value: "Laufeyson", type: "text" },
@@ -1020,6 +1021,7 @@ context.localStorage.setItem(
   ])
 );
 enc = model.store.getEncounter(enc.encounterId);
+enc.eventType = "VEHICLE_STOP";
 enc.vehicles = [
   {
     vehicleId: "veh_1",
@@ -1076,9 +1078,9 @@ check(
     ) === "sub_model_target"
 );
 check(
-  "live ice event and arrest time",
+  "live ice event and explicit arrest time take precedence over booking time",
   liveBundle.participants[0].iceEventNumber === "DAL-1" &&
-    String(liveBundle.participants[0].finalOutcomeAt).indexOf("2026-08-31") !== -1
+    liveBundle.participants[0].finalOutcomeAt === "2026-08-31T12:22"
 );
 check(
   "live closing from book-in",

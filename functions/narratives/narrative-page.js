@@ -44,6 +44,9 @@
           location: live.location,
           officers: live.officers || [],
           vehicles: live.vehicles || [],
+          sourceFacts: live.sourceFacts || null,
+          encounterLocked: !!live.encounterLocked,
+          sourceUnavailable: live.sourceUnavailable === true,
           unassignedParticipantCount: live.unassignedParticipantCount || 0,
           narrativesInitial: live.narrativesInitial || []
         };
@@ -113,6 +116,8 @@
     throw new Error("Narrative page host is missing.");
   }
   host.__copdocNarrativeWorkspaceUi = null;
+  var previousSourcePanel = byId("narrativeSourceStatusPanel");
+  if (previousSourcePanel) previousSourcePanel.remove();
 
   var liveEmpty = liveEncounter && !(fixture.participants && fixture.participants.length);
   var emptyState = byId("narrativeEmptyState");
@@ -190,6 +195,272 @@
   var unsavedDraftStateByParticipant = new Map();
   var conflictedParticipantIds = new Set();
   var activeParticipantId = null;
+  var sourceApi = global.COPDoc && COPDoc.narrativeSource;
+  var sourceSnapshotByParticipant = new Map();
+  var loadedSourceByParticipant = new Map();
+  var reviewReadyParticipantIds = new Set();
+  var sourceStatusByNarrativeId = new Map();
+  var latestSourceFixture = fixture;
+  var readOnlyControlState = new WeakMap();
+
+  function copyValue(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function captureSource(sourceFixture, participantId) {
+    return sourceApi && typeof sourceApi.capture === "function"
+      ? sourceApi.capture(sourceFixture, participantId)
+      : null;
+  }
+
+  function sourceStatus(snapshot, currentSnapshot) {
+    return sourceApi && typeof sourceApi.evaluate === "function"
+      ? sourceApi.evaluate(snapshot, currentSnapshot)
+      : "UNKNOWN";
+  }
+
+  function latestSources() {
+    if (!liveEncounter) return fixture;
+    var loadedSource = loadLiveFixture(liveEncounterId);
+    return loadedSource.liveEncounter ? loadedSource.fixture : null;
+  }
+
+  function refreshSourceStatus() {
+    latestSourceFixture = latestSources();
+    sourceStatusByNarrativeId.clear();
+    store.all().forEach(function (record) {
+      var participant = participantForReference(record.focusEncounterParticipantId);
+      sourceStatusByNarrativeId.set(record.narrativeId, sourceStatus(
+        record.sourceSnapshot,
+        participant && latestSourceFixture
+          ? captureSource(latestSourceFixture, participant.encounterParticipantId)
+          : null
+      ));
+    });
+  }
+
+  function sourceAwareNarratives(records) {
+    if (!liveEncounter) return records;
+    return records.map(function (record) {
+      return Object.assign({}, record, {
+        freshnessStatus: sourceStatusByNarrativeId.get(record.narrativeId) || "UNKNOWN"
+      });
+    });
+  }
+
+  function isReadOnlyNarrative(record) {
+    return !!(
+      (record && record.workflowStatus === "FINALIZED") ||
+      (latestSourceFixture && latestSourceFixture.encounterLocked)
+    );
+  }
+
+  function applyEditorReadOnly(readOnly) {
+    var viewActions = ["copyButton", "typesViewButton", "rolesViewButton", "valuesViewButton",
+      "plainTextViewButton", "bindingsViewButton", "helpButton", "helpCloseButton", "popoutDraftButton"];
+    host.querySelectorAll("input, select, textarea, button, [contenteditable]").forEach(function (control) {
+      if (control.tagName === "BUTTON" && viewActions.indexOf(control.id) !== -1) return;
+      if (readOnly) {
+        if (!readOnlyControlState.has(control)) {
+          readOnlyControlState.set(control, {
+            disabled: control.disabled,
+            readOnly: control.readOnly,
+            contenteditable: control.getAttribute("contenteditable")
+          });
+        }
+        if (control.tagName === "TEXTAREA") control.readOnly = true;
+        else if (/^(INPUT|SELECT|BUTTON)$/.test(control.tagName)) control.disabled = true;
+        if (control.getAttribute("contenteditable") != null) control.setAttribute("contenteditable", "false");
+      } else if (readOnlyControlState.has(control)) {
+        var previous = readOnlyControlState.get(control);
+        control.disabled = previous.disabled;
+        control.readOnly = previous.readOnly;
+        if (previous.contenteditable != null) control.setAttribute("contenteditable", previous.contenteditable);
+        readOnlyControlState.delete(control);
+      }
+    });
+    var record = primaryFor(activeParticipantId);
+    if (readOnly && record && record.output) {
+      // The source signature cannot reconstruct a historical packet. Preserve
+      // finalized/locked prose in every view instead of re-resolving its tokens.
+      var frozenText = record.output.finalPlainText || "";
+      var draft = byId("narrativeDraft");
+      var resolved = byId("resolvedDraft");
+      if (draft && draft.textContent !== frozenText) draft.textContent = frozenText;
+      if (resolved) resolved.value = frozenText;
+    }
+  }
+
+  function outputForExport() {
+    var record = primaryFor(activeParticipantId);
+    return isReadOnlyNarrative(record) && record && record.output
+      ? copyValue(record.output)
+      : engine.getOutput();
+  }
+
+  function copyReadOnlyNarrative() {
+    var output = outputForExport();
+    var text = typeof output.finalPlainText === "string"
+      ? output.finalPlainText : output.plainText || output.generatedResolvedText || "";
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { showStatus("Saved narrative copied."); });
+    } else {
+      var field = document.createElement("textarea");
+      field.value = text;
+      field.readOnly = true;
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand("copy");
+      field.remove();
+      showStatus("Saved narrative copied.");
+    }
+  }
+
+  function renderSourceStatus() {
+    var panel = byId("narrativeSourceStatusPanel");
+    if (!liveEncounter || !activeParticipantId) {
+      if (panel) panel.hidden = true;
+      return;
+    }
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "narrativeSourceStatusPanel";
+      panel.className = "narrative-source-status";
+      var message = document.createElement("p");
+      message.id = "narrativeSourceStatusText";
+      message.setAttribute("role", "status");
+      message.setAttribute("aria-live", "polite");
+      var refresh = document.createElement("button");
+      refresh.id = "refreshNarrativeSourceButton";
+      refresh.type = "button";
+      refresh.textContent = "Refresh source facts";
+      refresh.addEventListener("click", refreshActiveSource);
+      var review = document.createElement("button");
+      review.id = "reviewNarrativeSourceButton";
+      review.type = "button";
+      review.textContent = "Mark source reviewed";
+      review.addEventListener("click", markSourceReviewed);
+      panel.append(message, refresh, review);
+      if (host.parentNode) host.parentNode.insertBefore(panel, host);
+    }
+    panel.hidden = false;
+    var record = primaryFor(activeParticipantId);
+    var currentSource = latestSourceFixture && captureSource(latestSourceFixture, activeParticipantId);
+    var baseline = sourceSnapshotByParticipant.has(activeParticipantId)
+      ? sourceSnapshotByParticipant.get(activeParticipantId)
+      : record && record.sourceSnapshot;
+    var status = sourceStatus(baseline, currentSource);
+    var readOnly = isReadOnlyNarrative(record);
+    var ready = reviewReadyParticipantIds.has(activeParticipantId) &&
+      sourceStatus(loadedSourceByParticipant.get(activeParticipantId), currentSource) === "CURRENT";
+    var messageText = status === "CURRENT"
+      ? "Source facts match this draft."
+      : status === "STALE"
+        ? "Source facts changed. Refresh them, review the draft, then mark the source reviewed."
+        : "Source not verified. Refresh the facts and review this draft before marking the source reviewed.";
+    if (!latestSourceFixture || !currentSource) {
+      messageText = "This subject or its source is unavailable. Reload the Narrative workspace.";
+    } else if (record && record.workflowStatus === "FINALIZED") {
+      messageText = "Finalized narrative · " + (status === "CURRENT" ? "source unchanged." :
+        status === "STALE" ? "source facts changed; the saved narrative is unchanged." :
+          "source not verified; the saved narrative is unchanged.");
+    } else if (readOnly) {
+      messageText = "This encounter is completed and locked. Its narrative is read-only.";
+    } else if (ready) {
+      messageText += " Refreshed facts are loaded; review any manual text before accepting them.";
+    }
+    byId("narrativeSourceStatusText").textContent = messageText;
+    byId("refreshNarrativeSourceButton").disabled = readOnly || !currentSource;
+    byId("reviewNarrativeSourceButton").disabled = readOnly || !ready;
+    ["appBarPrimaryAction", "saveEncounterNarrativeButton"].forEach(function (id) {
+      var button = byId(id);
+      if (button) button.disabled = readOnly;
+    });
+    applyEditorReadOnly(readOnly);
+  }
+
+  function refreshActiveSource() {
+    if (session !== bootGeneration || !liveEncounter || !activeParticipantId) return;
+    refreshSourceStatus();
+    var existing = primaryFor(activeParticipantId);
+    if (isReadOnlyNarrative(existing)) {
+      renderSourceStatus();
+      return;
+    }
+    if (conflictedParticipantIds.has(activeParticipantId)) {
+      showStatus("This narrative changed in another window. Reload before refreshing its source.", false);
+      return;
+    }
+    var currentParticipant = fixture.participants.find(function (row) {
+      return row.encounterParticipantId === activeParticipantId;
+    });
+    var matches = latestSourceFixture && latestSourceFixture.participants.filter(function (row) {
+      return row.encounterParticipantId === activeParticipantId;
+    }) || [];
+    var nextParticipant = matches.length === 1 ? matches[0] : null;
+    if (!nextParticipant || !["personId", "leadId", "bookingId"].every(function (key) {
+      var before = currentParticipant && currentParticipant[key];
+      var after = nextParticipant[key];
+      return !before || !after || before === after;
+    })) {
+      showStatus("This subject's identity changed. Reload the Narrative workspace.", false);
+      return;
+    }
+    var state = engine.getState({ includeData: false });
+    var previousSeed = seedFromEncounter(currentParticipant);
+    fixture = latestSourceFixture;
+    var nextSeed = seedFromEncounter(nextParticipant);
+    state.encounter = state.encounter || {};
+    state.encounter.selections = Object.assign({}, state.encounter.selections || {});
+    previousSeed.hideIds.concat(nextSeed.hideIds).forEach(function (fieldId) {
+      delete state.encounter.selections[fieldId];
+    });
+    Object.assign(state.encounter.selections, nextSeed.selections);
+    var packet = narratives.buildPacketFromBundle(demoBundle(), activeParticipantId, {
+      isTestData: false,
+      vehicleResolver: vehicleResolver
+    });
+    engine.resetEncounter({ clearData: true });
+    engine.setDataPacket(packet);
+    engine.loadState(state, { loadData: false, restorePlainText: true, autoBind: true });
+    applyEncounterOwnedUi(nextSeed.hideIds);
+    loadedSourceByParticipant.set(activeParticipantId, captureSource(fixture, activeParticipantId));
+    reviewReadyParticipantIds.add(activeParticipantId);
+    renderParticipantList();
+    renderCoverageAndSummary();
+    renderOutputAudit();
+    renderSourceStatus();
+    showStatus("Source facts refreshed. Review the narrative, including any manual text, before marking the source reviewed.");
+  }
+
+  function markSourceReviewed() {
+    if (session !== bootGeneration || !liveEncounter || !activeParticipantId) return;
+    refreshSourceStatus();
+    var existing = primaryFor(activeParticipantId);
+    var currentSource = latestSourceFixture && captureSource(latestSourceFixture, activeParticipantId);
+    var loadedSource = loadedSourceByParticipant.get(activeParticipantId);
+    if (isReadOnlyNarrative(existing) || !reviewReadyParticipantIds.has(activeParticipantId)) {
+      renderSourceStatus();
+      return;
+    }
+    if (sourceStatus(loadedSource, currentSource) !== "CURRENT") {
+      reviewReadyParticipantIds.delete(activeParticipantId);
+      renderSourceStatus();
+      showStatus("Source facts changed again. Refresh them before marking the source reviewed.", false);
+      return;
+    }
+    sourceSnapshotByParticipant.set(activeParticipantId, copyValue(loadedSource));
+    reviewReadyParticipantIds.delete(activeParticipantId);
+    var saved = captureCurrent({ createMissing: !!existing, silent: true });
+    if (saved !== false) {
+      var latestAfterSave = latestSourceFixture && captureSource(latestSourceFixture, activeParticipantId);
+      showStatus(sourceStatus(loadedSource, latestAfterSave) === "CURRENT"
+        ? (existing ? "Source review saved." : "Source reviewed. Save to create this primary narrative.")
+        : "Draft saved, but source facts changed again. Refresh and review the latest facts.");
+    }
+    renderSourceStatus();
+  }
 
   function bindDraftPopout() {
     var hostEl = document.getElementById("narrativeEngineHost");
@@ -293,6 +564,7 @@
       if (destResolved && srcResolved) {
         destResolved.value = srcResolved.value;
         destResolved.hidden = !!srcResolved.hidden;
+        destResolved.readOnly = isReadOnlyNarrative(primaryFor(activeParticipantId));
       }
       if (label) {
         var mode = document.getElementById("editorModeLabel");
@@ -318,6 +590,10 @@
               : destDraft
                 ? destDraft.innerText
                 : "";
+          var record = primaryFor(activeParticipantId);
+          if (isReadOnlyNarrative(record) && record && record.output) {
+            text = record.output.finalPlainText || "";
+          }
           if (!text) {
             return;
           }
@@ -424,19 +700,6 @@
     return !text || text === "unknown" || text === "null";
   }
 
-  function liveStoreEncounter() {
-    var model = global.COPDoc && COPDoc.model;
-    if (!model || !model.store || !liveEncounterId) {
-      return null;
-    }
-    model.store.loadFromDisk();
-    return model.store.getEncounter(liveEncounterId) || null;
-  }
-
-  function digits(value) {
-    return String(value == null ? "" : value).replace(/\D/g, "");
-  }
-
   function participantReferenceIds(participant) {
     var seen = Object.create(null);
     return [
@@ -474,152 +737,21 @@
     return !!focused && focused.encounterParticipantId === participantId;
   }
 
-  function liveSubjectMatch(subjects, predicate) {
-    var matches = (subjects || []).filter(function (row) {
-      return row && predicate(row);
-    });
-    return {
-      subject: matches.length === 1 ? matches[0] : null,
-      ambiguous: matches.length > 1
-    };
-  }
-
-  function liveSubjectCompatible(subjects, subject, participant) {
-    var role = String(
-      (subject && (subject.role || subject.encounterRole)) || ""
-    )
-      .trim()
-      .toUpperCase();
-    if (role !== "TARGET" && role !== "COLLATERAL") {
-      return false;
-    }
-    var bookingId = String(
-      (participant && (participant.bookingId || participant.bookinRecordId)) || ""
-    ).trim();
-    var personId = String((participant && participant.personId) || "").trim();
-    var leadId = String((participant && participant.leadId) || "").trim();
-    var subjectBookingId = String(
-      (subject && (subject.bookingId || subject.bookinRecordId)) || ""
-    ).trim();
-    var subjectPersonId = String((subject && subject.personId) || "").trim();
-    var subjectLeadId = String((subject && subject.leadId) || "").trim();
-    if (
-      (bookingId && subjectBookingId && bookingId !== subjectBookingId) ||
-      (personId && subjectPersonId && personId !== subjectPersonId) ||
-      (leadId && subjectLeadId && leadId !== subjectLeadId)
-    ) {
-      return false;
-    }
-    return !(subjects || []).some(function (other) {
-      if (!other || other === subject) {
-        return false;
-      }
-      var otherBookingId = String(
-        other.bookingId || other.bookinRecordId || ""
-      ).trim();
-      return (
-        (bookingId && !subjectBookingId && otherBookingId === bookingId) ||
-        (personId && !subjectPersonId && String(other.personId || "").trim() === personId) ||
-        (leadId && !subjectLeadId && String(other.leadId || "").trim() === leadId)
-      );
-    });
-  }
-
   function matchLiveSubject(participant) {
-    var enc = liveStoreEncounter();
-    if (!enc || !participant) {
-      return null;
+    if (!participant) return null;
+    var subjects = fixture.sourceFacts && fixture.sourceFacts.subjects || {};
+    var canonicalId = String(participant.subjectId || participant.encounterParticipantId || "").trim();
+    // Source facts have already crossed the adapter's identity boundary. An
+    // explicit subject ID never falls back to a name, A-number, or roster index.
+    if (canonicalId && Object.prototype.hasOwnProperty.call(subjects, canonicalId)) {
+      return subjects[canonicalId];
     }
-    var subjects = Array.isArray(enc.subjects) ? enc.subjects : [];
-    var subjectId = String(participant.subjectId || "").trim();
-    if (!subjectId) {
-      var participantId = String(participant.encounterParticipantId || "").trim();
-      if (participantId && participantId.indexOf("ep_") !== 0) {
-        subjectId = participantId;
-      }
-    }
-    var result;
-    if (subjectId) {
-      result = liveSubjectMatch(subjects, function (row) {
-        return String(row.subjectId || "").trim() === subjectId;
-      });
-      // A canonical ID is authoritative. If it no longer exists (or is
-      // duplicated in damaged data), do not seed this narrative from a
-      // different association that happens to share a weaker identity.
-      return result.subject && liveSubjectCompatible(subjects, result.subject, participant)
-        ? result.subject
-        : null;
-    }
-    var bookingId = String(
-      participant.bookingId || participant.bookinRecordId || ""
-    ).trim();
-    result = liveSubjectMatch(subjects, function (row) {
-      var rowBookingId = String(row.bookingId || row.bookinRecordId || "").trim();
-      return (
-        bookingId &&
-        rowBookingId === bookingId &&
-        liveSubjectCompatible(subjects, row, participant)
-      );
+    if (participant.subjectId) return null;
+    var aliases = participantReferenceIds(participant);
+    var matches = Object.keys(subjects).filter(function (subjectId) {
+      return aliases.indexOf(subjectId) !== -1;
     });
-    if (result.subject || result.ambiguous) {
-      return result.subject;
-    }
-    var personId = String(participant.personId || "");
-    result = liveSubjectMatch(subjects, function (row) {
-      return (
-        personId &&
-        String(row.personId || "") === personId &&
-        liveSubjectCompatible(subjects, row, participant)
-      );
-    });
-    if (result.subject || result.ambiguous) {
-      return result.subject;
-    }
-    var leadId = String(participant.leadId || "");
-    result = liveSubjectMatch(subjects, function (row) {
-      return (
-        leadId &&
-        String(row.leadId || "") === leadId &&
-        liveSubjectCompatible(subjects, row, participant)
-      );
-    });
-    if (result.subject || result.ambiguous) {
-      return result.subject;
-    }
-    var aNumber = digits(
-      participant.identitySnapshot && participant.identitySnapshot.aNumber
-    );
-    result = liveSubjectMatch(subjects, function (row) {
-      return (
-        aNumber &&
-        digits(row.alienNumber || row.aNumber) === aNumber &&
-        liveSubjectCompatible(subjects, row, participant)
-      );
-    });
-    if (result.subject || result.ambiguous) {
-      return result.subject;
-    }
-    var last = String(
-      (participant.identitySnapshot &&
-        participant.identitySnapshot.displayName) ||
-        ""
-    )
-      .split(",")[0]
-      .trim()
-      .toUpperCase();
-    result = liveSubjectMatch(subjects, function (row) {
-      return (
-        last &&
-        String(row.lastName || "").trim().toUpperCase() === last &&
-        liveSubjectCompatible(subjects, row, participant)
-      );
-    });
-    if (result.subject || result.ambiguous) {
-      return result.subject;
-    }
-    return subjects.length === 1 && liveSubjectCompatible(subjects, subjects[0], participant)
-      ? subjects[0]
-      : null;
+    return matches.length === 1 ? subjects[matches[0]] : null;
   }
 
   function seedFromEncounter(participant) {
@@ -640,25 +772,15 @@
     if (!liveEncounter || !participant) {
       return { selections: selections, hideIds: hideIds };
     }
-    var enc = liveStoreEncounter() || fixture.encounter || {};
+    var facts = fixture.sourceFacts || {};
+    var enc = facts.encounter || fixture.encounter || {};
     var eventType = String(enc.eventType || "").toUpperCase();
     if (eventType === "TARGETED_ARREST") {
       take("origin_type", "preplanned_targeted_arrest");
     } else if (eventType === "COLLATERAL_CONTACT") {
       take("origin_type", "collateral_encounter");
     }
-    var center = null;
-    (enc.locations || []).forEach(function (loc) {
-      if (enc.centerLocationId && loc && loc.locationId === enc.centerLocationId) {
-        center = loc;
-      }
-    });
-    if (!center) {
-      center = (enc.locations || [])[0] || null;
-    }
-    var assoc = String(
-      (center && (center.association || center.locationAssociation)) || ""
-    ).toLowerCase();
+    var assoc = String(enc.centerAssociation || "").toLowerCase();
     if (assoc === "target") {
       take("encounter_location_type", "residence");
     } else if (assoc === "stop" || assoc === "arrest") {
@@ -679,7 +801,7 @@
     } else if (eventType === "KNOCK_AND_TALK") {
       take("encounter_location_type", "residence");
     }
-    var vehicles = enc.vehicles || [];
+    var vehicles = facts.vehicles || [];
     if (!vehicles.length) {
       hide("vehicle_disposition");
     } else {
@@ -701,16 +823,20 @@
       (subject && subject.outcome) || participant.finalOutcome || ""
     ).toUpperCase();
     var flightMode = String((subject && subject.flightMode) || "").toUpperCase();
-    if (outcome === "FLED_FOOT" || (outcome === "FLED" && flightMode === "FOOT")) {
+    if (outcome === "FLED_FOOT" || flightMode === "FOOT") {
       take("flight", "fled_on_foot");
-    } else if (outcome === "FLED_VEHICLE" || (outcome === "FLED" && flightMode === "VEHICLE")) {
+    } else if (outcome === "FLED_VEHICLE" || flightMode === "VEHICLE") {
       take("flight", "fled_in_vehicle");
-    } else if (outcome) {
-      hide("flight");
     }
     if (outcome === "ARRESTED") {
-      take("enforcement_action", "warrantless_administrative_arrest");
-      take("final_outcome", "transported_ice_office");
+      // Custody alone establishes neither arrest authority nor destination.
+      // Officers select those facts unless an explicit authority is supplied.
+      var authority = String(participant.enforcementBasisCode || "").toUpperCase();
+      if (authority === "I_200") {
+        take("enforcement_action", "administrative_arrest_i200");
+      } else if (authority === "WARRANTLESS_ADMINISTRATIVE") {
+        take("enforcement_action", "warrantless_administrative_arrest");
+      }
     } else if (outcome === "RELEASED") {
       take("enforcement_action", "released_no_action");
       take("final_outcome", "released_scene");
@@ -721,22 +847,11 @@
     var compliance = String((subject && subject.compliance) || "").toUpperCase();
     if (compliance === "COMPLIANT") {
       take("subject_conduct", "fully_compliant");
-    } else if (compliance === "NON_COMPLIANT" || compliance === "NONCOMPLIANT") {
-      take("subject_conduct", "refused_commands");
     }
     var uof = String((subject && subject.useOfForce) || "").toLowerCase();
-    var forceLevel = String((subject && subject.forceLevel) || "").toUpperCase();
     if (uof === "no") {
       hide("force_type");
       hide("force_result");
-    } else if (uof === "yes") {
-      if (forceLevel === "HARD") {
-        take("force_type", "takedown");
-      } else if (forceLevel === "LETHAL") {
-        take("force_type", "other_force");
-      } else {
-        take("force_type", "physical_control");
-      }
     }
     var closing = participant.closing || {};
     var health = String(closing.health || "").trim();
@@ -778,20 +893,9 @@
     } else if (nationality && !looksEmptyUnknown(nationality)) {
       take("subject_nationality", "other_nationality");
     }
-    var others = (enc.subjects || fixture.participants || []).filter(function (row) {
-      if (!row) {
-        return false;
-      }
-      if (row.encounterParticipantId) {
-        return (
-          row.encounterParticipantId !== participant.encounterParticipantId &&
-          String(row.finalOutcome || row.outcome || "").toUpperCase() === "ARRESTED"
-        );
-      }
-      return (
-        row !== subject &&
-        String(row.outcome || "").toUpperCase() === "ARRESTED"
-      );
+    var others = fixture.participants.filter(function (row) {
+      return row && row.encounterParticipantId !== participant.encounterParticipantId &&
+        String(row.finalOutcome || row.outcome || "").toUpperCase() === "ARRESTED";
     });
     if (others.length) {
       take("other_arrested", "include_all_other_arrested");
@@ -847,9 +951,13 @@
       typeof model.store.updateEncounter !== "function"
     ) {
       showStatus("Narrative storage is unavailable.", false);
+      if (change.previousNarratives) store.replaceAll(change.previousNarratives);
       return false;
     }
     var result = model.store.updateEncounter(liveEncounterId, function (enc) {
+      if (enc.meta && enc.meta.markedComplete) {
+        throw new domain.DomainError("ENCOUNTER_LOCKED", "This encounter is completed and locked.");
+      }
       var adapter = global.COPDoc && COPDoc.encounterNarrative;
       var latestBundle =
         adapter && typeof adapter.bundleFromEncounterRecord === "function"
@@ -955,6 +1063,10 @@
         }, []);
       }
       var diskNarratives = Array.isArray(enc.narratives) ? enc.narratives : [];
+      recordToSave.freshnessStatus = sourceStatus(
+        recordToSave.sourceSnapshot,
+        latestBundle ? captureSource(latestBundle, change.expectedFocusEncounterParticipantId) : null
+      );
       var mergeResult = change.kind === "create"
         ? domain.addNarrative(diskNarratives, recordToSave, {
             now: recordToSave.updatedAt
@@ -1007,6 +1119,8 @@
       var persisted = result && result.encounter;
       if (persisted && Array.isArray(persisted.narratives)) {
         store.replaceAll(persisted.narratives);
+      } else if (change.previousNarratives) {
+        store.replaceAll(change.previousNarratives);
       }
       if (isNarrativeConflict(error) && change.record.focusEncounterParticipantId) {
         var conflicted = participantForReference(
@@ -1057,7 +1171,8 @@
       vehicles: fixture.encounterVehicles,
       primaryLocation: fixture.location,
       officers: fixture.officers,
-      narratives: store.all(),
+      narratives: sourceAwareNarratives(store.all()),
+      sourceFacts: fixture.sourceFacts,
       narrativeFacts: liveEncounter
         ? {}
         : {
@@ -1079,7 +1194,7 @@
     return domain.validateCoverage({
       encounterId: fixture.encounter.encounterId,
       participants: fixture.participants,
-      narratives: narrativeRecords || []
+      narratives: sourceAwareNarratives(narrativeRecords || [])
     });
   }
 
@@ -1117,6 +1232,9 @@
       var meta = document.createElement("span");
       meta.className = "narrative-participant-meta";
       var narrativeStatus = primary ? primary.workflowStatus || "DRAFT" : "MISSING";
+      if (liveEncounter && primary) {
+        narrativeStatus += " · " + (sourceStatusByNarrativeId.get(primary.narrativeId) || "UNKNOWN");
+      }
       var outcome = String(participant.finalOutcome || "UNKNOWN").replaceAll("_", " ");
       meta.textContent = narrativeStatus +
         " · " + outcome +
@@ -1167,6 +1285,8 @@
       ["Covered", coverage.coveredCount],
       ["Missing", coverage.missingParticipantIds.length],
       ["Duplicates", coverage.duplicateParticipantIds.length],
+      ["Source changed", coverage.staleNarrativeIds.length],
+      ["Source unverified", coverage.unknownFreshnessNarrativeIds.length],
       ["Supplements", store.all().filter(function (n) {
         return n.narrativeKind === domain.NARRATIVE_KINDS.SUBJECT_SUPPLEMENT ||
           n.narrativeKind === domain.NARRATIVE_KINDS.ENCOUNTER_SUPPLEMENT;
@@ -1285,13 +1405,24 @@
 
   function captureCurrent(options) {
     options = options || {};
+    if (session !== bootGeneration) return false;
     if (!activeParticipantId) return null;
+    refreshSourceStatus();
     var output = engine.getOutput();
     var state = engine.getState({ includeData: false });
     var existing = primaryFor(activeParticipantId);
     var participant = fixture.participants.find(function (row) {
       return row.encounterParticipantId === activeParticipantId;
     });
+    if (isReadOnlyNarrative(existing)) {
+      if (!options.silent) {
+        showStatus(existing && existing.workflowStatus === "FINALIZED"
+          ? narrativeErrorMessage({ code: "FINALIZED_NARRATIVE_IMMUTABLE" })
+          : "This encounter is completed and locked.", false);
+      }
+      renderSourceStatus();
+      return false;
+    }
     if (conflictedParticipantIds.has(activeParticipantId)) {
       showStatus(
         "This subject's narrative changed in another window. Reload this page before editing it again.",
@@ -1301,6 +1432,10 @@
     }
     var successMessage = "";
     var persistenceChange = null;
+    var beforeNarratives = store.all();
+    var sourceSnapshot = copyValue(sourceSnapshotByParticipant.get(activeParticipantId) || null);
+    var freshness = sourceStatus(sourceSnapshot,
+      latestSourceFixture && captureSource(latestSourceFixture, activeParticipantId));
     try {
       if (existing) {
         var updated = store.save(existing.narrativeId, {
@@ -1314,7 +1449,8 @@
           bindings: output.bindings,
           factsManifest: output.factsManifest,
           validationSnapshot: output.validation,
-          freshnessStatus: "CURRENT"
+          sourceSnapshot: sourceSnapshot,
+          freshnessStatus: liveEncounter ? freshness : "CURRENT"
         });
         persistenceChange = {
           kind: "save",
@@ -1343,7 +1479,7 @@
           }),
           title: participantName(participant) + " — Primary subject narrative",
           workflowStatus: "DRAFT",
-          freshnessStatus: "CURRENT",
+          freshnessStatus: liveEncounter ? freshness : "CURRENT",
           engine: {
             version: engine.version,
             build: engine.build,
@@ -1354,10 +1490,7 @@
           bindings: output.bindings,
           factsManifest: output.factsManifest,
           validationSnapshot: output.validation,
-          sourceSnapshot: {
-            encounterId: fixture.encounter.encounterId,
-            iceEventNumber: participant.iceEventNumber || ""
-          }
+          sourceSnapshot: sourceSnapshot
         });
         persistenceChange = {
           kind: "create",
@@ -1379,19 +1512,31 @@
       showStatus(narrativeErrorMessage(error), false);
       return false;
     }
+    if (persistenceChange) persistenceChange.previousNarratives = beforeNarratives;
     var persisted = persistLiveEncounter(persistenceChange);
     if (!persisted) {
       renderParticipantList();
       renderCoverageAndSummary();
       renderOutputAudit();
+      refreshSourceStatus();
+      renderSourceStatus();
       return false;
     }
+    refreshSourceStatus();
     if (!options.silent && successMessage) {
+      var savedRecord = primaryFor(activeParticipantId);
+      var savedFreshness = savedRecord && sourceStatusByNarrativeId.get(savedRecord.narrativeId);
+      if (liveEncounter && savedFreshness !== "CURRENT") {
+        successMessage += savedFreshness === "STALE"
+          ? " Source facts changed; review is still needed."
+          : " Source is unverified; review is still needed.";
+      }
       showStatus(successMessage);
     }
     renderParticipantList();
     renderCoverageAndSummary();
     renderOutputAudit();
+    renderSourceStatus();
     return output;
   }
 
@@ -1406,13 +1551,22 @@
       : null;
     if (
       activeParticipantId &&
-      !(currentRecord && currentRecord.workflowStatus === "FINALIZED") &&
+      !isReadOnlyNarrative(currentRecord) &&
       captureCurrent({ silent: true, createMissing: false }) === false
     ) {
       return;
     }
+    applyEditorReadOnly(false);
     activeParticipantId = participantId;
+    refreshSourceStatus();
     var existing = primaryFor(participantId);
+    if (!sourceSnapshotByParticipant.has(participantId)) {
+      sourceSnapshotByParticipant.set(participantId, copyValue(existing
+        ? existing.sourceSnapshot || null
+        : captureSource(fixture, participantId)));
+    }
+    loadedSourceByParticipant.set(participantId, captureSource(fixture, participantId));
+    reviewReadyParticipantIds.delete(participantId);
     var packet = narratives.buildPacketFromBundle(demoBundle(), participantId, {
       isTestData: !liveEncounter,
       vehicleResolver: vehicleResolver
@@ -1423,6 +1577,15 @@
 
     var resumableState = unsavedDraftStateByParticipant.get(participantId) ||
       resumableStateFor(existing);
+    if (existing && existing.workflowStatus === "FINALIZED") {
+      // Finalized prose is a historical output. Fresh source packets may inform
+      // the warning, but must not silently rewrite the displayed/copyable text.
+      resumableState = resumableState || engine.getState({ includeData: false });
+      resumableState.narrative = Object.assign({}, resumableState.narrative || {}, {
+        plainText: existing.output && existing.output.finalPlainText || "",
+        plainTextIsManual: true
+      });
+    }
     if (resumableState) {
       engine.loadState(resumableState, {
         loadData: false,
@@ -1433,7 +1596,7 @@
       engine.setSelections(seededSelections(existing, participant), { rebuild: true });
     }
     applyEncounterOwnedUi(seedFromEncounter(participant).hideIds);
-    engine.setView("values");
+    engine.setView(isReadOnlyNarrative(existing) ? "plain" : "values");
     var title = byId("activeNarrativeTitle");
     if (title) {
       title.textContent =
@@ -1443,6 +1606,7 @@
     renderParticipantList();
     renderCoverageAndSummary();
     renderOutputAudit();
+    renderSourceStatus();
   }
 
   function renderOutputAudit() {
@@ -1504,14 +1668,15 @@
   }
 
   function downloadOutputJson() {
-    var output = engine.getOutput();
+    var output = outputForExport();
     downloadFile(activeFileStem() + ".json", JSON.stringify(output, null, 2), "application/json");
     showStatus("Narrative JSON downloaded.");
   }
 
   function downloadOutputText() {
-    var output = engine.getOutput();
-    var text = output.plainText || output.generatedResolvedText || "";
+    var output = outputForExport();
+    var text = typeof output.finalPlainText === "string"
+      ? output.finalPlainText : output.plainText || output.generatedResolvedText || "";
     if (!text) {
       showStatus("Build the narrative before downloading text.", false);
       return;
@@ -1528,7 +1693,9 @@
       return;
     }
     if (liveEncounter) {
-      captureCurrent({ silent: true, createMissing: false });
+      if (!isReadOnlyNarrative(primaryFor(activeParticipantId))) {
+        captureCurrent({ silent: true, createMissing: false });
+      }
     }
   };
   var primaryAction = byId("appBarPrimaryAction");
@@ -1542,6 +1709,11 @@
   var copyAction = byId("copyNarrativeButton");
   if (copyAction) {
     copyAction.addEventListener("click", function () {
+      if (session !== bootGeneration) return;
+      if (isReadOnlyNarrative(primaryFor(activeParticipantId))) {
+        copyReadOnlyNarrative();
+        return;
+      }
       var engineCopy = document.getElementById("copyButton");
       if (engineCopy) {
         engineCopy.click();
@@ -1612,7 +1784,42 @@
       if (focused) {
         applyEncounterOwnedUi(seedFromEncounter(focused).hideIds);
       }
+      applyEditorReadOnly(isReadOnlyNarrative(primaryFor(activeParticipantId)));
     });
+  });
+
+  ["beforeinput", "paste", "cut", "drop", "dragstart"].forEach(function (type) {
+    host.addEventListener(type, function (event) {
+      if (session !== bootGeneration || !isReadOnlyNarrative(primaryFor(activeParticipantId))) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+  });
+  host.addEventListener("click", function (event) {
+    if (session !== bootGeneration || !isReadOnlyNarrative(primaryFor(activeParticipantId))) return;
+    var target = event.target && event.target.closest ? event.target.closest("button") : null;
+    if (target && target.id === "copyButton") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      copyReadOnlyNarrative();
+    }
+  }, true);
+  host.addEventListener("click", function () {
+    if (session !== bootGeneration) return;
+    applyEditorReadOnly(isReadOnlyNarrative(primaryFor(activeParticipantId)));
+  });
+
+  function reevaluateLiveSource() {
+    if (session !== bootGeneration || !liveEncounter) return;
+    refreshSourceStatus();
+    renderParticipantList();
+    renderCoverageAndSummary();
+    renderSourceStatus();
+  }
+  global.addEventListener("storage", reevaluateLiveSource);
+  global.addEventListener("focus", reevaluateLiveSource);
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) reevaluateLiveSource();
   });
 
   var master = narratives.MASTER_NARRATIVE_SECTIONS;
@@ -1627,6 +1834,7 @@
 
   bindDraftPopout();
 
+  refreshSourceStatus();
   renderParticipantList();
   renderCoverageAndSummary();
   switchFocus(

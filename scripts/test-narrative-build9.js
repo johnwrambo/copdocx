@@ -309,6 +309,7 @@ assert.deepEqual(scriptOrder, [
   "functions/model/encounter.js",
   "functions/model/store.js",
   "functions/encounter-narrative.js",
+  "functions/narratives/source-freshness.js",
   "functions/narratives/narrative-page.js"
 ]);
 assert.match(narratives.ENGINE_MARKUP, /class="narrative-engine-container"/);
