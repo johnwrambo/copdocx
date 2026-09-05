@@ -289,7 +289,6 @@ dataLibraries.forEach((file) => {
 const scriptOrder = Array.from(page.matchAll(/<script\s+src="([^"]+)"/g), (match) => match[1]);
 assert.deepEqual(scriptOrder, [
   "functions/workspace-config.js",
-  "functions/privacy-gate.js",
   "functions/app-bar.js",
   "functions/date.js",
   ...dataLibraries,

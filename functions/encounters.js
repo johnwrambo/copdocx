@@ -188,14 +188,6 @@
 
   function showEncounterTab(id) {
     var narrative = id === "tab-narrative";
-    if (
-      !narrative &&
-      window.COPDoc &&
-      COPDoc.narratives &&
-      typeof COPDoc.narratives.flushWorkspace === "function"
-    ) {
-      COPDoc.narratives.flushWorkspace();
-    }
     if (narrative) {
       setStatus("");
     }
@@ -211,9 +203,6 @@
     }
     if (id === "tab-evidence") {
       paintEvidence();
-    }
-    if (narrative) {
-      paintNarrativeTab();
     }
   }
 
@@ -2718,55 +2707,6 @@
       return;
     }
     window.location.href = bookinHref(id);
-  }
-
-  function paintNarrativeTab() {
-    var need = byId("narrativeNeedSubjects");
-    var workspace = byId("narrativeWorkspace");
-    var empty = byId("narrativeEmptyState");
-    var id = (byId("encounterId") && byId("encounterId").value) || queryId();
-    var subjects =
-      encounterSubjects.length
-        ? encounterSubjects
-        : ((model() &&
-            model().store &&
-            id &&
-            model().store.getEncounter(id) &&
-            model().store.getEncounter(id).subjects) ||
-          []);
-    if (!id || !subjects.length) {
-      if (workspace) {
-        workspace.hidden = true;
-      }
-      if (empty) {
-        empty.hidden = true;
-      }
-      if (need) {
-        need.hidden = false;
-        need.textContent = !id
-          ? "Create the encounter first."
-          : "Add subjects on the Subjects tab before writing an I-213.";
-      }
-      return;
-    }
-    if (saveDraftQuiet({ force: true }) === false) {
-      return;
-    }
-    if (need) {
-      need.hidden = true;
-    }
-    if (workspace) {
-      workspace.hidden = false;
-    }
-    if (
-      !window.COPDoc ||
-      !COPDoc.narratives ||
-      typeof COPDoc.narratives.bootWorkspace !== "function"
-    ) {
-      setStatus("The I-213 engine did not load.");
-      return;
-    }
-    COPDoc.narratives.bootWorkspace({ encounterId: id, inPage: true });
   }
 
   function generateEncounterNarrative() {

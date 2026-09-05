@@ -1876,6 +1876,7 @@
       return [];
     }
     var packets = packetsForQuery(opts);
+    // Roster pages load arrest-report.js so collect fills name, A-number, dates.
     if (root.arrestReport && typeof root.arrestReport.collect === "function") {
       return root.arrestReport.collect(
         {

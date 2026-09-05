@@ -13,7 +13,7 @@
 > **Boundary:** This file is a rewrite design captured from an old snapshot. It
 > must not be used as a punch list or current-state description for the classic
 > multi-page app. The classic product is now **0.67.0** and includes Investigate,
-> Operations, Home utilities, the privacy lock, and later storage/media/map
+> Operations, Home utilities, and later storage/media/map
 > behavior that this frozen blueprint does not model. Update this document only
 > as part of an explicitly authorized React rewrite.
 

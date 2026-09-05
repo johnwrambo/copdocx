@@ -233,7 +233,6 @@
   function bindTools() {
     var importButton = byId("homeImportButton");
     var exportButton = byId("homeExportButton");
-    var lockButton = byId("homeLockButton");
     if (importButton) {
       importButton.addEventListener("click", function () {
         if (typeof window.openFileImport === "function") {
@@ -245,13 +244,6 @@
       exportButton.addEventListener("click", function () {
         if (typeof window.openFileExport === "function") {
           window.openFileExport();
-        }
-      });
-    }
-    if (lockButton) {
-      lockButton.addEventListener("click", function () {
-        if (window.COPDoc && COPDoc.privacyGate && COPDoc.privacyGate.lock) {
-          COPDoc.privacyGate.lock();
         }
       });
     }

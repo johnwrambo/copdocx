@@ -70,14 +70,12 @@ Icon library (Lucide set on the page, `<details>` closed by default) assigns a g
 
 `narrative.html` (`data-page="narrative"`) is the I-213 / Build 9 training lab
 and the standalone live page (`?encounterId=`). The encounter workspace
-**Narrative** tab mounts the same Build 9 engine in-page (`#narrativeEngineHost`,
-`COPDoc.narratives.bootWorkspace`). There is no iframe. The fact pane
-(`narrative-workspace-ui.js`) filters/collapses sections and hides
-encounter-owned fields in live mode. **Pop out** opens the live draft with
-`window.open()`. No query → synthetic training lab (Home tile). A missing
-encounter does **not** fall back to the demo. **Save I-213** writes
-`encounter.narratives[]` and `supervisorSummary`. Training **Update draft**
-stays in memory.
+**Narrative** tab is a stub; it does not mount the engine or use an iframe.
+The fact pane (`narrative-workspace-ui.js`) lives on `narrative.html`.
+**Pop out** opens the live draft with `window.open()`. No query → synthetic
+training lab (Home tile). A missing encounter does **not** fall back to the
+demo. **Save I-213** writes `encounter.narratives[]` and `supervisorSummary`.
+Training **Update draft** stays in memory.
 
 Chrome tab label: **Cases**. Files and `data-page` stay `leads` / `lead-form` / `case`. Person **stage** is `caseRole` Lead / Target / Detainee. Encounter Target / Collateral is `encounterRole`. **Investigate** tab: `investigations.html` / `investigate.html?id=`. Investigation ID `INV{team}-{YYYYMMDD}-{seq}`. Kind uses Case source codes (`tag` Plate Check, `otherLe`, `elite`, `other`, `discovered`). An investigation is a web of objects on a **wall** (place / drag / connect; identity in the Card window), not a Case and not a scrolling form. Objects live in `people{}`, `vehicles{}`, `locations{}`, `businesses{}`, and `entities{}` and are reused across investigations by id. **Spawn** creates a child (`parentInvestigationId`) that overlaps the parent’s focused object plus one-hop neighbors. **Open as case** files a focused PERSON as a working Case (same `personId`; wall stays put). Wall details: [investigation-wall-plan.md](investigation-wall-plan.md).
 
@@ -142,13 +140,12 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | Narrative downloads | `#downloadNarrativeJsonButton`, `#downloadNarrativeTextButton` | Download JSON / text | action-slot buttons |
 | Workspace Import | `#homeImportButton` | Import JSON | Home Tools button calling `openFileImport` |
 | Workspace Export | `#homeExportButton` | Export JSON / CSV | Home Tools button calling `openFileExport` |
-| Workspace lock | `#homeLockButton` | Lock this tab | Home Tools button calling `COPDoc.privacyGate.lock` |
 | Add encounter | `#appBarPrimaryAction` | Add encounter | `<a href="encounter-form.html">` |
 | Add encounter from operation | action slot | Add encounter | `encounter-form.html?operationId=` |
 | Add encounter from case | action slot | Add encounter | `encounter-form.html?leadId=` |
 | Encounter workspace tabs | `.enc-tabs` | Stop / Vehicles / Subjects / Evidence / Narrative / Review | in-page, not chrome |
 | Add existing / Add new (encounter form) | `#openAddExisting`, `#openAddSubject` | Add existing / Add new | in-page `#encSubjectFloat`; do not open Book-in |
-| Generate I-213 (encounter form) | `#narrativeEngineHost` | I-213 engine | Narrative tab mounts Build 9 in-page via `bootWorkspace` |
+| Generate I-213 (encounter form) | `#tab-narrative` | Narrative stub | Tab is a placeholder; Build 9 stays on `narrative.html` |
 | Confirm encounter | `#confirmEncounter` | Confirm and close encounter | Review tab; `completeCurrentEncounter` |
 | Book arrested subject | `#confirmBookin` | Book-in | in-page `#encBookFloat`; Arrested only |
 | Unlock encounter | `#unlockEncounter` | Unlock | Review tab; reason required |
@@ -216,7 +213,7 @@ Do not add per-page stylesheets unless print/PDF requires it.
 **Home** (`home.html`):
 
 ```
-workspace-config.js → privacy-gate.js (head)
+workspace-config.js (head)
 app-bar.js → model/util.js → model/media.js → transfer.js
 → date.js → assets/icons/copdoc-icons.js → functions/home.js
 ```
@@ -226,7 +223,7 @@ Do **not** load `store.js`, `admin.js`, `collect.js`, `hydrate.js`, `workflow.js
 **Oracle** (`oracle.html`):
 
 ```
-workspace-config.js → privacy-gate.js (head)
+workspace-config.js (head)
 app-bar.js → date.js
 → data/countries.js → data/immigration.js → data/encounter-catalogs.js
 → model/util.js → model/lead.js → model/person.js → model/location.js

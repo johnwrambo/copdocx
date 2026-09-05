@@ -4494,6 +4494,18 @@ check(
   })
 );
 check(
+  "listArrests rows include subject fields",
+  listed.some(function (row) {
+    return (
+      row &&
+      row.arrestId === "arr_listed" &&
+      row.name === "ONE ROSTER" &&
+      row.iceEvent === "DAL-1" &&
+      row.arrestDateTime
+    );
+  })
+);
+check(
   "listArrests filters by encounter",
   model.store.listArrests({ encounterId: "enc_listed" }).some(function (row) {
     return row && row.arrestId === "arr_listed";

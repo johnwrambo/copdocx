@@ -40,7 +40,6 @@ from encounter **Book** / Generate docs and case **Book-in**, not from the nav.
 - `#homeImportButton` calls `openFileImport` and accepts a COPDoc JSON backup.
 - `#homeExportButton` calls `openFileExport`; the dialog supports JSON, CSV, or
   both, selected record types, and an optional inclusive date range.
-- `#homeLockButton` clears the tab unlock and immediately covers the workspace.
 
 `functions/transfer.js` keeps the workspace, admin, and Book-in stores
 separate. Import merges by record id; it does not combine their schemas.
@@ -86,18 +85,6 @@ focus, and refreshes matching media cards without changing the parent URL.
 Standalone no-owner `photo-picker.html` remains the development lab.
 
 File upload remains a page for now.
-
-## Privacy lock
-
-Every active app page loads `workspace-config.js` and `privacy-gate.js` in the
-document head. Before chrome is visible, the gate requires the local unlock
-phrase. The first visit sets the phrase; its salted SHA-256 digest is stored in
-`copdocx.privacy-lock.v1`. A successful unlock is remembered only in
-`sessionStorage` for that tab (`copdocx.privacy-unlocked.v1`). This is a
-shoulder-surf screen lock, not encryption or authentication.
-
-Unreadable lock state fails closed. The record stores and media database are
-not encrypted, migrated, or re-keyed by this feature.
 
 ## Mobile
 

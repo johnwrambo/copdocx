@@ -86,7 +86,7 @@ Location associations for the encounter card: `stop` / `arrest` / `target` / `ve
 `narrative.html` does not add a fourth persistent store. Without a query, Build 9
 uses deterministic in-memory training data from `data/narratives/build9/demo-fixtures.js`.
 
-The encounter Narrative tab and `narrative.html?encounterId=` share the I-213 hook: `functions/encounter-narrative.js`
+`narrative.html?encounterId=` is the I-213 hook: `functions/encounter-narrative.js`
 `bundleFromEncounter` maps the saved encounter + Book-in `formState` + lead subject
 into the Build 9 bundle (identity, TARGET/COLLATERAL, immigration, closing, location,
 vehicles, reporting officer). Live pages omit training `narrativeFacts`. Do not rewrite

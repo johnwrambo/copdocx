@@ -52,7 +52,12 @@ check(
     listJs.indexOf('link.textContent = "View"') === -1 &&
     listJs.indexOf('link.textContent = "Edit"') === -1
 );
-check("cases loads roster without report scripts", cases.indexOf("functions/arrest-roster.js") !== -1 && cases.indexOf("functions/arrest-report.js") === -1 && cases.indexOf("functions/baseballcard.js") === -1);
+check(
+  "cases loads report collector for roster rows",
+  cases.indexOf("functions/arrest-roster.js") !== -1 &&
+    cases.indexOf("functions/arrest-report.js") !== -1 &&
+    cases.indexOf("functions/baseballcard.js") === -1
+);
 check(
   "cases arrest roster has no select, columns, or report",
   listJs.indexOf("showGenerate: false") !== -1 &&

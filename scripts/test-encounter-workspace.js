@@ -103,23 +103,19 @@ check("chrome form has no Save", /page === \"encounter-form\"[\s\S]{0,400}commit
 check("chrome form has no openEncounterBookIn", /page === \"encounter-form\"[\s\S]{0,800}openEncounterBookIn/.test(chrome) === false);
 check("chrome form keeps Back to encounters", /page === \"encounter-form\"[\s\S]{0,400}Back to encounters/.test(chrome));
 check("nav has no Book-in tab", chrome.indexOf('tabLink("bookin.html"') === -1);
-check("narrative tab mounts the engine in page", form.indexOf('id="narrativeEngineHost"') !== -1);
-check("narrative tab does not iframe the engine", form.indexOf("narrativeFrame") === -1 && form.indexOf("<iframe") === -1);
 check(
-  "narrative tab boots Build 9 in page",
-  js.indexOf("bootWorkspace") !== -1 &&
-    js.indexOf("inPage: true") !== -1 &&
-    js.indexOf("&embed=1") === -1
+  "narrative tab is a stub",
+  form.indexOf('id="tab-narrative"') !== -1 &&
+    form.indexOf("I-213 is not on this encounter yet") !== -1 &&
+    form.indexOf("narrativeEngineHost") === -1 &&
+    form.indexOf("narrative-builder-engine.js") === -1
 );
+check("narrative tab does not iframe the engine", form.indexOf("narrativeFrame") === -1 && form.indexOf("<iframe") === -1);
+check("encounter form does not boot Build 9", js.indexOf("bootWorkspace") === -1);
 check(
   "narrative tab has no supervisor-summary note",
   form.indexOf("encounterSupervisorSummary") === -1 &&
     form.indexOf("No supervisor summary yet") === -1
-);
-check(
-  "encounter form loads the Build 9 workspace",
-  form.indexOf("functions/narratives/narrative-workspace-ui.js") !== -1 &&
-    form.indexOf("functions/narratives/narrative-page.js") !== -1
 );
 check(
   "narrative draft popout uses window.open",
@@ -141,9 +137,8 @@ check(
     css.indexOf("ui-encounter-owned") !== -1
 );
 check(
-  "live I-213 uses the page as the scrollport",
-  css.indexOf("body.narrative-inpage .narrative-engine-host") !== -1 &&
-    css.indexOf("body.narrative-live .narrative-engine-host") !== -1 &&
+  "Build 9 engine stays on narrative.html",
+  narrativeHtml.indexOf("functions/narratives/narrative-page.js") !== -1 &&
     narrativePage.indexOf("bootWorkspace") !== -1
 );
 

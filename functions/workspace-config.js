@@ -23,12 +23,10 @@
     { id: "narrativeTemplatesLegacy", key: "opdoc.narrative.templates.v1", medium: "localStorage", owner: "narrative", portable: false },
     { id: "photoPickerLab", key: "copdocx.photo-picker.v1", medium: "localStorage", owner: "photo-picker-lab", portable: false },
     { id: "fileUploadLab", key: "copdocx.file-upload.v1", medium: "localStorage", owner: "file-upload-lab", portable: false },
-    { id: "privacyLock", key: "copdocx.privacy-lock.v1", medium: "localStorage", owner: "privacy-gate", portable: false },
     { id: "investigationWindows", key: "copdocx.investigation-windows.v1", medium: "sessionStorage", owner: "investigation-wall", portable: false },
     { id: "baseballHandoff", key: "copdocx.baseball.handoff.v1", medium: "sessionStorage", owner: "baseball", portable: false },
     { id: "baseballCardStyle", key: "copdocx.baseball.card-style.v1", medium: "localStorage", owner: "baseball", portable: false },
     { id: "geocodeCache", key: "addrGeoCache_v1", medium: "sessionStorage", owner: "address", portable: false },
-    { id: "privacySession", key: "copdocx.privacy-unlocked.v1", medium: "sessionStorage", owner: "privacy-gate", portable: false },
     { id: "media", key: "copdocx.media.v1", medium: "indexedDB", owner: "model/media", portable: true },
     { id: "warrants", key: "copdocx.warrants", medium: "indexedDB", owner: "warrant-issue", portable: false },
     { id: "retiredCaseLayout", key: "copdocx.case-view.layout.v1", medium: "retired", owner: "leads", portable: false }
