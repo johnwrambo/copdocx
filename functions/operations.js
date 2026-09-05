@@ -862,6 +862,20 @@
               .join(" ") || opt.value;
           veh.appendChild(opt);
         });
+        if (team.vehicleId && !fleet.some(function (row) { return (row.vehicleId || row.id) === team.vehicleId; })) {
+          var roster = rosterApi();
+          var admin = roster && roster.readAdmin ? roster.readAdmin() : null;
+          var historicalVehicle = admin && admin.ok && (admin.data.vehicles || []).filter(function (row) {
+            return row && (row.vehicleId || row.id) === team.vehicleId;
+          })[0];
+          var historical = document.createElement("option");
+          historical.value = team.vehicleId;
+          historical.disabled = true;
+          historical.textContent = (historicalVehicle
+            ? [historicalVehicle.plateState, historicalVehicle.licensePlate || historicalVehicle.plate, historicalVehicle.vehicleMake].filter(Boolean).join(" ") || team.vehicleId
+            : team.vehicleId) + " (unavailable; existing assignment)";
+          veh.appendChild(historical);
+        }
         veh.value = team.vehicleId || "";
         head.appendChild(veh);
         var drop = document.createElement("button");

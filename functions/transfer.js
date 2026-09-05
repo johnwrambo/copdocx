@@ -984,12 +984,30 @@
   function rememberPeople(store, snap) {
     var subject = snap.person;
     if (subject && subject.personId) {
-      store.people[subject.personId] = subject;
+      store.people[subject.personId] = store.people[subject.personId] || subject;
+      snap.person = store.people[subject.personId];
     }
-    (snap.people || []).forEach(function (person) {
+    if (!Array.isArray(snap.people)) return;
+    snap.people = snap.people.map(function (person) {
       if (person && person.personId) {
-        store.people[person.personId] = person;
+        store.people[person.personId] = store.people[person.personId] || person;
+        return store.people[person.personId];
       }
+      return person;
+    });
+  }
+
+  function rememberEmbeddedObjects(store, snap) {
+    rememberPeople(store, snap);
+    [["vehicles", "vehicleId"], ["locations", "locationId"]].forEach(function (pair) {
+      if (!Array.isArray(snap[pair[0]])) return;
+      snap[pair[0]] = snap[pair[0]].map(function (row) {
+        var id = canonicalText(row && (row[pair[1]] || row.id));
+        if (!id) return row;
+        store[pair[0]][id] = store[pair[0]][id] || row;
+        // Encounter-specific disposition/role remains on the association snapshot.
+        return Object.assign({}, row, store[pair[0]][id]);
+      });
     });
   }
 
@@ -1166,6 +1184,11 @@
     incoming.forEach(function (row) {
       var id = recordId(type, row);
       var current = byId[id];
+      if ((type === "officers" || type === "vehicles") && current) {
+        row = Object.assign({}, current, row, {
+          meta: Object.assign({}, current.meta || {}, row.meta || {})
+        });
+      }
       var incomingPresence =
         type === "bookin" ? bookInArrestFieldPresence(row) : null;
       if (type === "bookin") {
@@ -1756,6 +1779,145 @@
     return { ok: true, rowsByType: rowsByType, error: "" };
   }
 
+  // Import is not an unarchive, reassertion, or booking-void recovery command.
+  // Reject lifecycle loss before any store (including support settings) is written.
+  function lifecycleImportError(current, incoming, label) {
+    if (!current || !incoming) return "";
+    var markers = ["voidedAt", "retractedAt", "endedAt"];
+    var error = "";
+    markers.some(function (key) {
+      if (!current[key]) return false;
+      if (!jsonEqual(current, incoming)) {
+        error = label + " contains a voided or ended/retracted record; import cannot replace its lifecycle history.";
+        return true;
+      }
+      return false;
+    });
+    if (error) return error;
+    if (current.meta && current.meta.archivedAt &&
+        (!incoming.meta || incoming.meta.archivedAt !== current.meta.archivedAt ||
+         incoming.meta.archiveReason !== current.meta.archiveReason)) {
+      return label + " is archived; import cannot reactivate it.";
+    }
+    if (current.archivedAt && (incoming.archivedAt !== current.archivedAt || incoming.inactive !== current.inactive || incoming.junked !== current.junked)) {
+      return label + " is archived/inactive; import cannot restore it implicitly.";
+    }
+    if (current.junked && owns(incoming, "junked") && !incoming.junked) {
+      return label + " is inactive; use the explicit restore action.";
+    }
+    if (current.bookingVoid && !jsonEqual(current.bookingVoid, incoming.bookingVoid)) {
+      return label + " has a voided booking; import cannot remove its void history.";
+    }
+    if (current.bookingVoid && transferSubjectBookingClaims(incoming).indexOf(canonicalText(current.bookingVoid.bookingId)) !== -1) {
+      return label + " cannot relink a voided booking.";
+    }
+    if (current.person && incoming.person) {
+      error = lifecycleImportError(current.person, incoming.person, label + " Person");
+      if (error) return error;
+    }
+    [["arrests", "arrestId"], ["subjects", "subjectId"], ["people", "personId"]].some(function (pair) {
+      var priorRows = Array.isArray(current[pair[0]]) ? current[pair[0]] : [];
+      var nextRows = Array.isArray(incoming[pair[0]]) ? incoming[pair[0]] : [];
+      return priorRows.some(function (row) {
+        var next = nextRows.filter(function (candidate) {
+          return canonicalText(candidate && candidate[pair[1]]) === canonicalText(row && row[pair[1]]);
+        })[0];
+        var protectedRow = row && (row.voidedAt || row.bookingVoid || row.retractedAt || row.endedAt ||
+          (row.meta && row.meta.archivedAt));
+        if (protectedRow && !next) error = label + " cannot discard voided, archived, or retracted history.";
+        else if (next) error = lifecycleImportError(row, next, label + " " + pair[0]);
+        return Boolean(error);
+      });
+    });
+    return error;
+  }
+
+  function prepareObjectContractImport(parsed, types, prepared) {
+    var workspaceRead = readStored(LEAD_KEY);
+    if (!workspaceRead.ok) return { ok: false, error: workspaceRead.error };
+    var current = workspaceRead.value || emptyLeadStore();
+    var candidate = JSON.parse(JSON.stringify(current));
+    var importedObjects = { people: {}, vehicles: {}, locations: {}, businesses: {}, entities: {} };
+    var maps = ["people", "leads", "vehicles", "locations", "businesses", "entities", "associations", "encounters", "investigations", "operations"];
+    maps.forEach(function (key) { candidate[key] = candidate[key] || {}; });
+    var error = "";
+    var hasObjects = false;
+    (types || []).some(function (type) {
+      var incomingRows = cleanList(type, prepared.rowsByType[type] || []).rows;
+      if (["leads", "encounters", "investigations", "operations"].indexOf(type) !== -1) {
+        return incomingRows.some(function (row) {
+          var id = recordId(type, row);
+          error = lifecycleImportError((current[type] || {})[id], row, type + " " + id);
+          if (error) return true;
+          var snapshot = JSON.parse(JSON.stringify(row));
+          if (type === "leads" || type === "encounters") {
+            if (snapshot.person || (snapshot.people || []).length || (snapshot.vehicles || []).length || (snapshot.locations || []).length) hasObjects = true;
+            if (snapshot.subjectPersonId && snapshot.person && snapshot.person.personId &&
+                canonicalText(snapshot.subjectPersonId) !== canonicalText(snapshot.person.personId)) {
+              error = "Case " + id + " contains contradictory Person identifiers.";
+              return true;
+            }
+            (snapshot.person ? [snapshot.person] : []).concat(snapshot.people || []).forEach(function (person) {
+              if (person && person.personId) importedObjects.people[person.personId] = person;
+            });
+            [["vehicles", "vehicleId"], ["locations", "locationId"]].forEach(function (pair) {
+              (snapshot[pair[0]] || []).forEach(function (object) {
+                var objectId = object && (object[pair[1]] || object.id);
+                if (objectId) importedObjects[pair[0]][objectId] = object;
+              });
+            });
+            rememberEmbeddedObjects(candidate, snapshot);
+          }
+          if (!candidate[type][id] || incomingIsNewer(candidate[type][id], snapshot)) candidate[type][id] = snapshot;
+          return false;
+        });
+      }
+      var stored = readStored(type === "bookin" ? BOOKIN_KEY : ADMIN_KEY);
+      if (!stored.ok) { error = stored.error; return true; }
+      var localRows = type === "bookin" ? stored.value || [] : (stored.value && stored.value[type]) || [];
+      return incomingRows.some(function (row) {
+        var prior = localRows.filter(function (item) { return recordId(type, item) === recordId(type, row); })[0];
+        if (type === "bookin" && row.voidedAt && (!prior || !prior.voidedAt)) {
+          error = "Book-In " + recordId(type, row) + " has imported void history without an existing coordinated void. Restore it through a verified recovery workflow.";
+          return true;
+        }
+        if (type === "officers" && prior && Array.isArray(prior.fieldArrests) && owns(row, "fieldArrests") && !jsonEqual(prior.fieldArrests, row.fieldArrests)) {
+          error = "Officer " + recordId(type, row) + " has canonical Arrest history; import cannot replace its booked or voided facts.";
+          return true;
+        }
+        error = lifecycleImportError(prior, row, type + " " + recordId(type, row));
+        return Boolean(error);
+      });
+    });
+    if (error) return { ok: false, error: error };
+    if ((types || []).indexOf("investigations") !== -1 && parsed.investigationObjects) {
+      ["people", "vehicles", "locations", "businesses", "entities", "associations"].some(function (key) {
+        return Object.keys(parsed.investigationObjects[key] || {}).some(function (id) {
+          hasObjects = true;
+          var row = parsed.investigationObjects[key][id];
+          if (importedObjects[key]) importedObjects[key][id] = row;
+          var prior = (current[key] || {})[id];
+          error = lifecycleImportError(prior, row, key + " " + id);
+          if (error) return true;
+          if (!candidate[key][id] || incomingIsNewer(candidate[key][id], row)) candidate[key][id] = row;
+          return false;
+        });
+      });
+    }
+    if (error) return { ok: false, error: error };
+    var store = global.COPDoc && COPDoc.model && COPDoc.model.store;
+    if (hasObjects) {
+      if (!store || typeof store.validateObjectWorkspace !== "function") {
+        return { ok: false, error: "The shared object identity validator is unavailable. Open Import and retry after the model loads." };
+      }
+      var incomingValidation = store.validateObjectWorkspace(importedObjects, {});
+      if (!incomingValidation || !incomingValidation.ok) return incomingValidation || { ok: false, error: "Imported object identity validation failed." };
+      var validation = store.validateObjectWorkspace(candidate, current);
+      if (!validation || !validation.ok) return validation || { ok: false, error: "Object identity validation failed." };
+    }
+    return { ok: true, error: "" };
+  }
+
   function summarizeAgainstDisk(parsed) {
     return TYPE_META.map(function (meta) {
       var cleaned = cleanList(meta.key, parsed[meta.key]);
@@ -2041,7 +2203,7 @@
       });
     }
     var eligible = candidates.filter(function (row) {
-      return row && !quietIds[recordId("bookin", row)];
+      return row && !row.voidedAt && !quietIds[recordId("bookin", row)];
     });
     if (!eligible.length) {
       var quietRows = rows.map(stripImportPresence);
@@ -2299,6 +2461,11 @@
       result.error = prepared.error;
       return result;
     }
+    var objectContract = prepareObjectContractImport(parsed, types, prepared);
+    if (!objectContract.ok) {
+      result.error = objectContract.error;
+      return result;
+    }
     var pendingBookIn = null;
     types.forEach(function (type) {
       var cleaned = cleanList(type, prepared.rowsByType[type]);
@@ -2323,6 +2490,7 @@
         store.locations = store.locations || {};
         store.businesses = store.businesses || {};
         store.entities = store.entities || {};
+        store.associations = store.associations || {};
         store.operations = store.operations || {};
         var added = 0;
         var updated = 0;
@@ -2338,6 +2506,7 @@
             var id = recordId("encounters", row);
             var current = store.encounters[id];
             if (!current) {
+              rememberEmbeddedObjects(store, row);
               store.encounters[id] = row;
               added += 1;
               return;
@@ -2350,6 +2519,7 @@
               skipped += 1;
               return;
             }
+            rememberEmbeddedObjects(store, row);
             store.encounters[id] = row;
             updated += 1;
           });
@@ -2420,7 +2590,7 @@
             var current = store.leads[id];
             if (!current) {
               store.leads[id] = snap;
-              rememberPeople(store, snap);
+              rememberEmbeddedObjects(store, snap);
               added += 1;
               return;
             }
@@ -2433,7 +2603,7 @@
               return;
             }
             store.leads[id] = snap;
-            rememberPeople(store, snap);
+            rememberEmbeddedObjects(store, snap);
             updated += 1;
           });
         }
@@ -3172,6 +3342,7 @@
     var parsed = pendingParsed;
     var result;
     try {
+      await ensureCanonicalBookInStore();
       result = applyImport(parsed, types);
     } catch (error) {
       if (go) {

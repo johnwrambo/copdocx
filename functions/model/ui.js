@@ -282,6 +282,7 @@
       setStatus(result.error || "Save failed.");
       return null;
     }
+    if (model.acknowledgeObjectEdits) model.acknowledgeObjectEdits();
     replaceLeadUrl(result.leadId);
     rememberLeadSignature();
     if (quiet) {

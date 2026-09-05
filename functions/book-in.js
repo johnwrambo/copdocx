@@ -1778,6 +1778,17 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         knownFieldIds
       );
 
+      if (record.voidedAt || record.voidReason || record.voidTransactionId) {
+        if (!record.voidedAt || !String(record.voidReason || "").trim() ||
+            !normalizeImportedIdentifier(record.voidTransactionId, `Imported record ${recordNumber} void command`)) {
+          throw new Error(`Imported record ${recordNumber} has incomplete void history.`);
+        }
+        normalizeImportedTimestamp(record.voidedAt, "", `Imported record ${recordNumber} void date`);
+        // Historical packets must retain their exact content. Normalizing them
+        // into an active form-shaped record would drop the void lifecycle.
+        return JSON.parse(JSON.stringify(record));
+      }
+
       const iceState = formState.iceEvent || formState.ice_event;
       if (iceState) {
         iceState.value = normalizeIceEventValue(iceState.value);
@@ -2082,6 +2093,16 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function recordsAreEquivalent(left, right) {
+      if ((left && left.voidedAt) || (right && right.voidedAt)) {
+        const stable = value => {
+          if (Array.isArray(value)) return value.map(stable);
+          if (!value || typeof value !== "object") return value;
+          return Object.fromEntries(Object.keys(value).sort()
+            .filter(key => key !== "__copdocImportArrestFieldPresence")
+            .map(key => [key, stable(value[key])]));
+        };
+        return JSON.stringify(stable(left)) === JSON.stringify(stable(right));
+      }
       const comparable = record => {
         const copy = { ...(record || {}) };
         delete copy.leadId;
@@ -2193,6 +2214,9 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         const existing = existingById.get(record.id);
 
         if (!existing) {
+          if (record.voidedAt) {
+            throw new Error(`Import blocked: Book-In ${record.id} contains void history without an existing canonical booking. Review the complete recovery data before restoring this history.`);
+          }
           merged.push(record);
           existingById.set(record.id, record);
           usedIds.add(record.id);
@@ -2204,6 +2228,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         if (recordsAreEquivalent(existing, record)) {
           duplicateCount += 1;
           return;
+        }
+
+        if (existing.voidedAt || record.voidedAt) {
+          throw new Error(`Import blocked: Book-In ${record.id} has retained void history. A conflicting copy cannot replace or reactivate it.`);
         }
 
         const conflictCopy = detachImportedCanonicalLinks(
@@ -2259,6 +2287,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         );
         return (
           record &&
+          !record.voidedAt &&
           (!requested || requested.has(record.id)) &&
           !quietDraft
         );
@@ -2293,6 +2322,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         rows: source.map(record => {
           if (
             record &&
+            !record.voidedAt &&
             (!requested || requested.has(record.id)) &&
             !(
               record.encounterProjectionDraft === true &&
@@ -2371,6 +2401,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           return false;
         }
         return Boolean(
+          record.voidedAt ||
           String(record.encounterProjectionFiledAt || "").trim() ||
           String(record.arrestId || "").trim() ||
           activelyOwnedBookings.has(id) ||
@@ -2401,7 +2432,19 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         const id = String(next.id || "").trim();
         const current = existingById.get(id);
         if (!current) {
+          if (next.voidedAt) {
+            throw new Error(`Restore blocked: Book-In ${id} contains void history without an existing canonical booking. Review the complete recovery data before restoring this history.`);
+          }
           return next;
+        }
+        if (current.voidedAt) {
+          if (!recordsAreEquivalent(current, next)) {
+            throw new Error(`Restore blocked: Book-In ${id} is voided and its historical packet must remain unchanged.`);
+          }
+          return { ...current };
+        }
+        if (next.voidedAt) {
+          throw new Error(`Restore blocked: Book-In ${id} must be voided through the booking workflow so its linked records are reconciled.`);
         }
         immutableFields.forEach(field => {
           const currentValue = String(current[field] || "").trim();
@@ -2447,7 +2490,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         .filter(transaction => transaction && transaction.status !== "COMPLETED")
         .map(transaction => transaction.bookingId));
       const pending = records.filter(record => {
-        if (reserved.has(record.id) || record.encounterProjectionDraft === true) {
+        if (record.voidedAt || reserved.has(record.id) || record.encounterProjectionDraft === true) {
           return false;
         }
         if (record.leadId && record.personId && record.arrestId) {
@@ -3724,13 +3767,13 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         const row = document.createElement("div");
         row.className = "records-toolbar";
         const label = document.createElement("span");
-        label.textContent = "Booking " + String(transaction.bookingId || transaction.transactionId || "") +
+        label.textContent = (transaction.kind === "VOID" ? "Void booking " : "Booking ") + String(transaction.bookingId || transaction.transactionId || "") +
           " · " + String(transaction.status || "PENDING");
         const resumeButton = document.createElement("button");
         resumeButton.type = "button";
         resumeButton.className = "action-button-secondary compact";
         resumeButton.dataset.recordIgnore = "true";
-        resumeButton.textContent = "Resume booking";
+        resumeButton.textContent = transaction.kind === "VOID" ? "Resume void" : "Resume booking";
         resumeButton.addEventListener("click", async function () {
           if (bookingSaveInProgress) {
             setStatus("A Book-In save is already in progress.", "warning");
@@ -3748,7 +3791,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
                 activeRecordBaseUpdatedAt = String(packet.updatedAt || "");
                 pendingLeadId = packet.leadId || pendingLeadId;
               }
-              setStatus("Booking completed and its links were verified. Form edits have been preserved.", "success");
+              setStatus(transaction.kind === "VOID" ? "Booking void completed; history was retained." : "Booking completed and its links were verified. Form edits have been preserved.", "success");
             }
             renderSavedRecords();
           } catch (error) {
@@ -3818,7 +3861,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.className = "action-button-danger compact";
-        deleteButton.textContent = "Delete";
+        deleteButton.textContent = record.voidedAt ? "Voided" : (record.arrestId || record.encounterProjectionFiledAt ? "Void booking" : (record.encounterProjectionDraft === true ? "Delete draft" : "Review removal"));
+        deleteButton.disabled = Boolean(record.voidedAt);
         deleteButton.addEventListener("click", function () {
           deleteSavedRecord(record.id);
         });
@@ -3894,6 +3938,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         const existing = existingIndex >= 0
           ? records[existingIndex]
           : null;
+        if (existing && existing.voidedAt) {
+          if (!quiet) setStatus("This booking is voided. Its historical packet cannot be edited; start a new booking.", "warning");
+          return false;
+        }
         if (activeRecordBaseUpdatedAt !== null &&
             (!existing || String(existing.updatedAt || "") !== activeRecordBaseUpdatedAt)) {
           setStatus("That packet changed in another window. Reopen it before saving.", "warning");
@@ -4135,8 +4183,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       rememberFormSignature();
       suppressAutoSave = false;
       setStatus(
-        `Record loaded for editing: ${getRecordSubjectLabel(record)}`,
-        "success"
+        record.voidedAt
+          ? `Voided booking loaded for historical review: ${getRecordSubjectLabel(record)}. Saving and new document generation are disabled.`
+          : `Record loaded for editing: ${getRecordSubjectLabel(record)}`,
+        record.voidedAt ? "warning" : "success"
       );
 
       document.querySelector("main header")?.scrollIntoView?.({
@@ -4344,66 +4394,48 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       };
     }
 
-    function deleteSavedRecord(recordId) {
+    async function deleteSavedRecord(recordId) {
       if (bookingSaveInProgress) {
         setStatus("Wait for the current Book-In save to finish.", "warning");
         return;
       }
-      const records = readSavedRecords();
-      const record = records.find(item => item.id === recordId);
-
-      if (!record) {
-        renderSavedRecords();
-        return;
+      const api = window.COPDoc && COPDoc.booking;
+      if (!api || typeof api.planRemoval !== "function") { setStatus("Booking lifecycle controls are unavailable.", "error"); return false; }
+      const plan = api.planRemoval(recordId);
+      if (!plan.ok || plan.action === "RETAIN") {
+        const dependencies = (plan.dependencies || []).map(d => `${d.recordType || d.store} ${d.recordId || ""}`).join(", ");
+        setStatus((plan.error || "The booking cannot be removed.") + (dependencies ? " References: " + dependencies : ""), "warning");
+        return false;
       }
-
-      if (
-        !window.confirm(
-          `Delete the saved record for ${getRecordSubjectLabel(record)}?`
-        )
-      ) {
-        return;
-      }
-      const unlinkPlan = unlinkDeletedBookInFromEncounter(record, {
-        validateOnly: true
-      });
-      if (!unlinkPlan.ok) {
-        setStatus(unlinkPlan.error || "No record was deleted.", "error");
-        return;
-      }
+      const record = plan.record;
+      let reason = "";
+      if (plan.action === "VOID") {
+        const entered = window.prompt(`Void the booking for ${getRecordSubjectLabel(record)}? Its history and previously generated documents will be retained. Enter the reason:`);
+        if (entered === null) return false;
+        reason = String(entered || "").trim();
+        if (!reason) { setStatus("A void reason is required.", "error"); return false; }
+      } else if (!window.confirm(`Delete the unused draft for ${getRecordSubjectLabel(record)}?`)) return false;
+      bookingSaveInProgress = true;
       try {
-        writeSavedRecords(records.filter(item => item.id !== recordId));
-      } catch (error) {
-        setStatus(error.message || "No record was deleted.", "error");
-        return;
-      }
-      if (unlinkPlan.changed) {
-        const unlinked = unlinkDeletedBookInFromEncounter(record);
-        if (!unlinked.ok) {
-          try {
-            writeSavedRecords(records);
-          } catch (error) {
-            setStatus(
-              "The Encounter unlink failed and the Book-In record could not be restored. Run Integrity now.",
-              "error"
-            );
-            return;
-          }
-          setStatus(unlinked.error || "No record was deleted.", "error");
-          return;
+        const result = plan.action === "VOID"
+          ? await api.voidBooking(recordId, { reason, expectedUpdatedAt: record.updatedAt || "" })
+          : await api.deleteDraftBooking(recordId, { expectedUpdatedAt: record.updatedAt || "" });
+        if (!result || !result.ok) {
+          setStatus((result && result.error) || "The booking lifecycle action did not finish.", "error");
+          renderSavedRecords();
+          return false;
         }
-      }
-
-      if (activeRecordId === recordId) {
-        activeRecordId = null;
-        activeRecordBaseUpdatedAt = null;
-      }
-
-      renderSavedRecords();
-      setStatus(
-        `Saved record deleted: ${getRecordSubjectLabel(record)}`,
-        "warning"
-      );
+        if (activeRecordId === recordId && plan.action === "DELETE") {
+          activeRecordId = null; activeRecordBaseUpdatedAt = null;
+        } else if (activeRecordId === recordId && result.record) {
+          activeRecordBaseUpdatedAt = result.record.updatedAt || "";
+        }
+        renderSavedRecords();
+        setStatus(plan.action === "VOID" ? "Booking voided. History retained and active booking statistics reconciled." : "Unused draft deleted.", "success");
+        return true;
+      } catch (error) {
+        setStatus(error.message || "No record was removed.", "error"); return false;
+      } finally { bookingSaveInProgress = false; }
     }
 
     function startNewRecord() {
@@ -4542,6 +4574,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       updateBookInForeignWarrantControls();
       const arrests = Array.isArray(person.arrests) ? person.arrests : [];
       const latestArrest = arrests
+        .filter(arrest => arrest && !arrest.voidedAt)
         .slice()
         .sort((left, right) =>
           String(right.arrestDateTime || right.arrestDate || "").localeCompare(
@@ -5620,6 +5653,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       generateButton.disabled = true;
 
       try {
+        const currentPacket = activeRecordId && readSavedRecords().find(record => record.id === activeRecordId);
+        if (currentPacket && currentPacket.voidedAt) throw new Error("This booking is voided. Previously generated documents remain historical; start a new booking to generate a new packet.");
         const data = collectFormData();
         validateRequiredData(data);
 

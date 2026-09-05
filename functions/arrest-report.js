@@ -300,6 +300,15 @@
 
   function collect(store, bookinRecords, options) {
     options = options || {};
+    var voidedBookings = Object.create(null);
+    (bookinRecords || []).forEach(function (record) {
+      if (record && record.voidedAt) {
+        bookingClaims(record, true).forEach(function (id) { voidedBookings[id] = true; });
+      }
+    });
+    bookinRecords = (bookinRecords || []).filter(function (record) {
+      return record && !record.voidedAt;
+    });
     var selected = {};
     (options.bookinRecordIds || []).forEach(function (id) {
       selected[text(id)] = true;
@@ -336,7 +345,9 @@
         return;
       }
       (person.arrests || []).forEach(function (arrest) {
-        if (!arrest) {
+        if (!arrest || arrest.voidedAt || bookingClaims(arrest, false).some(function (id) {
+          return voidedBookings[id];
+        })) {
           return;
         }
         var recordId = unambiguousBookingId(arrest, false);

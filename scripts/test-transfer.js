@@ -24,6 +24,9 @@ var context = {
 context.globalThis = context;
 context.window = context;
 vm.createContext(context);
+["util", "lead", "person", "encounter", "location", "vehicle", "link", "store"].forEach(function (name) {
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/model/" + name + ".js"), "utf8"), context);
+});
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, "..", "functions/transfer.js"), "utf8"),
   context
@@ -288,8 +291,10 @@ check(
 mem["copdocx.store.v1"] = leadBackup;
 
 var promotedBookinCalls = 0;
+var sharedObjectValidator = context.COPDoc.model.store.validateObjectWorkspace;
 context.COPDoc.model = {
   store: {
+    validateObjectWorkspace: sharedObjectValidator,
     loadFromDisk: function () {},
     promoteBookInRecords: function (rows) {
       promotedBookinCalls += 1;

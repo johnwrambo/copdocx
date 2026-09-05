@@ -832,8 +832,70 @@
     return photos[0];
   }
 
+  function removalError(dependencies, message) {
+    var error = MediaError("MEDIA_REFERENCED", message || "This media is still referenced. Remove its references before deleting it.");
+    error.dependencies = dependencies || [];
+    return error;
+  }
+
+  function assertMediaUnreferenced(row) {
+    var store = model.store;
+    if (store && typeof store.dependenciesFor === "function") {
+      var checked = store.dependenciesFor("MEDIA", row.mediaId);
+      if (!checked.ok) { throw removalError(checked.dependencies, checked.error); }
+      if (checked.dependencies.length) { throw removalError(checked.dependencies); }
+    }
+    return listAll().then(function (rows) {
+      var dependencies = [];
+      function references(value, path, ownerId) {
+        if (!value || typeof value !== "object") { return; }
+        Object.keys(value).forEach(function (field) {
+          if (/(?:mediaId|photoId|sourceMediaId|derivedFromMediaId|originalMediaId)$/i.test(field) && String(value[field] || "") === row.mediaId) {
+            dependencies.push({ store: DB_NAME, recordType: "MEDIA", recordId: ownerId, path: path + "." + field, reason: "Media metadata reference" });
+          }
+          references(value[field], path + "." + field, ownerId);
+        });
+      }
+      rows.forEach(function (other) {
+        if (other.mediaId !== row.mediaId) { references(other, "meta." + other.mediaId, other.mediaId); }
+      });
+      if (dependencies.length) { throw removalError(dependencies); }
+      return row;
+    });
+  }
+
+  function assertOwnerUnreferenced(owner) {
+    var store = model.store;
+    if (!store || typeof store.dependenciesFor !== "function") { return; }
+    var checked = store.dependenciesFor(owner.type, owner.id);
+    if (!checked.ok) { throw removalError(checked.dependencies, checked.error); }
+    if (checked.dependencies.length) { throw removalError(checked.dependencies, "This media owner is still referenced. Its shared files were preserved."); }
+    if (typeof store.loadFromDisk === "function") { store.loadFromDisk(); }
+    var data = typeof store.getState === "function" ? store.getState() : {};
+    var collection = { PERSON: "people", VEHICLE: "vehicles", LOCATION: "locations", BUSINESS: "businesses", ENTITY: "entities", ENCOUNTER: "encounters", LEAD: "leads" }[owner.type];
+    if (collection && data[collection] && data[collection][owner.id]) {
+      throw removalError([{ store: store.STORAGE_KEY, recordType: owner.type, recordId: owner.id, path: collection + "." + owner.id, reason: "Media owner still exists" }],
+        "The media owner still exists. Its files were preserved.");
+    }
+    if (owner.type === "BOOKIN" || owner.type === "OFFICER") {
+      var sourceId = owner.type === "BOOKIN" ? "bookin" : "admin";
+      var sourceKey = root.config && root.config.storageKey(sourceId) || (sourceId === "bookin" ? "alien-book-in.saved-records.v1" : "copdoc.admin.v1");
+      var raw = global.localStorage && global.localStorage.getItem(sourceKey);
+      if (raw) {
+        var value;
+        try { value = JSON.parse(raw); } catch (error) { throw removalError([], "Cannot verify the media owner. Its files were preserved."); }
+        var owners = sourceId === "bookin" ? value : value.officers;
+        if (Array.isArray(owners) && owners.some(function (candidate) { return candidate && String(candidate.id || candidate.officerId || "") === owner.id; })) {
+          throw removalError([{ store: sourceKey, recordType: owner.type, recordId: owner.id, path: sourceId, reason: "Media owner still exists" }]);
+        }
+      }
+    }
+  }
+
   function remove(mediaId) {
     return getMeta(mediaId).then(function (row) {
+      return assertMediaUnreferenced(row);
+    }).then(function (row) {
       if (useMemory) {
         delete memory.meta[row.mediaId];
         deleteBlobsFor(row, null);
@@ -885,7 +947,15 @@
   }
 
   function removeByOwner(owner) {
-    return list(owner).then(function (rows) {
+    return Promise.resolve().then(function () {
+      owner = normalizeOwner(owner);
+      assertOwnerUnreferenced(owner);
+      return list(owner);
+    }).then(function (rows) {
+      // Verify the complete set before deleting the first byte.
+      return Promise.all(rows.map(assertMediaUnreferenced)).then(function () { return rows; });
+    }).then(function (rows) {
+      assertOwnerUnreferenced(owner);
       var i = 0;
       function next() {
         if (i >= rows.length) {
@@ -893,7 +963,7 @@
         }
         var id = rows[i].mediaId;
         i += 1;
-        return remove(id).then(next, next);
+        return remove(id).then(next);
       }
       return next();
     });

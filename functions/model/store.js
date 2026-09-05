@@ -37,6 +37,33 @@
 
   var state = emptyState();
   var diskError = "";
+  var workspaceMutationDepth = 0;
+
+  // Synchronous compound creates stage only workspace state. Child saves/read
+  // refreshes remain in the staged graph; the outer call has one durable write.
+  function atomicWorkspaceMutation(action) {
+    return function () {
+      var args = arguments;
+      if (workspaceMutationDepth) { return action.apply(null, args); }
+      var fresh = adoptDisk();
+      if (!fresh.ok) { return { ok: false, error: fresh.error }; }
+      var before = clone(state);
+      var result;
+      workspaceMutationDepth = 1;
+      try { result = action.apply(null, args); }
+      catch (error) {
+        state = before;
+        return { ok: false, code: "WORKSPACE_MUTATION_FAILED", error: error && error.message || "Could not prepare the object and its relationships." };
+      } finally { workspaceMutationDepth = 0; }
+      if (!result || !result.ok) { state = before; return result || { ok: false, error: "The object and relationship could not be prepared." }; }
+      if (JSON.stringify(before) === JSON.stringify(state)) { return result; }
+      if (!writeDisk()) {
+        state = before;
+        return Object.assign({}, result, { ok: false, code: "WORKSPACE_WRITE_FAILED", error: "Could not persist the object and its relationships. All changes were rolled back." });
+      }
+      return result;
+    };
+  }
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -82,6 +109,10 @@
   }
 
   function canonicalLocationRecord(location, previous) {
+    var canonicalId = location && (location.locationId || location.id);
+    if (canonicalId && state.locations[canonicalId]) {
+      return clone(state.locations[canonicalId]);
+    }
     var merged = mergeRecord(previous, location);
     return typeof model.createLocation === "function"
       ? model.createLocation(merged)
@@ -89,6 +120,12 @@
   }
 
   function canonicalVehicleRecord(vehicle, previous) {
+    var canonicalId = vehicle && (vehicle.vehicleId || vehicle.id);
+    if (canonicalId && state.vehicles[canonicalId]) {
+      var canonicalVehicle = clone(state.vehicles[canonicalId]);
+      canonicalVehicle.locations = (canonicalVehicle.locations || []).map(function (location) { return canonicalLocationRecord(location, null); });
+      return canonicalVehicle;
+    }
     var merged = mergeRecord(previous, vehicle);
     var built = typeof model.createVehicle === "function"
       ? model.createVehicle(merged)
@@ -114,11 +151,11 @@
       if (!subject.personId && subjectId) {
         subject.personId = subjectId;
       }
-      var knownSubject =
+      var knownSubject = (subjectId && state.people[subjectId]) || (
         previousSubject &&
         (!subjectId || previousSubject.personId === subjectId)
           ? previousSubject
-          : (subjectId && state.people[subjectId]) || null;
+          : null);
       subject = canonicalPersonRecord(subject, knownSubject);
       var previousLocations = (knownSubject && knownSubject.locations) || [];
       subject.locations = (subject.locations || []).map(function (location) {
@@ -1216,6 +1253,7 @@
     if (diskError) {
       return false;
     }
+    if (workspaceMutationDepth) { return true; }
     if (typeof localStorage === "undefined") {
       return true;
     }
@@ -1228,6 +1266,7 @@
   }
 
   function adoptDisk() {
+    if (workspaceMutationDepth) { return { ok: true, error: "" }; }
     var disk = readDisk();
     if (!disk.ok) {
       diskError = disk.error;
@@ -1260,10 +1299,39 @@
     (snapshot.people || []).forEach(function (person) {
       if (person && person.personId) {
         state.people[person.personId] = clone(
-          canonicalPersonRecord(person, state.people[person.personId])
+          state.people[person.personId] || canonicalPersonRecord(person, null)
         );
       }
     });
+  }
+
+  // A Case edits a Person; its last embedded copy is the edit baseline, never
+  // the authority for fields updated by another workflow since that baseline.
+  function mergeCasePerson(incoming, baseline, canonical, allowArrests) {
+    var conflict = "";
+    function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+    function apply(current, old, next, path) {
+      var result = current && typeof current === "object" ? clone(current) : {};
+      Object.keys(next || {}).forEach(function (key) {
+        if (!path && (key === "encounters" || (key === "arrests" && !allowArrests) || key === "objectRevision" || key === "meta")) {
+          return;
+        }
+        var value = next[key];
+        var prior = old && old[key];
+        var existing = current && current[key];
+        if (same(value, prior) || same(value, existing)) { return; }
+        if (value && prior && existing && typeof value === "object" && typeof prior === "object" && typeof existing === "object" && !Array.isArray(value) && !Array.isArray(prior) && !Array.isArray(existing)) {
+          result[key] = apply(existing, prior, value, path + key + ".");
+        } else if (baseline && !same(existing, prior) && !(allowArrests && !path && key === "arrests")) {
+          conflict = conflict || path + key;
+        } else {
+          result[key] = clone(value);
+        }
+      });
+      return result;
+    }
+    var record = canonical ? apply(canonical, baseline || canonical, incoming, "") : clone(incoming || {});
+    return { ok: !conflict, record: record, error: conflict ? "Person field " + conflict + " changed in another workflow. Reload the Case before saving." : "" };
   }
 
   /**
@@ -1280,10 +1348,12 @@
       return { ok: false, leadId: snapshot.leadId, error: fresh.error };
     }
     var mode = (opts && opts.mode) || "commit";
-    var bookingBefore = opts && opts.bookingWorkflow ? clone(state) : null;
+    var saveBefore = clone(state);
+    var bookingBefore = opts && opts.bookingWorkflow ? saveBefore : null;
     var previous = state.leads[snapshot.leadId]
       ? clone(state.leads[snapshot.leadId])
       : null;
+    if (previous && previous.meta && previous.meta.archivedAt) { return { ok: false, leadId: snapshot.leadId, code: "OBJECT_ARCHIVED", error: "This Case is archived. Restore it explicitly before editing." }; }
     var merged = mergeRecord(previous, snapshot);
     var incomingSubject = model.subjectOf
       ? model.subjectOf(snapshot)
@@ -1306,6 +1376,25 @@
       merged.person = clone(incomingSubject);
       merged.subjectPersonId = incomingSubjectId;
     }
+    if (incomingSubject) {
+      var personIdentity = validateObjectId("PERSON", incomingSubject);
+      if (!personIdentity.ok || (snapshot.subjectPersonId && snapshot.subjectPersonId !== personIdentity.objectId)) {
+        return { ok: false, leadId: snapshot.leadId, code: "OBJECT_ID_CONFLICT", error: "The Case Person identifiers must agree." };
+      }
+      var canonical = incomingSubjectId && state.people[incomingSubjectId];
+      if (canonical && incomingSubject.objectRevision != null && Number(incomingSubject.objectRevision) !== Number(canonical.objectRevision || 0)) {
+        return { ok: false, leadId: snapshot.leadId, code: "OBJECT_STALE", error: "This Person changed since the editor opened. Reload the Case before saving." };
+      }
+      var personEdit = !previous && canonical && !bookingBefore
+        ? { ok: true, record: clone(canonical), error: "" }
+        : mergeCasePerson(incomingSubject, incomingSubjectId === previousSubjectId ? previousSubject : null, canonical, !!bookingBefore);
+      if (!personEdit.ok) { return { ok: false, leadId: snapshot.leadId, code: "OBJECT_STALE", error: personEdit.error }; }
+      var preparedPerson = prepareObjectRecord("PERSON", personEdit.record, {});
+      if (!preparedPerson.ok) { return { ok: false, leadId: snapshot.leadId, code: preparedPerson.code, error: preparedPerson.error }; }
+      merged.person = preparedPerson.record;
+    }
+    var graph = stageObjectGraph(merged);
+    if (!graph.ok) { state = saveBefore; return { ok: false, leadId: snapshot.leadId, code: graph.code, error: graph.error }; }
     var record = canonicalLeadGraph(merged, previous);
     if (bookingBefore) {
       var bookingSubject = model.subjectOf ? model.subjectOf(record) : record.person;
@@ -1323,9 +1412,9 @@
       record.meta.updatedAt = model.nowIso();
     }
     record.meta.markedComplete = false;
-    syncNestedOccupancyToAssociations(record);
     rememberPeople(record);
-    syncLeadLinksToAssociations(record);
+    syncNestedOccupancyToAssociations(record);
+    syncLeadLinksToAssociations(record, saveBefore.associations);
     applyAssociationNestingToLead(record);
     state.leads[record.leadId] = clone(record);
     state.currentLeadId = record.leadId;
@@ -1349,11 +1438,7 @@
       state.leads[record.leadId] = clone(record);
     }
     if (!writeDisk()) {
-      if (bookingBefore) {
-        state = bookingBefore;
-      } else {
-        adoptDisk();
-      }
+      state = saveBefore;
       return {
         ok: false,
         leadId: record.leadId,
@@ -1656,12 +1741,10 @@
       };
     }
     var person;
-    if (personId && state.people[personId]) {
-      person = identityPerson(state.people[personId], personId);
-    } else {
-      person = identityPerson({ name: nameFromLabel(label) }, "");
-      personId = person.personId;
-    }
+    var resolvedPerson = resolveObjectRecord("PERSON", { objectId: personId, name: nameFromLabel(label) });
+    if (!resolvedPerson.ok) { return { ok: false, code: resolvedPerson.code, candidates: resolvedPerson.candidates, leadId: "", existing: false, error: resolvedPerson.error }; }
+    person = resolvedPerson.record;
+    personId = person.personId;
     var next = model.createLead({
       person: person,
       subjectPersonId: person.personId,
@@ -1689,7 +1772,6 @@
     );
     resolveSourceLink(person.personId);
     source.links = links;
-    upsertPerson(person);
     var savedNew = saveLead(next, { mode: "draft" });
     if (!savedNew || !savedNew.ok) {
       return {
@@ -1702,7 +1784,7 @@
     var savedSource = saveLead(source, { mode: "commit" });
     if (!savedSource || !savedSource.ok) {
       return {
-        ok: true,
+        ok: false,
         leadId: next.leadId,
         existing: false,
         error: (savedSource && savedSource.error) || ""
@@ -1788,7 +1870,8 @@
     var previousPerson = state.people[personId]
       ? clone(state.people[personId])
       : null;
-    var person = identityPerson(previousPerson || state.people[personId], personId);
+    var person = clone(previousPerson || state.people[personId]);
+    if (person.junked || (person.meta && person.meta.archivedAt)) { blank.error = "Restore the inactive Person explicitly before opening a Case."; return blank; }
     var label =
       (model.formatPersonLabel && model.formatPersonLabel(person)) || "Person";
     var next = model.createLead({
@@ -1804,11 +1887,7 @@
     next.vehicles = [];
     appendSystemNote(next, "Opened from investigation " + inv.investigationId + ".");
     appendSystemNote(inv, "Opened a case for " + label + ".");
-    upsertPerson(person);
     var savedNew = saveLead(next, { mode: "draft" });
-    if (savedNew && savedNew.ok && previousPerson) {
-      restorePersonRegistry(previousPerson, person);
-    }
     if (!savedNew || !savedNew.ok) {
       return {
         ok: false,
@@ -1822,7 +1901,7 @@
     });
     if (!savedInv || !savedInv.ok) {
       return {
-        ok: true,
+        ok: false,
         leadId: next.leadId,
         existing: false,
         error: (savedInv && savedInv.error) || ""
@@ -2504,6 +2583,9 @@
     }
     var canonicalPersonId = storeSubjectText(person && person.personId);
     person.arrests = Array.isArray(person.arrests) ? person.arrests : [];
+    if (person.arrests.some(function (row) { return row && row.voidedAt && recordId && storeSubjectBookingId(row) === recordId; })) {
+      return { ok: false, code: "BOOKING_VOIDED", arrestId: "", error: "This booking was voided. Create a new booking with a new ID." };
+    }
     var externalClaim = null;
     var splitProjectionClaim = null;
 
@@ -2629,7 +2711,7 @@
     }
     var subjectMatches = subjectId
       ? matchingIndexes(function (row) {
-          return storeSubjectText(row.subjectId) === subjectId;
+          return storeSubjectText(row.subjectId) === subjectId && !(row.voidedAt && recordId && storeSubjectBookingId(row) !== recordId);
         })
       : [];
     var bookingMatches = recordId
@@ -3037,6 +3119,7 @@
    */
   function promoteBookInToLead(input) {
     input = clone(input || {});
+    if (input.voidedAt) { return { ok: false, code: "BOOKING_VOIDED", error: "This booking was voided. Create a new booking with a new ID." }; }
     var directBookingClaims = [
       storeSubjectText(input.id),
       storeSubjectText(input.bookingId),
@@ -3152,35 +3235,23 @@
       leadId = leadIdForPerson(personId);
       snap = leadId ? getLead(leadId) : null;
       existing = !!snap;
-    } else if (aNumber) {
-      var match = personByAlienNumber(aNumber);
-      if (match) {
-        person = clone(match);
-        personId = person.personId || "";
-        leadId = leadIdForPerson(personId);
-        snap = leadId ? getLead(leadId) : null;
-        existing = !!snap;
-      }
     }
-    if (!person && !snap && fbiNumber) {
-      var fbiMatch = personByFbiNumber(fbiNumber);
-      if (fbiMatch) {
-        person = clone(fbiMatch);
-        personId = person.personId || "";
-        leadId = leadIdForPerson(personId);
-        snap = leadId ? getLead(leadId) : null;
-        existing = !!snap;
-      }
+    var identityInput = {
+      objectId: personId,
+      name: { lastName: lastName, firstName: firstName },
+      dateOfBirth: input.dateOfBirth || "",
+      alienNumber: aNumber,
+      fbiNumber: fbiNumber,
+      createNew: input.createNew === true
+    };
+    var resolvedIdentity = resolveObjectIdentity("PERSON", identityInput);
+    if (!resolvedIdentity.ok) {
+      return { ok: false, code: resolvedIdentity.code, leadId: leadId, personId: personId, existing: existing, candidates: resolvedIdentity.candidates, error: resolvedIdentity.error };
     }
-    if (!person && !snap) {
-      var identityMatch = personByNameAndBirth(
-        lastName,
-        firstName,
-        input.dateOfBirth
-      );
-      if (identityMatch) {
-        person = clone(identityMatch);
-        personId = person.personId || "";
+    if (resolvedIdentity.reused) {
+      person = resolvedIdentity.record;
+      personId = resolvedIdentity.objectId;
+      if (!snap) {
         leadId = leadIdForPerson(personId);
         snap = leadId ? getLead(leadId) : null;
         existing = !!snap;
@@ -3619,6 +3690,7 @@
   function promoteBookInRecord(record, options) {
     record = record || {};
     options = options || {};
+    if (record.voidedAt) { return { ok: false, code: "BOOKING_VOIDED", error: "This booking was voided. Create a new booking with a new ID." }; }
     var recordBookingClaims = [
       storeSubjectText(record.id),
       storeSubjectText(record.bookingId),
@@ -4066,7 +4138,7 @@
     return person ? clone(person) : null;
   }
 
-  function upsertPerson(person) {
+  function upsertPerson(person, opts) {
     if (!person || !person.personId) {
       return { ok: false, error: "Person is missing a personId." };
     }
@@ -4074,22 +4146,26 @@
     if (!fresh.ok) {
       return { ok: false, error: fresh.error };
     }
-    state.people[person.personId] = clone(
-      canonicalPersonRecord(person, state.people[person.personId])
-    );
+    var before = clone(state);
+    var prepared = prepareObjectRecord("PERSON", person, opts);
+    if (!prepared.ok) { return prepared; }
+    var locationsPrepared = stageObjectGraph({ locations: prepared.record.locations || [] });
+    if (!locationsPrepared.ok) { state = before; return locationsPrepared; }
+    prepared.record.locations = (prepared.record.locations || []).map(function (location) { return canonicalLocationRecord(location, null); });
+    state.people[person.personId] = clone(prepared.record);
     syncObjectOwnedLocations(
       "PERSON",
       person.personId,
       state.people[person.personId].locations
     );
     if (!writeDisk()) {
-      adoptDisk();
+      state = before;
       return {
         ok: false,
         error: "Could not write localStorage (quota or private mode)."
       };
     }
-    return { ok: true, error: "" };
+    return { ok: true, personId: person.personId, objectRevision: prepared.record.objectRevision, error: "" };
   }
 
   function locationPin(location) {
@@ -4440,6 +4516,7 @@
 
   function persistEncounter(record, opts, previous) {
     var mode = (opts && opts.mode) || "commit";
+    if (previous && previous.meta && previous.meta.archivedAt) { return { ok: false, code: "OBJECT_ARCHIVED", encounterId: record.encounterId, error: "This Encounter is archived. Restore it explicitly before editing." }; }
     if (previous && previous.meta && previous.meta.markedComplete) {
       return {
         ok: false,
@@ -4490,6 +4567,9 @@
         encounter: previous ? clone(previous) : null
       };
     }
+    var objectGraphBefore = clone(state);
+    var objectGraph = stageObjectGraph(record);
+    if (!objectGraph.ok) { return { ok: false, code: objectGraph.code, encounterId: record.encounterId, error: objectGraph.error }; }
     var saved = mergeRecord(previous, record);
     saved.schema = record.schema || "copdocx.encounter.v1";
     saved.encounterId = record.encounterId;
@@ -4542,6 +4622,12 @@
         previousSubjects: (previous && previous.subjects) || [],
         mergePrevious: true
       });
+    }
+    if (previous && Array.isArray(saved.subjects)) {
+      var removingBooked = (previous.subjects || []).some(function (subject) {
+        return storeSubjectBookingId(subject) && !saved.subjects.some(function (row) { return storeSubjectId(row) === storeSubjectId(subject); });
+      });
+      if (removingBooked) { state = objectGraphBefore; return { ok: false, code: "ENCOUNTER_BOOKING_DEPENDENCY", encounterId: record.encounterId, error: "Void the linked booking before removing its Encounter subject." }; }
     }
     var ownershipHistory = Array.isArray(
       previous && previous.subjectIdentityHistory
@@ -4705,7 +4791,7 @@
     normalizeEncounterStateRecord(saved, saved.encounterId);
     state.encounters[saved.encounterId] = clone(saved);
     if (!writeDisk()) {
-      adoptDisk();
+      state = objectGraphBefore;
       return {
         ok: false,
         encounterId: saved.encounterId,
@@ -4721,6 +4807,23 @@
       error: "",
       encounter: clone(saved)
     };
+  }
+
+  function saveEncounterWithObjects(record, opts) {
+    opts = opts || {};
+    if (!Array.isArray(opts.personEdits)) { return { ok: false, code: "OBJECT_INVALID", error: "Encounter Person edits must be an array." }; }
+    var savedIds = [];
+    for (var i = 0; i < opts.personEdits.length; i += 1) {
+      var edit = opts.personEdits[i] || {};
+      var savedPerson = saveObjectRecord("PERSON", edit.record, { intent: edit.intent, expectedRevision: edit.expectedRevision });
+      if (!savedPerson.ok) { return savedPerson; }
+      savedIds.push(savedPerson.objectId);
+    }
+    var encounterOptions = Object.assign({}, opts);
+    delete encounterOptions.personEdits;
+    var result = saveEncounter(record, encounterOptions);
+    if (result.ok) { result.objectRecords = savedIds.map(function (id) { return getPerson(id); }); }
+    return result;
   }
 
   function validateEncounterSubjectRoster(record, validationOpts) {
@@ -5067,17 +5170,23 @@
     if (!encounterId || !state.encounters[encounterId]) {
       return { ok: false, encounterId: encounterId || "", error: "Encounter not found." };
     }
-    var doomed = clone(state.encounters[encounterId]);
+    var protection = stage5DeleteProtection("ENCOUNTER", encounterId);
+    if (!protection.ok) {
+      protection.encounterId = encounterId;
+      return protection;
+    }
+    var beforeDelete = clone(state);
     delete state.encounters[encounterId];
     if (!writeDisk()) {
-      adoptDisk();
+      state = beforeDelete;
       return {
         ok: false,
         encounterId: encounterId,
         error: "Could not write localStorage (quota or private mode)."
       };
     }
-    dropOwnedMedia(doomed);
+    // Shared Vehicle/Location media belongs to those objects, never to this
+    // Encounter. Retain even Encounter-owned bytes for deliberate media cleanup.
     return { ok: true, encounterId: encounterId, error: "" };
   }
 
@@ -5109,6 +5218,9 @@
     var previous = state.investigations[record.investigationId]
       ? clone(state.investigations[record.investigationId])
       : null;
+    if (previous && previous.meta && previous.meta.archivedAt) {
+      return { ok: false, investigationId: record.investigationId, code: "RECORD_ARCHIVED", error: "This investigation is archived. Its history was preserved." };
+    }
     var saved = previous ? Object.assign({}, previous, record) : record;
     saved.schema = record.schema || model.INVESTIGATION_SCHEMA || "copdocx.investigation.v1";
     saved.investigationId = record.investigationId;
@@ -5128,6 +5240,7 @@
     if (!Array.isArray(saved.links)) {
       saved.links = [];
     }
+    saved.links = projectAssociationLinks(saved.links);
     if (!Array.isArray(saved.history)) {
       saved.history = [];
     }
@@ -5160,9 +5273,15 @@
         error: "Investigation not found."
       };
     }
+    var protection = stage5DeleteProtection("INVESTIGATION", investigationId);
+    if (!protection.ok) {
+      protection.investigationId = investigationId;
+      return protection;
+    }
+    var beforeDelete = clone(state);
     delete state.investigations[investigationId];
     if (!writeDisk()) {
-      adoptDisk();
+      state = beforeDelete;
       return {
         ok: false,
         investigationId: investigationId,
@@ -5199,7 +5318,11 @@
     var previous = state.operations[record.operationId]
       ? clone(state.operations[record.operationId])
       : null;
-    var saved = previous ? Object.assign({}, previous, record) : record;
+    if (previous && previous.meta && previous.meta.archivedAt) { return { ok: false, operationId: record.operationId, error: "This Operation is archived. Restore it explicitly before editing." }; }
+    var operationBefore = clone(state);
+    var locationGraph = stageObjectGraph({ locations: record.opLocations || [] });
+    if (!locationGraph.ok) { return { ok: false, operationId: record.operationId, code: locationGraph.code, error: locationGraph.error }; }
+    var saved = previous ? Object.assign({}, previous, clone(record)) : clone(record);
     saved.schema = record.schema || model.OPERATION_SCHEMA || "copdocx.operation.v1";
     saved.operationId = record.operationId;
     saved.operationNumber = record.operationNumber || record.operationId;
@@ -5216,7 +5339,12 @@
     saved.targetAssignments = Array.isArray(saved.targetAssignments)
       ? saved.targetAssignments
       : [];
-    saved.opLocations = Array.isArray(saved.opLocations) ? saved.opLocations : [];
+    saved.opLocations = (Array.isArray(saved.opLocations) ? saved.opLocations : []).map(function (location) {
+      var canonical = canonicalLocationRecord(location, null);
+      canonical.opAssociation = location.opAssociation || location.association || "";
+      canonical.association = canonical.opAssociation;
+      return canonical;
+    });
     saved.medevacRoute = Array.isArray(saved.medevacRoute) ? saved.medevacRoute : [];
     saved.history = Array.isArray(saved.history) ? saved.history : [];
     if (mode === "commit" && model.freezeOperationTarget) {
@@ -5239,7 +5367,7 @@
     }
     state.operations[saved.operationId] = clone(saved);
     if (!writeDisk()) {
-      adoptDisk();
+      state = operationBefore;
       return {
         ok: false,
         operationId: saved.operationId,
@@ -5266,9 +5394,15 @@
         error: "Operation not found."
       };
     }
+    var protection = stage5DeleteProtection("OPERATION", operationId);
+    if (!protection.ok) {
+      protection.operationId = operationId;
+      return protection;
+    }
+    var beforeDelete = clone(state);
     delete state.operations[operationId];
     if (!writeDisk()) {
-      adoptDisk();
+      state = beforeDelete;
       return {
         ok: false,
         operationId: operationId,
@@ -5827,21 +5961,17 @@
       blank.error = "Operation not found.";
       return blank;
     }
-    var loc = model.createLocation
-      ? model.createLocation({
+    var requestedLocationId = input.objectId || input.locationId || "";
+    var loc = requestedLocationId ? getLocationRecord(requestedLocationId) : createObjectRecord("LOCATION", {
           latitude: input.latitude || "",
           longitude: input.longitude || "",
           notes: input.label || input.notes || "",
           opAssociation: kind,
           association: kind
-        })
-      : {
-          locationId: model.newId("loc"),
-          latitude: input.latitude || "",
-          longitude: input.longitude || "",
-          opAssociation: kind,
-          association: kind
-        };
+        });
+    if (!loc || loc.junked || (loc.meta && loc.meta.archivedAt)) { blank.error = "The selected Location is missing or inactive."; return blank; }
+    loc.opAssociation = kind;
+    loc.association = kind;
     op.opLocations = Array.isArray(op.opLocations) ? op.opLocations : [];
     op.opLocations.push(loc);
     var saved = saveOperation(op, { mode: "draft" });
@@ -5978,10 +6108,13 @@
     }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.vehicles[id] ? clone(state.vehicles[id]) : null;
-    var merged = mergeRecord(previous, record);
-    var saved = typeof model.createVehicle === "function"
-      ? model.createVehicle(merged)
-      : merged;
+    var before = clone(state);
+    var prepared = prepareObjectRecord("VEHICLE", record, opts);
+    if (!prepared.ok) { prepared.vehicleId = id; return prepared; }
+    var saved = prepared.record;
+    var locationsPrepared = stageObjectGraph({ locations: saved.locations || [] });
+    if (!locationsPrepared.ok) { state = before; locationsPrepared.vehicleId = id; return locationsPrepared; }
+    saved.locations = (saved.locations || []).map(function (location) { return canonicalLocationRecord(location, null); });
     saved.vehicleId = id;
     saved.id = id;
     saved.entityType = "VEHICLE";
@@ -5996,7 +6129,7 @@
     state.vehicles[id] = clone(saved);
     syncObjectOwnedLocations("VEHICLE", id, saved.locations);
     if (!writeDisk()) {
-      adoptDisk();
+      state = before;
       return {
         ok: false,
         vehicleId: id,
@@ -6066,7 +6199,7 @@
       if (!row) {
         continue;
       }
-      if (!includeJunked && isJunked(row)) {
+      if (!includeJunked && (isJunked(row) || (row.meta && row.meta.archivedAt))) {
         continue;
       }
       var key = normalizePlateKey(
@@ -6121,7 +6254,7 @@
       if (!row) {
         continue;
       }
-      if (!includeJunked && isJunked(row)) {
+      if (!includeJunked && (isJunked(row) || (row.meta && row.meta.archivedAt))) {
         continue;
       }
       if (want && normalizeNameKey(row.name) === want) {
@@ -6173,10 +6306,10 @@
     }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.locations[id] ? clone(state.locations[id]) : null;
-    var merged = mergeRecord(previous, record);
-    var saved = typeof model.createLocation === "function"
-      ? model.createLocation(merged)
-      : merged;
+    var before = clone(state);
+    var prepared = prepareObjectRecord("LOCATION", record, opts);
+    if (!prepared.ok) { prepared.locationId = id; return prepared; }
+    var saved = prepared.record;
     saved.locationId = id;
     saved.id = id;
     saved.entityType = "LOCATION";
@@ -6189,7 +6322,7 @@
     saved.meta.markedComplete = false;
     state.locations[id] = clone(saved);
     if (!writeDisk()) {
-      adoptDisk();
+      state = before;
       return {
         ok: false,
         locationId: id,
@@ -6216,7 +6349,7 @@
         continue;
       }
       var row = state.locations[ids[i]];
-      if (!row || (!includeJunked && isJunked(row))) {
+      if (!row || (!includeJunked && (isJunked(row) || (row.meta && row.meta.archivedAt)))) {
         continue;
       }
       if (normalizeLocationKey(row) === want) {
@@ -6247,10 +6380,10 @@
     }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.businesses[id] ? clone(state.businesses[id]) : null;
-    var merged = mergeRecord(previous, record);
-    var saved = typeof model.createBusiness === "function"
-      ? model.createBusiness(merged)
-      : merged;
+    var before = clone(state);
+    var prepared = prepareObjectRecord("BUSINESS", record, opts);
+    if (!prepared.ok) { prepared.businessId = id; return prepared; }
+    var saved = prepared.record;
     saved.businessId = id;
     saved.id = id;
     saved.entityType = "BUSINESS";
@@ -6263,7 +6396,7 @@
     saved.meta.markedComplete = false;
     state.businesses[id] = clone(saved);
     if (!writeDisk()) {
-      adoptDisk();
+      state = before;
       return {
         ok: false,
         businessId: id,
@@ -6290,7 +6423,7 @@
         continue;
       }
       var row = state.businesses[ids[i]];
-      if (!row || (!includeJunked && isJunked(row))) {
+      if (!row || (!includeJunked && (isJunked(row) || (row.meta && row.meta.archivedAt)))) {
         continue;
       }
       if (normalizeOrgName(row.name) === want) {
@@ -6314,10 +6447,10 @@
     }
     var mode = (opts && opts.mode) || "commit";
     var previous = state.entities[id] ? clone(state.entities[id]) : null;
-    var merged = mergeRecord(previous, record);
-    var saved = typeof model.createCustomEntity === "function"
-      ? model.createCustomEntity(merged)
-      : merged;
+    var before = clone(state);
+    var prepared = prepareObjectRecord("ENTITY", record, opts);
+    if (!prepared.ok) { prepared.entityId = id; return prepared; }
+    var saved = prepared.record;
     saved.entityId = id;
     saved.id = id;
     saved.entityType = "ENTITY";
@@ -6330,7 +6463,7 @@
     saved.meta.markedComplete = false;
     state.entities[id] = clone(saved);
     if (!writeDisk()) {
-      adoptDisk();
+      state = before;
       return {
         ok: false,
         entityId: id,
@@ -6377,17 +6510,179 @@
     return "";
   }
 
+  function objectMap(type) {
+    return state[{ PERSON: "people", VEHICLE: "vehicles", LOCATION: "locations", BUSINESS: "businesses", ENTITY: "entities" }[type]] || {};
+  }
+
+  function objectIdField(type) {
+    return { PERSON: "personId", VEHICLE: "vehicleId", LOCATION: "locationId", BUSINESS: "businessId", ENTITY: "entityId" }[type];
+  }
+
+  function objectFailure(code, error) {
+    return { ok: false, code: code, error: error, record: null, objectId: "", reused: false, candidates: [] };
+  }
+
+  function validateObjectId(type, input) {
+    var claims = [input && input[objectIdField(type)], input && input.id, input && input.objectId].filter(function (value) { return value != null && value !== ""; });
+    var ids = [];
+    var invalid = claims.some(function (value) {
+      if (typeof value !== "string" || value !== value.trim() || /[\x00-\x20]/.test(value) || /^(?:__proto__|prototype|constructor)$/.test(value)) { return true; }
+      if (ids.indexOf(value) === -1) { ids.push(value); }
+      return false;
+    });
+    if (invalid || ids.length > 1) { return objectFailure("OBJECT_ID_CONFLICT", "Object identifiers must be valid and agree."); }
+    return { ok: true, objectId: ids[0] || "", error: "" };
+  }
+
+  function objectStrongIdentity(type, input) {
+    input = input || {};
+    function token(value) { return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+    if (type === "PERSON") {
+      return {
+        alienNumber: digitsOnly((input.immigration && input.immigration.alienNumber) || input.alienNumber || input.aNumber),
+        fbiNumber: token((input.criminal && input.criminal.fbiNumber) || input.fbiNumber),
+        ssn: digitsOnly(input.ssn),
+        lexId: token(input.lexId)
+      };
+    }
+    if (type === "VEHICLE") { return { vin: token(input.vin) }; }
+    return {};
+  }
+
+  function objectStrongMatches(type, input) {
+    var wanted = objectStrongIdentity(type, input);
+    return Object.keys(objectMap(type)).filter(function (id) {
+      var identity = objectStrongIdentity(type, objectMap(type)[id]);
+      return Object.keys(wanted).some(function (key) { return wanted[key] && wanted[key] === identity[key]; });
+    });
+  }
+
+  function objectIdentityContradicts(type, input, previous) {
+    var requested = objectStrongIdentity(type, input);
+    var known = objectStrongIdentity(type, previous);
+    return Object.keys(requested).some(function (key) { return requested[key] && known[key] && requested[key] !== known[key]; });
+  }
+
+  function validateObjectWorkspace(incoming, current) {
+    incoming = incoming || {};
+    current = current || {};
+    var failure = null;
+    Object.keys({ PERSON: 1, VEHICLE: 1, LOCATION: 1, BUSINESS: 1, ENTITY: 1 }).forEach(function (type) {
+      var mapName = { PERSON: "people", VEHICLE: "vehicles", LOCATION: "locations", BUSINESS: "businesses", ENTITY: "entities" }[type];
+      var rows = incoming[mapName] || {};
+      var known = current[mapName] || {};
+      var owners = {};
+      Object.keys(rows).forEach(function (id) {
+        if (failure) { return; }
+        var row = rows[id];
+        var valid = validateObjectId(type, row);
+        if (!row || Array.isArray(row) || !valid.ok || valid.objectId !== id) { failure = objectFailure("OBJECT_ID_CONFLICT", mapName + " contains a registry key that disagrees with its object ID."); return; }
+        var prior = known[id];
+        if (prior && prior.junked && !row.junked) { failure = objectFailure("OBJECT_JUNKED", "Import cannot restore an inactive object implicitly."); return; }
+        var strong = objectStrongIdentity(type, row);
+        Object.keys(strong).forEach(function (key) {
+          if (!strong[key] || failure) { return; }
+          var token = key + ":" + strong[key];
+          var priorOwner = owners[token];
+          if (priorOwner && priorOwner !== id) {
+            var oldA = objectStrongIdentity(type, known[priorOwner]);
+            var oldB = objectStrongIdentity(type, known[id]);
+            if (oldA[key] !== strong[key] || oldB[key] !== strong[key]) { failure = objectFailure("OBJECT_IDENTITY_CONFLICT", "Import would introduce conflicting " + type + " identifiers. Select and resolve the objects first."); }
+          } else { owners[token] = id; }
+        });
+      });
+    });
+    return failure || { ok: true, error: "" };
+  }
+
+  function prepareObjectRecord(type, input, opts) {
+    opts = opts || {};
+    if (!type || !input || typeof input !== "object" || Array.isArray(input)) { return objectFailure("OBJECT_INVALID", "A valid object is required."); }
+    var checked = validateObjectId(type, input);
+    if (!checked.ok) { return checked; }
+    var id = checked.objectId;
+    var previous = id && objectMap(type)[id];
+    if (previous && previous.meta && previous.meta.archivedAt && !opts.restore) { return objectFailure("OBJECT_ARCHIVED", "This object is archived. Restore it explicitly before editing."); }
+    if (previous && objectRecordId(type, previous) !== id) { return objectFailure("OBJECT_ID_CONFLICT", "The stored object ID contradicts its registry key."); }
+    if (opts.intent === "create" && previous) { return objectFailure("OBJECT_EXISTS", "That object already exists. Select it or update it explicitly."); }
+    if (opts.intent === "update" && !previous) { return objectFailure("OBJECT_NOT_FOUND", "The object to update no longer exists."); }
+    if (previous && isJunked(previous) && !opts.restore && !input.junked) { return objectFailure("OBJECT_JUNKED", "The object is inactive. Restore it explicitly before editing or reusing it."); }
+    var expected = opts.expectedRevision != null ? opts.expectedRevision : input.objectRevision;
+    if (previous && expected != null && Number(expected) !== Number(previous.objectRevision || 0)) { return objectFailure("OBJECT_STALE", "This object changed in another workflow. Reload it before saving."); }
+    var conflicts = objectStrongMatches(type, input).filter(function (owner) { return owner !== id; });
+    if (conflicts.length) {
+      var collision = objectFailure("OBJECT_IDENTITY_CONFLICT", "A supplied identifier belongs to another object. Select the existing record explicitly.");
+      collision.candidates = conflicts;
+      return collision;
+    }
+    var merged = mergeRecord(previous, input);
+    delete merged._objectEdit;
+    delete merged.objectId;
+    delete merged.createNew;
+    if (id) { merged[objectIdField(type)] = id; }
+    var candidate = createObjectRecord(type, merged);
+    if (!candidate) { return objectFailure("OBJECT_INVALID", "The object constructor is not available."); }
+    function revisionContent(row) {
+      var copy = clone(row || {});
+      delete copy.meta;
+      delete copy.objectRevision;
+      delete copy._objectEdit;
+      return JSON.stringify(copy);
+    }
+    candidate.objectRevision = Number(previous && previous.objectRevision || 0) + (previous && revisionContent(previous) === revisionContent(candidate) ? 0 : 1);
+    return { ok: true, objectId: objectRecordId(type, candidate), record: candidate, previous: previous || null, error: "" };
+  }
+
+  // Stage editor-owned changes in the same workspace write as their aggregate.
+  // Unmarked embedded objects are references/snapshots and never write backward.
+  function stageObjectGraph(aggregate) {
+    var before = clone(state);
+    var error = null;
+    function visit(type, record) {
+      if (!record || error) { return; }
+      var valid = validateObjectId(type, record);
+      if (!valid.ok) { error = valid; return; }
+      var old = valid.objectId && objectMap(type)[valid.objectId];
+      if (old && isJunked(old)) { error = objectFailure("OBJECT_JUNKED", "An attached object is inactive. Restore it explicitly first."); return; }
+      (record.locations || []).forEach(function (location) { visit("LOCATION", location); });
+      if (error) { return; }
+      if (record._objectEdit || !old) {
+        var prepared = prepareObjectRecord(type, record, {});
+        if (!prepared.ok) { error = prepared; return; }
+        if (Array.isArray(prepared.record.locations)) { prepared.record.locations = prepared.record.locations.map(function (location) { return canonicalLocationRecord(location, null); }); }
+        objectMap(type)[prepared.objectId] = clone(prepared.record);
+      }
+    }
+    (aggregate.vehicles || []).forEach(function (row) { visit("VEHICLE", row); });
+    (aggregate.locations || []).forEach(function (row) { visit("LOCATION", row); });
+    var subject = model.subjectOf ? model.subjectOf(aggregate) : aggregate.person;
+    if (subject) { (subject.locations || []).forEach(function (row) { visit("LOCATION", row); }); }
+    (aggregate.people || []).forEach(function (person) { visit("PERSON", person); });
+    if (error) { state = before; return error; }
+    return { ok: true, error: "" };
+  }
+
   /**
    * The one context-free constructor gateway for case, Book-In, encounter,
    * and investigation object editors.
    */
   function createObjectRecord(objectType, extra) {
     var type = canonicalObjectType(objectType);
-    extra = extra || {};
+    extra = clone(extra || {});
+    var identity = validateObjectId(type, extra);
+    if (!type || !identity.ok) { return null; }
+    if (identity.objectId) { extra[objectIdField(type)] = identity.objectId; }
+    delete extra.objectId;
+    delete extra._objectEdit;
+    delete extra.createNew;
     if (type === "PERSON" && typeof model.createPerson === "function") {
       return model.createPerson(extra);
     }
     if (type === "VEHICLE" && typeof model.createVehicle === "function") {
+      var normalizedPlate = String(extra.licensePlate || extra.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      extra.licensePlate = normalizedPlate;
+      extra.plate = normalizedPlate;
+      extra.plateState = String(extra.plateState || "").trim().toUpperCase();
       return model.createVehicle(extra);
     }
     if (type === "LOCATION" && typeof model.createLocation === "function") {
@@ -6446,15 +6741,15 @@
     }
     var input = record || {};
     var requestedId = objectRecordId(type, input);
-    var previous = requestedId ? getObjectRecord(type, requestedId) : null;
-    var candidate = createObjectRecord(type, mergeRecord(previous, input));
-    if (!candidate) {
-      blank.error = "The object constructor is not available.";
-      return blank;
-    }
+    var prepared = prepareObjectRecord(type, input, opts);
+    if (!prepared.ok) { prepared.objectType = type; return prepared; }
+    var candidate = prepared.record;
+    // The typed save boundary performs the revision increment once.
+    if (prepared.previous) { candidate.objectRevision = prepared.previous.objectRevision || 0; }
+    else { delete candidate.objectRevision; }
     var result;
     if (type === "PERSON") {
-      result = upsertPerson(candidate);
+      result = upsertPerson(candidate, opts);
     } else if (type === "VEHICLE") {
       result = saveVehicleRecord(candidate, opts);
     } else if (type === "LOCATION") {
@@ -6466,6 +6761,7 @@
     }
     if (!result || !result.ok) {
       blank.error = (result && result.error) || "Could not save that object.";
+      blank.code = result && result.code;
       return blank;
     }
     var id = objectRecordId(type, candidate);
@@ -6490,7 +6786,7 @@
         continue;
       }
       var row = state.entities[ids[i]];
-      if (!row || (!includeJunked && isJunked(row))) {
+      if (!row || (!includeJunked && (isJunked(row) || (row.meta && row.meta.archivedAt)))) {
         continue;
       }
       if (normalizeOrgName(row.name) === want) {
@@ -6696,270 +6992,83 @@
     return objectId;
   }
 
+  /**
+   * Resolve identity without writes. Weak labels suggest candidates; they never
+   * establish Person identity. createNew acknowledges a weak candidate list only.
+   */
+  function resolveObjectIdentity(objectType, input) {
+    var type = canonicalObjectType(objectType);
+    input = clone(input || {});
+    if (!type) { return objectFailure("OBJECT_INVALID", "Pick a person, vehicle, location, business, or entity."); }
+    var fresh = adoptDisk();
+    if (!fresh.ok) { return objectFailure("OBJECT_STORAGE_UNAVAILABLE", fresh.error); }
+    var checked = validateObjectId(type, input);
+    if (!checked.ok) { return checked; }
+    var requestedId = checked.objectId;
+    var exact = requestedId && objectMap(type)[requestedId];
+    if (requestedId && !exact) { return objectFailure("OBJECT_NOT_FOUND", "The selected object no longer exists. Create a new object explicitly if needed."); }
+    var matches = objectStrongMatches(type, input);
+    if (matches.length > 1 || (exact && matches.some(function (id) { return id !== requestedId; })) || (exact && objectIdentityContradicts(type, input, exact))) {
+      var conflict = objectFailure("OBJECT_IDENTITY_CONFLICT", "The supplied identifiers refer to conflicting objects. Select and correct the identity explicitly.");
+      conflict.candidates = matches;
+      return conflict;
+    }
+    var matchedId = requestedId || matches[0] || "";
+    var matched = matchedId && objectMap(type)[matchedId];
+    if (matched && (objectRecordId(type, matched) !== matchedId || objectIdentityContradicts(type, input, matched))) {
+      return objectFailure("OBJECT_IDENTITY_CONFLICT", "The selected object's stored identifiers contradict the request.");
+    }
+    if (matched && (isJunked(matched) || (matched.meta && matched.meta.archivedAt))) { return objectFailure("OBJECT_JUNKED", "The matching object is inactive. Restore it explicitly before reuse."); }
+    if (matched) { return { ok: true, objectType: type, objectId: matchedId, record: clone(matched), reused: true, candidates: [], error: "" }; }
+    var name = typeof input.name === "string" ? nameFromLabel(input.name) : input.name || nameFromLabel(input.label || "");
+    var weak = Object.keys(objectMap(type)).filter(function (id) {
+      var row = objectMap(type)[id];
+      if (type === "PERSON") { var key = normalizeNameKey(name); return key && normalizeNameKey(row.name) === key; }
+      if (type === "VEHICLE") {
+        var plate = input.licensePlate || input.plate || "";
+        var region = input.plateState || input.state || "";
+        return plate && region && normalizePlateKey(region, plate) === normalizePlateKey(row.plateState, row.licensePlate || row.plate);
+      }
+      if (type === "LOCATION") { var address = normalizeLocationKey(input); return address && address === normalizeLocationKey(row); }
+      var label = normalizeOrgName(input.name);
+      return label && label === normalizeOrgName(row.name);
+    });
+    if (weak.length && !input.createNew && weak.every(function (id) { var row = objectMap(type)[id]; return isJunked(row) || (row.meta && row.meta.archivedAt); })) {
+      return objectFailure("OBJECT_JUNKED", "The matching object is inactive. Restore it explicitly or create a separate object intentionally.");
+    }
+    weak = weak.filter(function (id) { var row = objectMap(type)[id]; return !isJunked(row) && !(row.meta && row.meta.archivedAt); });
+    // Plate+state and full addresses preserve established non-Person reuse.
+    // Multiple candidates or conflicting strong data always require selection.
+    if (weak.length === 1 && (type === "VEHICLE" || type === "LOCATION") && !input.createNew && !objectIdentityContradicts(type, input, objectMap(type)[weak[0]])) {
+      return { ok: true, objectType: type, objectId: weak[0], record: clone(objectMap(type)[weak[0]]), reused: true, candidates: [], error: "" };
+    }
+    if (weak.length && !input.createNew) {
+      var ambiguous = objectFailure("OBJECT_SELECTION_REQUIRED", "Possible matching objects exist. Select an existing object or explicitly create a separate one.");
+      ambiguous.candidates = weak;
+      return ambiguous;
+    }
+    return { ok: true, objectType: type, objectId: "", record: null, reused: false, candidates: weak, error: "" };
+  }
+
   function resolveObjectRecord(objectType, input) {
-    input = input || {};
-    var reused = false;
-    var record = null;
-    if (objectType === "PERSON") {
-      if (input.objectId) {
-        record = getPerson(input.objectId);
-        reused = !!record;
-      }
-      var name = input.name;
-      if (typeof name === "string") {
-        name = nameFromLabel(name);
-      }
-      if (!name || (!name.lastName && !name.firstName)) {
-        name = nameFromLabel(input.label || "");
-      }
-      if (!record && name && (name.lastName || name.firstName)) {
-        record = findPersonByName(name);
-        reused = !!record;
-        if (!record) {
-          record = restoreJunkedRecord("PERSON", findPersonByName(name, "", true));
-          reused = !!record;
-        }
-      }
-      if (!record) {
-        if (!name) {
-          name = { lastName: "", firstName: "", middleName: "" };
-        }
-        record = model.createPerson
-          ? model.createPerson({ name: name, caseRole: "" })
-          : {
-              personId: model.newId("p"),
-              entityType: "PERSON",
-              name: name,
-              caseRole: ""
-            };
-        var savedPerson = saveObjectRecord("PERSON", record, { mode: "commit" });
-        if (!savedPerson.ok) {
-          return {
-            ok: false,
-            record: null,
-            objectId: "",
-            reused: false,
-            error: savedPerson.error || "Could not save the person."
-          };
-        }
-        record = savedPerson.record || record;
-        reused = false;
-      }
-      return {
-        ok: true,
-        record: record,
-        objectId: record.personId,
-        reused: reused,
-        error: ""
-      };
+    var type = canonicalObjectType(objectType);
+    input = clone(input || {});
+    var identity = resolveObjectIdentity(type, input);
+    if (!identity.ok || identity.reused) { return identity; }
+    if (type === "PERSON") {
+      input.name = typeof input.name === "string" ? nameFromLabel(input.name) : input.name || nameFromLabel(input.label || "");
+      if (input.alienNumber || input.aNumber) { input.immigration = mergeRecord(input.immigration, { alienNumber: input.alienNumber || input.aNumber }); }
+      if (input.fbiNumber) { input.criminal = mergeRecord(input.criminal, { fbiNumber: input.fbiNumber }); }
     }
-    if (objectType === "VEHICLE") {
-      var plate = String(input.licensePlate || input.plate || "")
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, "");
-      var plateState = String(input.plateState || input.state || "").toUpperCase();
-      if (input.objectId) {
-        record = getVehicleRecord(input.objectId);
-        reused = !!record;
-      }
-      if (!record && plate) {
-        record = findVehicleByPlate(plateState, plate);
-        reused = !!record;
-        if (!record) {
-          record = restoreJunkedRecord(
-            "VEHICLE",
-            findVehicleByPlate(plateState, plate, "", true)
-          );
-          reused = !!record;
-        }
-      }
-      if (!record) {
-        record = model.createVehicle
-          ? model.createVehicle({
-              licensePlate: plate,
-              plate: plate,
-              plateState: plateState,
-              governmentVehicle: false
-            })
-          : {
-              vehicleId: model.newId("veh"),
-              licensePlate: plate,
-              plate: plate,
-              plateState: plateState,
-              governmentVehicle: false
-            };
-        var savedVeh = saveObjectRecord("VEHICLE", record, { mode: "commit" });
-        if (!savedVeh.ok) {
-          return {
-            ok: false,
-            record: null,
-            objectId: "",
-            reused: false,
-            error: savedVeh.error || "Could not save the vehicle."
-          };
-        }
-        record = savedVeh.record || getVehicleRecord(savedVeh.objectId);
-        reused = false;
-      }
-      return {
-        ok: true,
-        record: record,
-        objectId: record.vehicleId || record.id,
-        reused: reused,
-        error: ""
-      };
+    if (type === "VEHICLE") {
+      input.licensePlate = input.licensePlate || input.plate || "";
+      input.plateState = input.plateState || input.state || "";
     }
-    if (objectType === "LOCATION") {
-      var locInput = {
-        street: String(input.street || "").trim(),
-        city: String(input.city || "").trim(),
-        state: String(input.state || "").trim().toUpperCase(),
-        zip: String(input.zip || "").trim()
-      };
-      if (input.objectId) {
-        record = getLocationRecord(input.objectId);
-        reused = !!record;
-      }
-      if (!record && (locInput.street || locInput.city)) {
-        record = findLocationByAddress(locInput);
-        reused = !!record;
-        if (!record) {
-          record = restoreJunkedRecord(
-            "LOCATION",
-            findLocationByAddress(locInput, "", true)
-          );
-          reused = !!record;
-        }
-      }
-      if (!record) {
-        record = model.createLocation
-          ? model.createLocation(locInput)
-          : Object.assign(
-              { locationId: model.newId("loc"), entityType: "LOCATION" },
-              locInput
-            );
-        var savedLoc = saveObjectRecord("LOCATION", record, { mode: "commit" });
-        if (!savedLoc.ok) {
-          return {
-            ok: false,
-            record: null,
-            objectId: "",
-            reused: false,
-            error: savedLoc.error || "Could not save the location."
-          };
-        }
-        record = savedLoc.record || getLocationRecord(savedLoc.objectId);
-        reused = false;
-      }
-      return {
-        ok: true,
-        record: record,
-        objectId: record.locationId || record.id,
-        reused: reused,
-        error: ""
-      };
-    }
-    if (objectType === "BUSINESS") {
-      if (input.objectId) {
-        record = getBusinessRecord(input.objectId);
-        reused = !!record;
-      }
-      var bizName = String(input.name || "").trim();
-      if (!record && bizName) {
-        record = findBusinessByName(bizName);
-        reused = !!record;
-        if (!record) {
-          record = restoreJunkedRecord("BUSINESS", findBusinessByName(bizName, "", true));
-          reused = !!record;
-        }
-      }
-      if (!record) {
-        record = model.createBusiness
-          ? model.createBusiness({
-              name: bizName,
-              phone: input.phone || ""
-            })
-          : {
-              businessId: model.newId("biz"),
-              entityType: "BUSINESS",
-              name: bizName,
-              phone: input.phone || ""
-            };
-        var savedBiz = saveObjectRecord("BUSINESS", record, { mode: "commit" });
-        if (!savedBiz.ok) {
-          return {
-            ok: false,
-            record: null,
-            objectId: "",
-            reused: false,
-            error: savedBiz.error || "Could not save the business."
-          };
-        }
-        record = savedBiz.record || getBusinessRecord(savedBiz.objectId);
-        reused = false;
-      }
-      return {
-        ok: true,
-        record: record,
-        objectId: record.businessId || record.id,
-        reused: reused,
-        error: ""
-      };
-    }
-    if (objectType === "ENTITY") {
-      if (input.objectId) {
-        record = getEntityRecord(input.objectId);
-        reused = !!record;
-      }
-      var entName = String(input.name || "").trim();
-      if (!record && entName) {
-        record = findEntityByName(entName);
-        reused = !!record;
-        if (!record) {
-          record = restoreJunkedRecord("ENTITY", findEntityByName(entName, "", true));
-          reused = !!record;
-        }
-      }
-      if (!record) {
-        record = model.createCustomEntity
-          ? model.createCustomEntity({
-              name: entName,
-              kind: input.kind || ""
-            })
-          : {
-              entityId: model.newId("ent"),
-              entityType: "ENTITY",
-              name: entName,
-              kind: input.kind || ""
-            };
-        var savedEnt = saveObjectRecord("ENTITY", record, { mode: "commit" });
-        if (!savedEnt.ok) {
-          return {
-            ok: false,
-            record: null,
-            objectId: "",
-            reused: false,
-            error: savedEnt.error || "Could not save the entity."
-          };
-        }
-        record = savedEnt.record || getEntityRecord(savedEnt.objectId);
-        reused = false;
-      }
-      return {
-        ok: true,
-        record: record,
-        objectId: record.entityId || record.id,
-        reused: reused,
-        error: ""
-      };
-    }
-    return {
-      ok: false,
-      record: null,
-      objectId: "",
-      reused: false,
-      error: "Pick a person, vehicle, location, business, or entity."
-    };
+    delete input.objectType;
+    delete input.label;
+    var saved = saveObjectRecord(type, input, { mode: "commit", intent: "create" });
+    saved.reused = false;
+    return saved;
   }
 
   function addInvestigationObject(investigationId, input) {
@@ -7092,7 +7201,7 @@
       }
       if (existingLink) {
         linkId = existingLink.linkId;
-        citeWallAssociation(
+        var existingCitation = citeWallAssociation(
           existingLink,
           fromNode.objectType,
           fromNode.objectId,
@@ -7101,6 +7210,7 @@
           reason,
           inv.investigationId
         );
+        if (!existingCitation.ok) { return existingCitation; }
         associationId = existingLink.associationId || "";
       } else {
         var link = model.createLink
@@ -7120,7 +7230,7 @@
               label: "",
               otherType: ends.toType
             };
-        citeWallAssociation(
+        var newCitation = citeWallAssociation(
           link,
           fromNode.objectType,
           fromNode.objectId,
@@ -7129,6 +7239,7 @@
           reason,
           inv.investigationId
         );
+        if (!newCitation.ok) { return newCitation; }
         inv.links.push(link);
         linkId = link.linkId;
         associationId = link.associationId || "";
@@ -7329,6 +7440,52 @@
     );
   }
 
+  // Associations own relationship state. Embedded rows are compatibility projections;
+  // closed facts remain addressable so an old Case cannot silently assert them again.
+  function associationStatus(row) {
+    if (row && (row.relationshipStatus === "RETRACTED" || row.retractedAt)) {
+      return "RETRACTED";
+    }
+    if (row && (row.relationshipStatus === "ENDED" || row.endedAt)) {
+      return "ENDED";
+    }
+    return "ACTIVE";
+  }
+
+  function associationIsActive(row) {
+    return !!row && !isJunked(row) && associationStatus(row) === "ACTIVE";
+  }
+
+  function associationForLink(link) {
+    if (!link) { return null; }
+    if (link.associationId && state.associations[link.associationId]) {
+      return state.associations[link.associationId];
+    }
+    if (!link.from || !link.to || !link.from.id || !link.to.id) { return null; }
+    return findAssociationByEnds(link.from.type, link.from.id,
+      link.to.type || link.otherType, link.to.id,
+      link.reason || (link.reasons && link.reasons[0]) || "", true) ||
+      findAssociationByPair(link.from.type, link.from.id, link.to.type || link.otherType, link.to.id, true);
+  }
+
+  function projectAssociationLinks(links) {
+    return (links || []).filter(function (link) {
+      var association = associationForLink(link);
+      return !association || associationIsActive(association);
+    }).map(function (link) {
+      var association = associationForLink(link);
+      if (!association) { return link; }
+      var projected = clone(link);
+      projected.associationId = association.associationId;
+      projected.from = clone(association.from);
+      projected.to = clone(association.to);
+      projected.otherType = association.to.type;
+      projected.reasons = [association.reason || (association.reasons || [])[0]];
+      projected.notes = association.notes || "";
+      return projected;
+    });
+  }
+
   function associationEndsEqual(row, fromType, fromId, toType, toId, reason) {
     if (!row || !row.from || !row.to) {
       return false;
@@ -7365,7 +7522,7 @@
       if (!row) {
         continue;
       }
-      if (!includeJunked && isJunked(row)) {
+      if (!includeJunked && !associationIsActive(row)) {
         continue;
       }
       if (
@@ -7412,6 +7569,15 @@
     var existing = associationId && state.associations
       ? state.associations[associationId]
       : null;
+    if (existing && !associationIsActive(existing)) {
+      blank.code = "ASSOCIATION_CLOSED";
+      blank.error = "This relationship has ended or was retracted. Review it and explicitly reassert it before changing it.";
+      return blank;
+    }
+    if (opts.projection && existing) {
+      return { ok: true, reused: true, associationId: existing.associationId, error: "" };
+    }
+    var before = clone(state);
     var previousAssociation = existing ? clone(existing) : null;
     var fromType = (input.from && input.from.type) || input.fromEntityType ||
       (existing && existing.from && existing.from.type) || "";
@@ -7439,6 +7605,12 @@
       }
     }
     var ends = canonicalLinkEnds(fromType, fromId, toType, toId, reason);
+    if (!ends.fromId || !ends.toId || !objectExists(ends.fromType, ends.fromId) ||
+        !objectExists(ends.toType, ends.toId)) {
+      blank.code = "ASSOCIATION_ENDPOINT_MISSING";
+      blank.error = "Both relationship objects must exist before they can be linked.";
+      return blank;
+    }
     if (
       ends.fromType === ends.toType &&
       ends.fromId &&
@@ -7448,12 +7620,26 @@
       return blank;
     }
     var merged = mergeRecord(existing, input);
+    var duplicate = findAssociationByEnds(ends.fromType, ends.fromId, ends.toType, ends.toId, ends.reason || reason, true);
+    if (duplicate && duplicate.associationId !== associationId) {
+      blank.code = associationIsActive(duplicate) ? "ASSOCIATION_ALREADY_EXISTS" : "ASSOCIATION_CLOSED";
+      blank.associationId = duplicate.associationId;
+      blank.error = associationIsActive(duplicate)
+        ? "This relationship already exists. Update its existing association."
+        : "This relationship has ended or was retracted. Review it before explicitly reasserting it.";
+      return blank;
+    }
     merged.associationId = associationId || merged.associationId || model.newId("asoc");
     merged.from = { type: ends.fromType, id: ends.fromId };
     merged.to = { type: ends.toType, id: ends.toId };
     merged.reason = ends.reason || reason;
     merged.reasons = [merged.reason];
     merged.otherType = ends.toType;
+    // Lifecycle fields are only writable through explicit lifecycle commands.
+    ["relationshipStatus", "retractedAt", "endedAt", "retractionReason", "lifecycleHistory", "junked", "junkedAt"].forEach(function (key) {
+      if (existing && Object.prototype.hasOwnProperty.call(existing, key)) { merged[key] = clone(existing[key]); }
+      else { delete merged[key]; }
+    });
     var record = model.createAssociation
       ? model.createAssociation(merged)
       : merged;
@@ -7462,6 +7648,25 @@
     record.to = merged.to;
     record.reason = merged.reason;
     record.reasons = [merged.reason];
+    if (previousAssociation && !associationEndsEqual(previousAssociation,
+        record.from.type, record.from.id, record.to.type, record.to.id, "")) {
+      var superseded = clone(previousAssociation);
+      var correctionTime = model.nowIso ? model.nowIso() : new Date().toISOString();
+      superseded.associationId = model.newId("asoc");
+      superseded.linkId = superseded.associationId;
+      superseded.relationshipStatus = "RETRACTED";
+      superseded.retractedAt = correctionTime;
+      superseded.retractionReason = "Relationship endpoints corrected.";
+      superseded.junked = true;
+      superseded.junkedAt = correctionTime;
+      superseded.supersededBy = record.associationId;
+      superseded.lifecycleHistory = Array.isArray(superseded.lifecycleHistory) ? superseded.lifecycleHistory : [];
+      superseded.lifecycleHistory.push({ from: associationStatus(previousAssociation), to: "RETRACTED",
+        at: correctionTime, reason: superseded.retractionReason, supersededBy: record.associationId,
+        validFrom: previousAssociation.validFrom || "", validTo: previousAssociation.validTo || "",
+        occupancy: previousAssociation.occupancy || "" });
+      putAssociation(superseded);
+    }
     putAssociation(record);
     if (previousAssociation) {
       pruneAssociationProjections(previousAssociation);
@@ -7475,6 +7680,7 @@
       }
     }
     if (opts.persist !== false && !writeDisk()) {
+      state = before;
       blank.error = "Could not write localStorage (quota or private mode).";
       return blank;
     }
@@ -7525,6 +7731,12 @@
       }
     }
     var ends = canonicalLinkEnds(fromType, fromId, toType, toId, reason);
+    if (!ends.fromId || !ends.toId || !objectExists(ends.fromType, ends.fromId) ||
+        !objectExists(ends.toType, ends.toId)) {
+      blank.code = "ASSOCIATION_ENDPOINT_MISSING";
+      blank.error = "Both relationship objects must exist before they can be linked.";
+      return blank;
+    }
     if (
       ends.fromType &&
       ends.toType &&
@@ -7543,17 +7755,18 @@
       ends.reason || reason,
       true
     );
+    if (!existing && opts.projection) {
+      existing = findAssociationByPair(ends.fromType, ends.fromId, ends.toType, ends.toId, true);
+    }
     if (existing) {
-      if (isJunked(existing)) {
-        input.junked = false;
-        input.junkedAt = "";
-      }
       return saveAssociationRecord(existing.associationId, input, {
         skipAdopt: true,
         persist: opts.persist,
-        skipLeadSync: opts.skipLeadSync
+        skipLeadSync: opts.skipLeadSync,
+        projection: opts.projection
       });
     }
+    var before = clone(state);
     var record = model.createAssociation
       ? model.createAssociation({
           from: { type: ends.fromType, id: ends.fromId },
@@ -7591,7 +7804,12 @@
       }
     }
     if (opts.persist !== false) {
-      writeDisk();
+      if (!writeDisk()) {
+        state = before;
+        blank.code = "ASSOCIATION_WRITE_FAILED";
+        blank.error = "Could not write localStorage (quota or private mode).";
+        return blank;
+      }
     }
     return {
       ok: true,
@@ -7633,6 +7851,9 @@
         return;
       }
       if (!opts.includeJunked && isJunked(row)) {
+        return;
+      }
+      if (!opts.includeHistorical && associationStatus(row) !== "ACTIVE") {
         return;
       }
       if (associationTouches(row, objectType, objectId)) {
@@ -7720,7 +7941,7 @@
       if (!row) {
         continue;
       }
-      if (!includeJunked && isJunked(row)) {
+      if (!includeJunked && !associationIsActive(row)) {
         continue;
       }
       if (associationTouches(row, aType, aId) && associationTouches(row, bType, bId)) {
@@ -7761,13 +7982,7 @@
       state.locations[loc.locationId] = copy;
       return;
     }
-    prev.street = loc.street || prev.street;
-    prev.street2 = loc.street2 || prev.street2;
-    prev.city = loc.city || prev.city;
-    prev.state = loc.state || prev.state;
-    prev.zip = loc.zip || prev.zip;
-    prev.latitude = loc.latitude || prev.latitude;
-    prev.longitude = loc.longitude || prev.longitude;
+    // Existing canonical identity is edited only by the explicit object gateway.
   }
 
   function putIdentityVehicle(veh) {
@@ -7791,19 +8006,7 @@
       state.vehicles[id] = copy;
       return;
     }
-    prev.licensePlate = veh.licensePlate || veh.plate || prev.licensePlate;
-    prev.plate = prev.licensePlate;
-    prev.plateState = veh.plateState || prev.plateState;
-    prev.vehicleYear = veh.vehicleYear || prev.vehicleYear;
-    prev.vehicleMake = veh.vehicleMake || prev.vehicleMake;
-    prev.vehicleModel = veh.vehicleModel || prev.vehicleModel;
-    prev.vehicleColor = veh.vehicleColor || prev.vehicleColor;
-    prev.vehicleBodyStyle = veh.vehicleBodyStyle || prev.vehicleBodyStyle;
-    prev.vin = veh.vin || prev.vin;
-    if (!prev.registeredOwnerName && veh.registeredOwnerName) {
-      prev.registeredOwnerName = veh.registeredOwnerName;
-    }
-    prev.governmentVehicle = false;
+    // Embedded parent snapshots never write backward into this registry.
   }
 
   function syncObjectOwnedLocations(ownerType, ownerId, locations) {
@@ -7828,9 +8031,10 @@
           validFrom: location.occupiedFrom || "",
           validTo: location.occupiedTo || ""
         },
-        { skipAdopt: true, persist: false, skipLeadSync: true }
+        { skipAdopt: true, persist: false, skipLeadSync: true, projection: true }
       );
     });
+    projectObjectOwnedLocations(ownerType, ownerId, locations);
   }
 
   function syncEncounterObjects(encounter) {
@@ -7859,7 +8063,7 @@
             reason: reason,
             source: { encounterId: encounter.encounterId || "" }
           },
-          { skipAdopt: true, persist: false, skipLeadSync: true }
+          { skipAdopt: true, persist: false, skipLeadSync: true, projection: true }
         );
       });
     });
@@ -7892,11 +8096,16 @@
           label: link.label || investigationObjectLabel(toType, toId),
           source: { encounterId: encounter.encounterId || "" }
         }, link.notes ? { notes: link.notes } : {}),
-        { skipAdopt: true, persist: false, skipLeadSync: true }
+        { skipAdopt: true, persist: false, skipLeadSync: true, projection: true }
       );
       if (result && result.ok) {
         link.associationId = result.associationId;
       }
+    });
+    encounter.links = projectAssociationLinks(encounter.links);
+    (encounter.vehicles || []).forEach(function (vehicle) {
+      if (!vehicle) { return; }
+      projectObjectOwnedLocations("VEHICLE", vehicle.vehicleId || vehicle.id, vehicle.locations);
     });
   }
 
@@ -7905,12 +8114,9 @@
       return;
     }
     var occ = occupancyPayload(row);
-    var existing = findAssociationByPair(fromType, fromId, toType, toId);
+    var existing = findAssociationByPair(fromType, fromId, toType, toId, true);
     if (existing) {
-      existing.occupancy = occ.occupancy;
-      existing.validFrom = occ.validFrom;
-      existing.validTo = occ.validTo;
-      putAssociation(existing);
+      // Once materialized, the relationship record wins over nested copies.
       return;
     }
     upsertAssociation(
@@ -7980,7 +8186,7 @@
   }
 
   /** Materialize every resolvable lead link as the same world association used by investigations. */
-  function syncLeadLinksToAssociations(lead) {
+  function syncLeadLinksToAssociations(lead, persistedAssociations) {
     if (!lead || !Array.isArray(lead.links)) {
       return;
     }
@@ -8014,16 +8220,36 @@
       if (link.notes) {
         input.notes = link.notes;
       }
-      var result = link.associationId && state.associations[link.associationId]
-        ? saveAssociationRecord(link.associationId, input, {
+      var matching = (link.associationId && state.associations[link.associationId]) ||
+        findAssociationByEnds(fromType, fromId, toType, toId, reason, true) ||
+        findAssociationByPair(fromType, fromId, toType, toId, true);
+      // Nested cards may have materialized this relationship earlier in the same
+      // save. Its first explicit link supplies its annotations; later snapshots
+      // cannot overwrite a relationship that was already durable.
+      var initialAssertion = !!(matching && persistedAssociations &&
+        !Object.prototype.hasOwnProperty.call(persistedAssociations, matching.associationId));
+      if (initialAssertion && model.validateAssociationEnds &&
+          !model.validateAssociationEnds(fromType, toType, reason).ok) {
+        // A legacy display reason may be unreadable by the modern matrix. The
+        // freshly materialized canonical pair still accepts the original notes;
+        // retain the old reason as provenance instead of minting a guessed fact.
+        input.from = clone(matching.from);
+        input.to = clone(matching.to);
+        input.reason = matching.reason;
+        input.source.legacyLinkReason = reason;
+      }
+      var result = matching
+        ? saveAssociationRecord(matching.associationId, input, {
             skipAdopt: true,
             persist: false,
-            skipLeadSync: true
+            skipLeadSync: true,
+            projection: !initialAssertion
           })
         : upsertAssociation(input, {
             skipAdopt: true,
             persist: false,
-            skipLeadSync: true
+            skipLeadSync: true,
+            projection: true
           });
       if (result && result.ok) {
         link.associationId = result.associationId;
@@ -8047,7 +8273,7 @@
   function hasLiveAssociationBetween(typeA, idA, typeB, idB) {
     return Object.keys(state.associations || {}).some(function (associationId) {
       var row = state.associations[associationId];
-      if (!row || isJunked(row) || !row.from || !row.to) {
+      if (!associationIsActive(row) || !row.from || !row.to) {
         return false;
       }
       return (
@@ -8128,6 +8354,30 @@
         rememberPeople(lead);
       }
     });
+    ["people", "vehicles", "businesses", "entities"].forEach(function (collection) {
+      var type = collection === "people" ? "PERSON" : collection === "vehicles" ? "VEHICLE" : collection === "businesses" ? "BUSINESS" : "ENTITY";
+      Object.keys(state[collection] || {}).forEach(function (id) {
+        var record = state[collection][id];
+        var other = otherEnd(association, type, id);
+        if (record && other && other.type === "LOCATION" && !hasLiveAssociationBetween(type, id, "LOCATION", other.id)) {
+          record.locations = (record.locations || []).filter(function (location) { return !location || location.locationId !== other.id; });
+        }
+      });
+    });
+  }
+
+  function projectObjectOwnedLocations(type, id, locations) {
+    if (!Array.isArray(locations)) { return; }
+    for (var i = locations.length - 1; i >= 0; i -= 1) {
+      var location = locations[i];
+      if (!location || !location.locationId) { continue; }
+      var association = findAssociationByPair(type, id, "LOCATION", location.locationId, true);
+      if (association && !associationIsActive(association) && !hasLiveAssociationBetween(type, id, "LOCATION", location.locationId)) {
+        locations.splice(i, 1);
+      } else if (association && associationIsActive(association)) {
+        applyAssociationOccupancy(location, association);
+      }
+    }
   }
 
   function ensureNestedLocation(list, locationId, reason, asoc) {
@@ -8213,9 +8463,16 @@
     person.locations = Array.isArray(person.locations) ? person.locations : [];
     lead.vehicles = Array.isArray(lead.vehicles) ? lead.vehicles : [];
     var changed = false;
+    lead.links = projectAssociationLinks(lead.links);
+    Object.keys(state.associations || {}).forEach(function (id) {
+      var association = state.associations[id];
+      if (association && !associationIsActive(association)) {
+        changed = pruneAssociationProjectionFromLead(lead, association) || changed;
+      }
+    });
     Object.keys(state.associations || {}).forEach(function (id) {
       var row = state.associations[id];
-      if (!row || isJunked(row)) {
+      if (!associationIsActive(row)) {
         return;
       }
       var other = otherEnd(row, "PERSON", personId);
@@ -8246,7 +8503,7 @@
       vehicle.locations = Array.isArray(vehicle.locations) ? vehicle.locations : [];
       Object.keys(state.associations || {}).forEach(function (id) {
         var row = state.associations[id];
-        if (!row || isJunked(row)) {
+        if (!associationIsActive(row)) {
           return;
         }
         var other = otherEnd(row, "VEHICLE", vehicleId);
@@ -8263,12 +8520,12 @@
   }
 
   function syncLeadsForPerson(personId) {
-    var leadId = leadIdForPerson(personId);
-    if (!leadId || !state.leads[leadId]) {
-      return;
-    }
-    applyAssociationNestingToLead(state.leads[leadId]);
-    rememberPeople(state.leads[leadId]);
+    Object.keys(state.leads || {}).forEach(function (leadId) {
+      var lead = state.leads[leadId];
+      if (!lead || ((lead.subjectPersonId || (lead.person && lead.person.personId)) !== personId)) { return; }
+      applyAssociationNestingToLead(lead);
+      rememberPeople(lead);
+    });
   }
 
   function setAssociationReason(associationId, reason) {
@@ -8297,26 +8554,7 @@
         return blank;
       }
     }
-    var ends = canonicalLinkEnds(
-      row.from.type,
-      row.from.id,
-      row.to.type,
-      row.to.id,
-      reason
-    );
-    row.from = { type: ends.fromType, id: ends.fromId };
-    row.to = { type: ends.toType, id: ends.toId };
-    row.reason = ends.reason || reason;
-    row.reasons = [row.reason];
-    putAssociation(row);
-    if (row.from.type === "PERSON") {
-      syncLeadsForPerson(row.from.id);
-    }
-    if (row.to.type === "PERSON") {
-      syncLeadsForPerson(row.to.id);
-    }
-    writeDisk();
-    return { ok: true, associationId: row.associationId, error: "" };
+    return saveAssociationRecord(associationId, { reason: reason }, { skipAdopt: true });
   }
 
   function stripAssociationCitations(associationId) {
@@ -8341,43 +8579,188 @@
         return !row || row.associationId !== associationId;
       });
     });
+    Object.keys(state.encounters || {}).forEach(function (id) {
+      var encounter = state.encounters[id];
+      if (!encounter || !Array.isArray(encounter.links)) { return; }
+      // Completed snapshots and saved narratives remain historical evidence.
+      encounter.links = encounter.links.filter(function (row) {
+        return !row || row.associationId !== associationId;
+      });
+    });
   }
 
-  function dropAssociation(associationId) {
-    var blank = {
-      ok: false,
-      associationId: associationId || "",
-      removed: false,
-      error: ""
-    };
+  function transitionAssociation(row, status, opts) {
+    opts = opts || {};
+    var priorStatus = associationStatus(row);
+    var at = model.nowIso ? model.nowIso() : new Date().toISOString();
+    var reason = String(opts.reason || (status === "RETRACTED" ? "Relationship removed by user." : "Relationship ended by user.")).trim();
+    var history = Array.isArray(row.lifecycleHistory) ? row.lifecycleHistory.slice() : [];
+    var citations = [];
+    if (status !== "ACTIVE") {
+      ["leads", "investigations", "encounters"].forEach(function (collection) {
+        Object.keys(state[collection] || {}).forEach(function (id) {
+          (state[collection][id].links || []).forEach(function (link) {
+            var referenced = associationForLink(link);
+            if (referenced && referenced.associationId === row.associationId) {
+              citations.push({ collection: collection, objectId: id, link: clone(link) });
+            }
+          });
+        });
+      });
+    }
+    history.push({ from: priorStatus, to: status, at: at, reason: reason,
+      officerId: String(opts.officerId || ""), citations: citations,
+      validFrom: row.validFrom || "", validTo: row.validTo || "", occupancy: row.occupancy || "" });
+    row.lifecycleHistory = history;
+    row.relationshipStatus = status;
+    row.updatedAt = at;
+    if (status === "RETRACTED") {
+      row.retractedAt = at;
+      row.retractionReason = reason;
+      row.junked = true;
+      row.junkedAt = at;
+    } else if (status === "ENDED") {
+      row.endedAt = String(opts.endedAt || at);
+      row.endReason = reason;
+      row.validTo = row.endedAt;
+      row.occupancy = "historical";
+    } else {
+      row.retractedAt = "";
+      row.endedAt = "";
+      row.retractionReason = "";
+      row.junked = false;
+      row.junkedAt = "";
+      row.validFrom = String(opts.validFrom || at);
+      row.validTo = "";
+      row.occupancy = "current";
+    }
+    putAssociation(row);
+    if (status !== "ACTIVE") {
+      // Remove citations by identity and by legacy endpoints before stale links can
+      // be materialized again. Snapshot copies survive in lifecycleHistory above.
+      ["leads", "investigations", "encounters"].forEach(function (collection) {
+        Object.keys(state[collection] || {}).forEach(function (id) {
+          var owner = state[collection][id];
+          owner.links = projectAssociationLinks(owner.links);
+        });
+      });
+      pruneAssociationProjections(row);
+    }
+    if (row.from.type === "PERSON") { syncLeadsForPerson(row.from.id); }
+    if (row.to.type === "PERSON") { syncLeadsForPerson(row.to.id); }
+  }
+
+  function mutateAssociationLifecycle(associationId, status, opts) {
+    opts = opts || {};
+    var blank = { ok: false, associationId: associationId || "", removed: false, error: "" };
     var fresh = adoptDisk();
     if (!fresh.ok) {
       blank.error = fresh.error;
       return blank;
     }
-    if (!associationId || !state.associations || !state.associations[associationId]) {
-      return {
-        ok: true,
-        associationId: associationId || "",
-        removed: false,
-        error: ""
-      };
+    var row = state.associations && state.associations[associationId];
+    if (!row) {
+      blank.code = "ASSOCIATION_NOT_FOUND";
+      blank.error = "Relationship not found.";
+      return blank;
     }
-    var removedAssociation = clone(state.associations[associationId]);
-    delete state.associations[associationId];
-    stripAssociationCitations(associationId);
-    pruneAssociationProjections(removedAssociation);
+    if (associationStatus(row) === status && (status !== "ACTIVE" || !isJunked(row))) {
+      return { ok: true, associationId: associationId, status: status, removed: false, reused: true, error: "" };
+    }
+    if (status === "ACTIVE" && !String(opts.reason || "").trim()) {
+      blank.code = "REASSERTION_REASON_REQUIRED";
+      blank.error = "Explain why this relationship is being asserted again.";
+      return blank;
+    }
+    if (status === "ENDED" && associationStatus(row) === "RETRACTED") {
+      blank.code = "ASSOCIATION_RETRACTED";
+      blank.error = "A retracted relationship cannot be marked as a historical fact.";
+      return blank;
+    }
+    if (opts.endedAt && !isFinite(Date.parse(opts.endedAt))) {
+      blank.code = "INVALID_END_DATE";
+      blank.error = "Enter a valid relationship end date.";
+      return blank;
+    }
+    if (status === "ACTIVE" && (!objectExists(row.from.type, row.from.id) || !objectExists(row.to.type, row.to.id))) {
+      blank.code = "ASSOCIATION_ENDPOINT_MISSING";
+      blank.error = "Both objects must still exist before this relationship can be asserted again.";
+      return blank;
+    }
+    var before = clone(state);
+    transitionAssociation(row, status, opts);
     if (!writeDisk()) {
-      adoptDisk();
+      state = before;
+      blank.code = "ASSOCIATION_WRITE_FAILED";
       blank.error = "Could not write localStorage (quota or private mode).";
       return blank;
     }
-    return {
-      ok: true,
-      associationId: associationId,
-      removed: true,
-      error: ""
-    };
+    return { ok: true, associationId: associationId, status: status, removed: status !== "ACTIVE", error: "" };
+  }
+
+  function retractAssociation(associationId, opts) {
+    return mutateAssociationLifecycle(associationId, "RETRACTED", opts);
+  }
+
+  function endAssociation(associationId, opts) {
+    return mutateAssociationLifecycle(associationId, "ENDED", opts);
+  }
+
+  function reassertAssociation(associationId, opts) {
+    return mutateAssociationLifecycle(associationId, "ACTIVE", opts);
+  }
+
+  function dropAssociation(associationId) {
+    var fresh = adoptDisk();
+    if (!fresh.ok) { return { ok: false, associationId: associationId || "", removed: false, error: fresh.error }; }
+    if (!state.associations[associationId]) {
+      return { ok: true, associationId: associationId || "", removed: false, error: "" };
+    }
+    return retractAssociation(associationId, { reason: "Relationship removed by user." });
+  }
+
+  function removeObjectRelationship(ownerType, ownerId, otherType, otherId, opts) {
+    opts = opts || {};
+    var blank = { ok: false, associationIds: [], removed: false, error: "" };
+    var fresh = adoptDisk();
+    if (!fresh.ok) { blank.error = fresh.error; return blank; }
+    ownerType = canonicalObjectType(ownerType);
+    otherType = canonicalObjectType(otherType);
+    ownerId = String(ownerId || "");
+    otherId = String(otherId || "");
+    if (!ownerId || !otherId || !objectExists(ownerType, ownerId) || !objectExists(otherType, otherId)) {
+      blank.code = "ASSOCIATION_ENDPOINT_MISSING";
+      blank.error = "Both relationship objects must exist.";
+      return blank;
+    }
+    if (opts.mode && opts.mode !== "retract" && opts.mode !== "end") {
+      blank.code = "INVALID_RELATIONSHIP_ACTION";
+      blank.error = "Choose retract or end for this relationship.";
+      return blank;
+    }
+    if (opts.endedAt && !isFinite(Date.parse(opts.endedAt))) {
+      blank.code = "INVALID_END_DATE";
+      blank.error = "Enter a valid relationship end date.";
+      return blank;
+    }
+    var rows = Object.keys(state.associations || {}).map(function (id) { return state.associations[id]; }).filter(function (row) {
+      return row && associationTouches(row, ownerType, ownerId) && associationTouches(row, otherType, otherId);
+    });
+    var before = clone(state);
+    var status = opts.mode === "end" ? "ENDED" : "RETRACTED";
+    var changed = [];
+    rows.forEach(function (row) {
+      if (associationStatus(row) === status || (status === "ENDED" && associationStatus(row) === "RETRACTED")) { return; }
+      transitionAssociation(row, status, opts);
+      changed.push(row.associationId);
+    });
+    if (changed.length && !writeDisk()) {
+      state = before;
+      blank.code = "ASSOCIATION_WRITE_FAILED";
+      blank.error = "Could not write localStorage (quota or private mode).";
+      return blank;
+    }
+    return { ok: true, associationIds: rows.map(function (row) { return row.associationId; }), removed: changed.length > 0, status: status, error: "" };
   }
 
   function dropAssociationsForObject(objectType, objectId) {
@@ -8533,109 +8916,8 @@
   }
 
   function objectIsReferenced(objectType, objectId, skip) {
-    var type = String(objectType || "").toUpperCase();
-    var id = String(objectId || "");
-    skip = skip || {};
-    if (!id) {
-      return false;
-    }
-    var skipInv = skip.investigationId || "";
-    var skipNode = skip.nodeId || "";
-    var invIds = Object.keys(state.investigations);
-    var i;
-    var j;
-    for (i = 0; i < invIds.length; i++) {
-      var inv = state.investigations[invIds[i]];
-      var nodes = (inv && inv.nodes) || [];
-      for (j = 0; j < nodes.length; j++) {
-        var node = nodes[j];
-        if (
-          skipInv &&
-          invIds[i] === skipInv &&
-          node &&
-          node.nodeId === skipNode
-        ) {
-          continue;
-        }
-        if (node && node.objectType === type && node.objectId === id) {
-          return true;
-        }
-      }
-    }
-    var leadIds = Object.keys(state.leads);
-    for (i = 0; i < leadIds.length; i++) {
-      var lead = state.leads[leadIds[i]];
-      if (!lead) {
-        continue;
-      }
-      if (type === "PERSON") {
-        if (lead.subjectPersonId === id) {
-          return true;
-        }
-        if (lead.person && lead.person.personId === id) {
-          return true;
-        }
-        var links = lead.links || [];
-        for (j = 0; j < links.length; j++) {
-          var link = links[j];
-          if (
-            (link.from && link.from.type === "PERSON" && link.from.id === id) ||
-            (link.to && link.to.type === "PERSON" && link.to.id === id)
-          ) {
-            return true;
-          }
-        }
-      }
-      if (type === "VEHICLE") {
-        var vehs = lead.vehicles || [];
-        for (j = 0; j < vehs.length; j++) {
-          if (vehs[j] && (vehs[j].vehicleId || vehs[j].id) === id) {
-            return true;
-          }
-        }
-      }
-      if (type === "LOCATION") {
-        var subject = model.subjectOf ? model.subjectOf(lead) : lead.person;
-        var locs = (subject && subject.locations) || [];
-        for (j = 0; j < locs.length; j++) {
-          if (locs[j] && (locs[j].locationId || locs[j].id) === id) {
-            return true;
-          }
-        }
-      }
-    }
-    var encIds = Object.keys(state.encounters);
-    for (i = 0; i < encIds.length; i++) {
-      var enc = state.encounters[encIds[i]];
-      if (!enc) {
-        continue;
-      }
-      if (type === "PERSON") {
-        var subjects = enc.subjects || [];
-        for (j = 0; j < subjects.length; j++) {
-          if (subjects[j] && subjects[j].personId === id) {
-            return true;
-          }
-        }
-      }
-      if (type === "VEHICLE") {
-        var eVeh = enc.vehicles || [];
-        for (j = 0; j < eVeh.length; j++) {
-          if (eVeh[j] && (eVeh[j].vehicleId || eVeh[j].id) === id) {
-            return true;
-          }
-        }
-      }
-      if (type === "LOCATION") {
-        var eLoc = enc.locations || [];
-        for (j = 0; j < eLoc.length; j++) {
-          if (eLoc[j] && (eLoc[j].locationId || eLoc[j].id) === id) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
+    var checked = stage5DependencyScan(objectType, objectId, state, skip);
+    return !checked.ok || checked.dependencies.length > 0;
   }
 
   function overlayIdentityOnto(objectType, fromId, toId) {
@@ -8732,7 +9014,7 @@
   }
 
   function dropUnreferencedObject(objectType, objectId, skip) {
-    if (objectIsReferenced(objectType, objectId, skip)) {
+    if (!stage5DeleteProtection(objectType, objectId, skip).ok) {
       return false;
     }
     var type = String(objectType || "").toUpperCase();
@@ -8750,13 +9032,7 @@
     } else {
       return false;
     }
-    dropAssociationsForObject(type, id);
-    if (root.media && typeof root.media.removeByOwner === "function") {
-      root.media.removeByOwner({ type: type, id: id }).then(
-        function () {},
-        function () {}
-      );
-    }
+    // Media bytes are retained until explicit dependency-checked cleanup.
     return true;
   }
 
@@ -8990,138 +9266,32 @@
     return node.nodeId;
   }
 
-  function reuseInvestigationIdentity(investigationId, nodeId) {
-    var blank = { ok: false, reused: false, objectId: "", nodeId: nodeId || "", error: "" };
+  function reuseInvestigationIdentity(investigationId, nodeId, targetObjectId) {
     var fresh = adoptDisk();
-    if (!fresh.ok) {
-      blank.error = fresh.error;
-      return blank;
+    if (!fresh.ok) { return objectFailure("OBJECT_STORAGE_UNAVAILABLE", fresh.error); }
+    var inv = state.investigations[investigationId] ? clone(state.investigations[investigationId]) : null;
+    if (!inv) { return objectFailure("OBJECT_NOT_FOUND", "Investigation not found."); }
+    var node = (inv.nodes || []).filter(function (row) { return row && row.nodeId === nodeId; })[0];
+    if (!node) { return objectFailure("OBJECT_NOT_FOUND", "Object not found on this investigation."); }
+    var record = getObjectRecord(node.objectType, node.objectId);
+    if (!record) { return objectFailure("OBJECT_NOT_FOUND", "The investigation object no longer exists."); }
+    if (!targetObjectId || targetObjectId === node.objectId) {
+      return { ok: true, reused: false, objectId: node.objectId, nodeId: node.nodeId, error: "" };
     }
-    var inv = state.investigations[investigationId]
-      ? clone(state.investigations[investigationId])
-      : null;
-    if (!inv) {
-      blank.error = "Investigation not found.";
-      return blank;
+    var selected = resolveObjectIdentity(node.objectType, { objectId: targetObjectId });
+    if (!selected.ok) { return selected; }
+    if (objectIdentityContradicts(node.objectType, record, selected.record)) {
+      return objectFailure("OBJECT_IDENTITY_CONFLICT", "The selected objects have conflicting identifiers and cannot be reused interchangeably.");
     }
-    var node = null;
-    var i;
-    for (i = 0; i < (inv.nodes || []).length; i++) {
-      if (inv.nodes[i] && inv.nodes[i].nodeId === nodeId) {
-        node = inv.nodes[i];
-        break;
-      }
-    }
-    if (!node) {
-      blank.error = "Object not found on this investigation.";
-      return blank;
-    }
-    var other = null;
-    if (node.objectType === "VEHICLE") {
-      var vehicle = getVehicleRecord(node.objectId);
-      other =
-        vehicle &&
-        findVehicleByPlate(
-          vehicle.plateState || "",
-          vehicle.licensePlate || vehicle.plate || "",
-          node.objectId
-        );
-      if (!other && vehicle) {
-        other = restoreJunkedRecord(
-          "VEHICLE",
-          findVehicleByPlate(
-            vehicle.plateState || "",
-            vehicle.licensePlate || vehicle.plate || "",
-            node.objectId,
-            true
-          )
-        );
-      }
-      if (other) {
-        other = { id: other.vehicleId || other.id };
-      }
-    } else if (node.objectType === "PERSON") {
-      var person = getPerson(node.objectId);
-      var match = person && findPersonByName(person.name, node.objectId);
-      if (!match && person) {
-        match = restoreJunkedRecord(
-          "PERSON",
-          findPersonByName(person.name, node.objectId, true)
-        );
-      }
-      if (match) {
-        other = { id: match.personId };
-      }
-    } else if (node.objectType === "LOCATION") {
-      var loc = getLocationRecord(node.objectId);
-      var locMatch = loc && findLocationByAddress(loc, node.objectId);
-      if (!locMatch && loc) {
-        locMatch = restoreJunkedRecord(
-          "LOCATION",
-          findLocationByAddress(loc, node.objectId, true)
-        );
-      }
-      if (locMatch) {
-        other = { id: locMatch.locationId || locMatch.id };
-      }
-    } else if (node.objectType === "BUSINESS") {
-      var biz = getBusinessRecord(node.objectId);
-      var bizMatch = biz && findBusinessByName(biz.name, node.objectId);
-      if (!bizMatch && biz) {
-        bizMatch = restoreJunkedRecord(
-          "BUSINESS",
-          findBusinessByName(biz.name, node.objectId, true)
-        );
-      }
-      if (bizMatch) {
-        other = { id: bizMatch.businessId || bizMatch.id };
-      }
-    } else if (node.objectType === "ENTITY") {
-      var ent = getEntityRecord(node.objectId);
-      var entMatch = ent && findEntityByName(ent.name, node.objectId);
-      if (!entMatch && ent) {
-        entMatch = restoreJunkedRecord(
-          "ENTITY",
-          findEntityByName(ent.name, node.objectId, true)
-        );
-      }
-      if (entMatch) {
-        other = { id: entMatch.entityId || entMatch.id };
-      }
-    }
-    if (!other || !other.id) {
-      return {
-        ok: true,
-        reused: false,
-        objectId: node.objectId,
-        nodeId: node.nodeId,
-        error: ""
-      };
-    }
-    var abandonedId = node.objectId;
-    var abandonedType = node.objectType;
-    var keptId = retargetInvestigationNode(inv, node, other.id);
-    var saved = saveInvestigation(inv, {
-      mode: model.isCommitted && model.isCommitted(inv) ? "commit" : "draft"
-    });
-    if (!saved.ok) {
-      blank.error = saved.error || "Could not reuse that object.";
-      return blank;
-    }
-    overlayIdentityOnto(abandonedType, abandonedId, other.id);
-    retargetObjectAcrossInvestigations(abandonedType, abandonedId, other.id);
-    dropUnreferencedObject(abandonedType, abandonedId);
-    writeDisk();
-    return {
-      ok: true,
-      reused: true,
-      objectId: other.id,
-      nodeId: keptId,
-      error: ""
-    };
+    var keptId = retargetInvestigationNode(inv, node, selected.objectId);
+    var saved = saveInvestigation(inv, { mode: model.isCommitted && model.isCommitted(inv) ? "commit" : "draft" });
+    if (!saved.ok) { return saved; }
+    // Explicitly retarget this membership only; merging canonical objects and
+    // their histories is a separate operation and never a side effect of edit.
+    return { ok: true, reused: true, objectId: selected.objectId, nodeId: keptId, error: "" };
   }
 
-  function disconnectInvestigationLink(investigationId, linkId) {
+  function disconnectInvestigationLink(investigationId, linkId, opts) {
     var blank = { ok: false, linkId: linkId || "", error: "" };
     var fresh = adoptDisk();
     if (!fresh.ok) {
@@ -9134,6 +9304,13 @@
     if (!inv) {
       blank.error = "Investigation not found.";
       return blank;
+    }
+    var selectedLink = (inv.links || []).filter(function (row) { return row && row.linkId === linkId; })[0];
+    var association = associationForLink(selectedLink);
+    if (association) {
+      var retracted = retractAssociation(association.associationId, opts || { reason: "Relationship disconnected from investigation." });
+      retracted.linkId = linkId;
+      return retracted;
     }
     var before = (inv.links || []).length;
     inv.links = (inv.links || []).filter(function (row) {
@@ -9295,7 +9472,8 @@
       var vehicle = getVehicleRecord(vehicleId);
       if (vehicle && !String(vehicle.registeredOwnerName || "").trim()) {
         vehicle.registeredOwnerName = investigationObjectLabel("PERSON", personId);
-        saveVehicleRecord(vehicle, { mode: "commit" });
+        var savedVehicle = saveVehicleRecord(vehicle, { mode: "commit" });
+        if (!savedVehicle.ok) { return savedVehicle; }
       }
     }
     return {
@@ -9350,7 +9528,7 @@
       if (!row) {
         return;
       }
-      if (!includeJunked && isJunked(row)) {
+      if (!includeJunked && (isJunked(row) || (row.meta && row.meta.archivedAt))) {
         return;
       }
       var copy = clone(row);
@@ -9617,7 +9795,7 @@
     };
   }
 
-  function removeCaseLink(leadId, linkId) {
+  function removeCaseLink(leadId, linkId, opts) {
     var blank = {
       ok: false,
       leadId: leadId || "",
@@ -9634,6 +9812,14 @@
     if (!lead) {
       blank.error = "Case not found.";
       return blank;
+    }
+    var selectedLink = (lead.links || []).filter(function (row) { return row && row.linkId === linkId; })[0];
+    var association = associationForLink(selectedLink);
+    if (association) {
+      var retracted = retractAssociation(association.associationId, opts || { reason: "Relationship removed from Case." });
+      retracted.leadId = leadId;
+      retracted.linkId = linkId;
+      return retracted;
     }
     var before = (lead.links || []).length;
     lead.links = (lead.links || []).filter(function (row) {
@@ -9707,7 +9893,7 @@
     return { ok: true, associationId: associationId, error: "" };
   }
 
-  function disconnectInvestigationAssociation(investigationId, associationId) {
+  function disconnectInvestigationAssociation(investigationId, associationId, opts) {
     var blank = {
       ok: false,
       associationId: associationId || "",
@@ -9725,6 +9911,17 @@
     if (!inv) {
       blank.error = "Investigation not found.";
       return blank;
+    }
+    var association = state.associations && state.associations[associationId];
+    if (association) {
+      var belongs = (inv.links || []).some(function (row) { return row && row.associationId === associationId; }) ||
+        (inv.nodes || []).some(function (node) { return node && associationTouches(association, node.objectType, node.objectId); });
+      if (!belongs) {
+        blank.code = "ASSOCIATION_CONTEXT_MISMATCH";
+        blank.error = "This relationship is not connected to an object in this investigation.";
+        return blank;
+      }
+      return retractAssociation(associationId, opts || { reason: "Relationship disconnected from investigation." });
     }
     var before = (inv.links || []).length;
     inv.links = (inv.links || []).filter(function (row) {
@@ -9957,128 +10154,58 @@
       rec = state.entities[objectId];
     }
     var caseSubject = type === "PERSON" && objectIsCaseSubject(objectId);
+    var protection = stage5DeleteProtection(objectType, objectId, skip);
     var referenced = objectIsReferenced(objectType, objectId, skip);
+    var archived = !!(rec && rec.meta && rec.meta.archivedAt);
     return {
-      junked: isJunked(rec),
+      junked: isJunked(rec) || archived,
+      archived: archived,
       caseSubject: caseSubject,
       referenced: referenced,
-      canJunk: !!rec && !isJunked(rec) && !caseSubject,
-      canDelete: !!rec && !caseSubject && !referenced
+      canJunk: !!rec && !isJunked(rec) && !archived && !caseSubject,
+      canDelete: !!rec && !caseSubject && protection.ok,
+      dependencies: protection.dependencies,
+      error: protection.ok ? "" : protection.error
     };
   }
 
   function junkInvestigationObject(investigationId, nodeId) {
     var blank = { ok: false, objectId: "", objectType: "", error: "" };
     var fresh = adoptDisk();
-    if (!fresh.ok) {
-      blank.error = fresh.error;
-      return blank;
-    }
-    var inv = state.investigations[investigationId]
-      ? clone(state.investigations[investigationId])
-      : null;
-    if (!inv) {
-      blank.error = "Investigation not found.";
-      return blank;
-    }
-    var node = null;
-    var i;
-    for (i = 0; i < (inv.nodes || []).length; i++) {
-      if (inv.nodes[i] && inv.nodes[i].nodeId === nodeId) {
-        node = inv.nodes[i];
-        break;
-      }
-    }
-    if (!node) {
-      blank.error = "Focus an object to junk it.";
-      return blank;
-    }
-    if (node.objectType === "PERSON" && objectIsCaseSubject(node.objectId)) {
-      blank.error = "Cannot junk a person who is a case subject.";
-      return blank;
-    }
-    var label = investigationObjectLabel(node.objectType, node.objectId) || "object";
-    if (!setRecordJunked(node.objectType, node.objectId, true)) {
-      blank.error = "Record not found.";
-      return blank;
-    }
-    setAssociationsJunkedForObject(node.objectType, node.objectId, true);
-    Object.keys(state.investigations).forEach(function (id) {
-      var row = id === investigationId ? inv : clone(state.investigations[id]);
-      stripObjectFromInvestigation(row, node.objectType, node.objectId);
-      if (id === investigationId) {
-        appendSystemNote(row, "Junked " + label + ".");
-      }
-      state.investigations[id] = row;
-    });
-    writeDisk();
-    return {
-      ok: true,
-      objectType: node.objectType,
-      objectId: node.objectId,
-      error: ""
-    };
+    if (!fresh.ok) { blank.error = fresh.error; return blank; }
+    var inv = state.investigations[investigationId];
+    var node = inv && (inv.nodes || []).filter(function (row) { return row && row.nodeId === nodeId; })[0];
+    if (!node) { blank.error = "Focus an existing object to archive it."; return blank; }
+    var archived = archiveRecord(node.objectType, node.objectId, { reason: "Archived from investigation " + investigationId + "." });
+    archived.objectType = node.objectType;
+    archived.objectId = node.objectId;
+    return archived;
   }
 
   function deleteInvestigationObject(investigationId, nodeId) {
     var blank = { ok: false, objectId: "", objectType: "", error: "" };
     var fresh = adoptDisk();
-    if (!fresh.ok) {
-      blank.error = fresh.error;
-      return blank;
-    }
-    var inv = state.investigations[investigationId]
-      ? clone(state.investigations[investigationId])
-      : null;
-    if (!inv) {
-      blank.error = "Investigation not found.";
-      return blank;
-    }
-    var node = null;
-    var i;
-    for (i = 0; i < (inv.nodes || []).length; i++) {
-      if (inv.nodes[i] && inv.nodes[i].nodeId === nodeId) {
-        node = inv.nodes[i];
-        break;
-      }
-    }
-    if (!node) {
-      blank.error = "Focus an object to delete it.";
-      return blank;
-    }
-    if (node.objectType === "PERSON" && objectIsCaseSubject(node.objectId)) {
-      blank.error = "Cannot delete a person who is a case subject.";
-      return blank;
-    }
-    if (
-      objectIsReferenced(node.objectType, node.objectId, {
-        investigationId: inv.investigationId,
-        nodeId: node.nodeId
-      })
-    ) {
-      blank.objectType = node.objectType;
-      blank.objectId = node.objectId;
-      blank.error = "Cannot delete: this record is still on another wall or a case. Junk it, or remove it from other walls first.";
-      return blank;
-    }
+    if (!fresh.ok) { blank.error = fresh.error; return blank; }
+    var inv = state.investigations[investigationId];
+    var node = inv && (inv.nodes || []).filter(function (row) { return row && row.nodeId === nodeId; })[0];
+    if (!node) { blank.error = "Focus an existing object to delete it."; return blank; }
+    if (inv.meta && inv.meta.archivedAt) { blank.error = "This investigation is archived."; return blank; }
+    var checked = stage5DeleteProtection(node.objectType, node.objectId, { investigationId: investigationId, nodeId: nodeId });
+    checked.objectType = node.objectType;
+    checked.objectId = node.objectId;
+    if (!checked.ok) { return checked; }
+    var previous = clone(state);
     var label = investigationObjectLabel(node.objectType, node.objectId) || "object";
     stripObjectFromInvestigation(inv, node.objectType, node.objectId);
     appendSystemNote(inv, "Deleted " + label + ".");
-    var saved = saveInvestigation(inv, {
-      mode: model.isCommitted && model.isCommitted(inv) ? "commit" : "draft"
-    });
-    if (!saved.ok) {
-      blank.error = saved.error || "Could not update the investigation.";
-      return blank;
+    delete state[stage5Collections[stage5Type(node.objectType)]][node.objectId];
+    inv.meta = inv.meta || {};
+    inv.meta.updatedAt = model.nowIso ? model.nowIso() : new Date().toISOString();
+    if (!writeDisk()) {
+      state = previous; checked.ok = false;
+      checked.error = "Could not delete the object. Existing records were preserved.";
     }
-    dropUnreferencedObject(node.objectType, node.objectId);
-    writeDisk();
-    return {
-      ok: true,
-      objectType: node.objectType,
-      objectId: node.objectId,
-      error: ""
-    };
+    return checked;
   }
 
   function objectKey(type, id) {
@@ -10295,34 +10422,14 @@
         error: "Discarded plates cannot be promoted."
       };
     }
-    var vehicle = plate.vehicleId ? getVehicleRecord(plate.vehicleId) : null;
-    if (!vehicle) {
-      vehicle = findVehicleByPlate(plate.state, plate.plate);
-    }
-    if (!vehicle) {
-      vehicle = model.createVehicle
-        ? model.createVehicle({
-            licensePlate: plate.plate,
-            plate: plate.plate,
-            plateState: plate.state || "",
-            governmentVehicle: false
-          })
-        : {
-            vehicleId: model.newId("veh"),
-            licensePlate: plate.plate,
-            plateState: plate.state || ""
-          };
-      var savedVeh = saveVehicleRecord(vehicle, { mode: "commit" });
-      if (!savedVeh.ok) {
-        return {
-          ok: false,
-          vehicleId: "",
-          nodeId: "",
-          error: savedVeh.error || "Could not save the vehicle."
-        };
-      }
-      vehicle = getVehicleRecord(savedVeh.vehicleId);
-    }
+    var resolution = resolveObjectRecord("VEHICLE", {
+      objectId: plate.vehicleId || (opts && opts.objectId) || "",
+      licensePlate: plate.plate,
+      plateState: plate.state || "",
+      createNew: !!(opts && opts.createNew)
+    });
+    if (!resolution.ok) { return { ok: false, vehicleId: "", nodeId: "", code: resolution.code, candidates: resolution.candidates, error: resolution.error }; }
+    var vehicle = resolution.record;
     var vehicleId = vehicle.vehicleId || vehicle.id;
     opts = opts || {};
     var node = ensureInvestigationNode(inv, "VEHICLE", vehicleId, {
@@ -10385,7 +10492,354 @@
       });
   }
 
+  // Stage 5: dependency inspection uses stored identifiers, including historical
+  // snapshots. It never repairs records or guesses identity from display text.
+  function stage5Type(type) {
+    var value = String(type || "").trim().toUpperCase();
+    return ({ CASE: "LEAD", ADDRESS: "LOCATION", BOOKIN: "BOOKING", PHOTO: "MEDIA" })[value] || value;
+  }
+
+  var stage5Collections = {
+    PERSON: "people", LEAD: "leads", ENCOUNTER: "encounters",
+    INVESTIGATION: "investigations", VEHICLE: "vehicles", LOCATION: "locations",
+    BUSINESS: "businesses", ENTITY: "entities", ASSOCIATION: "associations", OPERATION: "operations"
+  };
+  var stage5IdFields = {
+    PERSON: ["personId", "personIds", "subjectPersonId", "targetPersonId", "ownerPersonId"],
+    LEAD: ["leadId", "leadIds", "caseId", "caseIds", "sourceLeadId", "parentLeadId"],
+    ENCOUNTER: ["encounterId", "encounterIds", "sourceEncounterId"],
+    INVESTIGATION: ["investigationId", "investigationIds", "parentInvestigationId", "sourceInvestigationId"],
+    VEHICLE: ["vehicleId", "vehicleIds", "assignedVehicleId", "fleetVehicleId"],
+    LOCATION: ["locationId", "locationIds", "addressId", "addressIds", "arrestLocationId", "targetLocationId", "centerLocationId"],
+    BUSINESS: ["businessId", "businessIds"], ENTITY: ["entityId", "entityIds"],
+    OPERATION: ["operationId", "operationIds", "opId"],
+    ASSOCIATION: ["associationId", "associationIds"],
+    OFFICER: ["officerId", "officerIds", "assignedOfficerId", "primaryOfficerId", "arrestingOfficerId", "caseOfficerId"],
+    BOOKING: ["bookingId", "bookingIds", "bookinRecordId", "bookinRecordIds", "voidedBookingId"],
+    ENCOUNTER_SUBJECT: ["subjectId", "subjectIds", "focusSubjectId", "encounterParticipantId"],
+    MEDIA: ["mediaId", "mediaIds", "photoId", "photoIds", "primaryPhotoId", "primaryMediaId", "headshotMediaId", "photoMediaId", "attachmentId", "attachmentIds"]
+  };
+
+  function stage5Object(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function stage5DependencyScan(type, id, data, skip) {
+    type = stage5Type(type);
+    id = storeSubjectText(id);
+    skip = skip || {};
+    var result = { ok: true, type: type, id: id, dependencies: [], error: "" };
+    var seen = Object.create(null);
+    var fields = stage5IdFields[type];
+    if (!fields || !id) {
+      result.ok = false;
+      result.error = "A supported object type and identifier are required.";
+      return result;
+    }
+    function add(store, recordType, recordId, path, reason) {
+      var key = [store, recordType, recordId, path].join("|");
+      if (seen[key]) { return; }
+      seen[key] = true;
+      result.dependencies.push({ store: store, recordType: recordType, recordId: String(recordId || ""), path: path, reason: reason || "Stored reference" });
+    }
+    function walk(value, path, store, recordType, recordId, depth) {
+      if (!value || typeof value !== "object") { return; }
+      if (depth > 80) { throw new Error("Dependency data is too deeply nested to verify."); }
+      if (Array.isArray(value)) {
+        value.forEach(function (row, index) { walk(row, path + "[" + index + "]", store, recordType, recordId, depth + 1); });
+        return;
+      }
+      if (recordType === "INVESTIGATION" && String(recordId) === String(skip.investigationId || "") &&
+          value.nodeId && value.nodeId === skip.nodeId && /\.nodes\[\d+\]$/.test(path)) { return; }
+      var endpointType = stage5Type(value.type || value.objectType || value.entityType || value.ownerType);
+      if (endpointType === type) {
+        ["id", "objectId", "ownerId"].forEach(function (field) {
+          if (storeSubjectText(value[field]) === id) { add(store, recordType, recordId, path + "." + field); }
+        });
+      }
+      Object.keys(value).forEach(function (field) {
+        var next = value[field];
+        if (fields.indexOf(field) !== -1) {
+          if (Array.isArray(next)) {
+            next.forEach(function (reference, index) {
+              if (typeof reference !== "object" && storeSubjectText(reference) === id) { add(store, recordType, recordId, path + "." + field + "[" + index + "]"); }
+            });
+          } else if (typeof next !== "object" && storeSubjectText(next) === id) {
+            add(store, recordType, recordId, path + "." + field);
+          }
+        }
+        walk(next, path + "." + field, store, recordType, recordId, depth + 1);
+      });
+    }
+    try {
+      if (!stage5Object(data)) { throw new Error("Workspace storage is malformed."); }
+      Object.keys(stage5Collections).forEach(function (recordType) {
+        var collection = stage5Collections[recordType];
+        if (data[collection] === undefined) { return; }
+        if (!stage5Object(data[collection])) { throw new Error("Workspace " + collection + " storage is malformed."); }
+        Object.keys(data[collection]).forEach(function (recordId) {
+          var record = data[collection][recordId];
+          if (!stage5Object(record)) { throw new Error("Workspace " + collection + " record " + recordId + " is malformed."); }
+          if (recordType === type && recordId === id) { return; }
+          walk(record, collection + "." + recordId, STORAGE_KEY, recordType, recordId, 0);
+        });
+      });
+      var sources = [
+        { id: "bookin", key: "alien-book-in.saved-records.v1", medium: "localStorage" },
+        { id: "admin", key: "copdoc.admin.v1", medium: "localStorage" },
+        { id: "bookingTransactions", key: "copdocx.booking-transactions.v1", medium: "localStorage" }
+      ];
+      if (root.config && Array.isArray(root.config.storageEntries)) {
+        root.config.storageEntries.forEach(function (entry) {
+          if (entry.id !== "workspace" && (entry.medium === "localStorage" || entry.medium === "sessionStorage") &&
+              sources.every(function (source) { return source.id !== entry.id; })) { sources.push(entry); }
+        });
+      }
+      sources.forEach(function (source) {
+        var storage = source.medium === "sessionStorage" ? global.sessionStorage : global.localStorage;
+        if (!storage) { return; }
+        var key = root.config && root.config.storageKey(source.id) || source.key;
+        var raw = storage.getItem(key);
+        if (raw === null) { return; }
+        // These preferences are deliberately plain text, not record containers.
+        if (["mapBasemap", "importDoneSignal"].indexOf(source.id) !== -1) { return; }
+        var value;
+        try { value = JSON.parse(raw); } catch (parseError) { throw new Error("Cannot verify dependencies in " + key + "."); }
+        if (source.id === "bookin") {
+          if (!Array.isArray(value)) { throw new Error("Book-In storage is malformed."); }
+          value.forEach(function (row, index) {
+            if (!stage5Object(row) || !storeSubjectText(row.id)) { throw new Error("Book-In record identity is malformed."); }
+            if (type === "BOOKING" && storeSubjectText(row.id) === id) { return; }
+            walk(row, "records[" + index + "]", key, "BOOKING", row.id, 0);
+          });
+        } else if (source.id === "bookingTransactions") {
+          if (!stage5Object(value) || !stage5Object(value.transactions)) { throw new Error("Booking recovery journal is malformed."); }
+          Object.keys(value.transactions).forEach(function (transactionId) {
+            walk(value.transactions[transactionId], "transactions." + transactionId, key, "BOOKING_TRANSACTION", transactionId, 0);
+          });
+        } else if (source.id === "admin") {
+          if (!stage5Object(value)) { throw new Error("Admin storage is malformed."); }
+          ["officers", "vehicles", "shifts"].forEach(function (collection) {
+            if (value[collection] !== undefined && !Array.isArray(value[collection])) {
+              throw new Error("Admin " + collection + " storage is malformed.");
+            }
+          });
+          Object.keys(value).forEach(function (collection) {
+            var entries = value[collection];
+            if (Array.isArray(entries)) {
+              entries.forEach(function (row, index) {
+                var recordType = collection === "officers" ? "OFFICER" : collection === "vehicles" ? "FLEET_VEHICLE" : "ADMIN";
+                var recordId = row && (row.officerId || row.vehicleId || row.id) || String(index);
+                if (recordType === type && String(recordId) === id) { return; }
+                walk(row, collection + "[" + index + "]", key, recordType, recordId, 0);
+              });
+            } else { walk(entries, collection, key, "ADMIN", collection, 0); }
+          });
+        } else { walk(value, source.id, key, source.id.toUpperCase(), source.id, 0); }
+      });
+    } catch (error) {
+      result.ok = false;
+      result.error = String(error.message || error) + " Existing records were preserved.";
+    }
+    result.dependencies.sort(function (a, b) {
+      return [a.store, a.recordType, a.recordId, a.path].join("|").localeCompare([b.store, b.recordType, b.recordId, b.path].join("|"));
+    });
+    return result;
+  }
+
+  function dependenciesFor(type, id) {
+    var disk = readDisk();
+    if (!disk.ok) { return { ok: false, type: stage5Type(type), id: storeSubjectText(id), dependencies: [], error: disk.error }; }
+    return stage5DependencyScan(type, id, disk.data || state);
+  }
+
+  function stage5DependencyError(result) {
+    var labels = [];
+    (result.dependencies || []).forEach(function (row) {
+      var label = row.recordType + " " + row.recordId;
+      if (labels.indexOf(label) === -1) { labels.push(label); }
+    });
+    return "Cannot delete: referenced by " + labels.join(", ") + ". Archive the record or review these dependencies.";
+  }
+
+  function stage5DeleteProtection(type, id, skip) {
+    type = stage5Type(type);
+    var inspection = stage5DependencyScan(type, id, state, skip);
+    if (!inspection.ok) { inspection.code = "DEPENDENCIES_UNVERIFIED"; return inspection; }
+    if (inspection.dependencies.length) {
+      inspection.ok = false;
+      inspection.code = "DEPENDENCIES_EXIST";
+      inspection.error = stage5DependencyError(inspection);
+      return inspection;
+    }
+    var row = state[stage5Collections[type]] && state[stage5Collections[type]][id];
+    var historic = row && (row.meta && (row.meta.status !== "draft" || row.meta.committedAt || row.meta.markedComplete || row.meta.completedAt || row.meta.archivedAt) ||
+      !row.meta || row.voidedAt || (Array.isArray(row.arrests) && row.arrests.length) || (Array.isArray(row.encounters) && row.encounters.length) ||
+      (Array.isArray(row.warrants) && row.warrants.length) || (Array.isArray(row.documents) && row.documents.length) ||
+      (Array.isArray(row.narratives) && row.narratives.length) || (Array.isArray(row.subjectIdentityHistory) && row.subjectIdentityHistory.length) ||
+      (Array.isArray(row.bookingIdentityHistory) && row.bookingIdentityHistory.length));
+    if (historic) {
+      inspection.ok = false;
+      inspection.code = "RECORD_FILED";
+      inspection.dependencies.push({ store: STORAGE_KEY, recordType: type, recordId: String(id), path: "meta", reason: "Filed or historical record" });
+      inspection.error = "Cannot delete " + type + " " + id + ": filed or historical records must be archived.";
+    }
+    return inspection;
+  }
+
+  function archiveRecord(type, id, input) {
+    type = stage5Type(type);
+    id = storeSubjectText(id);
+    input = input || {};
+    var result = { ok: false, type: type, id: id, dependencies: [], error: "" };
+    var reason = storeSubjectText(input.reason);
+    if (!stage5Collections[type] || !id || !reason) { result.error = "An object type, identifier, and archive reason are required."; return result; }
+    var fresh = adoptDisk();
+    if (!fresh.ok) { result.error = fresh.error; return result; }
+    var row = state[stage5Collections[type]] && state[stage5Collections[type]][id];
+    if (!row) { result.error = "Record not found."; return result; }
+    var inspection = stage5DependencyScan(type, id, state);
+    if (!inspection.ok) { return inspection; }
+    result.dependencies = inspection.dependencies;
+    if (row.meta && row.meta.archivedAt) {
+      result.ok = true; result.archivedAt = row.meta.archivedAt; result.alreadyArchived = true; return result;
+    }
+    var previous = clone(state);
+    var now = model.nowIso ? model.nowIso() : new Date().toISOString();
+    row.meta = row.meta || {};
+    row.meta.archivedAt = now;
+    row.meta.archiveReason = reason;
+    row.meta.updatedAt = now;
+    if (type === "ENCOUNTER") { row.meta.encounterRevision = Number(row.meta.encounterRevision || 0) + 1; }
+    if (!writeDisk()) { state = previous; result.error = "Could not persist the archive. Existing records were preserved."; return result; }
+    result.ok = true; result.archivedAt = now;
+    return result;
+  }
+
+  function voidBookingProjection(input, options) {
+    input = input || {};
+    options = options || {};
+    var validateOnly = input.validateOnly === true || options.validateOnly === true;
+    var bookingId = storeSubjectText(input.bookingId);
+    var transactionId = storeSubjectText(input.transactionId);
+    var reason = storeSubjectText(input.reason);
+    var result = { ok: false, bookingId: bookingId, dependencies: [], error: "", alreadyVoided: false };
+    function fail(code, message) { result.code = code; result.error = message; return result; }
+    if (!bookingId || !reason || (!transactionId && !validateOnly)) {
+      return fail("BOOKING_VOID_INPUT", "Booking, void transaction, and reason are required.");
+    }
+    var resolved = resolveBookInBooking(bookingId);
+    if (!resolved.ok || !resolved.found) { return fail("BOOKING_VOID_IDENTITY", resolved.error || "The booking has no canonical Arrest to void."); }
+    var conflict = ["personId", "leadId", "arrestId", "subjectId", "encounterId"].some(function (field) {
+      result[field] = resolved[field];
+      return Object.prototype.hasOwnProperty.call(input, field) && storeSubjectText(input[field]) !== storeSubjectText(resolved[field]);
+    });
+    if (conflict) { return fail("BOOKING_VOID_IDENTITY", "Supplied identifiers disagree with the canonical booking ownership."); }
+    var fresh = adoptDisk();
+    if (!fresh.ok) { return fail("BOOKING_VOID_UNVERIFIED", fresh.error); }
+    var inspection = stage5DependencyScan("BOOKING", bookingId, state);
+    if (!inspection.ok) { return fail("BOOKING_VOID_UNVERIFIED", inspection.error); }
+    var person = state.people[resolved.personId];
+    var lead = state.leads[resolved.leadId];
+    var arrest = (person.arrests || []).filter(function (row) { return row.arrestId === resolved.arrestId; })[0];
+    if (!arrest) { return fail("BOOKING_VOID_IDENTITY", "The canonical Arrest disappeared before voiding."); }
+    if (arrest.voidedAt) {
+      if (arrest.voidTransactionId !== transactionId || arrest.voidReason !== reason) {
+        return fail("BOOKING_ALREADY_VOIDED", "This booking was already voided by a different command. Its audit history was preserved.");
+      }
+      result.ok = true; result.alreadyVoided = true;
+      result.voidedAt = arrest.voidedAt; result.voidReason = arrest.voidReason;
+      result.voidTransactionId = arrest.voidTransactionId;
+      return result;
+    }
+    try {
+      var journalKey = root.config && root.config.storageKey("bookingTransactions") || "copdocx.booking-transactions.v1";
+      var journalRaw = global.localStorage && global.localStorage.getItem(journalKey);
+      var journalRows = journalRaw ? JSON.parse(journalRaw).transactions : {};
+      Object.keys(journalRows || {}).forEach(function (id) {
+        var command = journalRows[id];
+        if (command && storeSubjectText(command.bookingId) === bookingId && command.status !== "COMPLETED" && id !== transactionId) {
+          result.dependencies.push({ store: journalKey, recordType: "BOOKING_TRANSACTION", recordId: id, path: "transactions." + id, reason: "Unfinished booking command" });
+        }
+      });
+    } catch (journalError) { return fail("BOOKING_VOID_UNVERIFIED", "Cannot verify pending booking commands."); }
+    var encounter = resolved.encounterId ? state.encounters[resolved.encounterId] : null;
+    var subject = null;
+    if (resolved.encounterId || resolved.subjectId) {
+      if (!encounter || !Array.isArray(encounter.subjects)) { return fail("BOOKING_VOID_IDENTITY", "The booking Encounter or subject roster is missing."); }
+      var subjects = encounter.subjects.filter(function (row) { return storeSubjectId(row) === resolved.subjectId; });
+      if (subjects.length !== 1 || storeSubjectText(subjects[0].personId) !== resolved.personId ||
+          (storeSubjectText(subjects[0].leadId) && storeSubjectText(subjects[0].leadId) !== resolved.leadId)) {
+        return fail("BOOKING_VOID_IDENTITY", "The booking has no exact Encounter subject owner.");
+      }
+      subject = subjects[0];
+      var bookingClaims = [subject.bookingId, subject.bookinRecordId].map(storeSubjectText).filter(function (value, index, values) { return value && values.indexOf(value) === index; });
+      if (bookingClaims.length !== 1 || bookingClaims[0] !== bookingId) { return fail("BOOKING_VOID_IDENTITY", "The subject booking link has changed. Review it before voiding."); }
+      if (encounter.meta && (encounter.meta.markedComplete || encounter.meta.archivedAt)) {
+        result.dependencies.push({ store: STORAGE_KEY, recordType: "ENCOUNTER", recordId: encounter.encounterId, path: "encounters." + encounter.encounterId + ".meta", reason: "Completed or archived Encounter" });
+      }
+      function finalized(value, path) {
+        if (!value || typeof value !== "object") { return; }
+        if (value.workflowStatus === "FINALIZED") {
+          result.dependencies.push({ store: STORAGE_KEY, recordType: "NARRATIVE", recordId: value.narrativeId || value.id || encounter.encounterId,
+            path: path, reason: "Finalized narrative depends on the Encounter source" });
+          return;
+        }
+        Object.keys(value).forEach(function (key) { finalized(value[key], path + "." + key); });
+      }
+      finalized(encounter.narratives, "encounters." + encounter.encounterId + ".narratives");
+      finalized(encounter.narrativesInitial, "encounters." + encounter.encounterId + ".narrativesInitial");
+    }
+    if (result.dependencies.length) {
+      return fail("BOOKING_VOID_DEPENDENCIES", "Cannot void booking: " + result.dependencies.map(function (row) {
+        return row.recordType + " " + row.recordId + " (" + row.reason + ")";
+      }).join(", ") + ".");
+    }
+    result.voidedAt = storeSubjectText(input.voidedAt) || (model.nowIso ? model.nowIso() : new Date().toISOString());
+    result.voidReason = reason; result.voidTransactionId = transactionId;
+    if (validateOnly) { result.ok = true; return result; }
+    var previous = clone(state);
+    var audit = { bookingId: bookingId, voidedAt: result.voidedAt, reason: reason, transactionId: transactionId };
+    function markArrest(row) {
+      if (row && row.arrestId === resolved.arrestId) {
+        row.voidedAt = result.voidedAt; row.voidReason = reason; row.voidTransactionId = transactionId;
+      }
+    }
+    (person.arrests || []).forEach(markArrest);
+    var leadPerson = model.subjectOf ? model.subjectOf(lead) : lead.person;
+    (leadPerson && leadPerson.arrests || []).forEach(markArrest);
+    [person, leadPerson].forEach(function (row) {
+      (row && row.encounters || []).forEach(function (event) {
+        if (event && storeSubjectText(event.encounterId) === resolved.encounterId &&
+            (storeSubjectId(event) === resolved.subjectId || storeSubjectBookingId(event) === bookingId)) { event.bookingVoid = clone(audit); }
+      });
+    });
+    lead.history = Array.isArray(lead.history) ? lead.history : [];
+    lead.history.forEach(function (row) {
+      if (storeSubjectBookingId(row) === bookingId) { row.voidedAt = result.voidedAt; row.voidReason = reason; row.voidTransactionId = transactionId; }
+    });
+    lead.history.push({ type: "BOOKING_VOIDED", eventId: "booking_void_" + transactionId, voidedBookingId: bookingId,
+      arrestId: resolved.arrestId, subjectId: resolved.subjectId, encounterId: resolved.encounterId,
+      voidedAt: result.voidedAt, voidReason: reason, voidTransactionId: transactionId });
+    if (subject) {
+      var retired = clone(subject);
+      retired.bookingUnlinked = true; retired.removedAt = result.voidedAt; retired.bookingVoid = clone(audit);
+      encounter.bookingIdentityHistory = Array.isArray(encounter.bookingIdentityHistory) ? encounter.bookingIdentityHistory : [];
+      encounter.bookingIdentityHistory.push(retired);
+      subject.bookingId = ""; subject.bookinRecordId = "";
+      subject.packetFiledAt = ""; subject.docsGeneratedAt = ""; subject.bookingVoid = clone(audit);
+      encounter.meta = encounter.meta || {}; encounter.meta.updatedAt = result.voidedAt;
+      encounter.meta.encounterRevision = Number(encounter.meta.encounterRevision || 0) + 1;
+    }
+    if (!writeDisk()) { state = previous; return fail("BOOKING_VOID_WRITE_FAILED", "Could not persist the void. Existing records were preserved."); }
+    result.ok = true;
+    return result;
+  }
+
   model.store = {
+    voidBookingProjection: voidBookingProjection,
+    dependenciesFor: dependenciesFor,
+    archiveRecord: archiveRecord,
     STORAGE_KEY: STORAGE_KEY,
     loadFromDisk: loadFromDisk,
     saveLead: saveLead,
@@ -10393,8 +10847,8 @@
     listLeads: listLeads,
     listArrests: listArrests,
     relatedCommittedCases: relatedCommittedCases,
-    promoteAssociateToCase: promoteAssociateToCase,
-    promoteInvestigationPersonToCase: promoteInvestigationPersonToCase,
+    promoteAssociateToCase: atomicWorkspaceMutation(promoteAssociateToCase),
+    promoteInvestigationPersonToCase: atomicWorkspaceMutation(promoteInvestigationPersonToCase),
     promoteBookInToLead: promoteBookInToLead,
     bookInPromotionInput: bookInPromotionInput,
     promoteBookInRecord: promoteBookInRecord,
@@ -10409,6 +10863,7 @@
     mergeEncounterSubjects: mergeEncounterSubjectsForStore,
     validateEncounterSubjectRoster: validateEncounterSubjectRoster,
     saveEncounter: saveEncounter,
+    saveEncounterWithObjects: atomicWorkspaceMutation(saveEncounterWithObjects),
     unlinkEncounterSubjectBooking: unlinkEncounterSubjectBooking,
     updateEncounter: updateEncounter,
     unlockEncounter: unlockEncounter,
@@ -10456,8 +10911,10 @@
     getObjectRecord: getObjectRecord,
     saveObjectRecord: saveObjectRecord,
     resolveObjectRecord: resolveObjectRecord,
-    promoteInvestigationPlate: promoteInvestigationPlate,
-    addInvestigationObject: addInvestigationObject,
+    resolveObjectIdentity: resolveObjectIdentity,
+    validateObjectWorkspace: validateObjectWorkspace,
+    promoteInvestigationPlate: atomicWorkspaceMutation(promoteInvestigationPlate),
+    addInvestigationObject: atomicWorkspaceMutation(addInvestigationObject),
     connectInvestigationNodes: connectInvestigationNodes,
     upsertAssociation: upsertAssociation,
     saveAssociationRecord: saveAssociationRecord,
@@ -10468,10 +10925,14 @@
     associationIntegrity: associationIntegrity,
     reuseInvestigationIdentity: reuseInvestigationIdentity,
     disconnectInvestigationLink: disconnectInvestigationLink,
-    associateInvestigationPerson: associateInvestigationPerson,
-    associateInvestigationObject: associateInvestigationObject,
-    associateCaseObject: associateCaseObject,
+    associateInvestigationPerson: atomicWorkspaceMutation(associateInvestigationPerson),
+    associateInvestigationObject: atomicWorkspaceMutation(associateInvestigationObject),
+    associateCaseObject: atomicWorkspaceMutation(associateCaseObject),
     dropAssociation: dropAssociation,
+    retractAssociation: retractAssociation,
+    endAssociation: endAssociation,
+    reassertAssociation: reassertAssociation,
+    removeObjectRelationship: removeObjectRelationship,
     removeCaseLink: removeCaseLink,
     listObjects: listObjects,
     setInvestigationAssociationReason: setInvestigationAssociationReason,

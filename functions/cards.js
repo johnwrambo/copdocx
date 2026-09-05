@@ -632,6 +632,32 @@ function updateCardTitles(list, title, allowEmpty) {
   syncEmptyAddButton(list);
 }
 
+// Removing a saved object card retracts its relationship before removing the
+// projection. The canonical Person/Vehicle/Location and its Media remain.
+function retractCardRelationship(card) {
+  var m = window.COPDoc && COPDoc.model;
+  var store = m && m.store;
+  if (!card || !card.dataset.entityId || !store || !store.removeObjectRelationship) return { ok: true };
+  var kind = String(card.getAttribute("data-card") || "").toLowerCase();
+  var otherType = /vehicle/.test(kind) ? "VEHICLE" : /location|address/.test(kind) ? "LOCATION" : "";
+  if (!otherType) return { ok: true };
+  // Encounter membership is owned by its aggregate and saved by its controller.
+  if (/encounter/.test(kind) || (document.body && /encounter/.test(document.body.getAttribute("data-page") || ""))) return { ok: true };
+  var parentCard = card.parentElement && card.parentElement.closest && card.parentElement.closest("[data-card]");
+  var ownerType = parentCard && /vehicle/i.test(parentCard.getAttribute("data-card") || "") ? "VEHICLE" : "PERSON";
+  var personCard = document.querySelector('[data-card="lead"]');
+  var ownerId = ownerType === "VEHICLE" ? parentCard.dataset.entityId : personCard && personCard.dataset.entityId;
+  if (!ownerId && ownerType === "PERSON" && store.getLead) {
+    var leadId = new URLSearchParams(window.location.search || "").get("id");
+    var lead = leadId && store.getLead(leadId);
+    var person = lead && (m.subjectOf ? m.subjectOf(lead) : lead.person);
+    ownerId = person && person.personId;
+  }
+  if (!ownerId || (store.getObjectRecord && !store.getObjectRecord(ownerType, ownerId))) return { ok: true };
+  var result = store.removeObjectRelationship(ownerType, ownerId, otherType, card.dataset.entityId, { mode: "retract", reason: "Relationship removed from its object card" });
+  return result || { ok: false, error: "Could not remove the relationship." };
+}
+
 function addRepeatableCard(options) {
   var list = options.list;
   var template = options.template;
@@ -696,6 +722,11 @@ function addRepeatableCard(options) {
           if (!ok) {
             return;
           }
+        }
+        var removed = retractCardRelationship(card);
+        if (!removed.ok) {
+          if (window.COPDoc && COPDoc.setAppBarStatus) COPDoc.setAppBarStatus(removed.error || "Could not remove the relationship.");
+          return;
         }
         card.remove();
         updateCardTitles(list, title, allowEmpty);

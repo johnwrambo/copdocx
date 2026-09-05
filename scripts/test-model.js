@@ -71,6 +71,15 @@ function check(label, ok, extra) {
   }
 }
 
+// Old exports may already contain duplicate identities. Seed those durable
+// fixtures explicitly so compatibility checks do not depend on current minting rules.
+function seedLegacyStoredRecord(collection, id, record) {
+  var stored = JSON.parse(context.localStorage.getItem("copdocx.store.v1"));
+  stored[collection][id] = JSON.parse(JSON.stringify(record));
+  context.localStorage.setItem("copdocx.store.v1", JSON.stringify(stored));
+  model.store.loadFromDisk();
+}
+
 var blank = model.createLeadSnapshot();
 check("schema id", blank.schema === "copdocx.lead.v1");
 check("subject exists", !!blank.subjectPersonId && !!blank.person);
@@ -1135,13 +1144,18 @@ var doomedEnc = model.createEncounterRecord({
 model.store.saveEncounter(doomedEnc, { mode: "commit" });
 var doomedId = doomedEnc.encounterId;
 check(
-  "deleteEncounter ok",
-  model.store.deleteEncounter(doomedId).ok === true
+  "filed Encounter deletion is blocked",
+  model.store.deleteEncounter(doomedId).ok === false && !!model.store.getEncounter(doomedId)
 );
-check("deleteEncounter removes the row", !model.store.getEncounter(doomedId));
+check("filed Encounter can be archived with its identity retained",
+  model.store.archiveRecord("ENCOUNTER", doomedId, { reason: "Unused filed fixture" }).ok === true &&
+  !!model.store.getEncounter(doomedId).meta.archivedAt);
+var disposableEncounter = model.createEncounterRecord({ team: "3", existingIds: (model.store.listEncounters() || []).map(function (row) { return row.encounterId; }) });
+check("unused Encounter draft saves", model.store.saveEncounter(disposableEncounter, { mode: "draft" }).ok === true);
+check("unused Encounter draft deletes", model.store.deleteEncounter(disposableEncounter.encounterId).ok === true && !model.store.getEncounter(disposableEncounter.encounterId));
 check(
   "deleteEncounter missing is not ok",
-  model.store.deleteEncounter(doomedId).ok === false
+  model.store.deleteEncounter(disposableEncounter.encounterId).ok === false
 );
 
 var completeEnc = model.createEncounterRecord({
@@ -1550,7 +1564,7 @@ check(
 var fullCase = model.createLeadSnapshot();
 fullCase.person.name.lastName = "FULL";
 fullCase.person.name.firstName = "AUDIT";
-fullCase.person.lexId = "LEX-9";
+fullCase.person.lexId = "LEX-FULL-9";
 fullCase.person.citizenship = "MX";
 fullCase.person.locations = [
   model.createLocation({
@@ -1673,7 +1687,7 @@ check(
   "case patch keeps deportation date",
   afterPerson.immigration.firstDeportationDate === "2019-01-01"
 );
-check("case patch keeps lexId", afterPerson.lexId === "LEX-9");
+check("case patch keeps lexId", afterPerson.lexId === "LEX-FULL-9");
 check("case patch keeps fbiNumber", afterPerson.criminal.fbiNumber === "123456A");
 check("case patch keeps derived criminal", afterPerson.criminal.isCriminal === true);
 check(
@@ -1689,7 +1703,9 @@ check(
   afterPatch.links.some(function (row) {
     return (
       row.from &&
-      row.from.type === "VEHICLE" &&
+      row.to &&
+      [row.from.id, row.to.id].indexOf(auditVehicle.vehicleId) !== -1 &&
+      [row.from.id, row.to.id].indexOf(fullCase.subjectPersonId) !== -1 &&
       row.notes === "Title name differs"
     );
   })
@@ -2022,6 +2038,7 @@ check(
 );
 
 var bookinNew = model.store.promoteBookInToLead({
+  createNew: true,
   lastName: "GARCIA",
   firstName: "LUIS",
   sex: "Male",
@@ -2191,7 +2208,7 @@ var schema3BookinRecord = {
   formState: {
     first_name: { type: "text", value: "MARTA", checked: false },
     last_name: { type: "text", value: "SILVA", checked: false },
-    a_number: { type: "text", value: "123456789", checked: false },
+    a_number: { type: "text", value: "123456782", checked: false },
     fbi_number: { type: "text", value: "FBI-7788", checked: false },
     date_of_birth: { type: "date", value: "1988-04-12", checked: false },
     gender: { type: "radio", value: "Female", checked: false },
@@ -2556,11 +2573,12 @@ var addRoAgain = model.store.addInvestigationObject(invPlate.investigationId, {
   })[0].nodeId,
   objectType: "PERSON",
   name: "Vennweb, Platecheck",
+  objectId: addRo.objectId,
   reason: "REGISTERED_OWNER_OF"
 });
 var afterRoAgain = model.store.getInvestigation(invPlate.investigationId);
 check(
-  "reuse person by name",
+  "reuse an explicitly selected Person",
   addRoAgain.ok && addRoAgain.reused && addRoAgain.objectId === addRo.objectId
 );
 check("reuse person does not duplicate link", afterRoAgain.links.length === 1);
@@ -2976,13 +2994,14 @@ var reuseRec = model.store.getVehicleRecord(reuseB.objectId);
 reuseRec.licensePlate = "WALL1";
 reuseRec.plate = "WALL1";
 reuseRec.plateState = "TX";
-model.store.saveVehicleRecord(reuseRec, { mode: "commit" });
+seedLegacyStoredRecord("vehicles", reuseRec.vehicleId, reuseRec);
 var reused = model.store.reuseInvestigationIdentity(
   eliteChild.investigationId,
-  reuseB.nodeId
+  reuseB.nodeId,
+  reuseA.objectId
 );
 check(
-  "reuse vehicle by plate",
+  "explicitly select the retained vehicle identity",
   reused.ok && reused.reused && reused.objectId === reuseA.objectId
 );
 var afterReuse = model.store.getInvestigation(eliteChild.investigationId);
@@ -2991,8 +3010,8 @@ var wall1Nodes = afterReuse.nodes.filter(function (row) {
 });
 check("reuse collapses duplicate vehicle node", wall1Nodes.length === 1);
 check(
-  "reuse drops abandoned vehicle record",
-  !model.store.getVehicleRecord(reuseB.objectId)
+  "membership replacement retains the prior canonical vehicle",
+  !!model.store.getVehicleRecord(reuseB.objectId)
 );
 var wallIntegrity = model.store.investigationIntegrity(eliteChild.investigationId);
 check("wall integrity after reuse", wallIntegrity.ok);
@@ -3014,15 +3033,16 @@ var crossRec = model.store.getVehicleRecord(crossEmpty.objectId);
 crossRec.licensePlate = "XWALL9";
 crossRec.plate = "XWALL9";
 crossRec.plateState = "TX";
-model.store.saveVehicleRecord(crossRec, { mode: "commit" });
+seedLegacyStoredRecord("vehicles", crossRec.vehicleId, crossRec);
 var crossReuse = model.store.reuseInvestigationIdentity(
   childInv.investigationId,
-  crossEmpty.nodeId
+  crossEmpty.nodeId,
+  crossPlate.objectId
 );
 var childAfterCross = model.store.getInvestigation(childInv.investigationId);
 var parentAfterCross = model.store.getInvestigation(eliteChild.investigationId);
 check(
-  "reuse retargets sibling walls to kept id",
+  "explicit replacement changes the selected wall while retaining the sibling membership",
   crossReuse.ok &&
     crossReuse.reused &&
     crossReuse.objectId === crossPlate.objectId &&
@@ -3034,8 +3054,8 @@ check(
     })
 );
 check(
-  "reuse drops loser used on another wall",
-  !model.store.getVehicleRecord(crossEmpty.objectId)
+  "membership replacement retains the other canonical record",
+  !!model.store.getVehicleRecord(crossEmpty.objectId)
 );
 
 var cutId = (afterReuse.links[0] && afterReuse.links[0].linkId) || "";
@@ -3095,11 +3115,12 @@ check(
 );
 var bizDup = model.store.addInvestigationObject(eliteChild.investigationId, {
   objectType: "BUSINESS",
+  objectId: bizAdd.objectId,
   name: "Acme Towing",
   fromNodeId: ""
 });
 check(
-  "reuse business by name",
+  "reuse an explicitly selected business",
   bizDup.ok && bizDup.reused && bizDup.objectId === bizAdd.objectId
 );
 var entAdd = model.store.addInvestigationObject(eliteChild.investigationId, {
@@ -3355,8 +3376,8 @@ check(
 );
 var rapLead = model.store.getLead(rapCase.leadId);
 check(
-  "promote wall person case stays identity-only",
-  rapLead && (rapLead.person.arrests || []).length === 0
+  "promote wall person case retains canonical Person history",
+  rapLead && (rapLead.person.arrests || []).some(function (row) { return row.arrestId === "arr_wall"; })
 );
 
 var childBeforeClear = model.store.getInvestigation(childInv.investigationId);
@@ -3406,12 +3427,12 @@ var junked = model.store.junkInvestigationObject(
 );
 var junkRec = model.store.getVehicleRecord(junkAdd.objectId);
 check(
-  "junk keeps record and marks junked",
-  junked.ok && junkRec && junkRec.junked
+  "archive keeps record and stamps archive history",
+  junked.ok && junkRec && junkRec.meta.archivedAt
 );
 check(
-  "junk removes from this wall",
-  !model.store.getInvestigation(eliteChild.investigationId).nodes.some(function (row) {
+  "archive retains the historical wall membership",
+  model.store.getInvestigation(eliteChild.investigationId).nodes.some(function (row) {
     return row.objectId === junkAdd.objectId;
   })
 );
@@ -3426,11 +3447,8 @@ var junkRestore = model.store.addInvestigationObject(eliteChild.investigationId,
   fromNodeId: ""
 });
 check(
-  "placing junked plate restores same vehicle",
-  junkRestore.ok &&
-    junkRestore.reused &&
-    junkRestore.objectId === junkAdd.objectId &&
-    !model.store.getVehicleRecord(junkAdd.objectId).junked
+  "adding an archived plate requires explicit restoration",
+  !junkRestore.ok && !!model.store.getVehicleRecord(junkAdd.objectId).meta.archivedAt
 );
 var delAdd = model.store.addInvestigationObject(eliteChild.investigationId, {
   objectType: "LOCATION",
@@ -3445,10 +3463,14 @@ var deleted = model.store.deleteInvestigationObject(
   delAdd.nodeId
 );
 check(
-  "delete unreferenced record",
-  deleted.ok && !model.store.getLocationRecord(delAdd.objectId)
+  "filed object deletion is blocked even with a single wall membership",
+  !deleted.ok && !!model.store.getLocationRecord(delAdd.objectId)
 );
-var casePerson = model.store.getLead(openedWallCase.leadId);
+var caseArchiveFixture = model.createLeadSnapshot();
+caseArchiveFixture.person.name.lastName = "ARCHIVE-FIXTURE";
+caseArchiveFixture.person.name.firstName = "CASE";
+model.store.saveLead(caseArchiveFixture, { mode: "commit" });
+var casePerson = model.store.getLead(caseArchiveFixture.leadId);
 var caseOnWall = model.store.addInvestigationObject(eliteChild.investigationId, {
   objectType: "PERSON",
   objectId: casePerson.subjectPersonId,
@@ -3463,8 +3485,8 @@ var junkCase = model.store.junkInvestigationObject(
   caseOnWall.nodeId
 );
 check(
-  "cannot delete or junk a case subject",
-  !delCase.ok && !junkCase.ok && !!model.store.getPerson(casePerson.subjectPersonId)
+  "case subject deletion is blocked and archiving retains its Case reference",
+  !delCase.ok && junkCase.ok && !!model.store.getPerson(casePerson.subjectPersonId).meta.archivedAt && !!model.store.getLead(caseArchiveFixture.leadId)
 );
 
 var winTag = model.investigationWindowsDefault("tag");
@@ -3627,19 +3649,20 @@ fooPerson.name.firstName = "LUIS";
 model.store.upsertPerson(fooPerson);
 var reusedFoo = model.store.reuseInvestigationIdentity(
   asocInv.investigationId,
-  asocFoo.nodeId
+  asocFoo.nodeId,
+  asocPer.objectId
 );
 var opAsocs = model.store.associationsFor("PERSON", asocPer.objectId);
 check(
-  "reuse-on-type retargets association ends",
+  "explicit membership replacement preserves the prior Person and its association history",
   reusedFoo.ok &&
     reusedFoo.reused &&
     reusedFoo.objectId === asocPer.objectId &&
-    opAsocs.some(function (row) {
+    !!model.store.getPerson(asocFoo.objectId) && model.store.associationsFor("PERSON", asocFoo.objectId).some(function (row) {
       return (
         row.reason === "KNOWN_OPERATOR_OF" &&
         row.to.id === asocVeh2.objectId &&
-        row.from.id === asocPer.objectId
+        row.from.id === asocFoo.objectId
       );
     })
 );
@@ -3658,11 +3681,11 @@ var deletedLoc = model.store.deleteInvestigationObject(
   lonerLoc.nodeId
 );
 check(
-  "delete unreferenced person-end drops hanging association",
-  deletedLoc.ok &&
+  "referenced Location deletion is blocked and preserves its association",
+  !deletedLoc.ok &&
     locAsoc &&
-    !model.store.getAssociation(locAsoc.associationId) &&
-    !model.store.getLocationRecord(lonerLoc.objectId)
+    !!model.store.getAssociation(locAsoc.associationId) &&
+    !!model.store.getLocationRecord(lonerLoc.objectId)
 );
 var caseSubj = model.store.getLead(openedWallCase.leadId);
 var caseAsoc = model.store.upsertAssociation({
@@ -3762,7 +3785,7 @@ check(
 var composedAgain = model.store.associateInvestigationPerson(
   composerInv.investigationId,
   composerVeh.nodeId,
-  { label: "COMPOSER, RITA", reason: "REGISTERED_OWNER_OF" }
+  { personId: composed.personId, label: "COMPOSER, RITA", reason: "REGISTERED_OWNER_OF" }
 );
 check(
   "composer reuses person and association",
@@ -3956,14 +3979,14 @@ model.store.saveObjectRecord("PERSON", {
 });
 var partialPersonUpdate = model.store.saveObjectRecord("PERSON", {
   personId: gatewayPerson.objectId,
-  immigration: { alienNumber: "A123456789" }
+  immigration: { alienNumber: "A987654321" }
 });
 check(
   "partial object updates preserve the complete person sections",
   partialPersonUpdate.ok &&
     partialPersonUpdate.record.criminal.fbiNumber === "FBI-GATEWAY" &&
     partialPersonUpdate.record.immigration.status === "EWI" &&
-    partialPersonUpdate.record.immigration.alienNumber === "A123456789" &&
+    partialPersonUpdate.record.immigration.alienNumber === "A987654321" &&
     partialPersonUpdate.record.criminal.threatLevel === "none"
 );
 var gatewayParking = model.createLocation({

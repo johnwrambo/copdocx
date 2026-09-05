@@ -4,6 +4,7 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+const { execFileSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
 const contractDir = path.join(root, "docs", "stage-1-data-contract");
@@ -53,16 +54,17 @@ function collectSourceLocations(value, out) {
   }
 }
 
-function validateSourceLocation(location) {
+function validateSourceLocation(location, sourceText) {
   const absolute = path.join(root, location.relativePath);
-  assert.ok(
-    fs.existsSync(absolute),
-    "manifest source does not exist: " + location.relativePath
-  );
-  if (location.firstLine === null || fs.statSync(absolute).isDirectory()) {
+  if (sourceText === undefined) {
+    assert.ok(fs.existsSync(absolute), "manifest source does not exist: " + location.relativePath);
+    if (fs.statSync(absolute).isDirectory()) return;
+    sourceText = fs.readFileSync(absolute, "utf8");
+  }
+  if (location.firstLine === null) {
     return;
   }
-  const lineCount = fs.readFileSync(absolute, "utf8").split(/\r?\n/).length;
+  const lineCount = sourceText.split(/\r?\n/).length;
   assert.ok(
     location.firstLine >= 1 && location.firstLine <= lineCount,
     location.relativePath + " source line " + location.firstLine + " exceeds " + lineCount
@@ -87,6 +89,39 @@ assert.strictEqual(
 assert.match(manifest.sourceSnapshot.baseCommit, /^[0-9a-f]{40}$/);
 assert.match(manifest.sourceSnapshot.baseTree, /^[0-9a-f]{40}$/);
 assert.strictEqual(manifest.sourceSnapshot.includesUncommittedStage0, true);
+
+function git(args) {
+  return execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+}
+assert.strictEqual(
+  git(["rev-parse", manifest.sourceSnapshot.baseCommit + "^{tree}"]).trim(),
+  manifest.sourceSnapshot.baseTree,
+  "the documented Stage 1 baseline commit must still resolve to its frozen tree"
+);
+// The manifest was written over baseCommit plus uncommitted Stage 0 files.
+// Checkpoint 9571793 (API-equivalent 68ce7ed) captures those additions exactly.
+// Its immutable tree is available in either local or API-published Git history.
+const stage01CheckpointTree = "aae0558fddef0620a25ff62540807829522cc6e0";
+assert.strictEqual(git(["cat-file", "-t", stage01CheckpointTree]).trim(), "tree", "Stage 0/1 evidence checkpoint is required");
+assert.deepStrictEqual(
+  JSON.parse(git(["show", stage01CheckpointTree + ":docs/stage-1-data-contract/architecture-manifest.json"])).sourceSnapshot,
+  manifest.sourceSnapshot,
+  "the frozen Stage 1 source snapshot must remain tied to its original checkpoint"
+);
+const frozenSources = new Map();
+function frozenSource(relativePath) {
+  if (frozenSources.has(relativePath)) return frozenSources.get(relativePath);
+  for (const tree of [manifest.sourceSnapshot.baseTree, stage01CheckpointTree]) {
+    try {
+      const sourceText = git(["show", tree + ":" + relativePath]);
+      frozenSources.set(relativePath, sourceText);
+      return sourceText;
+    } catch (error) {
+      // Only Stage 0/1 additions may be absent from the original base tree.
+    }
+  }
+  assert.fail("frozen manifest source is absent from its baseline and Stage 0/1 checkpoint: " + relativePath);
+}
 
 [
   "application",
@@ -294,13 +329,18 @@ requiredEntities.filter((name) => !["IntegrityReport"].includes(name)).forEach((
 
 const sources = [];
 collectSourceLocations(manifest, sources);
-collectSourceLocations(storageOverlay, sources);
 const uniqueSources = new Map();
 sources.forEach((location) => {
-  const key = [location.relativePath, location.firstLine, location.lastLine].join(":");
+  const key = ["stage1", location.relativePath, location.firstLine, location.lastLine].join(":");
   uniqueSources.set(key, location);
 });
-uniqueSources.forEach(validateSourceLocation);
+uniqueSources.forEach((location) => validateSourceLocation(location, frozenSource(location.relativePath)));
+const overlaySources = [];
+collectSourceLocations(storageOverlay, overlaySources);
+overlaySources.forEach((location) => {
+  validateSourceLocation(location);
+  uniqueSources.set(["overlay", location.relativePath, location.firstLine, location.lastLine].join(":"), location);
+});
 
 console.log(
   "STAGE1_DATA_CONTRACT_PASSED",

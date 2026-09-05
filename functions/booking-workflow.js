@@ -3,7 +3,7 @@
   "use strict";
   var root = (global.COPDoc = global.COPDoc || {});
   var SCHEMA = "copdocx.booking-transactions.v1";
-  var STEPS = ["subject-reservation", "canonical", "packet", "subject", "location", "associations", "officer", "verified"];
+  var STEPS = ["subject-reservation", "canonical", "packet", "subject", "location", "associations", "officer", "verified", "void-canonical", "void-packet", "void-officers", "void-verified"];
   var queue = Promise.resolve();
   function own(o, k) { return Object.prototype.hasOwnProperty.call(o || {}, k); }
   function plain(o) { return !!o && typeof o === "object" && !Array.isArray(o); }
@@ -53,6 +53,7 @@
     Object.keys(loaded.value.transactions).forEach(function (id) {
       var t = loaded.value.transactions[id];
       if (!plain(t) || t.transactionId !== id || !text(t.bookingId) ||
+          (own(t, "kind") && ["BOOK", "VOID"].indexOf(t.kind) < 0) ||
           ["PENDING", "FAILED", "COMPLETED"].indexOf(t.status) < 0 || !Array.isArray(t.completedSteps) ||
           t.completedSteps.some(function (s) { return STEPS.indexOf(s) < 0; }) ||
           (t.status !== "COMPLETED" && (!plain(t.request) || !plain(t.request.packet)))) {
@@ -64,6 +65,10 @@
       if (t.request) {
         if (t.request.packet.id !== t.bookingId || !plain(t.request.options || {})) fail("The booking recovery request has conflicting identity.");
         assertCompatible(t, t.request.packet);
+      }
+      if (t.kind === "VOID" && (!text(t.voidReason) || !text(t.voidedAt) || !text(t.basePacketHash) || !text(t.baseArrestHash) ||
+          (t.request && text(t.request.options.reason) !== t.voidReason))) {
+        fail("The booking void recovery command is invalid. Run Integrity before resuming.");
       }
     });
     return loaded;
@@ -163,7 +168,7 @@
     if (subjectBooking(subject) && subjectBooking(subject) !== packet.id) fail("This subject already belongs to another booking.");
     if (text(subject.outcome).toUpperCase() !== "ARRESTED") fail("Book-In is only available for an arrested subject.");
     var otherOwner = src.packets.value.some(function (p) {
-      return p.id !== packet.id && text(p.encounterId) === encId && text(p.subjectId) === sid;
+      return !p.voidedAt && p.id !== packet.id && text(p.encounterId) === encId && text(p.subjectId) === sid;
     });
     if (otherOwner) fail("Another Book-In packet already claims this subject.");
     packet.subjectId = sid;
@@ -282,6 +287,7 @@
     return packet;
   }
   function runTransaction(t) {
+    if (t.kind === "VOID") return runVoid(t);
     t.persistedAt = t.updatedAt;
     t.persistedRevision = Number(t.revision || 0);
     var packet = clone(t.request.packet), opts = clone(t.request.options || {});
@@ -359,6 +365,8 @@
     try {
       var loaded = journal(), src = sources();
       packet.id = bookingId(packet) || newId("bk_");
+      var storedPacket = currentPacket(packet.id, src);
+      if (packet.voidedAt || (storedPacket && storedPacket.voidedAt)) fail("This booking was voided. Start a new booking if one is required.");
       packet.encounterId = text(packet.encounterId); packet.subjectId = text(packet.subjectId);
       // Resolve an interrupted Add Another command before allocating a new subject.
       var pendingByBooking = Object.keys(loaded.value.transactions).map(function (id) { return loaded.value.transactions[id]; }).filter(function (t) { return t.status !== "COMPLETED" && t.bookingId === packet.id; });
@@ -400,13 +408,146 @@
     var result = queue.then(run, run); queue = result.catch(function () {});
     return result.catch(function (error) { return { ok: false, status: "FAILED", error: text(error.message) }; });
   }
+  function canonicalArrest(packet, src) {
+    var resolved = checked(src.store.resolveBookInBooking(packet.id), "Could not resolve the saved booking.");
+    if (!resolved.found) fail("The filed booking has no canonical Arrest. Run Integrity.");
+    assertCompatible(packet, resolved);
+    var person = (src.workspace.people || {})[resolved.personId];
+    var arrests = ((person && person.arrests) || []).filter(function (a) { return a && a.arrestId === resolved.arrestId; });
+    if (arrests.length !== 1) fail("The booking Arrest is missing or ambiguous.");
+    return { resolved: resolved, arrest: arrests[0] };
+  }
+  function voidInput(t) {
+    return { bookingId: t.bookingId, subjectId: t.subjectId, encounterId: t.encounterId,
+      personId: t.personId, leadId: t.leadId, arrestId: t.arrestId,
+      reason: t.voidReason, voidedAt: t.voidedAt, transactionId: t.transactionId };
+  }
+  function verifyVoid(t) {
+    var src = sources(), packet = currentPacket(t.bookingId, src);
+    if (!packet || !packet.voidedAt || packet.voidTransactionId !== t.transactionId || packet.voidReason !== t.voidReason) fail("The voided packet could not be verified.");
+    var saved = canonicalArrest(packet, src);
+    if (!saved.arrest.voidedAt || saved.arrest.voidTransactionId !== t.transactionId || saved.arrest.voidReason !== t.voidReason) fail("The canonical void acknowledgement is missing.");
+    var lead = (src.workspace.leads || {})[t.leadId];
+    var projected = ((lead && lead.person && lead.person.arrests) || []).filter(function (a) { return a && a.arrestId === t.arrestId; });
+    if (projected.length !== 1 || projected[0].voidTransactionId !== t.transactionId) fail("The Case void projection is incomplete.");
+    if (t.encounterId) {
+      var enc = src.store.getEncounter(t.encounterId);
+      if (enc && (enc.subjects || []).some(function (s) { return subjectBooking(s) === t.bookingId; })) fail("The voided packet is still actively linked to an Encounter subject.");
+    }
+    (src.admin.officers || []).forEach(function (o) {
+      (o.fieldArrests || []).forEach(function (a) {
+        if (a && (text(a.arrestId) === t.arrestId || text(a.bookingId || a.bookinRecordId) === t.bookingId) && !a.voidedAt) fail("An active officer statistic still references the voided booking.");
+      });
+    });
+    return packet;
+  }
+  function runVoid(t) {
+    t.persistedRevision = Number(t.revision || 0); t.persistedAt = t.updatedAt;
+    var request = clone(t.request);
+    try {
+      var src = sources(), packet = currentPacket(t.bookingId, src);
+      if (!packet) fail("The packet was removed after the void began.");
+      assertCompatible(t, packet);
+      if (hash(packet) !== t.basePacketHash && !(packet.voidTransactionId === t.transactionId && packet.voidReason === t.voidReason)) fail("The packet changed after the void began. Review it before resuming.");
+      var saved = canonicalArrest(packet, src);
+      if (saved.arrest.voidTransactionId !== t.transactionId && hash(saved.arrest) !== t.baseArrestHash) fail("The Arrest changed after the void began. Review it before resuming.");
+      if (!src.store.voidBookingProjection) fail("The booking void store is unavailable.");
+      checked(src.store.voidBookingProjection(voidInput(t)), "Could not void the canonical booking.");
+      checkpoint(t, "void-canonical");
+      src = sources(); packet = currentPacket(t.bookingId, src);
+      if (!packet) fail("The packet disappeared during the void.");
+      if (!packet.voidedAt) {
+        if (hash(packet) !== t.basePacketHash) fail("The packet changed during the void.");
+        packet.voidedAt = t.voidedAt; packet.voidReason = t.voidReason; packet.voidTransactionId = t.transactionId;
+        packet.updatedAt = t.voidedAt; packet.revision = Number(packet.revision || 0) + 1;
+        var index = src.packets.value.findIndex(function (p) { return p.id === t.bookingId; });
+        src.packets.value[index] = packet;
+        write(packetKey(), src.packets.raw, src.packets.value);
+      } else if (packet.voidTransactionId !== t.transactionId) fail("Another void command owns this packet.");
+      checkpoint(t, "void-packet");
+      src = sources();
+      (src.admin.officers || []).forEach(function (officer) {
+        var claims = (officer.fieldArrests || []).filter(function (a) { return a && (text(a.arrestId) === t.arrestId || text(a.bookingId || a.bookinRecordId) === t.bookingId); });
+        if (!claims.length) return;
+        if (!root.officers || !root.officers.voidFieldArrest) fail("The officer void projection is unavailable.");
+        checked(root.officers.voidFieldArrest(text(officer.id || officer.officerId), voidInput(t)), "Could not void the officer statistic.");
+      });
+      checkpoint(t, "void-officers");
+      packet = verifyVoid(t); checkpoint(t, "void-verified");
+      t.status = "COMPLETED"; t.lastError = ""; t.packetHash = hash(packet); delete t.request;
+      saveTransaction(t);
+      return { ok: true, record: packet, bookingId: t.bookingId, transactionId: t.transactionId, status: t.status };
+    } catch (error) {
+      t.status = "FAILED"; t.lastError = text(error.message); t.request = request;
+      try { saveTransaction(t); } catch (e) { /* Previous durable command remains. */ }
+      return { ok: false, bookingId: t.bookingId, transactionId: t.transactionId, status: t.status, error: t.lastError + " Resume the void from Bookings needing attention." };
+    }
+  }
+  function beginVoid(id, options) {
+    options = options || {};
+    try {
+      var src = sources(), packet = currentPacket(text(id), src);
+      if (!packet) fail("The saved packet was not found.");
+      var map = journal().value.transactions, unfinished = Object.keys(map).map(function (k) { return map[k]; }).filter(function (t) { return t.bookingId === packet.id && t.status !== "COMPLETED"; });
+      if (unfinished.length) {
+        if (unfinished.length === 1 && unfinished[0].kind === "VOID") return runVoid(clone(unfinished[0]));
+        fail("Finish the pending booking before voiding it.");
+      }
+      if (packet.voidedAt) {
+        var receipt = map[packet.voidTransactionId];
+        if (!receipt || receipt.kind !== "VOID") fail("The existing void has no verifiable receipt. Run Integrity.");
+        return { ok: true, record: verifyVoid(receipt), bookingId: packet.id, transactionId: receipt.transactionId, status: "COMPLETED" };
+      }
+      var reason = text(options.reason); if (!reason) fail("Voiding a booking requires a reason.");
+      if (own(options, "expectedUpdatedAt") && text(options.expectedUpdatedAt) !== text(packet.updatedAt)) fail("This packet changed. Reload it before voiding.");
+      var canonical = canonicalArrest(packet, src), now = new Date().toISOString();
+      var t = { kind: "VOID", transactionId: newId("voidtx_"), bookingId: packet.id,
+        encounterId: text(canonical.resolved.encounterId), subjectId: text(canonical.resolved.subjectId),
+        personId: text(canonical.resolved.personId), leadId: text(canonical.resolved.leadId), arrestId: text(canonical.resolved.arrestId),
+        status: "PENDING", completedSteps: [], createdAt: now, updatedAt: now, voidedAt: now, voidReason: reason,
+        basePacketHash: hash(packet), baseArrestHash: hash(canonical.arrest), request: { packet: clone(packet), options: { reason: reason } } };
+      if (!src.store.voidBookingProjection) fail("The booking void store is unavailable.");
+      checked(src.store.voidBookingProjection(Object.assign(voidInput(t), { validateOnly: true })), "This booking cannot be voided.");
+      saveTransaction(t); return runVoid(t);
+    } catch (error) { return { ok: false, bookingId: text(id), status: "FAILED", error: text(error.message) }; }
+  }
+  function removalPlan(id) {
+    try {
+      var src = sources(), packet = currentPacket(text(id), src);
+      if (!packet) fail("The packet was not found.");
+      if (packet.voidedAt) return { ok: true, action: "RETAIN", record: packet, error: "Voided records are retained as history." };
+      var transactions = journal().value.transactions;
+      if (Object.keys(transactions).some(function (k) { return transactions[k].bookingId === packet.id && transactions[k].status !== "COMPLETED"; })) fail("This booking has a pending recovery command. Resume it before removing the packet.");
+      var canonical = checked(src.store.resolveBookInBooking(packet.id), "Could not inspect booking ownership.");
+      if (canonical.found || packet.arrestId || packet.encounterProjectionFiledAt) return { ok: true, action: "VOID", record: packet };
+      if (packet.encounterProjectionDraft !== true) fail("This legacy packet is not identified as an unfiled draft. Its history must be reviewed before removal.");
+      if (!src.store.dependenciesFor) fail("The dependency scanner is unavailable.");
+      var deps = checked(src.store.dependenciesFor("BOOKING", packet.id), "Could not inspect packet dependencies.");
+      var blockers = (deps.dependencies || []).filter(function (d) {
+        return !(d.store === "bookin" && text(d.recordId) === packet.id);
+      });
+      if (blockers.length) return { ok: false, action: "BLOCK", dependencies: blockers, error: "This draft is referenced by other records and cannot be deleted." };
+      return { ok: true, action: "DELETE", record: packet };
+    } catch (e) { return { ok: false, action: "BLOCK", error: text(e.message) }; }
+  }
   root.booking = Object.freeze({
     schema: SCHEMA,
     bookSubject: function (record, options) { var p = clone(record || {}), o = clone(options || {}); return serialized(function () { return begin(p, o); }); },
+    planRemoval: removalPlan,
+    voidBooking: function (id, options) { return serialized(function () { return beginVoid(id, options); }); },
+    deleteDraftBooking: function (id, options) { return serialized(function () {
+      var plan = removalPlan(id); if (!plan.ok || plan.action !== "DELETE") return { ok: false, dependencies: plan.dependencies, error: plan.error || "Only an unused draft can be deleted." };
+      if (options && own(options, "expectedUpdatedAt") && text(options.expectedUpdatedAt) !== text(plan.record.updatedAt)) return { ok: false, error: "The packet changed before deletion." };
+      var p = packets();
+      if (!samePacket(p.value.filter(function (row) { return row.id === text(id); })[0], plan.record)) return { ok: false, error: "The packet changed before deletion." };
+      write(packetKey(), p.raw, p.value.filter(function (row) { return row.id !== text(id); }));
+      return { ok: true, bookingId: text(id), deleted: true };
+    }); },
     resume: function (id) { return serialized(function () {
       var t = journal().value.transactions[text(id)];
       if (!t) return { ok: false, error: "The booking recovery command was not found." };
       if (t.status === "COMPLETED") {
+        if (t.kind === "VOID") return { ok: true, record: verifyVoid(t), bookingId: t.bookingId, transactionId: t.transactionId, status: t.status };
         var p = currentPacket(t.bookingId); if (!p || hash(p) !== t.packetHash) return { ok: false, error: "The completed booking has since changed." };
         verify(p, t); return { ok: true, record: p, bookingId: t.bookingId, transactionId: t.transactionId, status: t.status };
       }
@@ -422,7 +563,7 @@
     },
     listTransactions: function () {
       try { var map = journal().value.transactions; return { ok: true, transactions: Object.keys(map).map(function (id) {
-        var t = map[id]; return { transactionId: id, bookingId: t.bookingId, encounterId: t.encounterId, subjectId: t.subjectId, status: t.status, completedSteps: t.completedSteps.slice(), updatedAt: t.updatedAt, lastError: t.lastError || "" };
+        var t = map[id]; return { transactionId: id, kind: t.kind || "BOOK", bookingId: t.bookingId, encounterId: t.encounterId, subjectId: t.subjectId, status: t.status, completedSteps: t.completedSteps.slice(), updatedAt: t.updatedAt, lastError: t.lastError || "" };
       }) }; } catch (e) { return { ok: false, transactions: [], error: text(e.message) }; }
     }
   });

@@ -617,7 +617,7 @@
       }
       var immigration = person.immigration || {};
       (person.arrests || []).forEach(function (arrest) {
-        if (!arrest) {
+        if (!arrest || arrest.voidedAt) {
           return;
         }
         var encounterId = text(arrest.encounterId || arrest.encounterNumber);

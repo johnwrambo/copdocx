@@ -488,7 +488,8 @@
     }
 
     function identifiersCompatible(subject, record, subjectIndex, tierOptions) {
-      if (!subject || !record) {
+      if (!subject || !record || record.voidedAt || subject.bookingUnlinked === true ||
+          (subject.bookingVoid && recordBookingIds(record).indexOf(text(subject.bookingVoid.bookingId)) !== -1)) {
         return false;
       }
       if (
@@ -666,6 +667,7 @@
     var linkedBookinSubjects = packetSource.filter(function (row) {
       return (
         row &&
+        !row.voidedAt &&
         row.encounterId === encounterId &&
         row.encounterProjectionDraft !== true
       );

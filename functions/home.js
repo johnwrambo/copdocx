@@ -148,6 +148,13 @@
     var weekFrom = localDay(weekStart);
     var weekTo = localDay(weekEnd);
     var weekBookins = (Array.isArray(bookins) ? bookins : []).filter(function (row) {
+      if (!row || row.voidedAt) { return false; }
+      var person = workspace.people && workspace.people[row.personId];
+      if (person && (person.arrests || []).some(function (arrest) {
+        return arrest && arrest.voidedAt &&
+          ((row.arrestId && arrest.arrestId === row.arrestId) ||
+           (row.id && arrest.bookinRecordId === row.id));
+      })) { return false; }
       var day = rowTime(row).slice(0, 10);
       return day >= weekFrom && day <= weekTo;
     });

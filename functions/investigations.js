@@ -884,6 +884,9 @@
         vehicle.locations.push(m.collectLocation(locCard));
       }
     });
+    if (m.collectObjectEdit) vehicle = m.collectObjectEdit(vehicle, card);
+    vehicle._objectEdit = true;
+    if (card.dataset.objectRevision !== undefined) vehicle.objectRevision = Number(card.dataset.objectRevision || 0);
     return vehicle;
   }
 
@@ -892,6 +895,9 @@
     if (!card || !vehicle) {
       return;
     }
+    vehicle = (m.store.getObjectRecord && m.store.getObjectRecord("VEHICLE", vehicle.vehicleId || vehicle.id)) || vehicle;
+    card.dataset.objectRevision = String(Number(vehicle.objectRevision || 0));
+    card._objectEditRecord = JSON.parse(JSON.stringify(vehicle));
     card.dataset.entityId = vehicle.vehicleId || vehicle.id || "";
     if (m.fillCard) {
       m.fillCard(card, vehicle);
@@ -967,7 +973,7 @@
       return;
     }
     var savedVehicle = m.store.saveObjectRecord("VEHICLE", vehicle, {
-      mode: "commit"
+      mode: "commit", intent: "update", expectedRevision: Number(card.dataset.objectRevision || 0)
     });
     if (!savedVehicle || !savedVehicle.ok) {
       setStatus(
@@ -975,6 +981,9 @@
       );
       return;
     }
+    var canonicalVehicle = m.store.getObjectRecord("VEHICLE", vehicle.vehicleId);
+    card.dataset.objectRevision = String(Number((canonicalVehicle && canonicalVehicle.objectRevision) || 0));
+    card._objectEditRecord = canonicalVehicle ? JSON.parse(JSON.stringify(canonicalVehicle)) : null;
     var current = currentStoredInvestigation();
     if (!current || !m.readFields) {
       return;
@@ -1411,6 +1420,10 @@
         (byId("investigationAddZip") && byId("investigationAddZip").value) || "";
     }
     var result = m.store.addInvestigationObject(current.investigationId, payload);
+    if (result && result.code === "OBJECT_SELECTION_REQUIRED" && !payload.objectId && window.confirm && window.confirm(result.error + " Create a separate new record?")) {
+      payload.createNew = true;
+      result = m.store.addInvestigationObject(current.investigationId, payload);
+    }
     if (!result || !result.ok) {
       setStatus((result && result.error) || "Could not add that object.");
       return;
@@ -1692,7 +1705,7 @@
         }
         m.store.loadFromDisk();
         var stored = m.store.getInvestigation(id);
-        var current = stored || transientInvestigation;
+        var current = stored ? JSON.parse(JSON.stringify(stored)) : transientInvestigation;
         if (!current || isCommitted(current)) {
           if (current && isCommitted(current)) {
             setStatus("Team is locked after the investigation is saved.");
@@ -1706,25 +1719,29 @@
           return;
         }
         var team = teamEl.value || "3";
-        var nextId = m.nextInvestigationId({
+        // Once stored, an Investigation keeps its identity when team changes.
+        var nextId = stored ? id : m.nextInvestigationId({
           team: team,
           existingIds: existingInvestigationIds(id)
         });
         current.team = String(team);
         current.investigationId = nextId;
         if (stored) {
-          m.store.saveInvestigation(current, { mode: "draft" });
-          if (nextId !== id && m.store.deleteInvestigation) {
-            m.store.deleteInvestigation(id);
+          var saved = m.store.saveInvestigation(current, { mode: "draft" });
+          if (!saved || !saved.ok) {
+            teamEl.value = stored.team || "3";
+            setStatus((saved && saved.error) || "Could not update the Investigation team.");
+            return;
           }
+          current = m.store.getInvestigation(id) || current;
           rememberPersistedInvestigation(current);
         } else {
           transientInvestigation = current;
           hydrateInvestigation(current);
-          saveDraftQuiet({ force: true });
+          if (saveDraftQuiet({ force: true }) === false) return;
         }
         hydrateInvestigation(current);
-        setStatus("Investigation ID updated for team " + team + ".", true);
+        setStatus("Investigation team updated to " + team + ".", true);
       });
     }
     var m = model();
@@ -1953,7 +1970,7 @@
   function junkFocusedInvestigationObject() {
     var m = model();
     if (!m || !m.store || !m.store.junkInvestigationObject) {
-      setStatus("Could not junk that record.");
+      setStatus("Could not archive that record.");
       return;
     }
     if (saveDraftQuiet() === false) {
@@ -1961,16 +1978,16 @@
     }
     var focused = focusedWallObject();
     if (!focused) {
-      setStatus("Focus an object to junk it.");
+      setStatus("Focus an object to archive it.");
       return;
     }
     var label = focusedWallLabel(focused.node);
     if (
       typeof window.confirm === "function" &&
       !window.confirm(
-        "Junk " +
+        "Archive " +
           label +
-          "? It stays in the registry but will not be reused, and it comes off every wall."
+          "? Its history, relationships, and wall memberships are retained. It will be unavailable for new work."
       )
     ) {
       return;
@@ -1980,11 +1997,11 @@
       focused.node.nodeId
     );
     if (!result || !result.ok) {
-      setStatus((result && result.error) || "Could not junk that record.");
+      setStatus((result && result.error) || "Could not archive that record.");
       return;
     }
     refreshWallAfterObjectChange();
-    setStatus("Junked " + label + ".", true);
+    setStatus("Archived " + label + ". History and relationships retained.", true);
   }
 
   function deleteFocusedInvestigationObject() {

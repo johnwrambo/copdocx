@@ -9,6 +9,141 @@
   var ADMIN_KEY =
     (root.config && root.config.storageKey("admin")) || "copdoc.admin.v1";
 
+  function plain(row) { return Boolean(row && typeof row === "object" && !Array.isArray(row)); }
+  function own(row, key) { return Object.prototype.hasOwnProperty.call(row || {}, key); }
+  function text(value) { return String(value == null ? "" : value).trim(); }
+  function clone(value) { return JSON.parse(JSON.stringify(value)); }
+  function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function fail(error) { return { ok: false, error: error }; }
+  function key(name, fallback) { return root.config && root.config.storageKey(name) || fallback; }
+  function rowId(row, kind) { return text(row && (row[kind === "officers" ? "officerId" : "vehicleId"] || row.id)); }
+  function isActive(row) { return Boolean(row && !row.junked && !row.inactive && !row.archivedAt); }
+  function isVoided(row) { return Boolean(row && (row.voided || row.voidedAt || String(row.status || "").toUpperCase() === "VOIDED")); }
+
+  function readAdminStrict() {
+    try {
+      var raw = global.localStorage.getItem(ADMIN_KEY);
+      var data = raw === null ? { officers: [], vehicles: [], shifts: [] } : JSON.parse(raw);
+      if (!plain(data)) { return fail("Admin storage is malformed. Run Integrity before saving."); }
+      var error = "";
+      ["officers", "vehicles", "shifts"].forEach(function (kind) {
+        if (!own(data, kind)) { data[kind] = []; }
+        if (!Array.isArray(data[kind])) { error = "Admin " + kind + " storage is malformed."; return; }
+        var seen = Object.create(null);
+        data[kind].forEach(function (row) {
+          if (!plain(row)) { error = "Admin " + kind + " contains an invalid record."; return; }
+          var alias = kind === "officers" ? "officerId" : kind === "vehicles" ? "vehicleId" : "id";
+          var id = rowId(row, kind);
+          if (kind === "shifts") { id = text(row.id); }
+          if (!id || seen[id] || ["id", alias].some(function (field) {
+            return own(row, field) && (typeof row[field] !== "string" || text(row[field]) !== row[field] || row[field] !== id);
+          })) { error = "Admin " + kind + " identity is missing, conflicting or duplicated."; }
+          seen[id] = true;
+          ["fieldArrests", "assignedOfficerIds", "locations", "qualifications", "equipment"].forEach(function (field) {
+            if (own(row, field) && !Array.isArray(row[field])) { error = "Admin " + kind + " " + field + " is malformed."; }
+          });
+          if (row.fieldArrests && row.fieldArrests.some(function (fact) { return !plain(fact); })) {
+            error = "Officer Arrest storage is malformed.";
+          }
+          if ((own(row, "meta") && !plain(row.meta)) || (row.assignedOfficerIds && row.assignedOfficerIds.some(function (id) { return typeof id !== "string" || !id || id !== text(id); }))) {
+            error = "Admin " + kind + " metadata or assignment identity is malformed.";
+          }
+        });
+      });
+      return error ? fail(error) : { ok: true, raw: raw, data: data };
+    } catch (error) { return fail("Could not read Admin storage. Run Integrity before retrying."); }
+  }
+
+  function writeAdmin(loaded) {
+    try {
+      if (global.localStorage.getItem(ADMIN_KEY) !== loaded.raw) { return fail("Admin changed in another window. Reload before saving."); }
+      var serialized = JSON.stringify(loaded.data);
+      global.localStorage.setItem(ADMIN_KEY, serialized);
+      if (global.localStorage.getItem(ADMIN_KEY) !== serialized) { return fail("The Admin write could not be verified. Reload before retrying."); }
+      return { ok: true, error: "" };
+    } catch (error) { return fail("Could not write Admin storage. Existing records were not accepted as saved."); }
+  }
+
+  function mergePatch(current, patch) {
+    var result = clone(current || {});
+    Object.keys(patch || {}).forEach(function (field) {
+      if (field === "__proto__" || field === "constructor" || field === "prototype" || patch[field] === undefined) { return; }
+      result[field] = plain(patch[field]) && plain(result[field]) ? mergePatch(result[field], patch[field]) : clone(patch[field]);
+    });
+    return result;
+  }
+
+  // One Admin-owned create/update contract. Officer and fleet ownership intentionally
+  // remains separate from workspace Person and civilian Vehicle ownership.
+  function saveRecord(kind, patch, options) {
+    options = options || {};
+    if (["officers", "vehicles"].indexOf(kind) < 0 || !plain(patch)) { return fail("An officer or fleet record is required."); }
+    var loaded = readAdminStrict();
+    if (!loaded.ok) { return loaded; }
+    var alias = kind === "officers" ? "officerId" : "vehicleId";
+    var claims = [patch.id, patch[alias], options.id].filter(function (id) { return id !== undefined && id !== ""; });
+    if (claims.some(function (id) { return typeof id !== "string" || !text(id) || id !== text(id) || id !== claims[0]; })) {
+      return fail("Admin identity aliases must agree.");
+    }
+    var id = claims[0] || "";
+    var existing = loaded.data[kind].filter(function (row) { return rowId(row, kind) === id; })[0] || null;
+    if (options.createOnly && existing) { return fail("That Admin identity already exists. Open it to edit."); }
+    if (options.updateOnly && !existing) { return fail("That Admin record no longer exists. Reload before saving."); }
+    if (existing && options.expectedRecord) {
+      var stale = Object.keys(patch).some(function (field) {
+        return ["id", alias, "meta"].indexOf(field) < 0 && !same(existing[field], options.expectedRecord[field]) && !same(existing[field], patch[field]);
+      });
+      if (stale) { return fail("An edited Admin field changed in another window. Reload before saving."); }
+    }
+    if (["fieldArrests", "inactive", "archivedAt", "junked", "junkedAt", "voidedAt"].some(function (field) {
+      return own(patch, field) && !same(patch[field], existing ? existing[field] : undefined);
+    })) { return fail("Historical facts and archive state use their own workflow."); }
+    if (["locations", "qualifications", "equipment", "assignedOfficerIds"].some(function (field) {
+      return own(patch, field) && !Array.isArray(patch[field]);
+    }) || (own(patch, "address") && !plain(patch.address)) || (own(patch, "meta") && !plain(patch.meta))) {
+      return fail("Admin object fields have an invalid shape.");
+    }
+    var model = root.model || {};
+    var factory = kind === "officers" ? model.createOfficer : model.createVehicle;
+    if (typeof factory !== "function") { return fail("The Admin object factory is unavailable."); }
+    var record = mergePatch(existing || {}, patch);
+    if (id) { record.id = record[alias] = id; }
+    if (kind === "vehicles") {
+      if (own(patch, "governmentVehicle") && patch.governmentVehicle !== true) { return fail("Fleet ownership cannot be changed through the Admin form."); }
+      if (own(patch, "plate") && own(patch, "licensePlate") && text(patch.plate).toUpperCase() !== text(patch.licensePlate).toUpperCase()) { return fail("Fleet plate aliases must agree."); }
+      if (own(patch, "plate") || own(patch, "licensePlate")) { record.plate = record.licensePlate = text(own(patch, "licensePlate") ? patch.licensePlate : patch.plate).toUpperCase(); }
+      record.governmentVehicle = true;
+      if (own(patch, "assignedOfficerIds") && (!Array.isArray(patch.assignedOfficerIds) || patch.assignedOfficerIds.some(function (officerId) {
+        var matches = loaded.data.officers.filter(function (row) { return rowId(row, "officers") === officerId; });
+        var retained = existing && (existing.assignedOfficerIds || []).indexOf(officerId) !== -1;
+        return typeof officerId !== "string" || officerId !== text(officerId) || matches.length !== 1 || (!retained && (!isActive(matches[0]) || !isCommitted(matches[0])));
+      }))) { return fail("New fleet assignments require an active, saved officer."); }
+    }
+    var retainedPlaces = kind === "officers" && own(patch, "address") ? clone((record.locations || []).slice(1)) : null;
+    var clearedAddress = kind === "officers" && own(patch, "address") && !["street", "street2", "city", "state", "zip", "latitude", "longitude", "latLong", "association", "locationAssociation"].some(function (field) { return text(record.address[field]); });
+    if (clearedAddress) { record.locations = []; }
+    record = factory(record);
+    if (retainedPlaces) {
+      record.locations = (clearedAddress ? [] : record.locations).concat(retainedPlaces.filter(function (place) {
+        return !(record.locations || []).some(function (current) { return place.locationId && current.locationId === place.locationId; });
+      }));
+    }
+    id = rowId(record, kind);
+    record.id = record[alias] = id;
+    if (!id || (!existing && loaded.data[kind].some(function (row) { return rowId(row, kind) === id; }))) { return fail("The new Admin identity is already in use. Retry creating the record."); }
+    var duplicate = loaded.data[kind].filter(function (row) {
+      if (rowId(row, kind) === id) { return false; }
+      if (kind === "officers") { return text(record.badge) && text(row.badge).toUpperCase() === text(record.badge).toUpperCase(); }
+      return (text(record.vin) && text(row.vin).toUpperCase() === text(record.vin).toUpperCase()) ||
+        (text(record.licensePlate) && text(record.plateState) && text(row.licensePlate || row.plate).toUpperCase() === text(record.licensePlate).toUpperCase() && text(row.plateState).toUpperCase() === text(record.plateState).toUpperCase());
+    });
+    if (duplicate.length) { return { ok: false, error: kind === "officers" ? "That badge belongs to an existing officer. Review the existing record." : "That VIN or plate/state belongs to an existing fleet vehicle. Review the existing record.", candidates: duplicate.map(function (row) { return rowId(row, kind); }) }; }
+    if (existing) { loaded.data[kind][loaded.data[kind].indexOf(existing)] = record; }
+    else { loaded.data[kind].push(record); }
+    var saved = writeAdmin(loaded);
+    return saved.ok ? { ok: true, error: "", record: clone(record), created: !existing } : saved;
+  }
+
   function isCommitted(row) {
     if (root.model && typeof root.model.isCommitted === "function") {
       return root.model.isCommitted(row);
@@ -17,17 +152,14 @@
   }
 
   function readAdmin() {
-    try {
-      return JSON.parse(global.localStorage.getItem(ADMIN_KEY) || "{}") || {};
-    } catch (error) {
-      return {};
-    }
+    var loaded = readAdminStrict();
+    return loaded.ok ? loaded.data : { officers: [], vehicles: [], shifts: [] };
   }
 
   function listCommitted() {
     var officers = readAdmin().officers || [];
     return officers.filter(function (row) {
-      return row && !row.junked && isCommitted(row);
+      return isActive(row) && isCommitted(row);
     });
   }
 
@@ -39,7 +171,7 @@
   function listFleet() {
     var vehicles = readAdmin().vehicles || [];
     return vehicles.filter(function (row) {
-      return row && !row.junked && isCommitted(row) && row.governmentVehicle;
+      return isActive(row) && isCommitted(row) && row.governmentVehicle;
     });
   }
 
@@ -63,7 +195,7 @@
     if (!id) {
       return null;
     }
-    var list = (readAdmin().officers || []).filter(isCommitted);
+    var list = readAdmin().officers || [];
     var i;
     for (i = 0; i < list.length; i++) {
       if (list[i].id === id || list[i].officerId === id) {
@@ -273,6 +405,160 @@
     });
   }
 
+  function archiveRecord(kind, id, options) {
+    options = options || {};
+    var loaded = readAdminStrict();
+    if (!loaded.ok) { return loaded; }
+    if (["officers", "vehicles"].indexOf(kind) < 0) { return fail("Unknown Admin record type."); }
+    var row = loaded.data[kind].filter(function (candidate) { return rowId(candidate, kind) === text(id); })[0];
+    if (!row) { return fail("Admin record not found."); }
+    if (!isActive(row)) { return { ok: true, error: "", alreadyArchived: true, record: clone(row) }; }
+    row.inactive = true;
+    row.archivedAt = text(options.archivedAt) || new Date().toISOString();
+    row.junked = true;
+    row.junkedAt = row.archivedAt;
+    if (text(options.reason)) { row.archiveReason = text(options.reason); }
+    var result = writeAdmin(loaded);
+    return result.ok ? { ok: true, error: "", record: clone(row) } : result;
+  }
+
+  function restoreRecord(kind, id) {
+    var loaded = readAdminStrict();
+    if (!loaded.ok) { return loaded; }
+    if (["officers", "vehicles"].indexOf(kind) < 0) { return fail("Unknown Admin record type."); }
+    var row = loaded.data[kind].filter(function (candidate) { return rowId(candidate, kind) === text(id); })[0];
+    if (!row) { return fail("Admin record not found."); }
+    row.inactive = false; row.archivedAt = ""; row.junked = false; row.junkedAt = "";
+    return writeAdmin(loaded);
+  }
+
+  // Reference inspection is intentionally ID-based. Neither names nor badges
+  // establish historical ownership. Malformed stores block hard deletion.
+  async function inspectDependencies(kind, id) {
+    if (["officers", "vehicles"].indexOf(kind) < 0 || !text(id)) { return fail("An Admin identity is required."); }
+    id = text(id);
+    var loaded = readAdminStrict();
+    if (!loaded.ok) { return loaded; }
+    var row = loaded.data[kind].filter(function (candidate) { return rowId(candidate, kind) === id; })[0];
+    if (!row) { return fail("Admin record not found."); }
+    var references = [];
+    var snapshots = [{ key: ADMIN_KEY, raw: loaded.raw }];
+    function ref(type, path) { references.push({ type: type, id: id, path: path, label: path }); }
+    function inspect(value, path, parentKey) {
+      if (Array.isArray(value)) {
+        value.forEach(function (entry, index) {
+          if (typeof entry === "string" && entry === id && new RegExp(kind === "officers" ? "officerIds$" : "vehicleIds$", "i").test(parentKey || "")) { ref("reference", path + "[" + index + "]"); }
+          else { inspect(entry, path + "[" + index + "]", parentKey); }
+        });
+        return;
+      }
+      if (!plain(value)) { return; }
+      var type = text(value.type || value.entityType).toUpperCase();
+      if (type === (kind === "officers" ? "OFFICER" : "VEHICLE") && text(value.id || value.entityId) === id) { ref("reference", path); }
+      Object.keys(value).forEach(function (field) {
+        var next = value[field];
+        if (path !== "Workspace" && ["subjects", "bookins", "teams", "members", "arrests", "fieldArrests", "locations", "vehicles", "links", "history"].indexOf(field) !== -1 && !Array.isArray(next)) {
+          throw new Error("Malformed relationship list at " + path + "." + field);
+        }
+        var singular = new RegExp(kind === "officers" ? "officerId$" : "vehicleId$", "i");
+        var plural = new RegExp(kind === "officers" ? "officerIds$" : "vehicleIds$", "i");
+        if (singular.test(field)) {
+          // Book-In formState controls carry their value in a wrapper.
+          if (plain(next) && own(next, "value")) { if (text(next.value) === id) { ref("reference", path + "." + field); } }
+          else if (next !== null && next !== undefined && typeof next !== "string") { throw new Error("Malformed identifier at " + path + "." + field); }
+          else if (text(next) === id) { ref("reference", path + "." + field); }
+        } else if (plural.test(field) && !Array.isArray(next)) { throw new Error("Malformed reference list at " + path + "." + field); }
+        inspect(next, path + "." + field, field);
+      });
+    }
+    function source(storageKey, fallback, validate) {
+      var raw = global.localStorage.getItem(storageKey);
+      var data = raw === null ? fallback : JSON.parse(raw);
+      if (!validate(data)) { throw new Error("Malformed dependent store " + storageKey); }
+      snapshots.push({ key: storageKey, raw: raw });
+      return data;
+    }
+    try {
+      if (isCommitted(row) || text(row.meta && row.meta.committedAt)) { ref("history", "Committed " + (kind === "officers" ? "officer " : "fleet vehicle ") + id + "; retain its identity in Archive"); }
+      if ((row.fieldArrests || []).length) { ref("arrest-history", "Admin " + id + ".fieldArrests (including voided history)"); }
+      ["officers", "vehicles", "shifts"].forEach(function (bucket) {
+        loaded.data[bucket].forEach(function (candidate, index) {
+          if (candidate !== row) { inspect(candidate, "Admin." + bucket + "[" + index + "]"); }
+        });
+      });
+      var workspace = source(key("workspace", "copdocx.store.v1"), {}, plain);
+      Object.keys(workspace).forEach(function (bucket) {
+        if (["leads", "people", "vehicles", "locations", "encounters", "operations", "investigations", "associations", "businesses", "entities"].indexOf(bucket) !== -1) {
+          if (!plain(workspace[bucket]) || Object.keys(workspace[bucket]).some(function (recordId) { return !plain(workspace[bucket][recordId]); })) { throw new Error("Malformed Workspace " + bucket + " references"); }
+        }
+      });
+      inspect(workspace, "Workspace");
+      var packets = source(key("bookin", "alien-book-in.saved-records.v1"), [], function (data) { return Array.isArray(data) && data.every(plain); });
+      inspect(packets, "Book-In");
+      var journal = source(key("bookingTransactions", "copdocx.booking-transactions.v1"), { transactions: {} }, function (data) { return plain(data) && plain(data.transactions) && Object.keys(data.transactions).every(function (txId) { return plain(data.transactions[txId]); }); });
+      inspect(journal, "Booking recovery");
+      if (typeof global.indexedDB === "undefined" || !root.media || typeof root.media.listAll !== "function") { return fail("Durable Media references could not be inspected. Archive the record instead."); }
+      var media = await root.media.listAll();
+      if (!Array.isArray(media) || media.some(function (item) { return !plain(item) || !plain(item.owner) || !text(item.owner.id) || !text(item.owner.type); })) { return fail("Media references are malformed. Archive the record instead."); }
+      media.forEach(function (item, index) { inspect(item, "Media[" + index + "]"); });
+      var unique = Object.create(null);
+      references = references.filter(function (entry) { if (unique[entry.path]) { return false; } unique[entry.path] = true; return true; });
+      return { ok: true, error: "", references: references, snapshots: snapshots, mediaSignature: JSON.stringify(media), record: clone(row) };
+    } catch (error) { return fail("Dependency inspection failed: " + error.message + ". Archive the record instead."); }
+  }
+
+  async function deleteDraft(kind, id) {
+    var inspection = await inspectDependencies(kind, id);
+    if (!inspection.ok) { return inspection; }
+    if (inspection.references.length) { return { ok: false, error: "Delete blocked: " + inspection.references.map(function (entry) { return entry.label; }).join("; "), references: inspection.references }; }
+    if (isActive(inspection.record)) { return fail("Archive the unused draft before permanent deletion."); }
+    try {
+      // Re-read media after the asynchronous scan and compare every durable source
+      // immediately before the single Admin write. Media is never auto-deleted.
+      if (JSON.stringify(await root.media.listAll()) !== inspection.mediaSignature) { return fail("Media references changed during deletion. Review and retry."); }
+      if (inspection.snapshots.some(function (snapshot) { return global.localStorage.getItem(snapshot.key) !== snapshot.raw; })) { return fail("A dependent record changed during deletion. Review and retry."); }
+      var loaded = readAdminStrict();
+      if (!loaded.ok) { return loaded; }
+      loaded.data[kind] = loaded.data[kind].filter(function (candidate) { return rowId(candidate, kind) !== text(id); });
+      return writeAdmin(loaded);
+    } catch (error) { return fail("Deletion could not verify its dependencies. No record was deleted."); }
+  }
+
+  function voidFieldArrest(officerId, entry) {
+    entry = entry || {};
+    var id = text(officerId), arrestId = text(entry.arrestId), bookingId = text(entry.bookingId || entry.bookinRecordId);
+    var reason = text(entry.voidReason || entry.reason), transactionId = text(entry.voidTransactionId || entry.transactionId);
+    if (!id || !arrestId || !bookingId || !reason ||
+        (text(entry.reason) && text(entry.voidReason) && text(entry.reason) !== text(entry.voidReason)) ||
+        (text(entry.transactionId) && text(entry.voidTransactionId) && text(entry.transactionId) !== text(entry.voidTransactionId)) ||
+        (text(entry.bookingId) && text(entry.bookinRecordId) && text(entry.bookingId) !== text(entry.bookinRecordId))) { return fail("Voiding an officer Arrest requires consistent officer, Arrest and booking IDs and a reason."); }
+    var loaded = readAdminStrict();
+    if (!loaded.ok) { return loaded; }
+    var officer = loaded.data.officers.filter(function (candidate) { return rowId(candidate, "officers") === id; })[0];
+    if (!officer) { return fail("Officer not found. Historical identity must be retained."); }
+    var matches = (officer.fieldArrests || []).filter(function (fact) {
+      return text(fact.arrestId) === arrestId || [text(fact.bookingId), text(fact.bookinRecordId)].indexOf(bookingId) !== -1;
+    });
+    if (!matches.length) { return { ok: true, error: "", missing: true }; }
+    if (matches.length !== 1) { return fail("Officer Arrest identity is duplicated."); }
+    var fact = matches[0];
+    if (text(fact.arrestId) !== arrestId || ["bookingId", "bookinRecordId"].some(function (field) { return text(fact[field]) && text(fact[field]) !== bookingId; }) ||
+        ["subjectId", "encounterId", "personId"].some(function (field) { return text(entry[field]) && text(fact[field]) && text(entry[field]) !== text(fact[field]); })) { return fail("Officer Arrest identity conflicts with this void command."); }
+    if (isVoided(fact)) {
+      if ((text(fact.voidReason) && text(fact.voidReason) !== reason) || (text(fact.voidTransactionId) && text(fact.voidTransactionId) !== transactionId)) { return fail("This officer Arrest was voided by another command. Review its history."); }
+      return { ok: true, error: "", alreadyVoided: true };
+    }
+    fact.voided = true; fact.status = "VOIDED";
+    fact.voidedAt = text(entry.voidedAt) || new Date().toISOString();
+    fact.voidReason = reason; fact.voidTransactionId = transactionId;
+    return writeAdmin(loaded);
+  }
+
+  function listFieldArrests(officerId, options) {
+    var officer = get(officerId);
+    return (officer && officer.fieldArrests || []).filter(function (fact) { return options && options.includeVoided || !isVoided(fact); });
+  }
+
   function recordFieldArrest(officerId, entry) {
     entry = entry || {};
     var id = String(officerId || "").trim();
@@ -289,16 +575,9 @@
     if (!arrestId || bookingIds.length > 1) {
       return { ok: false, error: "A stable Arrest identifier and consistent booking identifiers are required." };
     }
-    var admin;
-    try {
-      var raw = global.localStorage.getItem(ADMIN_KEY);
-      admin = raw === null ? { officers: [] } : JSON.parse(raw);
-      if (!admin || typeof admin !== "object" || Array.isArray(admin) || !Array.isArray(admin.officers)) {
-        return { ok: false, error: "Officer storage is malformed. Run Integrity before retrying." };
-      }
-    } catch (error) {
-      return { ok: false, error: "Could not read officer storage. Run Integrity before retrying." };
-    }
+    var loaded = readAdminStrict();
+    if (!loaded.ok) { return loaded; }
+    var admin = loaded.data;
     var matches = admin.officers.filter(function (row) {
       return row && (text(row.id) === id || text(row.officerId) === id);
     });
@@ -336,6 +615,8 @@
       if (arrestMatches > 1) { conflict = "Officer Arrest identity is duplicated."; }
     });
     if (conflict) { return { ok: false, error: conflict }; }
+    if (existing && isVoided(existing)) { return fail("A voided officer Arrest cannot be reactivated by booking replay."); }
+    if (!existing && !isActive(officer)) { return fail("New arrests cannot be assigned to an inactive officer."); }
     officer.fieldArrests = officer.fieldArrests || [];
     var before = JSON.stringify(existing);
     if (existing) {
@@ -350,12 +631,7 @@
       incoming.bookedAt = text(entry.bookedAt) || new Date().toISOString();
       officer.fieldArrests.push(incoming);
     }
-    try {
-      global.localStorage.setItem(ADMIN_KEY, JSON.stringify(admin));
-    } catch (error) {
-      return { ok: false, error: "Could not write the officer profile." };
-    }
-    return { ok: true, error: "" };
+    return writeAdmin(loaded);
   }
 
   root.officers = {
@@ -371,6 +647,18 @@
     display: display,
     search: search,
     bindAssign: bindAssign,
-    recordFieldArrest: recordFieldArrest
+    recordFieldArrest: recordFieldArrest,
+    voidFieldArrest: voidFieldArrest,
+    retractFieldArrest: voidFieldArrest,
+    listFieldArrests: listFieldArrests,
+    isActive: isActive,
+    isVoided: isVoided,
+    readAdmin: readAdminStrict,
+    saveOfficer: function (patch, options) { return saveRecord("officers", patch, options); },
+    saveFleetVehicle: function (patch, options) { return saveRecord("vehicles", patch, options); },
+    archiveRecord: archiveRecord,
+    restoreRecord: restoreRecord,
+    inspectDependencies: inspectDependencies,
+    deleteDraft: deleteDraft
   };
 })(typeof window !== "undefined" ? window : globalThis);

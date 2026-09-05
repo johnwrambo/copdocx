@@ -92,6 +92,8 @@
   var state = { officers: [], vehicles: [], shifts: [] };
   var editingOfficerId = "";
   var editingVehicleId = "";
+  var editingOfficerBaseline = null;
+  var editingVehicleBaseline = null;
   var suppressOfficerAutoSave = false;
   var officerAutoSaveBound = false;
   var officerAuto = null;
@@ -194,6 +196,7 @@
   }
 
   function rowJunked(row) {
+    if (row && (row.inactive || row.archivedAt)) { return true; }
     var api = dispositionApi();
     return api && api.isJunked ? api.isJunked(row) : Boolean(row && row.junked);
   }
@@ -226,7 +229,11 @@
         address: row.address,
         locations: row.locations
       });
+      var retainedPlaces = Array.isArray(row.locations) ? row.locations.slice(1) : [];
       COPDoc.model.syncOfficerPlaces(row);
+      row.locations = (row.locations || []).concat(retainedPlaces.filter(function (place) {
+        return !(row.locations || []).some(function (current) { return place.locationId && current.locationId === place.locationId; });
+      }));
       if (
         JSON.stringify({
           id: row.id,
@@ -301,6 +308,11 @@
   var diskError = "";
 
   function readDisk() {
+    var roster = window.COPDoc && COPDoc.officers;
+    if (roster && roster.readAdmin) {
+      var loaded = roster.readAdmin();
+      return { ok: loaded.ok, missing: loaded.raw === null, data: loaded.data || null, error: loaded.error || "" };
+    }
     if (typeof localStorage === "undefined") {
       return { ok: true, missing: true, data: null, error: "" };
     }
@@ -369,11 +381,7 @@
       return { ok: false, error: disk.error };
     }
     diskError = "";
-    if (disk.data) {
-      state.officers = disk.data.officers || [];
-      state.vehicles = disk.data.vehicles || [];
-      state.shifts = disk.data.shifts || [];
-    }
+    state = disk.data || { officers: [], vehicles: [], shifts: [] };
     return { ok: true, error: "" };
   }
 
@@ -715,8 +723,12 @@
     var weekTo = isoDate(new Date(weekEnd.getTime() - 86400000));
     var fyFrom = isoDate(fy0);
     var fyTo = isoDate(now);
-    week = (store.listArrests({ from: weekFrom, to: weekTo }) || []).length;
-    fy = (store.listArrests({ from: fyFrom, to: fyTo }) || []).length;
+    function activeArrest(row) {
+      var arrest = row && (row.arrest || row);
+      return arrest && !arrest.voided && !arrest.voidedAt && String(arrest.status || "").toUpperCase() !== "VOIDED";
+    }
+    week = (store.listArrests({ from: weekFrom, to: weekTo }) || []).filter(activeArrest).length;
+    fy = (store.listArrests({ from: fyFrom, to: fyTo }) || []).filter(activeArrest).length;
     return { week: week, fy: fy };
   }
 
@@ -917,7 +929,7 @@
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "action-button-danger compact";
-    btn.textContent = "Junk";
+    btn.textContent = "Archive";
     btn.addEventListener("click", function () {
       var fresh = adoptDisk();
       if (!fresh.ok) {
@@ -930,20 +942,15 @@
         return;
       }
       var label = recordLabel(kind, row);
-      if (!window.confirm("Junk " + label + "?\n\nThe record is archived and can be restored. References and media are kept.")) {
+      if (!window.confirm("Archive " + label + "?\n\nIt becomes inactive for new assignments. Historical references and media are kept; it can be restored.")) {
         return;
       }
-      var api = dispositionApi();
-      if (api && api.archive) {
-        api.archive(row);
-      } else {
-        row.junked = true;
-        row.junkedAt = new Date().toISOString();
-      }
-      if (persistOrRollback()) {
-        setStatus(label + " moved to Junk.", true);
-        paint();
-      }
+      var api = window.COPDoc && COPDoc.officers;
+      var saved = api && api.archiveRecord ? api.archiveRecord(kind, id) : { ok: false, error: "Admin lifecycle is unavailable." };
+      if (!saved.ok) { setStatus(saved.error); return; }
+      adoptDisk();
+      setStatus(label + " archived; historical links retained.", true);
+      paint();
     });
     return btn;
   }
@@ -964,17 +971,12 @@
         paint();
         return;
       }
-      var api = dispositionApi();
-      if (api && api.restore) {
-        api.restore(row);
-      } else {
-        row.junked = false;
-        row.junkedAt = "";
-      }
-      if (persistOrRollback()) {
-        setStatus(recordLabel(kind, row) + " restored.", true);
-        paint();
-      }
+      var api = window.COPDoc && COPDoc.officers;
+      var restored = api && api.restoreRecord ? api.restoreRecord(kind, id) : { ok: false, error: "Admin lifecycle is unavailable." };
+      if (!restored.ok) { setStatus(restored.error); return; }
+      adoptDisk();
+      setStatus(recordLabel(kind, row) + " restored.", true);
+      paint();
     });
     return btn;
   }
@@ -984,7 +986,7 @@
     btn.type = "button";
     btn.className = "action-button-danger compact";
     btn.textContent = "Delete record";
-    btn.addEventListener("click", function () {
+    btn.addEventListener("click", async function () {
       var fresh = adoptDisk();
       if (!fresh.ok) {
         setStatus(fresh.error);
@@ -992,19 +994,15 @@
       }
       var row = recordFor(kind, id);
       if (!row || !rowJunked(row)) {
-        setStatus("Move the record to Junk before permanent deletion.");
+        setStatus("Archive the unused draft before permanent deletion.");
         paint();
         return;
       }
-      var workspace = readWorkspaceForReferences();
-      if (!workspace.ok) {
-        setStatus(workspace.error);
-        return;
-      }
-      var api = dispositionApi();
-      var refs = api && api.references
-        ? api.references(kind, id, state, workspace.data)
-        : [{ type: "unknown", label: "Reference checking is unavailable" }];
+      var api = window.COPDoc && COPDoc.officers;
+      if (!api || !api.inspectDependencies || !api.deleteDraft) { setStatus("Admin lifecycle is unavailable."); return; }
+      var inspection = await api.inspectDependencies(kind, id);
+      if (!inspection.ok) { setStatus(inspection.error); return; }
+      var refs = inspection.references;
       if (refs.length) {
         setStatus(
           "Delete blocked: " + refs.map(function (item) { return item.label; }).join("; ")
@@ -1023,19 +1021,10 @@
         setStatus("Permanent delete cancelled; the name did not match.");
         return;
       }
-      state[kind] = state[kind].filter(function (candidate) {
-        return candidate !== row;
-      });
-      if (!persistOrRollback()) {
-        return;
-      }
+      var deleted = await api.deleteDraft(kind, id);
+      if (!deleted.ok) { setStatus(deleted.error); return; }
+      adoptDisk();
       setStatus(label + " permanently deleted.", true);
-      if (window.COPDoc && COPDoc.media && typeof COPDoc.media.removeByOwner === "function") {
-        var ownerType = kind === "officers" ? "OFFICER" : "VEHICLE";
-        COPDoc.media.removeByOwner({ type: ownerType, id: id }).catch(function () {
-          setStatus(label + " was deleted, but its media could not be removed.");
-        });
-      }
       paint();
     });
     return btn;
@@ -1945,6 +1934,7 @@
       return;
     }
     editingOfficerId = id;
+    editingOfficerBaseline = JSON.parse(JSON.stringify(row));
     setVal("officerLastName", row.lastName);
     setVal("officerFirstName", row.firstName);
     setVal("officerMiddleName", row.middleName);
@@ -1984,6 +1974,7 @@
       return;
     }
     editingVehicleId = id;
+    editingVehicleBaseline = JSON.parse(JSON.stringify(row));
     vSet("licensePlate", row.licensePlate || row.plate);
     if (typeof formatLicensePlate === "function") {
       formatLicensePlate(vField("licensePlate"));
@@ -2018,6 +2009,7 @@
 
   function clearOfficerForm() {
     editingOfficerId = "";
+    editingOfficerBaseline = null;
     paintAdminFormMediaLinks("officer", "");
     [
       "officerLastName",
@@ -2045,6 +2037,7 @@
 
   function clearVehicleForm() {
     editingVehicleId = "";
+    editingVehicleBaseline = null;
     paintAdminFormMediaLinks("vehicle", "");
     [
       "licensePlate",
@@ -2267,26 +2260,15 @@
       equipNotes: val("officerEquipNotes"),
       meta: rowMeta(existing, quiet ? "draft" : "commit")
     };
-    var record =
-      window.COPDoc && COPDoc.model && COPDoc.model.createOfficer
-        ? COPDoc.model.createOfficer(Object.assign({}, existing, payload))
-        : Object.assign({}, existing, payload);
-    if (window.COPDoc && COPDoc.model && COPDoc.model.syncOfficerPlaces) {
-      COPDoc.model.syncOfficerPlaces(record);
-    }
-    if (updating) {
-      state.officers = state.officers.map(function (row) {
-        return row.id === editingOfficerId || row.officerId === editingOfficerId
-          ? record
-          : row;
-      });
-    } else {
-      state.officers.push(record);
-    }
-    if (!persistOrRollback()) {
-      return;
-    }
+    var api = window.COPDoc && COPDoc.officers;
+    var saved = api && api.saveOfficer ? api.saveOfficer(payload, {
+      updateOnly: updating, createOnly: !updating, expectedRecord: editingOfficerBaseline
+    }) : { ok: false, error: "The shared officer save workflow is unavailable." };
+    if (!saved.ok) { setStatus(saved.error); return; }
+    var record = saved.record;
+    adoptDisk();
     editingOfficerId = record.id;
+    editingOfficerBaseline = JSON.parse(JSON.stringify(record));
     paintAdminFormMediaLinks("officer", record.id);
     rememberOfficerSignature();
     if (byId("addOfficerButton")) {
@@ -2367,29 +2349,15 @@
       equipment: checkedValues("vehicleEquip"),
       meta: rowMeta(existing, quiet ? "draft" : "commit")
     };
-    var record =
-      window.COPDoc && COPDoc.model && COPDoc.model.createVehicle
-        ? COPDoc.model.createVehicle(Object.assign({}, existing, payload))
-        : Object.assign({}, existing, payload);
-    delete record.registeredOwner;
-    delete record.registeredOwnerName;
-    delete record.locations;
-    record.governmentVehicle = true;
-    record.plate = plate;
-    record.licensePlate = plate;
-    if (editingVehicleId) {
-      state.vehicles = state.vehicles.map(function (row) {
-        return row.id === editingVehicleId || row.vehicleId === editingVehicleId
-          ? record
-          : row;
-      });
-    } else {
-      state.vehicles.push(record);
-    }
-    if (!persistOrRollback()) {
-      return;
-    }
+    var api = window.COPDoc && COPDoc.officers;
+    var saved = api && api.saveFleetVehicle ? api.saveFleetVehicle(payload, {
+      updateOnly: Boolean(editingVehicleId), createOnly: !editingVehicleId, expectedRecord: editingVehicleBaseline
+    }) : { ok: false, error: "The shared fleet save workflow is unavailable." };
+    if (!saved.ok) { setStatus(saved.error); return; }
+    var record = saved.record;
+    adoptDisk();
     editingVehicleId = record.id;
+    editingVehicleBaseline = JSON.parse(JSON.stringify(record));
     paintAdminFormMediaLinks("vehicle", record.id);
     if (byId("addVehicleButton")) {
       byId("addVehicleButton").textContent = "Save vehicle";
@@ -2547,11 +2515,18 @@
       setStatus(fresh.error);
       return;
     }
+    var officer = findOfficer(officerId);
+    var vehicleId = val("shiftVehicle");
+    var vehicle = vehicleId ? findVehicle(vehicleId) : null;
+    if (!officer || !rowActive(officer) || !rowCommitted(officer) || (vehicleId && (!vehicle || !rowActive(vehicle) || !rowCommitted(vehicle)))) {
+      setStatus("New shifts require an active saved officer and fleet vehicle.");
+      return;
+    }
     state.shifts.push({
       id: newId("sft"),
       date: date,
       officerId: officerId,
-      vehicleId: val("shiftVehicle"),
+      vehicleId: vehicleId,
       start: val("shiftStart") || "06:00",
       end: val("shiftEnd") || "14:00",
       assignment: val("shiftAssignment") || "field"
@@ -2625,6 +2600,7 @@
     });
     if (adminPage() === "officer-form" && queryParam("id")) {
       suppressOfficerAutoSave = true;
+      editingOfficerId = queryParam("id");
       if (findOfficer(queryParam("id"))) {
         fillOfficerForm(queryParam("id"));
         if (byId("officerFormLegend")) {
@@ -2640,6 +2616,7 @@
     }
     if (adminPage() === "vehicle-form" && queryParam("id")) {
       suppressVehicleAutoSave = true;
+      editingVehicleId = queryParam("id");
       if (findVehicle(queryParam("id"))) {
         fillVehicleForm(queryParam("id"));
       } else {

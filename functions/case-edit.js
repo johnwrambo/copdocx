@@ -132,11 +132,16 @@
       return;
     }
     mutator(snap, m);
+    if (["identity", "immigration", "criminal", "document"].indexOf(state.kind) !== -1) {
+      subjectOf(snap).objectRevision = state.personRevision;
+    }
     var saved = m.store.saveLead(snap, { mode: "commit" });
     if (!saved || !saved.ok) {
       setStatus((saved && saved.error) || "Could not save.");
       return;
     }
+    state.personRevision = Number((m.store.getPerson(subjectOf(snap).personId) || {}).objectRevision || 0);
+    if (m.acknowledgeObjectEdits) m.acknowledgeObjectEdits();
     if (closeAfter !== false) {
       closePanel();
     }
@@ -144,6 +149,44 @@
     if (typeof window.paintCaseView === "function") {
       window.paintCaseView();
     }
+  }
+
+  function canonicalEditorRecord(type, record, card) {
+    if (!record) return record;
+    var m = model();
+    var id = record.personId || record.vehicleId || record.locationId || record.businessId || record.entityId || record.id;
+    var canonical = m.store.getObjectRecord && m.store.getObjectRecord(type, id);
+    var next = canonical ? Object.assign({}, record, canonical) : record;
+    ["association", "occupancy", "occupiedFrom", "occupiedTo"].forEach(function (key) {
+      if (Object.prototype.hasOwnProperty.call(record, key)) next[key] = record[key];
+    });
+    if (card) {
+      card.dataset.objectRevision = String(Number(next.objectRevision || 0));
+      card._objectEditRecord = JSON.parse(JSON.stringify(next));
+    }
+    return next;
+  }
+
+  function markObjectEdit(record, card) {
+    if (card && card._objectEditRecord) {
+      var values = record;
+      record = JSON.parse(JSON.stringify(card._objectEditRecord));
+      var aliases = { plate: ["licensePlate"], licensePlate: ["plate"], association: ["locationAssociation", "addressAssociation"], registeredOwnerName: ["registeredOwner"], encounterDisposition: ["encounterDisposition"] };
+      Object.keys(values).forEach(function (key) {
+        var represented = [key].concat(aliases[key] || []).some(function (field) {
+          var input = card.querySelector('[data-field="' + field + '"]');
+          return input && (!input.closest || input.closest("[data-card]") === card);
+        });
+        if (represented || key === "locations") record[key] = values[key];
+      });
+    }
+    var plateInput = card && card.querySelector('[data-field="licensePlate"]');
+    if (plateInput && (!plateInput.closest || plateInput.closest("[data-card]") === card) && Object.prototype.hasOwnProperty.call(record, "licensePlate")) {
+      record.plate = record.licensePlate;
+    }
+    record._objectEdit = true;
+    if (card && card.dataset.objectRevision !== undefined) record.objectRevision = Number(card.dataset.objectRevision || 0);
+    return record;
   }
 
   function collectLocationCard(card) {
@@ -202,7 +245,7 @@
     Array.prototype.forEach.call(nested, function (locCard) {
       vehicle.locations.push(collectLocationCard(locCard));
     });
-    return vehicle;
+    return markObjectEdit(vehicle, card);
   }
 
   function findLocation(snap, locationId) {
@@ -253,6 +296,7 @@
       bindVehicleCard(card);
     }
     if (vehicle) {
+      vehicle = canonicalEditorRecord("VEHICLE", vehicle, card);
       card.dataset.entityId = vehicle.vehicleId || "";
       fillFields(card, vehicle);
       fillFields(card, {
@@ -296,6 +340,7 @@
             ? card._addNested.location()
             : null;
         if (locCard) {
+          location = canonicalEditorRecord("LOCATION", location, locCard);
           locCard.dataset.entityId = location.locationId || "";
           fillFields(locCard, location);
           fillFields(locCard, {
@@ -317,6 +362,7 @@
       bindAddressCardFull(card);
     }
     if (location) {
+      location = canonicalEditorRecord("LOCATION", location, card);
       card.dataset.entityId = location.locationId || "";
       fillFields(card, location);
       fillFields(card, {
@@ -680,25 +726,7 @@
       for (i = 0; i < snap.vehicles.length; i++) {
         var prev = snap.vehicles[i];
         if (prev && prev.vehicleId === next.vehicleId) {
-          prev.licensePlate = next.licensePlate;
-          prev.plate = next.licensePlate || prev.plate;
-          prev.plateState = next.plateState;
-          prev.vehicleYear = next.vehicleYear;
-          prev.vehicleMake = next.vehicleMake;
-          prev.vehicleModel = next.vehicleModel;
-          prev.vehicleColor = next.vehicleColor;
-          prev.vehicleBodyStyle = next.vehicleBodyStyle;
-          prev.vin = next.vin;
-          prev.registeredOwnerName = next.registeredOwnerName;
-          prev.governmentVehicle = false;
-          prev.occupancy = next.occupancy || "current";
-          prev.occupiedFrom = next.occupiedFrom || "";
-          prev.occupiedTo = next.occupiedTo || "";
-          prev.notes = next.notes || "";
-          prev.otherResidents = next.otherResidents || "";
-          if (next.locations.length) {
-            prev.locations = next.locations;
-          }
+          snap.vehicles[i] = Object.assign({}, prev, next);
           found = true;
           break;
         }
@@ -727,23 +755,11 @@
     if (!card) {
       return;
     }
-    var next = collectLocationCard(card);
+    var next = markObjectEdit(collectLocationCard(card), card);
     commit(function (snap, m) {
       var person = subjectOf(snap);
       person.locations = person.locations || [];
       if (state.id && findLocation(snap, state.id)) {
-        var prev = findLocation(snap, state.id);
-        if (prev) {
-          if (!next.pinColor && prev.pinColor) {
-            next.pinColor = prev.pinColor;
-          }
-          if (!next.targetPriority && prev.targetPriority) {
-            next.targetPriority = prev.targetPriority;
-          }
-          if (!next.parksHere && prev.parksHere) {
-            next.parksHere = prev.parksHere;
-          }
-        }
         replaceLocation(snap, next);
       } else {
         if (!next.locationId) {
@@ -983,6 +999,7 @@
     if (identity) {
       identity.querySelector("legend").textContent = "Person";
       identity.dataset.entityId = (person && person.personId) || "";
+      identity.dataset.objectRevision = String(Number((person && person.objectRevision) || 0));
       hostEl.appendChild(identity);
       fillFields(identity, {
         lastName: name.lastName,
@@ -1079,6 +1096,7 @@
         } else {
           objectCard.dataset.entityId =
             (record && (record.businessId || record.entityId || record.id)) || "";
+          objectCard.dataset.objectRevision = String(Number((record && record.objectRevision) || 0));
           fillFields(objectCard, record || {});
         }
       }
@@ -1156,6 +1174,7 @@
       ) {
         return { ok: false, record: null, error: "Enter a name, A-Number, or FBI number." };
       }
+      if (identity && identity.dataset.objectRevision !== undefined) person.objectRevision = Number(identity.dataset.objectRevision || 0);
       return { ok: true, record: person, error: "" };
     }
     var objectCard = objectHost.querySelector("[data-card]");
@@ -1185,6 +1204,7 @@
     } else {
       record.kind = values.kind || "";
     }
+    if (objectCard && objectCard.dataset.objectRevision !== undefined) record.objectRevision = Number(objectCard.dataset.objectRevision || 0);
     return { ok: true, record: record, error: "" };
   }
 
@@ -1461,6 +1481,10 @@
     if (h) {
       h.replaceChildren();
     }
+    var subject = subjectOf(snap);
+    var canonicalPerson = subject && model().store.getPerson(subject.personId);
+    if (canonicalPerson) snap.person = canonicalPerson;
+    state.personRevision = Number((canonicalPerson || subject || {}).objectRevision || 0);
     state.kind = kind;
     state.id = id || "";
     var fn = OPENERS[kind];

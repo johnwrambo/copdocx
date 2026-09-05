@@ -771,60 +771,44 @@
     if (!m || !m.store || !card || !id || !type) {
       return;
     }
+    var record = card._objectRecord ? JSON.parse(JSON.stringify(card._objectRecord)) : null;
+    if (!record) {
+      setStatus("The object changed or was removed. Reload the card before editing.");
+      return;
+    }
     if (type === "VEHICLE") {
-      var prev = m.store.getVehicleRecord(id) || m.createVehicle({ vehicleId: id });
-      prev.licensePlate = readField(card, "licensePlate").toUpperCase();
-      prev.plate = prev.licensePlate;
-      prev.plateState = readField(card, "plateState").toUpperCase();
-      prev.vehicleYear = readField(card, "vehicleYear");
-      prev.vehicleMake = readField(card, "vehicleMake");
-      prev.vehicleModel = readField(card, "vehicleModel");
-      prev.vehicleColor = readField(card, "vehicleColor");
-      prev.vehicleBodyStyle = readField(card, "vehicleBodyStyle");
-      prev.vin = readField(card, "vin");
-      prev.registeredOwnerName = readField(card, "registeredOwner");
-      prev.governmentVehicle = false;
-      m.store.saveObjectRecord("VEHICLE", prev, { mode: "commit" });
+      record.licensePlate = readField(card, "licensePlate").toUpperCase();
+      record.plate = record.licensePlate;
+      record.plateState = readField(card, "plateState").toUpperCase();
+      ["vehicleYear", "vehicleMake", "vehicleModel", "vehicleColor", "vehicleBodyStyle", "vin"].forEach(function (key) {
+        record[key] = readField(card, key);
+      });
+      record.registeredOwnerName = readField(card, "registeredOwner");
+      record.governmentVehicle = false;
     } else if (type === "PERSON") {
-      var person = m.store.getPerson(id) || m.createPerson({ personId: id, caseRole: "" });
-      person.name = person.name || {};
-      person.name.lastName = readField(card, "lastName");
-      person.name.firstName = readField(card, "firstName");
-      person.name.middleName = readField(card, "middleName");
-      m.store.saveObjectRecord("PERSON", person, { mode: "commit" });
+      record.name = Object.assign({}, record.name, {
+        lastName: readField(card, "lastName"), firstName: readField(card, "firstName"), middleName: readField(card, "middleName")
+      });
     } else if (type === "LOCATION") {
-      var loc = m.store.getLocationRecord(id) || m.createLocation({ locationId: id });
-      loc.street = readField(card, "street");
-      loc.street2 = readField(card, "street2");
-      loc.city = readField(card, "city");
-      loc.state = readField(card, "state").toUpperCase();
-      loc.zip = readField(card, "zip");
-      m.store.saveObjectRecord("LOCATION", loc, { mode: "commit" });
+      ["street", "street2", "city", "zip"].forEach(function (key) { record[key] = readField(card, key); });
+      record.state = readField(card, "state").toUpperCase();
     } else if (type === "BUSINESS") {
-      var biz =
-        (m.store.getBusinessRecord && m.store.getBusinessRecord(id)) ||
-        m.createBusiness({ businessId: id });
-      biz.name = readField(card, "name");
-      biz.phone = readField(card, "phone");
-      m.store.saveObjectRecord("BUSINESS", biz, { mode: "commit" });
+      record.name = readField(card, "name");
+      record.phone = readField(card, "phone");
     } else if (type === "ENTITY") {
-      var ent =
-        (m.store.getEntityRecord && m.store.getEntityRecord(id)) ||
-        m.createCustomEntity({ entityId: id });
-      ent.name = readField(card, "name");
-      ent.kind = readField(card, "kind");
-      m.store.saveObjectRecord("ENTITY", ent, { mode: "commit" });
+      record.name = readField(card, "name");
+      record.kind = readField(card, "kind");
     }
-    var invId = currentId();
-    if (m.store.reuseInvestigationIdentity && invId && nodeId) {
-      var reused = m.store.reuseInvestigationIdentity(invId, nodeId);
-      if (reused && reused.ok && reused.reused) {
-        inspectorPainted = { nodeId: "", objectId: "", objectType: "" };
-        paint(loadRecord());
-        setStatus("Reused existing " + type.toLowerCase() + ".", true);
-        return;
-      }
+    var saved = m.store.saveObjectRecord(type, record, {
+      mode: "commit", intent: "update", expectedRevision: Number(card.dataset.objectRevision || 0)
+    });
+    if (!saved || !saved.ok) {
+      setStatus((saved && saved.error) || "Could not save the object. Your edits remain in the card.");
+      return;
     }
+    var canonical = m.store.getObjectRecord(type, id);
+    card._objectRecord = canonical ? JSON.parse(JSON.stringify(canonical)) : null;
+    card.dataset.objectRevision = String(Number((canonical && canonical.objectRevision) || 0));
     var rec = loadRecord();
     var node = rec && nodeById(rec, nodeId);
     var label = node ? nodeTitle(node) : "";
@@ -1849,14 +1833,19 @@
     if (!fn) {
       return;
     }
-    var result = fn.call(m.store, rec.investigationId, node.nodeId, {
+    var input = {
       objectType: kind,
       objectId: objectId || "",
       personId: kind === "PERSON" ? objectId || "" : "",
       label: query,
       name: query,
       reason: reason
-    });
+    };
+    var result = fn.call(m.store, rec.investigationId, node.nodeId, input);
+    if (result && result.code === "OBJECT_SELECTION_REQUIRED" && !objectId && window.confirm && window.confirm(result.error + " Create a separate new record?")) {
+      input.createNew = true;
+      result = fn.call(m.store, rec.investigationId, node.nodeId, input);
+    }
     if (!result || !result.ok) {
       setStatus((result && result.error) || "Could not add that object.");
       return;
@@ -2033,20 +2022,13 @@
         { investigationId: record.investigationId, nodeId: node.nodeId }
       );
       if (junkBtn) {
+        junkBtn.textContent = disp.archived ? "Archived" : "Archive";
         junkBtn.disabled = !disp.canJunk;
-        junkBtn.title = disp.caseSubject
-          ? "Cannot junk a case subject."
-          : disp.junked
-            ? "Already junked."
-            : "Keep the record, hide from reuse, take off every wall.";
+        junkBtn.title = disp.caseSubject ? "Archive the Case through its own controls." : disp.junked ? "Already inactive or archived." : "Keep history, relationships, Media, and wall memberships; exclude from new work.";
       }
       if (deleteBtn) {
         deleteBtn.disabled = !disp.canDelete;
-        deleteBtn.title = disp.caseSubject
-          ? "Cannot delete a case subject."
-          : disp.referenced
-            ? "Still on another wall or a case. Remove those first, or Junk."
-            : "Permanently delete this record.";
+        deleteBtn.title = disp.error || "Permanently delete this unused draft record.";
       }
     }
     if (!node) {
@@ -2095,6 +2077,9 @@
       var card = buildIdentityCard(node);
       cardHost.replaceChildren();
       if (card) {
+        var canonical = model().store.getObjectRecord(node.objectType, node.objectId);
+        card._objectRecord = canonical ? JSON.parse(JSON.stringify(canonical)) : null;
+        card.dataset.objectRevision = String(Number((canonical && canonical.objectRevision) || 0));
         cardHost.appendChild(card);
       }
     }

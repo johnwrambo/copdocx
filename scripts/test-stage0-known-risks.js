@@ -21,7 +21,7 @@ const baseline = JSON.parse(
   fs.readFileSync(path.join(__dirname, "stage0-known-risks.json"), "utf8")
 );
 const resolvedRiskIds = new Set(
-  ["stage2-resolved-risks.json", "stage4-resolved-risks.json"].flatMap(filename => {
+  ["stage2-resolved-risks.json", "stage4-resolved-risks.json", "stage5-resolved-risks.json"].flatMap(filename => {
     const resolutionFile = path.join(__dirname, filename);
     return fs.existsSync(resolutionFile)
       ? JSON.parse(fs.readFileSync(resolutionFile, "utf8")).resolvedRiskIds || []
@@ -60,7 +60,8 @@ function probePersonEncounterLoss() {
   ];
   requireOk(model.store.saveEncounter(encounter, { mode: "commit" }), "Encounter save");
   const before = (model.store.getPerson(staleCase.person.personId).encounters || []).length;
-  requireOk(model.store.saveLead(staleCase, { mode: "commit" }), "stale Case save");
+  const saved = model.store.saveLead(staleCase, { mode: "commit" });
+  if (!saved.ok && saved.code !== "OBJECT_STALE") requireOk(saved, "stale Case save");
   const after = (model.store.getPerson(staleCase.person.personId).encounters || []).length;
   return {
     reproduced: before === 1 && after === 0,
@@ -226,7 +227,7 @@ async function probePartialBookIn() {
   };
 }
 
-function bookInDeleteResidueFixture() {
+async function bookInDeleteResidueFixture() {
   const storage = createMemoryStorage();
   const { context, model } = loadBookInRuntime(storage, {
     search: "?encounterId=enc_delete_residue",
@@ -269,7 +270,8 @@ function bookInDeleteResidueFixture() {
       formState: {}
     }
   ]);
-  run(context, "deleteSavedRecord('bk_delete_residue')");
+  context.prompt = () => "Duplicate booking corrected";
+  await run(context, "deleteSavedRecord('bk_delete_residue')");
   const after = model.store.getState();
   const packets = storage.json(BOOKIN_KEY, []);
   const savedEncounter = after.encounters[encounter.encounterId];
@@ -278,31 +280,35 @@ function bookInDeleteResidueFixture() {
     (row) => row && row.bookinRecordId === "bk_delete_residue"
   );
   const arrestReference = (savedPerson.arrests || []).some(
-    (row) => row && row.bookinRecordId === "bk_delete_residue"
+    (row) => row && row.bookinRecordId === "bk_delete_residue" && !row.voidedAt
   );
+  const retainedVoidedPacket = packets.some(row => row.id === "bk_delete_residue" && row.voidedAt);
+  if (resolvedRiskIds.has("S0-BOOKIN-002") && !retainedVoidedPacket) {
+    throw new Error("Expected a successfully voided, retained packet; cancellation is not a resolved deletion risk.");
+  }
   return {
     packetCount: packets.length,
+    retainedVoidedPacket,
     encounterSubjectReferenceStillActive: subjectReference,
     arrestReferenceStillActive: arrestReference,
     caseStillPresent: !!after.leads[promoted.leadId]
   };
 }
 
-function probeBookInDeleteEncounterResidue() {
-  const observed = bookInDeleteResidueFixture();
+async function probeBookInDeleteEncounterResidue() {
+  const observed = await bookInDeleteResidueFixture();
   return {
     reproduced:
-      observed.packetCount === 0 &&
-      observed.encounterSubjectReferenceStillActive,
+      observed.encounterSubjectReferenceStillActive && (observed.packetCount === 0 || observed.retainedVoidedPacket),
     observed
   };
 }
 
-function probeBookInDeleteArrestResidue() {
-  const observed = bookInDeleteResidueFixture();
+async function probeBookInDeleteArrestResidue() {
+  const observed = await bookInDeleteResidueFixture();
   return {
     reproduced:
-      observed.packetCount === 0 && observed.arrestReferenceStillActive,
+      observed.arrestReferenceStillActive && (observed.packetCount === 0 || observed.retainedVoidedPacket),
     observed
   };
 }
@@ -329,7 +335,7 @@ function probePartialImport() {
     [WORKSPACE_KEY]: emptyWorkspace(),
     [ADMIN_KEY]: { officers: [], vehicles: [], shifts: [] }
   });
-  const context = createTab(storage, { console: quietConsole() });
+  const { context } = loadModelTab(storage, { console: quietConsole() });
   loadScript(context, "functions/transfer.js");
   const parsed = context.COPDoc.transfer.parseTransfer(
     JSON.stringify({

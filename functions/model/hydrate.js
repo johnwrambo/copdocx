@@ -35,6 +35,26 @@
     setValue(byId(id), value);
   }
 
+  // The revision belongs to the data shown to the user, never a later reload.
+  function rememberObjectVersion(card, record) {
+    if (!card || !record) return;
+    card.dataset.objectRevision = String(Number(record.objectRevision || 0));
+    card._objectEditRecord = JSON.parse(JSON.stringify(record));
+    card._objectEditMeta = record.meta ? JSON.parse(JSON.stringify(record.meta)) : null;
+  }
+
+  function canonicalForEditor(type, record) {
+    if (!record || !model.store || !model.store.getObjectRecord) return record;
+    var id = record.personId || record.vehicleId || record.locationId || record.businessId || record.entityId || record.id;
+    var canonical = id && model.store.getObjectRecord(type, id);
+    if (!canonical) return record;
+    var next = Object.assign({}, record, canonical);
+    ["association", "occupancy", "occupiedFrom", "occupiedTo", "encounterDisposition", "parkedLocationText"].forEach(function (key) {
+      if (Object.prototype.hasOwnProperty.call(record, key)) next[key] = record[key];
+    });
+    return next;
+  }
+
   function fillCard(card, data) {
     if (!card || !data) {
       return;
@@ -56,6 +76,8 @@
   }
 
   function fillLocationCard(card, location) {
+    location = canonicalForEditor("LOCATION", location);
+    rememberObjectVersion(card, location);
     setEntity(card, location.locationId);
     fillCard(card, location);
     var assoc = card.querySelector('[data-field="locationAssociation"]');
@@ -140,8 +162,10 @@
       snapshot.person ||
       model.createPerson({ caseRole: "LEAD" });
 
+    subject = canonicalForEditor("PERSON", subject);
     var leadCard = document.querySelector('[data-card="lead"]');
     if (leadCard) {
+      rememberObjectVersion(leadCard, subject);
       leadCard.dataset.leadId = snapshot.leadId || "";
       leadCard.dataset.entityId = subject.personId || "";
       leadCard.dataset.createdAt =
@@ -266,6 +290,8 @@
       "vehicle",
       snapshot.vehicles,
       function (card, vehicle) {
+        vehicle = canonicalForEditor("VEHICLE", vehicle);
+        rememberObjectVersion(card, vehicle);
         setEntity(card, vehicle.vehicleId);
         fillCard(card, vehicle);
         fillCard(card, {
@@ -385,6 +411,8 @@
     );
   }
 
+  model.rememberObjectVersion = rememberObjectVersion;
+  model.canonicalForEditor = canonicalForEditor;
   model.hydrateLead = hydrateLead;
   model.fillCard = fillCard;
   model.fillLocationCard = fillLocationCard;

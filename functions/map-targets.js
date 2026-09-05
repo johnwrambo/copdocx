@@ -801,7 +801,12 @@
           );
         }
       });
-      (subject && subject.arrests ? subject.arrests : []).forEach(function (arr) {
+      var canonicalPerson = storeState.people && storeState.people[personId];
+      var arrests = canonicalPerson && Array.isArray(canonicalPerson.arrests)
+        ? canonicalPerson.arrests
+        : (subject && subject.arrests ? subject.arrests : []);
+      arrests.forEach(function (arr) {
+        if (!arr || arr.voidedAt) { return; }
         var parsed = parseCoords(arr.arrestLocation);
         var lat = arr.latitude || (parsed && parsed.latitude) || "";
         var lng = arr.longitude || (parsed && parsed.longitude) || "";

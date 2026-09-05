@@ -626,7 +626,8 @@ function exerciseBookInBoundaryGuards() {
     arrestDate: "2026-09-05"
   });
   assert.strictEqual(alienConflict.ok, false);
-  assert.strictEqual(alienConflict.code, "BOOKIN_PERSON_IDENTITY_CONFLICT");
+  // Stage 5 rejects this at the shared object identity boundary before Book-In writes.
+  assert.strictEqual(alienConflict.code, "OBJECT_IDENTITY_CONFLICT");
   assert.strictEqual(storage.raw(WORKSPACE_KEY), beforeAlienConflict);
 }
 
@@ -1111,7 +1112,8 @@ function exerciseRemovedSubjectOwnership() {
       {
         subjectId: "sub_removed_owner",
         personId: person.personId,
-        bookingId: "booking_removed_owner",
+        // Stage 5 retains booked subjects; this removal exercises an unbooked draft.
+        bookingId: "",
         lastName: "PRIVATE",
         alienNumber: "123456789",
         notes: "must not remain in tombstone",
@@ -1127,7 +1129,7 @@ function exerciseRemovedSubjectOwnership() {
   const tombstones = model.store.getEncounter(encounter.encounterId).subjectIdentityHistory;
   assert.strictEqual(tombstones.length, 1);
   assert.strictEqual(tombstones[0].subjectId, "sub_removed_owner");
-  assert.strictEqual(tombstones[0].bookingId, "booking_removed_owner");
+  assert.strictEqual(tombstones[0].bookingId, "");
   assert.strictEqual(tombstones[0].lastName, "");
   assert.strictEqual(tombstones[0].alienNumber, "");
   assert.strictEqual(tombstones[0].notes, "");

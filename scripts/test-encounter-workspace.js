@@ -79,7 +79,7 @@ check("subjects painted from encounterSubjects", js.indexOf("encounterSubjects")
 check("collect does not rebuild subjects from packets", js.indexOf("record.subjects = subjectsForEncounter") === -1);
 check("list still reads packets for arrested column", js.indexOf("subjectsForEncounter(full.encounterId)") !== -1);
 check("add existing does not open Book-in", js.indexOf("does not open Book-in") !== -1);
-check("add new upserts a person", js.indexOf("upsertPerson") !== -1);
+check("add new uses the shared Person identity and save contracts", js.indexOf('resolveObjectIdentity("PERSON"') !== -1 && js.indexOf('saveObjectRecord("PERSON"') !== -1);
 check("add new does not saveLead", js.indexOf("saveLead") === -1);
 check("add new does not open Book-in", js.indexOf("openSubjectBrowse") !== -1 && js.indexOf("openNewSubject") !== -1);
 check("edit reopens the float", js.indexOf("openEditSubject") !== -1);

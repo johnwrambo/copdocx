@@ -1,0 +1,13 @@
+{
+  "schema": "copdocx.stage5-resolved-risks.v1",
+  "stage": 5,
+  "scope": "Canonical object save boundaries, persistence rollback and recoverable booking voids that preserve historical references",
+  "resolvedRiskIds": [
+    "S0-PERSON-001",
+    "S0-OBJECT-001",
+    "S0-OBJECT-002",
+    "S0-STORAGE-001",
+    "S0-BOOKIN-002",
+    "S0-BOOKIN-003"
+  ]
+}

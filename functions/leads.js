@@ -724,10 +724,11 @@
         if (!loc) {
           return;
         }
-        if (loc.locationId === locationId) {
-          loc.targetPriority = "1";
-        } else if (String(loc.targetPriority) === "1") {
-          loc.targetPriority = "";
+        if (loc.locationId === locationId || String(loc.targetPriority) === "1") {
+          var canonical = m.store.getObjectRecord && m.store.getObjectRecord("LOCATION", loc.locationId);
+          if (canonical) Object.assign(loc, canonical);
+          loc._objectEdit = true;
+          loc.targetPriority = loc.locationId === locationId ? "1" : "";
         }
       });
     }
@@ -755,6 +756,9 @@
     function apply(list) {
       (list || []).forEach(function (loc) {
         if (loc && loc.locationId === locationId) {
+          var canonical = m.store.getObjectRecord && m.store.getObjectRecord("LOCATION", loc.locationId);
+          if (canonical) Object.assign(loc, canonical);
+          loc._objectEdit = true;
           loc.pinColor = color;
         }
       });
@@ -2608,8 +2612,8 @@
         if (!m || !m.store || !m.store.dropAssociation) {
           return;
         }
-        var dropped = m.store.dropAssociation(
-          removeBtn.getAttribute("data-case-assoc-remove")
+        var dropped = (m.store.retractAssociation || m.store.dropAssociation)(
+          removeBtn.getAttribute("data-case-assoc-remove"), { reason: "Association removed from Case" }
         );
         if (!dropped || !dropped.ok) {
           caseAssocStatus((dropped && dropped.error) || "Could not remove that association.");

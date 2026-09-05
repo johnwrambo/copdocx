@@ -11,7 +11,7 @@
   var root = (global.COPDoc = global.COPDoc || {});
   var REPORT_SCHEMA = "copdocx.integrity-report.v1";
   var RULESET_VERSION = "copdocx.integrity-rules.v1";
-  var SCANNER_VERSION = "0.2.0";
+  var SCANNER_VERSION = "0.3.0";
   var MEDIA_DB_NAME = "copdocx.media.v1";
   var FALLBACK_ENTRIES = [
     { id: "workspace", key: "copdocx.store.v1", medium: "localStorage" },
@@ -1219,6 +1219,12 @@
             [{ store: "workspace", type: "ENCOUNTER_SUBJECT", id: subjectId, path: subjectPath + ".bookinRecordId" },
              { store: "bookin", type: "BOOKIN", id: subject.bookinRecordId, path: "$" }]);
         }
+        var activeBookingId = text(subject.bookingId || subject.bookinRecordId);
+        if (activeBookingId && idx.bookin[activeBookingId] && idx.bookin[activeBookingId].voidedAt) {
+          finding(ctx, "ENCOUNTER_BOOKIN_VOIDED", "critical", "relationship", "Encounter subject still references a voided Book-In packet",
+            [{ store: "workspace", type: "ENCOUNTER_SUBJECT", id: subjectId, path: subjectPath },
+             { store: "bookin", type: "BOOKIN", id: activeBookingId, path: "$" }]);
+        }
         var role = upper(subject.encounterRole);
         if (role && ["TARGET", "COLLATERAL", "OTHER"].indexOf(role) === -1) {
           finding(ctx, "ENCOUNTER_ROLE_INVALID", "high", "schema", "Encounter subject role is invalid",
@@ -1347,6 +1353,12 @@
       var lead = leadId && idx.leads[leadId];
       var person = personId && idx.people[personId];
       var arrestEntry = arrestId && idx.arrests[arrestId];
+      var voidState = bookingVoidEvidence(ctx, record, arrestEntry);
+      if ((record.voidedAt || (arrestEntry && arrestEntry.row.voidedAt)) && !voidState.verified && !voidState.pending) {
+        finding(ctx, "BOOKIN_VOID_MARKER_MISMATCH", "critical", "relationship", "Book-In void markers lack matching canonical Arrest, history or recovery evidence",
+          [{ store: "bookin", type: "BOOKIN", id: id, path: path },
+           { store: "workspace", type: "ARREST", id: arrestId, path: arrestEntry ? arrestEntry.path : "people.*.arrests" }]);
+      }
       if (leadId && !lead) {
         finding(ctx, "BOOKIN_LEAD_DANGLING", "high", "relationship", "Book-In record references a missing Lead",
           [{ store: "bookin", type: "BOOKIN", id: id, path: path + ".leadId" },
@@ -1395,9 +1407,9 @@
              { store: "workspace", type: "ENCOUNTER", id: encounterId, path: "encounters." + encounterId }]);
         } else {
           var matching = list(encounter.subjects).filter(function (subject) {
-            return subject && text(subject.bookinRecordId) === id;
+            return subject && (text(subject.bookinRecordId) === id || text(subject.bookingId) === id);
           });
-          if (matching.length === 0 && supplied > 0) {
+          if (matching.length === 0 && supplied > 0 && !voidState.verified && !voidState.pending) {
             finding(ctx, "BOOKIN_ENCOUNTER_SUBJECT_MISSING", "high", "relationship", "Promoted Book-In record is absent from its Encounter subjects",
               [{ store: "bookin", type: "BOOKIN", id: id, path: path },
                { store: "workspace", type: "ENCOUNTER", id: encounterId, path: "encounters." + encounterId + ".subjects" }]);
@@ -1428,6 +1440,55 @@
         });
       }
     });
+  }
+
+  // A retained voided packet is historical only when the canonical Arrest,
+  // journal identity, and retired Encounter ownership all independently agree.
+  // In-flight canonical-before-packet writes are recognized as recovery work,
+  // never as permission to ignore a contradictory identity or forged marker.
+  function bookingVoidEvidence(ctx, packet, arrestEntry) {
+    var result = { verified: false, pending: false };
+    if (!packet || !arrestEntry || !arrestEntry.row) { return result; }
+    var arrest = arrestEntry.row;
+    var id = text(packet.id || packet.bookinRecordId);
+    var transactionId = text(arrest.voidTransactionId || packet.voidTransactionId);
+    var store = ctx.snapshot.bookingTransactions;
+    var journal = store && store.status === "ok" && store.value;
+    var transaction = journal && journal.schema === "copdocx.booking-transactions.v1" &&
+      isObject(journal.transactions) && journal.transactions[transactionId];
+    if (!transaction || transaction.kind !== "VOID" || transaction.transactionId !== transactionId ||
+        !id || text(transaction.bookingId) !== id || !text(packet.personId) ||
+        arrestEntry.personId !== text(packet.personId) || text(arrest.bookinRecordId) !== id ||
+        text(arrest.arrestId) !== text(packet.arrestId) || !text(arrest.voidedAt) ||
+        !isFinite(Date.parse(arrest.voidedAt)) || !text(arrest.voidReason) ||
+        ["PENDING", "FAILED", "COMPLETED"].indexOf(transaction.status) < 0) { return result; }
+    if (["personId", "leadId", "arrestId", "encounterId", "subjectId"].some(function (field) {
+      return text(transaction[field]) !== text(packet[field]);
+    })) { return result; }
+    if (text(arrest.voidTransactionId) !== transactionId || text(arrest.voidedAt) !== text(transaction.voidedAt) ||
+        text(arrest.voidReason) !== text(transaction.voidReason)) { return result; }
+    if (text(packet.encounterId)) {
+      var encounter = ctx.indexes.encounters[packet.encounterId];
+      var retired = list(encounter && encounter.bookingIdentityHistory).filter(function (subject) {
+        return subject && subject.bookingUnlinked === true &&
+          text(subject.subjectId) === text(packet.subjectId) &&
+          text(subject.personId) === text(packet.personId) &&
+          text(subject.leadId) === text(packet.leadId) &&
+          text(subject.bookingId || subject.bookinRecordId) === id && subject.bookingVoid &&
+          text(subject.bookingVoid.bookingId) === id &&
+          text(subject.bookingVoid.transactionId) === transactionId &&
+          text(subject.bookingVoid.voidedAt) === text(arrest.voidedAt) &&
+          text(subject.bookingVoid.reason) === text(arrest.voidReason);
+      });
+      if (retired.length !== 1) { return result; }
+    }
+    if (packet.voidedAt) {
+      result.verified = text(packet.voidedAt) === text(arrest.voidedAt) &&
+        text(packet.voidReason) === text(arrest.voidReason) && text(packet.voidTransactionId) === transactionId;
+    } else {
+      result.pending = transaction.status !== "COMPLETED";
+    }
+    return result;
   }
 
   var ASSOCIATION_SPEC = {
@@ -1520,6 +1581,8 @@
       var row = idx.associations[associationId];
       if (!isObject(row)) return;
       var path = "associations." + associationId;
+      var historical = row.relationshipStatus === "ENDED" || row.relationshipStatus === "RETRACTED" || !!row.retractedAt || !!row.endedAt;
+      var active = row.junked !== true && !historical;
       var fromType = upper(row.from && row.from.type || row.fromEntityType);
       var fromId = text(row.from && row.from.id || row.fromEntityId);
       var toType = upper(row.to && row.to.type || row.toEntityType);
@@ -1548,7 +1611,7 @@
             [{ store: "workspace", type: "ASSOCIATION", id: associationId, path: path + "." + end[2] },
              { store: end[0] === "OFFICER" ? "admin" : "workspace", type: end[0], id: end[1], path: "canonical registry" }]);
         }
-        if (resolved.row && resolved.row.junked === true && row.junked !== true) {
+        if (resolved.row && resolved.row.junked === true && active) {
           finding(ctx, "ASSOCIATION_ACTIVE_TO_JUNKED_OBJECT", "high", "relationship", "Active Association references a junked object",
             [{ store: "workspace", type: "ASSOCIATION", id: associationId, path: path },
              { store: "workspace", type: end[0], id: end[1], path: "canonical registry" }]);
@@ -1565,11 +1628,11 @@
           [{ store: "workspace", type: "ASSOCIATION", id: associationId, path: path }]);
       }
       var key = canonicalAssociationKey(row);
-      if (logical[key] && row.junked !== true && logical[key].row.junked !== true) {
+      if (logical[key] && active) {
         finding(ctx, "DUPLICATE_LOGICAL_ASSOCIATION", "high", "duplication", "Two active Associations assert the same relationship",
           [{ store: "workspace", type: "ASSOCIATION", id: associationId, path: path },
            { store: "workspace", type: "ASSOCIATION", id: logical[key].id, path: logical[key].path }]);
-      } else {
+      } else if (active) {
         logical[key] = { id: associationId, path: path, row: row };
       }
       var source = isObject(row.source) ? row.source : {};
@@ -2083,6 +2146,11 @@
             return typeof row[field] !== "string" || !row[field] || !isFinite(Date.parse(row[field]));
           }) || (own(row, "lastError") && typeof row.lastError !== "string") ||
           Boolean(row.encounterId) !== Boolean(row.subjectId);
+        if (!invalid && own(row, "kind") && ["BOOK", "VOID"].indexOf(row.kind) < 0) { invalid = true; }
+        if (!invalid && row.kind === "VOID") {
+          invalid = !text(row.voidReason) || !text(row.voidedAt) || !isFinite(Date.parse(row.voidedAt)) ||
+            ["personId", "leadId", "arrestId"].some(function (field) { return !text(row[field]); });
+        }
       }
       if (!invalid && row.status !== "COMPLETED") {
         invalid = !isObject(row.request) || !isObject(row.request.packet) || !isObject(row.request.options);
@@ -2123,6 +2191,9 @@
       var packets = ctx.indexes.bookinRows.filter(function (packet) {
         return text(packet && packet.id) === row.bookingId;
       });
+      var voidEvidence = packets.length === 1
+        ? bookingVoidEvidence(ctx, packets[0], ctx.indexes.arrests[row.arrestId])
+        : { verified: false, pending: false };
       if (packets.length > 1) conflict("bookingId");
       packets.forEach(function (packet) {
         if (mismatch(row, packet, ["encounterId", "subjectId", "personId", "leadId", "arrestId"]) ||
@@ -2137,8 +2208,9 @@
         if ((unfinished && subjects.length !== 1) || subjects.length > 1) conflict("subjectId");
         subjects.forEach(function (subject) {
           if (mismatch(row, subject, ["encounterId", "personId", "leadId"]) ||
-            (text(subject.bookingId) && text(subject.bookingId) !== row.bookingId) ||
-            (text(subject.bookinRecordId) && text(subject.bookinRecordId) !== row.bookingId)) conflict("subjectId");
+            (!(voidEvidence.verified || (row.kind === "VOID" && voidEvidence.pending)) &&
+              ((text(subject.bookingId) && text(subject.bookingId) !== row.bookingId) ||
+               (text(subject.bookinRecordId) && text(subject.bookinRecordId) !== row.bookingId)))) conflict("subjectId");
         });
       }
       var lead = row.leadId && ctx.indexes.leads[row.leadId];

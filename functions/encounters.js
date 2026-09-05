@@ -946,28 +946,6 @@
     return !!(record && record.vehicles && record.vehicles.length);
   }
 
-  function findPersonByAlienNumber(aNumber) {
-    var needle = normalizeAlien(aNumber);
-    if (!needle) {
-      return null;
-    }
-    var m = model();
-    if (!m || !m.store || typeof m.store.allPeople !== "function") {
-      return null;
-    }
-    var people = m.store.allPeople() || [];
-    var i;
-    for (i = 0; i < people.length; i++) {
-      var have = normalizeAlien(
-        people[i] && people[i].immigration && people[i].immigration.alienNumber
-      );
-      if (have && have === needle) {
-        return people[i];
-      }
-    }
-    return null;
-  }
-
   function subjectAlreadyOnEncounter(personId, exceptKey) {
     if (!personId) {
       return false;
@@ -1307,6 +1285,9 @@
     }
     var m = model();
     var personId = opts.personId || "";
+    var sourcePerson = personId && m.store.getPerson(personId);
+    subjectFloatState.sourcePersonId = (sourcePerson && sourcePerson.personId) || "";
+    subjectFloatState.objectRevision = Number((sourcePerson && sourcePerson.objectRevision) || 0);
     if (!personId && opts.mode === "new" && m && m.newId) {
       personId = m.newId("p");
     }
@@ -1381,13 +1362,12 @@
       subjectId: row.subjectId || "",
       personId: row.personId || "",
       leadId: row.leadId || "",
-      lastName: row.lastName || name.lastName || "",
-      firstName: row.firstName || name.firstName || "",
-      citizenship: row.citizenship || (person && person.citizenship) || "",
-      alienNumber:
-        row.alienNumber ||
-        (person && person.immigration && person.immigration.alienNumber) ||
-        "",
+      lastName: person ? name.lastName || "" : row.lastName || "",
+      firstName: person ? name.firstName || "" : row.firstName || "",
+      citizenship: person ? person.citizenship || "" : row.citizenship || "",
+      alienNumber: person
+        ? (person.immigration && person.immigration.alienNumber) || ""
+        : row.alienNumber || "",
       dateOfBirth: (person && person.dateOfBirth) || "",
       encounterRole: subjectRole(row),
       roleOther: row.roleOther || "",
@@ -1400,76 +1380,54 @@
     });
   }
 
+  function resolveSubjectPerson(fields) {
+    var m = model();
+    if (!m || !m.store || !m.store.resolveObjectIdentity) return { ok: false, error: "Person identity service is unavailable." };
+    var existing = fields.personId && m.store.getPerson(fields.personId);
+    var explicit = fields.lockedPersonId || (existing && existing.personId) || "";
+    return m.store.resolveObjectIdentity("PERSON", {
+      objectId: explicit,
+      name: { lastName: fields.lastName, firstName: fields.firstName },
+      dateOfBirth: fields.dateOfBirth,
+      immigration: { alienNumber: fields.alienNumber },
+      createNew: fields.createNew === true
+    });
+  }
+
   function upsertSubjectPerson(fields) {
     var m = model();
-    if (!m || !m.store || typeof m.createPerson !== "function") {
-      return { ok: false, error: "Could not save the person." };
-    }
+    if (!m || !m.store || !m.store.saveObjectRecord) return { ok: false, error: "Could not save the person." };
     m.store.loadFromDisk();
-    var lockedPersonId = String(fields.lockedPersonId || "").trim();
-    if (
-      lockedPersonId &&
-      fields.personId &&
-      String(fields.personId) !== lockedPersonId
-    ) {
-      return {
-        ok: false,
-        error: "An existing Encounter subject cannot be reassigned to another person."
-      };
+    if (fields.lockedPersonId && fields.personId && fields.personId !== fields.lockedPersonId) {
+      return { ok: false, error: "An existing Encounter subject cannot be reassigned to another person." };
     }
-    var previous = fields.personId ? m.store.getPerson(fields.personId) : null;
-    if (fields.alienNumber) {
-      var hit = findPersonByAlienNumber(fields.alienNumber);
-      if (hit && hit.personId && hit.personId !== fields.personId) {
-        if (lockedPersonId && hit.personId !== lockedPersonId) {
-          return {
-            ok: false,
-            error: "That A-Number belongs to a different person. Add a separate subject instead."
-          };
-        }
-        if (subjectAlreadyOnEncounter(hit.personId, fields.editKey)) {
-          return {
-            ok: false,
-            error: "That A-Number is already a subject on this encounter."
-          };
-        }
-        previous = hit;
-        fields.personId = hit.personId;
-        setStatus("Reused the existing person with that A-Number.", true);
-      }
+    var resolved = resolveSubjectPerson(fields);
+    if (!resolved || !resolved.ok) return resolved || { ok: false, error: "Could not resolve the person." };
+    var previous = resolved.record || null;
+    var id = (previous && previous.personId) || fields.personId;
+    if (subjectAlreadyOnEncounter(id, fields.editKey)) return { ok: false, error: "That person is already on this encounter." };
+    var person = m.createPerson(Object.assign({}, previous || {}, {
+      personId: id,
+      caseRole: (previous && previous.caseRole) || "",
+      name: Object.assign({}, previous && previous.name, { lastName: fields.lastName, firstName: fields.firstName }),
+      citizenship: fields.citizenship,
+      dateOfBirth: fields.dateOfBirth,
+      immigration: Object.assign({}, previous && previous.immigration, { alienNumber: fields.alienNumber })
+    }));
+    // A strong-ID match discovered from Add New has not been shown in this
+    // editor. Reuse its canonical identity without treating unseen blanks as
+    // edits; deliberate clears require an editor opened for that Person.
+    if (previous && fields.sourcePersonId !== previous.personId) person = previous;
+    var options = { mode: "commit", intent: previous ? "update" : "create", createNew: fields.createNew === true };
+    if (previous) {
+      options.expectedRevision = fields.sourcePersonId === previous.personId
+        ? Number(fields.objectRevision || 0) : Number(previous.objectRevision || 0);
     }
-    var person = m.createPerson(
-      previous
-        ? Object.assign({}, previous, {
-            personId: previous.personId,
-            name: Object.assign({}, previous.name, {
-              lastName: fields.lastName,
-              firstName: fields.firstName
-            }),
-            citizenship: fields.citizenship || previous.citizenship || "",
-            dateOfBirth: fields.dateOfBirth || previous.dateOfBirth || "",
-            immigration: Object.assign({}, previous.immigration, {
-              alienNumber: fields.alienNumber || (previous.immigration && previous.immigration.alienNumber) || ""
-            })
-          })
-        : {
-            personId: fields.personId,
-            caseRole: "",
-            name: { lastName: fields.lastName, firstName: fields.firstName },
-            citizenship: fields.citizenship,
-            dateOfBirth: fields.dateOfBirth,
-            immigration: { alienNumber: fields.alienNumber }
-          }
-    );
-    if (!previous) {
-      person.caseRole = "";
-    } else if (previous.caseRole) {
-      person.caseRole = previous.caseRole;
+    if (fields.prepareOnly) {
+      return { ok: true, person: person, objectEdit: { record: person, intent: options.intent, expectedRevision: options.expectedRevision } };
     }
-    var saved = m.store.upsertPerson(person);
-    if (!saved || !saved.ok) {
-      return { ok: false, error: (saved && saved.error) || "Could not save the person." };
-    }
+    var saved = m.store.saveObjectRecord("PERSON", person, options);
+    if (!saved || !saved.ok) return saved || { ok: false, error: "Could not save the person." };
     return { ok: true, person: m.store.getPerson(person.personId) || person };
   }
 
@@ -1528,6 +1486,8 @@
     var fields = {
       personId: personId,
       lockedPersonId: priorPersonId,
+      sourcePersonId: subjectFloatState.sourcePersonId || "",
+      objectRevision: subjectFloatState.objectRevision,
       leadId: priorLeadId || requestedLeadId,
       subjectId:
         (previousSubject && subjectKey(previousSubject)) ||
@@ -1549,6 +1509,16 @@
       );
       return;
     }
+    var identity = resolveSubjectPerson(fields);
+    if (identity && identity.code === "OBJECT_SELECTION_REQUIRED" && window.confirm && window.confirm(identity.error + " Create a separate new person?")) {
+      fields.createNew = true;
+      identity = resolveSubjectPerson(fields);
+    }
+    if (!identity || !identity.ok) {
+      setStatus((identity && identity.error) || "Could not resolve the person.");
+      return;
+    }
+    if (identity.record) fields.personId = identity.record.personId;
     if (
       m &&
       m.store &&
@@ -1556,11 +1526,6 @@
       typeof m.createEncounterSubject === "function"
     ) {
       var preflightPersonId = fields.personId;
-      if (fields.alienNumber) {
-        var preflightPerson = findPersonByAlienNumber(fields.alienNumber);
-        preflightPersonId =
-          (preflightPerson && preflightPerson.personId) || preflightPersonId;
-      }
       var preflightSubject = m.createEncounterSubject(
         Object.assign({}, previousSubject || {}, {
           subjectId: fields.subjectId,
@@ -1595,6 +1560,7 @@
         return;
       }
     }
+    fields.prepareOnly = true;
     var personResult = upsertSubjectPerson(fields);
     if (!personResult.ok) {
       setStatus(personResult.error);
@@ -1614,10 +1580,10 @@
       encounterId: encounterId,
       personId: person.personId,
       leadId: fields.leadId,
-      lastName: (person.name && person.name.lastName) || lastName,
-      firstName: (person.name && person.name.firstName) || firstName,
-      alienNumber: (person.immigration && person.immigration.alienNumber) || fields.alienNumber,
-      citizenship: person.citizenship || fields.citizenship,
+      lastName: (person.name && person.name.lastName) || "",
+      firstName: (person.name && person.name.firstName) || "",
+      alienNumber: (person.immigration && person.immigration.alienNumber) || "",
+      citizenship: person.citizenship || "",
       role: role,
       encounterRole: role,
       roleOther: role === "OTHER" ? roleOther : "",
@@ -1652,7 +1618,7 @@
     } else {
       encounterSubjects.push(subject);
     }
-    if (saveDraftQuiet({ force: true }) === false) {
+    if (saveDraftQuiet({ force: true, personEdits: [personResult.objectEdit] }) === false) {
       encounterSubjects = rosterBeforeSave;
       paintSubjectsTable(
         (byId("encounterId") && byId("encounterId").value) || queryId()
@@ -1969,6 +1935,42 @@
     return Array.prototype.slice.call(list.querySelectorAll(":scope > fieldset"));
   }
 
+  function canonicalObjectForCard(type, record, card) {
+    var id = record && (record.vehicleId || record.locationId || record.id);
+    var canonical = id && model().store.getObjectRecord && model().store.getObjectRecord(type, id);
+    var next = canonical ? Object.assign({}, record, canonical) : record;
+    ["association", "occupancy", "occupiedFrom", "occupiedTo", "encounterDisposition", "parkedLocationText"].forEach(function (key) {
+      if (Object.prototype.hasOwnProperty.call(record, key)) next[key] = record[key];
+    });
+    if (card) {
+      card.dataset.objectRevision = String(Number(next.objectRevision || 0));
+      card._objectEditRecord = JSON.parse(JSON.stringify(next));
+    }
+    return next;
+  }
+
+  function markObjectEdit(record, card) {
+    if (card && card._objectEditRecord) {
+      var values = record;
+      record = JSON.parse(JSON.stringify(card._objectEditRecord));
+      var aliases = { plate: ["licensePlate"], licensePlate: ["plate"], association: ["locationAssociation", "addressAssociation"], registeredOwnerName: ["registeredOwner"], encounterDisposition: ["encounterDisposition"] };
+      Object.keys(values).forEach(function (key) {
+        var represented = [key].concat(aliases[key] || []).some(function (field) {
+          var input = card.querySelector('[data-field="' + field + '"]');
+          return input && (!input.closest || input.closest("[data-card]") === card);
+        });
+        if (represented || key === "locations") record[key] = values[key];
+      });
+    }
+    var plateInput = card && card.querySelector('[data-field="licensePlate"]');
+    if (plateInput && (!plateInput.closest || plateInput.closest("[data-card]") === card) && Object.prototype.hasOwnProperty.call(record, "licensePlate")) {
+      record.plate = record.licensePlate;
+    }
+    record._objectEdit = true;
+    if (card && card.dataset.objectRevision !== undefined) record.objectRevision = Number(card.dataset.objectRevision || 0);
+    return record;
+  }
+
   function collectLocation(card) {
     var f = readFields(card);
     var loc = model().createLocation({
@@ -1998,7 +2000,8 @@
         loc.longitude = loc.longitude || pair[2];
       }
     }
-    return loc;
+    card.dataset.entityId = loc.locationId || "";
+    return markObjectEdit(loc, card);
   }
 
   function collectLink(card, vehicleId) {
@@ -2060,7 +2063,7 @@
         links.push(link);
       }
     });
-    return vehicle;
+    return markObjectEdit(vehicle, card);
   }
 
   function collectEncounter() {
@@ -2147,6 +2150,7 @@
     if (!card || !location) {
       return;
     }
+    location = canonicalObjectForCard("LOCATION", location, card);
     card.dataset.entityId = location.locationId || "";
     setCardValue(card, "locationAssociation", location.association || "");
     setCardValue(card, "street", location.street || "");
@@ -2210,6 +2214,7 @@
         if (!card) {
           return;
         }
+        vehicle = canonicalObjectForCard("VEHICLE", vehicle, card);
         card.dataset.entityId = vehicle.vehicleId || "";
         [
           "licensePlate",
@@ -2424,6 +2429,20 @@
       return;
     }
     var row = matches[0];
+    var storedEncounter = model().store.getEncounter(encounterId);
+    if (storedEncounter && (isComplete(storedEncounter) || (storedEncounter.meta && storedEncounter.meta.archivedAt) || (storedEncounter.narratives || []).some(function (n) { return n && (n.finalizedAt || n.status === "FINALIZED" || n.status === "finalized"); }))) {
+      setStatus("This Encounter retains completed, archived, or finalized history. The subject cannot be removed.");
+      return;
+    }
+    var filedPacket = packetStore.records.some(function (packet) {
+      if (!packet) return false;
+      var linked = (String(packet.encounterId || "") === String(encounterId) && String(packet.subjectId || "") === String(key)) || (subjectBookingId(row) && [packet.id, packet.bookingId, packet.bookinRecordId].indexOf(subjectBookingId(row)) !== -1);
+      return linked && (packet.arrestId || packet.encounterProjectionFiledAt || packet.voidedAt);
+    });
+    if (filedPacket || row.voidedBookingId) {
+      setStatus("This subject has filed booking history. Use Void booking for a correction; the historical Encounter link is retained.");
+      return;
+    }
     if (
       !window.confirm(
         "Remove " +
@@ -3044,6 +3063,15 @@
   }
 
   function rememberPersistedEncounter(record) {
+    document.querySelectorAll("[data-card][data-entity-id]").forEach(function (card) {
+      var kind = card.getAttribute("data-card") || "";
+      var type = /vehicle/i.test(kind) ? "VEHICLE" : /location|address/i.test(kind) ? "LOCATION" : "";
+      var canonical = type && model().store.getObjectRecord && model().store.getObjectRecord(type, card.dataset.entityId);
+      if (canonical) {
+        card.dataset.objectRevision = String(Number(canonical.objectRevision || 0));
+        card._objectEditRecord = JSON.parse(JSON.stringify(canonical));
+      }
+    });
     transientEncounter = null;
     encounterEditMeta = record && record.meta
       ? JSON.parse(JSON.stringify(record.meta))
@@ -3086,7 +3114,13 @@
     }
     var mode =
       options.preserveStatus && isCommitted(previous) ? "commit" : "draft";
-    var saved = m.store.saveEncounter(record, { mode: mode });
+    if (options.personEdits && !m.store.saveEncounterWithObjects) {
+      setStatus("The shared Encounter save service is unavailable. No Person changes were saved.");
+      return false;
+    }
+    var saved = options.personEdits
+      ? m.store.saveEncounterWithObjects(record, { mode: mode, personEdits: options.personEdits })
+      : m.store.saveEncounter(record, { mode: mode });
     if (!saved || !saved.ok) {
       setStatus((saved && saved.error) || "Could not save the encounter.");
       return false;
@@ -3184,22 +3218,36 @@
       setStatus("Could not delete the encounter.");
       return false;
     }
-    if (
-      typeof window.confirm === "function" &&
-      !window.confirm(
-        "Delete encounter " +
-          id +
-          "? Cases and Book-in packets stay. Packets on this encounter are unlinked."
-      )
-    ) {
-      return false;
-    }
     m.store.loadFromDisk();
     var existing = m.store.getEncounter(id);
     if (!existing && !transientEncounter) {
       setStatus("That encounter was not found.");
       return false;
     }
+    if (existing && m.store.dependenciesFor) {
+      var dependencies = m.store.dependenciesFor("ENCOUNTER", id);
+      if (!dependencies || !dependencies.ok) {
+        setStatus((dependencies && dependencies.error) || "Could not check the Encounter dependencies.");
+        return false;
+      }
+      if (isCommitted(existing) || isComplete(existing) || (dependencies.dependencies || []).length) {
+        var detail = (dependencies.dependencies || []).map(function (row) { return row.recordType + " " + row.recordId; }).join(", ");
+        var message = "This Encounter must retain its history" + (detail ? ": " + detail : ".") + " Archive it instead?";
+        if (!m.store.archiveRecord || !window.confirm || !window.confirm(message)) {
+          setStatus("Encounter retained." + (detail ? " Dependencies: " + detail : ""));
+          return false;
+        }
+        var archived = m.store.archiveRecord("ENCOUNTER", id, { reason: "Archived from Encounter controls" });
+        if (!archived || !archived.ok) {
+          setStatus((archived && archived.error) || "Could not archive the Encounter.");
+          return false;
+        }
+        setStatus("Archived Encounter " + id + ". Its history and linked records are retained.", true);
+        paintList();
+        return true;
+      }
+    }
+    if (window.confirm && !window.confirm("Delete unused draft Encounter " + id + "?")) return false;
     var packetStore = readBookinRecords();
     if (!packetStore.ok) {
       setStatus(packetStore.error);

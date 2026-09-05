@@ -132,9 +132,49 @@
     );
   }
 
+  function objectEdit(record, card) {
+    if (card && card._objectEditRecord) {
+      var values = record;
+      record = JSON.parse(JSON.stringify(card._objectEditRecord));
+      var aliases = { plate: ["licensePlate"], licensePlate: ["plate"], association: ["locationAssociation", "addressAssociation"], registeredOwnerName: ["registeredOwner"], encounterDisposition: ["encounterDisposition"] };
+      Object.keys(values).forEach(function (key) {
+        var represented = [key].concat(aliases[key] || []).some(function (field) {
+          var input = card.querySelector('[data-field="' + field + '"]');
+          return input && (!input.closest || input.closest("[data-card]") === card);
+        });
+        if (represented || key === "locations") record[key] = values[key];
+      });
+    }
+    var plateInput = card && card.querySelector('[data-field="licensePlate"]');
+    if (plateInput && (!plateInput.closest || plateInput.closest("[data-card]") === card) && Object.prototype.hasOwnProperty.call(record, "licensePlate")) {
+      record.plate = record.licensePlate;
+    }
+    record._objectEdit = true;
+    if (card && card.dataset.objectRevision !== undefined) {
+      record.objectRevision = Number(card.dataset.objectRevision || 0);
+    }
+    if (card && card._objectEditMeta) record.meta = JSON.parse(JSON.stringify(card._objectEditMeta));
+    return record;
+  }
+
+  // A successful save advances revisions without replacing the user's inputs.
+  function acknowledgeObjectEdits() {
+    if (!model.store || !model.store.getObjectRecord) return;
+    document.querySelectorAll("[data-card][data-entity-id]").forEach(function (card) {
+      var kind = String(card.getAttribute("data-card") || "").toLowerCase();
+      var type = /vehicle/.test(kind) ? "VEHICLE" : /location|address/.test(kind) ? "LOCATION" : /lead|person|identity/.test(kind) ? "PERSON" : "";
+      if (!type) return;
+      var record = model.store.getObjectRecord(type, card.dataset.entityId);
+      if (!record) return;
+      card.dataset.objectRevision = String(Number(record.objectRevision || 0));
+      card._objectEditRecord = JSON.parse(JSON.stringify(record));
+      card._objectEditMeta = record.meta ? JSON.parse(JSON.stringify(record.meta)) : null;
+    });
+  }
+
   function collectLocation(card) {
     var f = readFields(card);
-    return model.createLocation({
+    return objectEdit(model.createLocation({
       locationId: entityId(card, "loc"),
       street: f.street || "",
       street2: f.street2 || "",
@@ -152,7 +192,7 @@
       occupiedTo: f.occupiedTo || "",
       notes: f.notes || "",
       otherResidents: f.otherResidents || ""
-    });
+    }), card);
   }
 
   function collectLink(card, vehicleId) {
@@ -212,6 +252,9 @@
       ssn: leadFields.ssn || textValue(byId("ssn")) || "",
       lexId: leadFields.lexId || textValue(byId("lexId")) || ""
     });
+
+    if (leadCard && leadCard.dataset.objectRevision !== undefined) person.objectRevision = Number(leadCard.dataset.objectRevision || 0);
+    if (leadCard && leadCard._objectEditMeta) person.meta = JSON.parse(JSON.stringify(leadCard._objectEditMeta));
 
     cardsIn("aliasList").forEach(function (card) {
       if (!cardHasData(card)) {
@@ -419,6 +462,7 @@
         notes: f.notes || "",
         otherResidents: f.otherResidents || ""
       });
+      vehicle = objectEdit(vehicle, card);
       nestedLocs.forEach(function (locCard) {
         vehicle.locations.push(collectLocation(locCard));
       });
@@ -546,6 +590,8 @@
     };
   }
 
+  model.collectObjectEdit = objectEdit;
+  model.acknowledgeObjectEdits = acknowledgeObjectEdits;
   model.collectLead = collectLead;
   model.readFields = readFields;
   model.collectLocation = collectLocation;

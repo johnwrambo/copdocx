@@ -176,7 +176,13 @@
   }
 
   function arrestForContext(arrests) {
-    var rows = Array.isArray(arrests) ? arrests.slice() : [];
+    if (currentBookInRecordId && (arrests || []).some(function (row) {
+      return row && row.voidedAt &&
+        [row.bookingId, row.bookinRecordId].map(text).indexOf(currentBookInRecordId) !== -1;
+    })) return null;
+    var rows = (Array.isArray(arrests) ? arrests : []).filter(function (row) {
+      return row && !row.voidedAt;
+    });
     var exact = rows.filter(function (row) {
       return (
         currentBookInRecordId &&
@@ -195,6 +201,24 @@
         );
       })[0] || null
     );
+  }
+
+  function bookingLifecycleError(subject, recordId) {
+    var voided = (subject && subject.arrests || []).some(function (row) {
+      return row && row.voidedAt && recordId &&
+        [row.bookinRecordId, row.bookingId].map(text).indexOf(recordId) !== -1;
+    });
+    try {
+      var packets = JSON.parse(localStorage.getItem("alien-book-in.saved-records.v1") || "[]");
+      if (!Array.isArray(packets)) throw new Error("Book-In data is unavailable.");
+      voided = voided || packets.some(function (row) {
+        return row && row.voidedAt && recordId &&
+          [row.id, row.bookinRecordId, row.bookingId].map(text).indexOf(recordId) !== -1;
+      });
+    } catch (error) {
+      return "Book-In data could not be verified. The baseball card was not saved.";
+    }
+    return voided ? "This booking was voided. Its saved baseball card remains historical and cannot be updated." : "";
   }
 
   function latestCard(cards) {
@@ -807,6 +831,12 @@
       setStatus("The case has no subject.", "error");
       return false;
     }
+    // A stale card tab must not write new output onto a voided booking.
+    var lifecycleError = bookingLifecycleError(subject, currentBookInRecordId);
+    if (lifecycleError) {
+      setStatus(lifecycleError, "error");
+      return false;
+    }
 
     var warrants = foreignWarrantValues();
     subject.criminal = subject.criminal || {};
@@ -875,6 +905,13 @@
         subject.immigration.baseballCards.push(card);
       }
       snap.person = subject;
+      m.store.loadFromDisk();
+      var latest = m.store.getLead(leadId);
+      var latestSubject = latest && (m.subjectOf ? m.subjectOf(latest) : latest.person);
+      var lateLifecycleError = bookingLifecycleError(latestSubject, recordId);
+      if (!latest || !latestSubject || (m.store.diskError && m.store.diskError()) || lateLifecycleError) {
+        throw new Error(lateLifecycleError || "The case changed or became unavailable while saving. Reload it before saving the card.");
+      }
       var saved = m.store.saveLead(snap, { mode: "commit" });
       if (!saved || !saved.ok) {
         throw new Error((saved && saved.error) || "Could not save the baseball card.");
