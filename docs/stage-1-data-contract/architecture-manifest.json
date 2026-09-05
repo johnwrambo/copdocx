@@ -1,0 +1,1225 @@
+{
+  "manifestSchema": "copdocx.architecture-manifest.v1",
+  "contractStatus": "current-effective-contract",
+  "generatedAt": "2026-09-05",
+  "sourceSnapshot": {
+    "baseCommit": "980e5096414a74c16dd71be534b4f88ca456f364",
+    "baseTree": "28e2ddd99bd4fbf9f3a78dc6466f8c338acd4408",
+    "branch": "codex/release-0.66.1-narrative-direct-tab",
+    "productVersion": "0.69.2",
+    "includesUncommittedStage0": true,
+    "stage0Contract": "docs/stage-0-safety.md"
+  },
+  "relationships": [
+    { "id": "lead-subject-person", "from": "Lead", "to": "Person", "cardinality": "many Leads may reference one Person; current UI generally treats one Lead as primary", "representation": ["Lead.subjectPersonId", "Lead.person"], "direction": "bidirectional-by-projection", "authority": "ambiguous because Lead.person and WorkspaceState.people are both writable", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js:107-383"] },
+    { "id": "lead-vehicles", "from": "Lead", "to": "Vehicle", "cardinality": "one-to-many embedded/reference hybrid", "representation": ["Lead.vehicles[]", "WorkspaceState.vehicles{}"], "direction": "bidirectional-by-projection", "authority": "ambiguous", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js"] },
+    { "id": "person-locations", "from": "Person", "to": "Location", "cardinality": "one-to-many embedded/reference hybrid", "representation": ["Person.locations[]", "WorkspaceState.locations{}", "Association"], "direction": "duplicated", "authority": "ambiguous", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js", "functions/address.js"] },
+    { "id": "vehicle-locations", "from": "Vehicle", "to": "Location", "cardinality": "one-to-many embedded/reference hybrid", "representation": ["Vehicle.locations[]", "WorkspaceState.locations{}", "Association"], "direction": "duplicated", "authority": "ambiguous", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js"] },
+    { "id": "association-endpoints", "from": "Association", "to": "SharedObject", "cardinality": "many-to-many through Association", "representation": ["Association.from", "Association.to"], "direction": "directed endpoint pair", "authority": "Association intended canonical", "duplicate": false, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/model/link.js", "functions/model/store.js"] },
+    { "id": "link-association", "from": "Link", "to": "Association", "cardinality": "many embedded Link projections to zero-or-one Association", "representation": ["Link.associationId"], "direction": "one-way", "authority": "Association when present", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js"] },
+    { "id": "investigation-parent", "from": "Investigation", "to": "Investigation", "cardinality": "many-to-zero-or-one parent", "representation": ["Investigation.parentInvestigationId"], "direction": "one-way", "authority": "child pointer", "duplicate": false, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/model/investigation.js", "functions/model/store.js"] },
+    { "id": "investigation-source-lead", "from": "Investigation", "to": "Lead", "cardinality": "many-to-zero-or-one", "representation": ["Investigation.sourceLeadId"], "direction": "one-way", "authority": "Investigation pointer", "duplicate": false, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/model/investigation.js"] },
+    { "id": "investigation-nodes", "from": "Investigation", "to": "InvestigationNode", "cardinality": "one-to-many embedded", "representation": ["Investigation.nodes[]"], "direction": "owner-to-child", "authority": "Investigation", "duplicate": false, "integrityRisk": "LOW", "evidence": "VERIFIED", "sources": ["functions/investigation-wall.js"] },
+    { "id": "investigation-node-object", "from": "InvestigationNode", "to": "SharedObject", "cardinality": "many-to-one polymorphic", "representation": ["InvestigationNode.objectType", "InvestigationNode.objectId"], "direction": "one-way", "authority": "referenced object for facts; node for placement", "duplicate": false, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/investigation-wall.js"] },
+    { "id": "operation-targets", "from": "Operation", "to": "OperationTarget", "cardinality": "one-to-many embedded", "representation": ["Operation.targets[]"], "direction": "owner-to-child", "authority": "Operation", "duplicate": false, "integrityRisk": "LOW", "evidence": "VERIFIED", "sources": ["functions/operations.js", "functions/model/store.js"] },
+    { "id": "operation-target-lead", "from": "OperationTarget", "to": "Lead", "cardinality": "many-to-one", "representation": ["OperationTarget.leadId"], "direction": "one-way", "authority": "Lead for live Case facts", "duplicate": true, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/operations.js"] },
+    { "id": "operation-target-person", "from": "OperationTarget", "to": "Person", "cardinality": "many-to-one", "representation": ["OperationTarget.personId"], "direction": "one-way", "authority": "Person for live identity", "duplicate": true, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/operations.js"] },
+    { "id": "operation-target-freeze", "from": "OperationTarget", "to": "OperationTargetFreeze", "cardinality": "one-to-zero-or-one embedded", "representation": ["OperationTarget.freeze"], "direction": "owner-to-snapshot", "authority": "freeze for issued historical plan only", "duplicate": true, "integrityRisk": "LOW", "evidence": "VERIFIED", "sources": ["functions/model/store.js", "functions/operations.js"] },
+    { "id": "operation-teams", "from": "Operation", "to": "OperationTeam", "cardinality": "one-to-many embedded", "representation": ["Operation.teams[]"], "direction": "owner-to-child", "authority": "Operation", "duplicate": false, "integrityRisk": "LOW", "evidence": "VERIFIED", "sources": ["functions/operations.js"] },
+    { "id": "operation-team-members", "from": "OperationTeam", "to": "OperationMember", "cardinality": "one-to-many embedded", "representation": ["OperationTeam.members[]"], "direction": "owner-to-child", "authority": "Operation team assignment", "duplicate": false, "integrityRisk": "LOW", "evidence": "VERIFIED", "sources": ["functions/operations.js"] },
+    { "id": "operation-member-officer", "from": "OperationMember", "to": "Officer", "cardinality": "many-to-one cross-store", "representation": ["OperationMember.officerId"], "direction": "Workspace-to-Admin", "authority": "Admin Officer identity; Operation assignment role", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/operations.js", "functions/admin.js"] },
+    { "id": "operation-assignments", "from": "Operation", "to": "OperationTargetAssignment", "cardinality": "one-to-many embedded join rows", "representation": ["Operation.targetAssignments[]"], "direction": "owner-to-join", "authority": "Operation", "duplicate": false, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/operations.js"] },
+    { "id": "encounter-operation", "from": "FieldEncounter", "to": "Operation", "cardinality": "many-to-zero-or-one", "representation": ["FieldEncounter.operationId", "EncounterSubject.shared.operationId"], "direction": "one-way plus projection", "authority": "FieldEncounter.operationId", "duplicate": true, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/model/encounter.js", "functions/model/store.js"] },
+    { "id": "encounter-officers", "from": "FieldEncounter", "to": "Officer", "cardinality": "many-to-many cross-store", "representation": ["FieldEncounter.officerIds[]", "EncounterSubject.shared.officerIds[]"], "direction": "Workspace-to-Admin", "authority": "Encounter assignment; Admin identity", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/encounters.js", "functions/admin.js"] },
+    { "id": "encounter-locations", "from": "FieldEncounter", "to": "Location", "cardinality": "one-to-many embedded/reference hybrid", "representation": ["FieldEncounter.locations[]", "centerLocationId", "WorkspaceState.locations{}", "EncounterCompleted.locations[]"], "direction": "duplicated", "authority": "Encounter for event context; shared Location intended for reusable place", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js", "functions/encounters.js"] },
+    { "id": "encounter-vehicles", "from": "FieldEncounter", "to": "Vehicle", "cardinality": "one-to-many embedded/reference hybrid", "representation": ["FieldEncounter.vehicles[]", "WorkspaceState.vehicles{}", "EncounterSubject.shared.vehicles[]"], "direction": "duplicated", "authority": "ambiguous", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js", "functions/encounters.js"] },
+    { "id": "encounter-subjects", "from": "FieldEncounter", "to": "EncounterSubject", "cardinality": "one-to-many embedded", "representation": ["FieldEncounter.subjects[]"], "direction": "owner-to-child", "authority": "EncounterSubject for event-participant facts", "duplicate": false, "integrityRisk": "LOW", "evidence": "VERIFIED", "sources": ["functions/model/encounter.js", "functions/encounters.js"] },
+    { "id": "encounter-subject-person", "from": "EncounterSubject", "to": "Person", "cardinality": "many-to-zero-or-one", "representation": ["EncounterSubject.personId", "identity snapshot scalars", "Person.encounters[]"], "direction": "duplicated and projected", "authority": "Person for identity; EncounterSubject for event role/outcome", "duplicate": true, "integrityRisk": "CRITICAL", "evidence": "VERIFIED", "sources": ["functions/model/store.js", "functions/encounters.js"] },
+    { "id": "encounter-subject-lead", "from": "EncounterSubject", "to": "Lead", "cardinality": "many-to-zero-or-one", "representation": ["EncounterSubject.leadId"], "direction": "one-way", "authority": "Lead for Case aggregate", "duplicate": false, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/encounters.js"] },
+    { "id": "encounter-subject-bookin", "from": "EncounterSubject", "to": "BookInRecord", "cardinality": "one-to-zero-or-one cross-store", "representation": ["EncounterSubject.bookinRecordId", "BookInRecord.encounterId/personId/leadId"], "direction": "manual bidirectional join", "authority": "BookInRecord for packet; EncounterSubject for event participation", "duplicate": true, "integrityRisk": "CRITICAL", "evidence": "VERIFIED", "sources": ["functions/encounters.js", "functions/book-in.js", "functions/model/store.js"] },
+    { "id": "person-arrests", "from": "Person", "to": "Arrest", "cardinality": "one-to-many embedded", "representation": ["Person.arrests[]"], "direction": "owner-to-child", "authority": "committed Lead Person copy is current report source", "duplicate": false, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js", "functions/arrest-report.js"] },
+    { "id": "arrest-encounter", "from": "Arrest", "to": "FieldEncounter", "cardinality": "many-to-zero-or-one", "representation": ["Arrest.encounterId", "encounterNumber"], "direction": "one-way plus duplicated display ID", "authority": "Encounter for event; Arrest for report projection", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/store.js"] },
+    { "id": "arrest-bookin", "from": "Arrest", "to": "BookInRecord", "cardinality": "one-to-zero-or-one cross-store", "representation": ["Arrest.bookinRecordId", "BookInRecord.arrestId", "Arrest.booking"], "direction": "manual bidirectional join plus projection", "authority": "BookInRecord for packet; Arrest for committed report projection", "duplicate": true, "integrityRisk": "CRITICAL", "evidence": "VERIFIED", "sources": ["functions/model/store.js", "functions/book-in.js"] },
+    { "id": "encounter-narratives", "from": "FieldEncounter", "to": "NarrativeRecord", "cardinality": "one-to-many embedded", "representation": ["FieldEncounter.narratives[]"], "direction": "owner-to-child", "authority": "Encounter narratives array", "duplicate": false, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/narratives/narrative-page.js"] },
+    { "id": "narrative-focus-subject", "from": "NarrativeRecord", "to": "EncounterSubject", "cardinality": "many-to-one intended", "representation": ["focusEncounterParticipantId", "relatedEncounterParticipantIds[]", "sourceSnapshot"], "direction": "one-way", "authority": "intended EncounterSubject IDs; current adapter can synthesize replacements", "duplicate": true, "integrityRisk": "CRITICAL", "evidence": "VERIFIED", "sources": ["functions/encounter-narrative.js", "functions/narratives/narrative-page.js"] },
+    { "id": "person-warrant-media", "from": "Warrant", "to": "MediaMetadata", "cardinality": "one-to-zero-or-one cross-database", "representation": ["Warrant.mediaId", "MediaMetadata.owner"], "direction": "manual bidirectional convention", "authority": "Warrant metadata and Media bytes separately", "duplicate": false, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/warrant-issue.js", "functions/model/media.js"] },
+    { "id": "media-owner", "from": "MediaMetadata", "to": "SharedObject", "cardinality": "many Media to one polymorphic owner", "representation": ["MediaMetadata.owner", "ownerKey"], "direction": "Media-to-owner", "authority": "Media repository; no database FK", "duplicate": true, "integrityRisk": "HIGH", "evidence": "VERIFIED", "sources": ["functions/model/media.js"] },
+    { "id": "media-blobs", "from": "MediaMetadata", "to": "MediaBlobRow", "cardinality": "one-to-many roles", "representation": ["MediaMetadata.roles[]", "MediaBlobRow compound key"], "direction": "metadata-to-bytes convention", "authority": "IndexedDB stores; transaction-scoped in Media repository", "duplicate": true, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/model/media.js"] },
+    { "id": "shift-officer", "from": "Shift", "to": "Officer", "cardinality": "many-to-one within Admin", "representation": ["Shift.officerId"], "direction": "one-way", "authority": "Officer roster", "duplicate": false, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/admin.js"] },
+    { "id": "shift-vehicle", "from": "Shift", "to": "Vehicle", "cardinality": "many-to-one within Admin fleet", "representation": ["Shift.vehicleId"], "direction": "one-way", "authority": "Admin fleet", "duplicate": false, "integrityRisk": "MEDIUM", "evidence": "VERIFIED", "sources": ["functions/admin.js"] }
+  ],
+  "workflows": {
+    "saveLead": {
+      "entryPoints": ["Case/Lead forms", "Book-In promotion", "Warrant/Baseball Card save"],
+      "steps": ["collect or clone Lead", "canonicalLeadGraph normalizes Person and embedded objects", "update Workspace dictionaries and Lead", "serialize whole copdocx.store.v1 document", "refresh views through local call or storage event"],
+      "reads": ["workspace", "bookin when promotion triggered"],
+      "writes": ["workspace"],
+      "atomicity": "single localStorage write, but live in-memory mutation can precede a failed first write",
+      "functions": ["canonicalLeadGraph", "saveLead"],
+      "evidence": "VERIFIED"
+    },
+    "saveEncounter": {
+      "entryPoints": ["Encounter form", "subject/location/vehicle edits", "Narrative save"],
+      "steps": ["normalize/create Encounter", "synchronize embedded subjects/shared stop and object dictionaries", "replace Workspace Encounter", "serialize whole Workspace document", "project selected encounter facts into Person/associations where invoked"],
+      "reads": ["workspace", "admin for UI selections", "bookin for booking joins"],
+      "writes": ["workspace"],
+      "atomicity": "single Workspace key write; read-modify-write is last-writer-wins across tabs",
+      "functions": ["saveEncounter", "updateEncounter"],
+      "evidence": "VERIFIED"
+    },
+    "bookEncounterSubject": {
+      "entryPoints": ["Encounter Book action"],
+      "steps": ["collect EncounterSubject and Encounter context", "create/update BookInRecord", "promote/reuse Lead and Person identity", "append/update Arrest projection", "write Workspace and Book-In independently", "mark EncounterSubject booking/document fields"],
+      "reads": ["workspace", "bookin", "admin"],
+      "writes": ["workspace", "bookin", "admin in selected statistic paths"],
+      "atomicity": "no cross-store transaction; a failure can leave Arrest without packet or packet without all projections",
+      "functions": ["promoteBookInIdentity", "Book-In saveRecord", "Encounter booking bridge"],
+      "evidence": "VERIFIED"
+    },
+    "deleteBookInRecord": {
+      "entryPoints": ["Book-In Saved Records delete"],
+      "steps": ["remove array row", "rewrite Book-In array", "refresh Saved Records UI"],
+      "reads": ["bookin"],
+      "writes": ["bookin"],
+      "atomicity": "single key write; no cascade to Workspace references",
+      "functions": ["Book-In delete handler"],
+      "evidence": "VERIFIED"
+    },
+    "completeEncounter": {
+      "entryPoints": ["Encounter complete action"],
+      "steps": ["validate current aggregate", "derive subject/location/vehicle snapshots", "calculate outcomeCounts and pin", "persist completed snapshot and lifecycle metadata", "serialize Workspace"],
+      "reads": ["workspace"],
+      "writes": ["workspace"],
+      "atomicity": "one Workspace write; snapshot freshness after later unlock/edit is workflow-dependent",
+      "functions": ["completeEncounter"],
+      "evidence": "VERIFIED"
+    },
+    "saveNarrative": {
+      "entryPoints": ["Narrative page Build 9 save"],
+      "steps": ["adapt Encounter/Admin/Book-In/settings to Narrative bundle", "resolve engine state and sections", "merge NarrativeRecord by narrativeId", "derive supervisor summary", "update Encounter", "serialize Workspace"],
+      "reads": ["workspace", "admin", "bookin", "settings"],
+      "writes": ["workspace"],
+      "atomicity": "one Workspace write after multi-store reads; adapter currently can alter outcomes and participant IDs",
+      "functions": ["encounter narrative adapter", "Narrative domain merge", "save narrative handler"],
+      "evidence": "VERIFIED"
+    },
+    "issueWarrant": {
+      "entryPoints": ["I-200/I-205 warrant issue page"],
+      "steps": ["load Lead/Person/Admin/settings", "fill PDF", "save generated PDF to Media", "append Person Warrant", "save Lead/Workspace", "optionally write authorized directory", "download PDF"],
+      "reads": ["workspace", "admin", "settings", "warrants"],
+      "writes": ["media", "workspace", "warrants directory outside application"],
+      "atomicity": "cross-store partial commit: Media may persist before Lead/Warrant save fails",
+      "functions": ["warrant issue save flow", "Media save"],
+      "evidence": "VERIFIED"
+    },
+    "saveMedia": {
+      "entryPoints": ["photo picker modal", "file/media cards", "warrant issue", "import"],
+      "steps": ["normalize metadata/owner", "hash content", "prepare roles", "write meta and blob roles in IndexedDB transaction", "dispatch media-changed event"],
+      "reads": ["media"],
+      "writes": ["media"],
+      "atomicity": "Media repository transaction can cover its stores, but owner aggregate is outside that transaction",
+      "functions": ["Media repository save APIs"],
+      "evidence": "VERIFIED"
+    },
+    "ordinaryExport": {
+      "entryPoints": ["Import/Export page"],
+      "steps": ["read portable registry stores", "normalize selected transfer sections", "optionally export Media when API is loaded", "serialize copdocx.transfer.v1", "download JSON"],
+      "reads": ["portable storage entries", "media when available"],
+      "writes": ["download only"],
+      "atomicity": "not an exact byte backup; Media can be omitted on pages without media.js",
+      "functions": ["transfer export builder"],
+      "evidence": "VERIFIED"
+    },
+    "ordinaryImport": {
+      "entryPoints": ["Import/Export page", "opener handoff"],
+      "steps": ["parse supported transfer/legacy wrapper", "enforce import size ceiling", "merge/replace selected local stores", "import Media/support payload", "write invalidation key", "post import-done to opener"],
+      "reads": ["selected current stores", "import file"],
+      "writes": ["workspace", "admin", "bookin", "settings", "map stores", "media", "importDoneSignal"],
+      "atomicity": "no rollback across stores; earlier writes survive a later failure",
+      "functions": ["applyImport"],
+      "evidence": "VERIFIED"
+    },
+    "safetyBackup": {
+      "entryPoints": ["Stage 0 Integrity page"],
+      "steps": ["capture registered local/session raw strings", "export Media metadata/blobs", "inventory Warrant handle database", "hash captured rows and blobs", "recapture raw stores", "compare before/after", "embed integrity report", "download copdocx.safety-backup.v1"],
+      "reads": ["all 22 registered entries where readable"],
+      "writes": ["download only"],
+      "atomicity": "observational verification detects change during capture; it does not lock other tabs",
+      "functions": ["safetyBackup.createVerifiedArchive"],
+      "evidence": "VERIFIED"
+    }
+  },
+  "components": {
+    "ApplicationBar": { "sources": ["functions/app-bar.js"], "pages": ["most current HTML pages"], "reads": ["AdminState for identity/team context"], "writes": [], "actions": ["normal link navigation", "query-string preservation", "new-window links"], "persistence": "none directly", "ownership": "navigation only", "evidence": "VERIFIED" },
+    "CaseListAndCard": { "sources": ["functions/leads.js", "functions/cards.js", "cases.html", "case.html"], "pages": ["Cases", "Case detail"], "reads": ["Lead", "Person", "Vehicle", "Location", "Association", "MediaMetadata"], "writes": ["Lead and writable embedded/shared copies through store APIs"], "actions": ["open", "edit", "file/commit", "junk/remove", "launch related workflows"], "persistence": "Workspace whole-document save", "ownership": "Lead owns aggregate cards; several cards also project into shared dictionaries", "evidence": "VERIFIED" },
+    "LeadSourceCard": { "sources": ["functions/lead-source.js", "functions/model/collect.js"], "pages": ["Case edit", "legacy Lead form"], "reads": ["LeadSource"], "writes": ["Lead.source"], "actions": ["collect", "hydrate", "validate"], "persistence": "through saveLead", "ownership": "edits owning Lead", "evidence": "VERIFIED" },
+    "PersonIdentityCards": { "sources": ["functions/leads.js", "functions/case-edit.js", "functions/model/collect.js", "functions/model/hydrate.js"], "pages": ["Case", "Case edit"], "reads": ["Lead.person", "Workspace Person"], "writes": ["Person name, identifiers, aliases, documents, immigration/criminal fields"], "actions": ["add/remove child cards", "collect/hydrate"], "persistence": "through saveLead/canonicalLeadGraph", "ownership": "edits Lead.person and indirectly shared Person", "evidence": "VERIFIED" },
+    "AddressCard": { "sources": ["functions/address.js", "functions/cards.js", "functions/model/location.js"], "pages": ["Case", "Vehicle", "Officer", "Encounter", "Investigation"], "reads": ["Location", "Association", "GeocodeCache"], "writes": ["embedded Location", "Workspace Location", "Association", "geocode cache"], "actions": ["geocode", "map", "set occupancy/association"], "persistence": "owner save plus session geocode cache", "ownership": "context-dependent; shared and embedded copies coexist", "evidence": "VERIFIED" },
+    "VehicleCard": { "sources": ["functions/vehicles.js", "functions/model/vehicle.js", "functions/cards.js"], "pages": ["Vehicles", "Case", "Encounter", "Investigation", "Admin fleet"], "reads": ["Vehicle", "Location", "Association"], "writes": ["Vehicle and context copies"], "actions": ["create", "edit", "link", "junk/remove"], "persistence": "Workspace or Admin whole-document save", "ownership": "shared entity in Workspace; separate fleet variant in Admin", "evidence": "VERIFIED" },
+    "CriminalHistoryCard": { "sources": ["functions/rapsheet.js", "functions/leads.js"], "pages": ["Case"], "reads": ["CriminalProfile", "Conviction", "Warrant", "rapSheet text"], "writes": ["Person.criminal", "convictions and parsed flags"], "actions": ["parse", "merge", "edit"], "persistence": "through saveLead", "ownership": "edits Person; derived flags are persisted", "evidence": "VERIFIED" },
+    "EncounterEditor": { "sources": ["functions/encounters.js", "functions/model/encounter.js", "encounter.html", "encounter-form.html"], "pages": ["Encounter list/detail/form"], "reads": ["FieldEncounter", "Admin Officer", "Operation", "Person/Lead", "BookInRecord"], "writes": ["FieldEncounter aggregate and selected projections"], "actions": ["create", "edit", "add subject/object", "book", "complete", "unlock", "delete", "open Narrative"], "persistence": "Workspace plus separate Book-In path for booking", "ownership": "Encounter root", "evidence": "VERIFIED" },
+    "EncounterSubjectCard": { "sources": ["functions/encounters.js", "functions/model/encounter.js"], "pages": ["Encounter"], "reads": ["EncounterSubject", "Person", "Lead", "Officer", "BookInRecord"], "writes": ["EncounterSubject", "PersonEncounter/Arrest/Book-In projections in workflows"], "actions": ["select/create subject", "set role/outcome", "book", "generate documents"], "persistence": "Workspace and sometimes Book-In", "ownership": "owns event-participant facts, edits references/copies of other domains", "evidence": "VERIFIED" },
+    "BookInWorkspace": { "sources": ["functions/book-in.js", "bookin.html"], "pages": ["Book-In"], "reads": ["BookInRecord", "live DOM", "Workspace joins", "Admin"], "writes": ["BookInRecord", "FormControlSnapshot", "Lead/Person/Arrest promotion", "BaseballHandoff"], "actions": ["new/save/open/delete/import/export/generate packet/open baseball card"], "persistence": "Book-In LocalStorage plus non-atomic Workspace promotion", "ownership": "Book-In packet owns formState; does not own Person/Encounter", "evidence": "VERIFIED" },
+    "OfficerAdminCards": { "sources": ["functions/admin.js", "functions/officer-roster.js", "admin.html", "officer.html", "officer-form.html"], "pages": ["Admin", "Officers"], "reads": ["AdminState", "Workspace Arrest projections"], "writes": ["Officer", "Admin fleet Vehicle", "Shift", "fieldArrests cache"], "actions": ["create/edit/delete", "roster and schedule"], "persistence": "Admin whole-document LocalStorage save", "ownership": "Admin domains", "evidence": "VERIFIED" },
+    "InvestigationWall": { "sources": ["functions/investigations.js", "functions/investigation-wall.js", "investigate.html", "investigations.html"], "pages": ["Investigations", "Investigation wall"], "reads": ["Investigation", "SharedObject", "Association", "MediaMetadata"], "writes": ["Investigation nodes/links/plates/history", "InvestigationWindowState", "shared objects through store commands"], "actions": ["create/open/link/position/focus"], "persistence": "Workspace plus current-tab session window state", "ownership": "Investigation owns wall state; referenced objects own their facts", "evidence": "VERIFIED" },
+    "OperationPlanner": { "sources": ["functions/operations.js", "functions/model/operation.js", "operation-form.html", "operation.html", "operation-brief.html"], "pages": ["Operations", "Operation plan", "issued brief"], "reads": ["Operation", "Lead/Person", "Admin roster/fleet", "Location/Vehicle/Media"], "writes": ["Operation aggregate, freezes, order"], "actions": ["import targets/teams", "assign", "issue", "generate/download brief", "seed Encounter"], "persistence": "Workspace", "ownership": "Operation plan and intentional issued snapshots", "evidence": "VERIFIED" },
+    "NarrativeWorkspace": { "sources": ["functions/encounter-narrative.js", "functions/narratives/narrative-page.js", "functions/narratives/narrative-workspace-ui.js", "narrative.html"], "pages": ["Narrative workspace"], "reads": ["FieldEncounter", "EncounterSubject", "BookInRecord", "AdminState", "WarrantSettings", "NarrativeRecord"], "writes": ["NarrativeRecord", "SupervisorSummary", "FieldEncounter"], "actions": ["build", "select sections", "override text", "save/finalize", "copy/download"], "persistence": "Workspace Encounter save; local template storage disabled in current integration", "ownership": "Narrative editorial state; adapter reads but must not own source facts", "evidence": "VERIFIED" },
+    "MediaCardAndPicker": { "sources": ["functions/media-card.js", "functions/photo-picker-modal.js", "functions/model/media.js"], "pages": ["Case and object cards", "Baseball Card", "Warrant"], "reads": ["MediaMetadata", "MediaBlobRow", "owner references"], "writes": ["Media IndexedDB"], "actions": ["upload/select/crop/caption/set primary/delete"], "persistence": "IndexedDB transaction within Media only", "ownership": "Media metadata/bytes; owner object is referenced", "evidence": "VERIFIED" },
+    "MapView": { "sources": ["functions/map.js", "functions/map-targets.js", "functions/map-popup.js", "functions/map-views.js", "functions/map-markup.js", "map.html"], "pages": ["Map"], "reads": ["Workspace Person/Lead/Location/Vehicle/Encounter/Association", "Media", "map preferences"], "writes": ["MapViewsState", "MapLayersState", "MapIconsState", "MapMarkupState"], "actions": ["filter", "select", "save view", "markup", "open source records"], "persistence": "auxiliary map keys only; domain data is read-only in main map flow", "ownership": "derived GEOINT/presentation view", "evidence": "VERIFIED" },
+    "OracleView": { "sources": ["functions/oracle.js", "oracle.html"], "pages": ["Oracle"], "reads": ["Workspace Lead/Person/Encounter/Operation", "Admin Officer"], "writes": [], "actions": ["filter", "aggregate", "rank", "render statistics"], "persistence": "none", "ownership": "derived analytics view", "evidence": "VERIFIED" },
+    "WarrantIssue": { "sources": ["functions/warrant-issue.js", "functions/pdf/fill-warrant.js", "i200-form.html", "i205-form.html"], "pages": ["I-200", "I-205"], "reads": ["Lead/Person", "Admin Officer", "WarrantSettings", "WarrantDirectoryHandle"], "writes": ["Media", "Person.warrants", "Workspace", "optional external directory"], "actions": ["fill", "issue", "download"], "persistence": "cross-store, non-transactional", "ownership": "Warrant metadata on Person; bytes in Media", "evidence": "VERIFIED" },
+    "BaseballCardWorkspace": { "sources": ["functions/baseball-page.js", "functions/baseballcard.js", "baseballcard.html"], "pages": ["Baseball Card"], "reads": ["BaseballHandoff", "Lead/Person/Arrest", "BookInRecord", "Media", "BaseballCardStyle"], "writes": ["BaseballCard", "CriminalProfile foreign-warrant fields", "Media photo", "Workspace"], "actions": ["generate", "edit", "save", "copy", "download HTML"], "persistence": "Workspace plus Media/style key", "ownership": "saved output snapshot", "evidence": "VERIFIED" },
+    "TransferWorkspace": { "sources": ["functions/transfer.js", "import.html"], "pages": ["Import/Export"], "reads": ["portable stores", "Media"], "writes": ["selected stores", "Media", "ImportDoneSignal"], "actions": ["export", "preview import", "merge/replace", "notify opener"], "persistence": "multi-store without rollback", "ownership": "transport only", "evidence": "VERIFIED" },
+    "IntegrityWorkspace": { "sources": ["functions/integrity.js", "functions/integrity-page.js", "functions/safety-backup.js", "integrity.html"], "pages": ["Integrity & Safety"], "reads": ["all registered stores"], "writes": ["in-memory report and downloaded archive only"], "actions": ["scan", "download report", "create verified safety archive"], "persistence": "no application-store mutation", "ownership": "diagnostic/backup artifact", "evidence": "VERIFIED" }
+  },
+  "reports": {
+    "ArrestReport": { "source": "functions/arrest-report.js", "entryPoint": "arrest roster/report UI", "inputs": ["Lead.person identity", "Person.arrests", "BaseballCard", "Officer/team/location display facts"], "output": ["HTML/plain report model"], "persistentOutput": false, "fieldChangeRisk": "Person/Arrest/BaseballCard renames break report collection", "evidence": "VERIFIED" },
+    "ArrestRoster": { "source": "functions/arrest-roster.js", "entryPoint": "roster pages", "inputs": ["Arrest report rows", "date/team/officer filters"], "output": ["rendered roster"], "persistentOutput": false, "fieldChangeRisk": "Arrest identity/date/officer field changes", "evidence": "VERIFIED" },
+    "BookInCombinedPacket": { "source": "functions/book-in.js:4341-4468", "entryPoint": "Book-In Generate", "inputs": ["live Book-In DOM controls", "embedded PDF templates"], "output": ["downloaded combined PDF"], "persistentOutput": false, "fieldChangeRisk": "HTML control ID or PDF field-map changes can silently omit/misplace data", "evidence": "VERIFIED" },
+    "BookInMedicalPacket": { "source": "functions/book-in.js:3820-4433", "entryPoint": "Book-In Generate", "inputs": ["live medical/property DOM controls"], "output": ["PDF pages within combined packet"], "persistentOutput": false, "fieldChangeRisk": "DOM control/PDF mapping changes", "evidence": "VERIFIED" },
+    "WarrantI200": { "source": "functions/pdf/fill-warrant.js", "entryPoint": "i200-form.html", "inputs": ["Person identity/immigration", "WarrantSettings", "Admin Officer", "warrant form"], "output": ["PDF download", "Media file", "Warrant record", "optional directory file"], "persistentOutput": true, "fieldChangeRisk": "Person immigration/name or settings/officer changes", "evidence": "VERIFIED" },
+    "WarrantI205": { "source": "functions/pdf/fill-warrant.js", "entryPoint": "i205-form.html", "inputs": ["Person identity/immigration", "WarrantSettings", "Admin Officer", "warrant form"], "output": ["PDF download", "Media file", "Warrant record", "optional directory file"], "persistentOutput": true, "fieldChangeRisk": "Person immigration/name or settings/officer changes", "evidence": "VERIFIED" },
+    "BaseballCardOutput": { "source": "functions/baseball-page.js", "entryPoint": "baseballcard.html", "inputs": ["Person", "Arrest", "BookInRecord", "Media", "style"], "output": ["saved BaseballCard text/html", "downloaded HTML"], "persistentOutput": true, "fieldChangeRisk": "identity, arrest, immigration, booking or Media changes", "evidence": "VERIFIED" },
+    "OperationOrder": { "source": "functions/model/store.js", "entryPoint": "Issue Operation", "inputs": ["Operation plan", "OperationTarget freeze inputs", "Officer/team assignments", "Location/Vehicle"], "output": ["Operation.order snapshot"], "persistentOutput": true, "fieldChangeRisk": "Operation/target/team/location schema changes", "evidence": "VERIFIED" },
+    "OperationBrief": { "source": "functions/operations.js:1189-1427", "entryPoint": "operation-brief.html", "inputs": ["issued Operation.order", "target freezes", "officer briefs"], "output": ["rendered/printable page", "downloaded HTML"], "persistentOutput": false, "fieldChangeRisk": "OperationOrder/OfficerBrief changes", "evidence": "VERIFIED" },
+    "MobileTargetSheet": { "source": "functions/leads.js", "entryPoint": "mobile-target-sheet.html", "inputs": ["Lead", "Person", "Vehicle", "Location", "Media"], "output": ["rendered target sheet"], "persistentOutput": false, "fieldChangeRisk": "Lead.person and shared-object changes", "evidence": "VERIFIED" },
+    "NarrativeTextAndJson": { "source": "functions/narratives/narrative-page.js:1191-1266", "entryPoint": "Narrative Copy/Download", "inputs": ["NarrativeRecord.output", "Narrative engine current output"], "output": ["clipboard text", "TXT", "JSON"], "persistentOutput": false, "fieldChangeRisk": "Narrative output-stage changes", "evidence": "VERIFIED" },
+    "SupervisorSummary": { "source": "functions/narratives/build9/encounter-summary.js", "entryPoint": "Narrative save/summary", "inputs": ["EncounterSubject outcomes", "Narrative coverage", "Encounter context"], "output": ["FieldEncounter.supervisorSummary"], "persistentOutput": true, "fieldChangeRisk": "participant identity/outcome or coverage changes", "evidence": "VERIFIED" },
+    "TransferJson": { "source": "functions/transfer.js", "entryPoint": "Import/Export", "inputs": ["portable storage entries", "Media when loaded"], "output": ["copdocx.transfer.v1 JSON"], "persistentOutput": false, "fieldChangeRisk": "root store/import normalization changes", "evidence": "VERIFIED" },
+    "SafetyBackupJson": { "source": "functions/safety-backup.js", "entryPoint": "Integrity page", "inputs": ["registered raw storage", "Media", "Warrant handle inventory", "IntegrityReport"], "output": ["copdocx.safety-backup.v1 JSON"], "persistentOutput": false, "fieldChangeRisk": "storage registry or IndexedDB schema changes require capture update", "evidence": "VERIFIED" }
+  },
+  "events": {
+    "browserStorage": { "mechanism": "window storage event", "producers": ["browser after other-document LocalStorage writes"], "consumers": ["functions/model/store.js:8025", "functions/admin.js:2657", "functions/book-in.js:4891", "functions/transfer.js:2149", "functions/integrity-page.js:565"], "schema": { "key": "storage key", "newValue": "raw serialized value" }, "persistent": false, "delivery": "other same-origin browsing contexts only; not the writer", "failureModes": ["last-writer-wins", "listeners refresh at different granularity", "sessionStorage is tab-scoped"], "evidence": "VERIFIED" },
+    "importDonePostMessage": { "mechanism": "window.opener.postMessage", "producers": ["functions/transfer.js:1548-1551"], "consumers": ["opener transfer/page listener where present"], "schema": { "type": "copdocx-import-done" }, "persistent": false, "delivery": "opener reference, target origin wildcard", "failureModes": ["opener absent/closed", "listener absent", "wildcard origin weakens isolation"], "evidence": "VERIFIED" },
+    "importDoneStoragePulse": { "mechanism": "LocalStorage invalidation key", "producers": ["functions/transfer.js:1542-1544"], "consumers": ["functions/transfer.js:2149-2168", "other storage listeners"], "schema": { "key": "copdocx.import.done.v1", "value": "Date.now string" }, "persistent": true, "delivery": "same-origin other contexts", "failureModes": ["writer does not receive storage event", "pulse persists but has no replay protocol"], "evidence": "VERIFIED" },
+    "mediaChanged": { "mechanism": "CustomEvent", "producers": ["functions/photo-picker-modal.js:164-167"], "consumers": ["same-window media UI listeners"], "schema": { "type": "copdoc:media-changed", "detail": { "owner": "Endpoint" } }, "persistent": false, "delivery": "same Window only", "failureModes": ["does not synchronize other tabs by itself"], "evidence": "VERIFIED" },
+    "photoPickerMessages": { "mechanism": "parent/child postMessage", "producers": ["functions/photo-picker.js"], "consumers": ["parent picker integration"], "schema": { "types": ["copdocx:photo-picker-close", "picker payload messages"] }, "persistent": false, "delivery": "embedded/parent window", "failureModes": ["lab/legacy picker paths differ from production modal"], "evidence": "VERIFIED" },
+    "narrativeEmbedMessages": { "mechanism": "parent/child postMessage", "producers": ["functions/narratives/narrative-builder-engine.js:6551-6600"], "consumers": ["embed host when engine is embedded"], "schema": { "types": ["ready", "state", "error", "engine command/response"] }, "persistent": false, "delivery": "parent/source window with origin checks defined by engine", "failureModes": ["current direct Narrative workspace does not require an iframe; dormant embed API can diverge"], "evidence": "VERIFIED" },
+    "broadcastChannel": { "mechanism": "BroadcastChannel", "producers": [], "consumers": [], "schema": null, "persistent": false, "delivery": "not used by active current pages", "failureModes": [], "evidence": "VERIFIED" },
+    "legacyStandaloneBookInBroadcastChannel": { "mechanism": "BroadcastChannel", "producers": ["Alien_Book_In_Docs_v1_10_0.html"], "consumers": ["Alien_Book_In_Docs_v1_10_0.html"], "schema": { "channelAndMessages": "standalone legacy implementation-specific" }, "persistent": false, "delivery": "same-origin standalone Book-In contexts if that retained file is opened directly", "failureModes": ["not linked by active navigation", "different synchronization/revision model from current bookin.html"], "evidence": "UNKNOWN_REVIEW" }
+  },
+  "risks": [
+    { "id": "S0-PERSON-001", "severity": "CRITICAL", "title": "A stale Case save removes newer Person encounter history", "status": "risk_reproduced", "affected": ["Lead", "Person", "PersonEncounter"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-OBJECT-001", "severity": "CRITICAL", "title": "A stale embedded Vehicle overwrites its newer canonical record", "status": "risk_reproduced", "affected": ["Lead", "Vehicle"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-OBJECT-002", "severity": "CRITICAL", "title": "A stale embedded Location overwrites its newer canonical record", "status": "risk_reproduced", "affected": ["Person", "Vehicle", "Location"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-STORAGE-001", "severity": "CRITICAL", "title": "A failed first write leaves a phantom record in live memory", "status": "risk_reproduced", "affected": ["WorkspaceState"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-BOOKIN-001", "severity": "CRITICAL", "title": "Book-In promotion can persist an Arrest without its packet", "status": "risk_reproduced", "affected": ["BookInRecord", "Arrest", "Person"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-BOOKIN-002", "severity": "CRITICAL", "title": "Deleting a Book-In packet leaves active Encounter and Arrest references", "status": "risk_reproduced", "affected": ["BookInRecord", "EncounterSubject", "Arrest"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-IMPORT-001", "severity": "CRITICAL", "title": "A multi-store import can partially commit before a later write fails", "status": "risk_reproduced", "affected": ["all portable stores"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-NARRATIVE-001", "severity": "CRITICAL", "title": "Narrative adaptation changes a fled outcome to arrested", "status": "risk_reproduced", "affected": ["EncounterSubject", "NarrativeRecord"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-NARRATIVE-002", "severity": "CRITICAL", "title": "Narrative adaptation discards stable subject and person identifiers", "status": "risk_reproduced", "affected": ["EncounterSubject", "Person", "NarrativeRecord"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-NARRATIVE-003", "severity": "CRITICAL", "title": "Any linked Book-In packet causes unbooked Encounter subjects to disappear", "status": "risk_reproduced", "affected": ["EncounterSubject", "BookInRecord", "NarrativeRecord"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S0-CONCURRENCY-001", "severity": "CRITICAL", "title": "Overlapping tab writes silently lose one successful Encounter update", "status": "risk_reproduced", "affected": ["WorkspaceState", "FieldEncounter"], "sources": ["scripts/stage0-known-risks.json", "scripts/test-stage0-known-risks.js"], "evidence": "VERIFIED" },
+    { "id": "S1-TRANSFER-001", "severity": "HIGH", "title": "Ordinary export can silently omit Media when the Media API is not loaded", "status": "verified_current_behavior", "affected": ["MediaMetadata", "MediaBlobRow", "TransferJson"], "sources": ["functions/transfer.js", "docs/stage-1-data-contract/storage-media-transfer.md"], "evidence": "VERIFIED" },
+    { "id": "S1-TRANSFER-002", "severity": "HIGH", "title": "Transfer can export a file larger than its own import limit", "status": "verified_current_behavior", "affected": ["TransferJson"], "sources": ["functions/transfer.js", "docs/stage-1-data-contract/storage-media-transfer.md"], "evidence": "VERIFIED" },
+    { "id": "S1-MEDIA-001", "severity": "HIGH", "title": "Media import can replace an existing mediaId with different owner or content", "status": "verified_current_behavior", "affected": ["MediaMetadata", "MediaBlobRow"], "sources": ["functions/transfer.js", "functions/model/media.js"], "evidence": "VERIFIED" },
+    { "id": "S1-WARRANT-001", "severity": "HIGH", "title": "Warrant issue and delete paths span Workspace and Media without a shared transaction", "status": "verified_current_behavior", "affected": ["Warrant", "MediaMetadata", "Person"], "sources": ["functions/warrant-issue.js", "functions/model/media.js"], "evidence": "VERIFIED" },
+    { "id": "S1-BACKUP-001", "severity": "MEDIUM", "title": "Safety archive verification excludes wrapper metadata and captures sessionStorage only for the current tab", "status": "documented_boundary", "affected": ["SafetyBackupV1"], "sources": ["functions/safety-backup.js", "docs/stage-0-safety.md"], "evidence": "VERIFIED" },
+    { "id": "S1-ID-001", "severity": "HIGH", "title": "Human-readable sequential Encounter/Investigation/Operation IDs can collide under concurrent creation", "status": "inferred_from_generation_and_lost-update_model", "affected": ["FieldEncounter", "Investigation", "Operation"], "sources": ["functions/model/encounter.js", "functions/model/investigation.js", "functions/model/operation.js"], "evidence": "INFERRED" },
+    { "id": "S1-DELETE-001", "severity": "HIGH", "title": "Deleting an Encounter can erase Media owned by shared Vehicle or Location IDs that remain in other records", "status": "verified_current_behavior", "affected": ["FieldEncounter", "Vehicle", "Location", "MediaMetadata", "MediaBlobRow"], "sources": ["functions/model/store.js:2538-2582", "functions/model/media.js:887-899", "docs/stage-1-data-contract/workspace-store.md"], "evidence": "VERIFIED" },
+    { "id": "S1-SCHEMA-001", "severity": "HIGH", "title": "Book-In persists DOM control IDs as schema without versioned migration", "status": "verified_current_behavior", "affected": ["BookInRecord", "FormControlSnapshot"], "sources": ["functions/book-in.js"], "evidence": "VERIFIED" },
+    { "id": "S1-BOOKIN-003", "severity": "CRITICAL", "title": "Malformed or non-array Book-In storage is read as empty and a later save can overwrite it with one record", "status": "verified_current_behavior", "affected": ["BookInRecord"], "sources": ["functions/book-in.js:1455-1509", "docs/stage-1-data-contract/admin-bookin.md"], "evidence": "VERIFIED" },
+    { "id": "S1-BOOKIN-004", "severity": "HIGH", "title": "Quiet Book-In autosave can bypass role validation and project an arrested/in-custody EncounterSubject before explicit save", "status": "verified_current_behavior", "affected": ["BookInRecord", "EncounterSubject", "Arrest"], "sources": ["functions/book-in.js:2523-2582", "functions/book-in.js:2925-3014", "functions/book-in.js:4621-4633"], "evidence": "VERIFIED" },
+    { "id": "S1-ADMIN-001", "severity": "HIGH", "title": "Admin delete reference checks omit active Encounter, history, Narrative, Association and completed/order references", "status": "verified_current_behavior", "affected": ["Officer", "Vehicle", "FieldEncounter", "Operation", "NarrativeRecord"], "sources": ["functions/admin.js", "docs/stage-1-data-contract/admin-bookin.md"], "evidence": "VERIFIED" },
+    { "id": "S1-ANALYTICS-001", "severity": "HIGH", "title": "Map and Oracle use different completion gates, so unlocking an Encounter changes Oracle while Map can retain the snapshot", "status": "verified_current_behavior", "affected": ["FieldEncounter", "EncounterCompleted"], "sources": ["functions/map-targets.js:608-620", "functions/oracle.js:898-910", "functions/model/store.js:2495-2535"], "evidence": "VERIFIED" },
+    { "id": "S1-REPORT-001", "severity": "MEDIUM", "title": "Active Case pages load two Lead CSV click-handler implementations", "status": "verified_current_behavior", "affected": ["Lead", "TransferJson"], "sources": ["case.html", "cases.html", "functions/leads.js", "functions/lead-csv.js"], "evidence": "VERIFIED" },
+    { "id": "S1-REPORT-002", "severity": "HIGH", "title": "Encounter document generation stamps docsGeneratedAt before PDF generation succeeds", "status": "verified_current_behavior", "affected": ["EncounterSubject", "BookInCombinedPacket"], "sources": ["functions/encounters.js:2267-2289", "functions/model/encounter.js:51-100"], "evidence": "VERIFIED" }
+  ],
+  "legacy": {
+    "confirmedDead": [
+      { "item": "functions/model/schema.js runtime schema layer", "reason": "current file is a compatibility/no-op surface and active persistence does not validate through it", "sources": ["functions/model/schema.js"], "evidence": "VERIFIED" },
+      { "item": "copdocx.case-view.layout.v1 retained data", "reason": "registry marks it retired and current leads UI removes the key", "sources": ["functions/workspace-config.js", "functions/leads.js:3220"], "evidence": "VERIFIED" }
+    ],
+    "likelyDeadOrDormant": [
+      { "item": "Narrative template LocalStorage v1/v2 in current direct workspace", "reason": "engine supports it, but current Narrative integration passes enableLocalStorage false", "status": "dormant", "sources": ["functions/narratives/narrative-builder-engine.js", "functions/narratives/narrative-page.js"], "evidence": "VERIFIED" },
+      { "item": "Narrative iframe/postMessage integration API", "reason": "engine still exposes embed messaging while current Narrative tab opens a direct workspace", "status": "dormant", "sources": ["functions/narratives/narrative-builder-engine.js", "narrative.html"], "evidence": "VERIFIED" },
+      { "item": "standalone upload lab storage", "reason": "photo-picker.html/file-upload.html have isolated lab keys distinct from production Media", "sources": ["functions/photo-picker.js", "functions/file-upload.js"], "evidence": "UNKNOWN_REVIEW" }
+    ],
+    "unknownRequiresReview": [
+      { "item": "Alien_Book_In_Docs_v1_10_0.html", "reason": "standalone legacy Book-In implementation remains in repository; do not delete without deployment/link review", "sources": ["Alien_Book_In_Docs_v1_10_0.html"], "evidence": "UNKNOWN_REVIEW" },
+      { "item": "Baseball_Card_Standalone_v1_0_0.html", "reason": "standalone legacy Baseball Card implementation remains in repository", "sources": ["Baseball_Card_Standalone_v1_0_0.html"], "evidence": "UNKNOWN_REVIEW" },
+      { "item": "Narrative_Builder.html", "reason": "legacy/standalone Narrative entry remains beside narrative.html", "sources": ["Narrative_Builder.html"], "evidence": "UNKNOWN_REVIEW" },
+      { "item": "data module breadth", "reason": "some large catalogs may be loaded only by specific forms; absence from a primary workflow is not proof of death", "sources": ["data/"], "evidence": "UNKNOWN_REVIEW" }
+    ]
+  },
+  "functions": {
+    "canonicalLeadGraph": { "source": "functions/model/store.js:107-220", "reads": ["Lead", "previous Lead", "Workspace shared dictionaries"], "writes": ["normalized Lead", "people/vehicle/location projections"], "sideEffects": ["none until caller persists"], "risk": "stale embedded copies can overwrite newer canonical data", "evidence": "VERIFIED" },
+    "saveLead": { "source": "functions/model/store.js:306-383", "reads": ["WorkspaceState", "Lead snapshot"], "writes": ["WorkspaceState.leads", "people/vehicles/locations/associations", "workspace localStorage"], "sideEffects": ["whole-document replacement", "status/error reporting"], "risk": "in-memory phantom state on failed first write", "evidence": "VERIFIED" },
+    "createPerson": { "source": "functions/model/person.js:56-87", "reads": ["caller extras"], "writes": ["new Person object only"], "sideEffects": [], "risk": "factory does not constrain all imported/historical fields", "evidence": "VERIFIED" },
+    "createArrest": { "source": "functions/model/person.js:174-208", "reads": ["caller extras"], "writes": ["new Arrest object only"], "sideEffects": [], "risk": "downstream promotion adds dynamic/projection fields", "evidence": "VERIFIED" },
+    "createEncounterRecord": { "source": "functions/model/encounter.js:315-394", "reads": ["caller extras", "ID helpers"], "writes": ["new FieldEncounter object only"], "sideEffects": [], "risk": "sequence ID is based on current snapshot", "evidence": "VERIFIED" },
+    "saveEncounter": { "source": "functions/model/store.js:2408-2434", "reads": ["FieldEncounter", "WorkspaceState"], "writes": ["encounters and projections", "workspace localStorage"], "sideEffects": ["whole-document replacement"], "risk": "cross-tab lost update", "evidence": "VERIFIED" },
+    "updateEncounter": { "source": "functions/model/store.js:2436-2539", "reads": ["latest in-memory Encounter"], "writes": ["Encounter and Workspace localStorage"], "sideEffects": ["read-modify-write"], "risk": "no compare-and-swap/revision guard", "evidence": "VERIFIED" },
+    "deleteEncounter": { "source": "functions/model/store.js:2559-2580", "reads": ["WorkspaceState"], "writes": ["encounter deletion and Workspace localStorage"], "sideEffects": ["partial projection cleanup only"], "risk": "Book-In/Arrest/Narrative/output references can remain", "evidence": "VERIFIED" },
+    "completeEncounter": { "source": "functions/model/store.js:2247-2289", "reads": ["FieldEncounter aggregate"], "writes": ["EncounterCompleted", "meta", "workspace localStorage"], "sideEffects": ["persists derived snapshot"], "risk": "stale snapshot after later edits", "evidence": "VERIFIED" },
+    "promoteBookInIdentity": { "source": "functions/model/store.js:1117-1427", "reads": ["BookInRecord", "WorkspaceState", "FieldEncounter"], "writes": ["Lead", "Person", "Arrest and cross-store join fields"], "sideEffects": ["Workspace persistence by caller"], "risk": "not atomic with Book-In record write", "evidence": "VERIFIED" },
+    "applyImport": { "source": "functions/transfer.js:1097-1558", "reads": ["import payload", "current stores"], "writes": ["multiple LocalStorage/IndexedDB stores", "importDoneSignal"], "sideEffects": ["postMessage", "storage events", "reload/refresh prompts"], "risk": "partial multi-store commit", "evidence": "VERIFIED" },
+    "adminPersist": { "source": "functions/admin.js:304-405", "reads": ["AdminState", "Workspace arrest facts"], "writes": ["admin localStorage"], "sideEffects": ["UI status and refresh"], "risk": "whole-document last-writer-wins", "evidence": "VERIFIED" },
+    "bookInSave": { "source": "functions/book-in.js:1276-1515", "reads": ["live DOM controls", "Book-In array"], "writes": ["BookInRecord array", "bookin localStorage"], "sideEffects": ["promotion and UI refresh in surrounding workflow"], "risk": "DOM control IDs are implicit persistent schema", "evidence": "VERIFIED" },
+    "mediaRepository": { "source": "functions/model/media.js", "reads": ["Media IndexedDB"], "writes": ["meta and blob IndexedDB stores"], "sideEffects": ["hashing", "primary-role normalization"], "risk": "owner referential integrity is not DB-enforced", "evidence": "VERIFIED" },
+    "encounterNarrativeAdapter": { "source": "functions/encounter-narrative.js", "reads": ["Workspace Encounter", "Book-In", "Admin", "settings"], "writes": ["Narrative adapter bundle in memory"], "sideEffects": [], "risk": "known outcome/identity/filtering defects characterized by Stage 0", "evidence": "VERIFIED" },
+    "narrativeSave": { "source": "functions/narratives/narrative-page.js:680-750", "reads": ["engine output", "Encounter", "adapter bundle"], "writes": ["Encounter.narratives", "supervisorSummary", "workspace"], "sideEffects": ["downloads/clipboard in separate actions"], "risk": "participant identity is adapter-dependent", "evidence": "VERIFIED" },
+    "safetyBackupCreate": { "source": "functions/safety-backup.js", "reads": ["registered browser stores"], "writes": ["download artifact only"], "sideEffects": ["IndexedDB open is avoided when absent where detectable"], "risk": "session capture is current-tab only and does not freeze concurrent writers", "evidence": "VERIFIED" },
+    "integrityScan": { "source": "functions/integrity.js", "reads": ["registered browser stores"], "writes": ["in-memory IntegrityReport only"], "sideEffects": [], "risk": "known-risk suppression is reporting policy, not repair", "evidence": "VERIFIED" }
+  },
+  "fieldLineage": [
+    { "id": "person-legal-name", "fact": "legal name", "enteredAt": ["Case identity cards", "Book-In form"], "storedAt": ["Lead.person.name", "WorkspaceState.people[].name", "EncounterSubject firstName/lastName", "BookInRecord top-level and formState", "output snapshots"], "authority": "AMBIGUOUS between writable Person copies; Book-In is an independent packet copy", "consumers": ["Case and Encounter UI", "Narrative", "Book-In PDFs", "target sheets", "baseball cards", "arrest reports"], "risk": "HIGH", "evidence": "VERIFIED" },
+    { "id": "person-dob-age", "fact": "date of birth and age", "enteredAt": ["Case identity", "Book-In form"], "storedAt": ["Person.dateOfBirth", "Person.age", "BookInRecord", "formState", "output snapshots"], "authority": "DOB on the selected source record; age has no reliable authority because it is derived and persisted", "consumers": ["cards", "Narrative", "PDFs", "baseball card"], "risk": "HIGH", "evidence": "VERIFIED" },
+    { "id": "person-alien-number", "fact": "A-number", "enteredAt": ["Case immigration card", "Book-In form"], "storedAt": ["Person.immigration.alienNumber", "EncounterSubject.alienNumber", "BookInRecord.aNumber", "formState", "snapshots"], "authority": "AMBIGUOUS across Case and Book-In", "consumers": ["identity joins", "Narrative", "reports", "PDFs"], "risk": "CRITICAL", "evidence": "VERIFIED" },
+    { "id": "case-role", "fact": "Case role", "enteredAt": ["Lead/Case workflow", "Book-In promotion"], "storedAt": ["Lead.caseRole", "Person.caseRole"], "authority": "Lead workflow appears primary; save mirrors into Person", "consumers": ["Case lists", "operation target import", "target UI"], "risk": "MEDIUM", "evidence": "VERIFIED" },
+    { "id": "encounter-outcome", "fact": "subject outcome", "enteredAt": ["Encounter Subject editor", "booking workflow"], "storedAt": ["EncounterSubject.outcome/custody", "Arrest existence", "BookInRecord fields", "EncounterCompleted.outcomeCounts", "Narrative source snapshot"], "authority": "EncounterSubject intended for event; downstream copies are projections", "consumers": ["completion", "Narrative", "Oracle", "reports"], "risk": "CRITICAL", "evidence": "VERIFIED" },
+    { "id": "encounter-time", "fact": "encounter/arrest time", "enteredAt": ["Encounter root", "Book-In form"], "storedAt": ["FieldEncounter.startedAt", "SharedStop.startedAt", "Arrest dates/times", "BookInRecord", "EncounterCompleted"], "authority": "FieldEncounter for linked event; standalone Book-In independently authoritative for its packet", "consumers": ["Narrative", "Map", "Oracle", "PDFs", "arrest report"], "risk": "HIGH", "evidence": "VERIFIED" },
+    { "id": "arrest-location", "fact": "arrest/center location", "enteredAt": ["Encounter Location card", "Book-In form", "geocoder/map"], "storedAt": ["FieldEncounter.locations and centerLocationId", "SharedStop address/coordinates", "Arrest text/coordinates", "BookInRecord", "Association", "EncounterCompleted.pin"], "authority": "context-dependent and not enforced", "consumers": ["Narrative", "Book-In PDFs", "Map/GEOINT", "Oracle", "arrest report"], "risk": "CRITICAL", "evidence": "VERIFIED" },
+    { "id": "officer-participation", "fact": "participating/arresting officer", "enteredAt": ["Encounter officer selector", "Book-In/Admin workflows"], "storedAt": ["FieldEncounter.officerIds", "EncounterSubject.arrestingOfficerId", "Arrest ID/text", "BookInRecord", "Officer.fieldArrests"], "authority": "Encounter assignment and subject arresting officer are separate facts; Admin owns identity", "consumers": ["Narrative", "reports", "operations", "statistics"], "risk": "HIGH", "evidence": "VERIFIED" },
+    { "id": "vehicle-plate", "fact": "vehicle identity/plate", "enteredAt": ["Vehicle cards", "Encounter", "Book-In"], "storedAt": ["Workspace Vehicle", "Lead/Encounter copies", "SharedStop", "BookInRecord", "OperationTargetFreeze"], "authority": "Vehicle intended but writable copies can win", "consumers": ["search", "Narrative", "Map", "operations", "reports"], "risk": "HIGH", "evidence": "VERIFIED" },
+    { "id": "booking-id", "fact": "Book-In record identity", "enteredAt": ["Book-In save"], "storedAt": ["BookInRecord.id", "EncounterSubject.bookinRecordId", "Arrest.bookinRecordId", "BaseballCard.bookinRecordId"], "authority": "BookInRecord.id", "consumers": ["reopen", "cross-store join", "Narrative", "reports", "baseball card"], "risk": "CRITICAL", "evidence": "VERIFIED" },
+    { "id": "narrative-final-text", "fact": "approved narrative text", "enteredAt": ["Narrative resolver and manual editor"], "storedAt": ["NarrativeOutputSection variants", "NarrativeRecord.output.finalPlainText"], "authority": "finalPlainText/current final section text", "consumers": ["copy", "TXT/JSON export", "supervisor summary derivation"], "risk": "HIGH", "evidence": "VERIFIED" },
+    { "id": "media-owner-bytes", "fact": "attachment ownership and bytes", "enteredAt": ["photo/file picker", "warrant issue", "import"], "storedAt": ["MediaMetadata owner/ownerKey/hash/roles", "MediaBlobRow blob"], "authority": "Media IndexedDB", "consumers": ["media cards", "baseball card", "warrants", "transfer", "safety backup"], "risk": "HIGH", "evidence": "VERIFIED" },
+    { "id": "completion-counts", "fact": "completed outcome totals", "enteredAt": ["completeEncounter derivation"], "storedAt": ["EncounterCompleted.outcomeCounts"], "authority": "derived snapshot from EncounterSubject outcomes at completion time", "consumers": ["Oracle", "Map", "review"], "risk": "MEDIUM", "evidence": "VERIFIED" }
+  ],
+  "evidenceLabels": {
+    "VERIFIED": "Directly traced to current source or a repeatable isolated test.",
+    "INFERRED": "Strongly supported by code, but dependent on browser state or an unexecuted end-to-end path.",
+    "UNKNOWN_REVIEW": "Persisted or referenced shape whose complete live use cannot be established from the repository alone."
+  },
+  "application": {
+    "runtime": "static classic-script multi-page browser application",
+    "framework": null,
+    "moduleLoader": null,
+    "remoteDataApi": null,
+    "navigation": "normal links and query strings configured by functions/app-bar.js",
+    "globalNamespace": "window.COPDoc",
+    "persistenceModel": "whole-document LocalStorage stores plus IndexedDB Media and auxiliary LocalStorage/sessionStorage keys",
+    "transactionScope": "Media operations may use one IndexedDB transaction; no transaction spans Workspace, Admin, Book-In, Media, or auxiliary stores"
+  },
+  "storage": {
+    "workspace": {
+      "key": "copdocx.store.v1",
+      "medium": "localStorage",
+      "owner": "model/store",
+      "portable": true,
+      "rootType": "object",
+      "schema": "copdocx.store.v1",
+      "authority": "physical authority for Workspace dictionaries; several contained facts still have ambiguous logical authority",
+      "readers": ["functions/model/store.js", "functions/transfer.js", "functions/admin.js"],
+      "writers": ["functions/model/store.js", "functions/transfer.js"],
+      "migration": "normalizeState fills missing roots and lifecycle metadata; no ordered version migration or global referential validation",
+      "evidence": "VERIFIED"
+    },
+    "admin": {
+      "key": "copdoc.admin.v1",
+      "medium": "localStorage",
+      "owner": "admin",
+      "portable": true,
+      "rootType": "object",
+      "schema": null,
+      "authority": "Officer, government Vehicle, and Shift arrays",
+      "readers": ["functions/admin.js", "functions/app-bar.js", "functions/encounter-narrative.js", "functions/officer-roster.js", "functions/transfer.js"],
+      "writers": ["functions/admin.js", "functions/officer-roster.js", "functions/transfer.js"],
+      "migration": "in-place officer/vehicle compatibility migration; no persisted root schema tag",
+      "evidence": "VERIFIED"
+    },
+    "bookin": {
+      "key": "alien-book-in.saved-records.v1",
+      "medium": "localStorage",
+      "owner": "book-in",
+      "portable": true,
+      "rootType": "array",
+      "schema": null,
+      "authority": "Book-In packets; formState is reopen/document source while top-level fields are search/join projections",
+      "readers": ["functions/book-in.js", "functions/encounters.js", "functions/encounter-narrative.js", "functions/leads.js", "functions/model/store.js", "functions/transfer.js"],
+      "writers": ["functions/book-in.js", "functions/encounters.js", "functions/transfer.js"],
+      "migration": "live array is unversioned; import accepts multiple wrapper/legacy shapes",
+      "evidence": "VERIFIED"
+    },
+    "bookinColumns": {
+      "key": "alien-book-in.saved-record-columns.v1",
+      "medium": "localStorage",
+      "owner": "book-in",
+      "portable": false,
+      "rootType": "json",
+      "schema": null,
+      "authority": "Saved Records presentation preference only",
+      "readers": ["functions/book-in.js"],
+      "writers": ["functions/book-in.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "settings": {
+      "key": "copdocx.settings.v1",
+      "medium": "localStorage",
+      "owner": "settings",
+      "portable": true,
+      "rootType": "object",
+      "schema": null,
+      "authority": "warrant/application preference values",
+      "readers": ["functions/warrant-issue.js", "functions/encounter-narrative.js", "functions/transfer.js"],
+      "writers": ["functions/warrant-issue.js", "functions/transfer.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "importDoneSignal": {
+      "key": "copdocx.import.done.v1",
+      "medium": "localStorage",
+      "owner": "transfer",
+      "portable": false,
+      "rootType": "scalar",
+      "schema": null,
+      "authority": "cross-window invalidation pulse; never domain authority",
+      "readers": ["functions/transfer.js"],
+      "writers": ["functions/transfer.js"],
+      "migration": "overwritten per import",
+      "evidence": "VERIFIED"
+    },
+    "mapViews": {
+      "key": "copdocx.map.views.v1",
+      "medium": "localStorage",
+      "owner": "map",
+      "portable": true,
+      "rootType": "object",
+      "schema": null,
+      "authority": "saved map view state",
+      "readers": ["functions/map-views.js", "functions/transfer.js"],
+      "writers": ["functions/map-views.js", "functions/transfer.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "mapLayers": {
+      "key": "copdocx.map.layers.v1",
+      "medium": "localStorage",
+      "owner": "map",
+      "portable": true,
+      "rootType": "object",
+      "schema": null,
+      "authority": "map layer presentation preference",
+      "readers": ["functions/map-targets.js", "functions/transfer.js"],
+      "writers": ["functions/map-targets.js", "functions/transfer.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "mapIcons": {
+      "key": "copdocx.map.icons.v1",
+      "medium": "localStorage",
+      "owner": "map",
+      "portable": true,
+      "rootType": "object",
+      "schema": null,
+      "authority": "custom map icon preference/library",
+      "readers": ["functions/map-targets.js", "functions/transfer.js"],
+      "writers": ["functions/map-targets.js", "functions/transfer.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "mapMarkup": {
+      "key": "copdocx.map.markup.v1",
+      "medium": "localStorage",
+      "owner": "map",
+      "portable": true,
+      "rootType": "object",
+      "schema": null,
+      "authority": "current map labels/arrows",
+      "readers": ["functions/map-markup.js", "functions/transfer.js"],
+      "writers": ["functions/map-markup.js", "functions/transfer.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "mapBasemap": {
+      "key": "copdocx.location-map.basemap",
+      "medium": "localStorage",
+      "owner": "map",
+      "portable": true,
+      "rootType": "string",
+      "schema": null,
+      "authority": "embedded location-map basemap choice",
+      "readers": ["functions/location-map.js", "functions/transfer.js"],
+      "writers": ["functions/location-map.js", "functions/transfer.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "narrativeTemplates": {
+      "key": "opdoc.narrative.templates.v2",
+      "medium": "localStorage",
+      "owner": "narrative",
+      "portable": true,
+      "rootType": "object",
+      "schema": "narrative template registry v2",
+      "authority": "dormant in current Narrative page because local template persistence is disabled",
+      "readers": ["functions/narratives/narrative-builder-engine.js"],
+      "writers": ["functions/narratives/narrative-builder-engine.js"],
+      "migration": "engine contains v1-to-v2 registry compatibility; current page passes enableLocalStorage false",
+      "evidence": "VERIFIED"
+    },
+    "narrativeTemplatesLegacy": {
+      "key": "opdoc.narrative.templates.v1",
+      "medium": "localStorage",
+      "owner": "narrative",
+      "portable": false,
+      "rootType": "object",
+      "schema": "legacy narrative template registry",
+      "authority": "legacy/dormant",
+      "readers": ["functions/narratives/narrative-builder-engine.js"],
+      "writers": [],
+      "migration": "optional read/migrate path when persistence is enabled",
+      "evidence": "VERIFIED"
+    },
+    "photoPickerLab": {
+      "key": "copdocx.photo-picker.v1",
+      "medium": "localStorage",
+      "owner": "photo-picker-lab",
+      "portable": false,
+      "rootType": "json",
+      "schema": null,
+      "authority": "lab-only state, not production Media authority",
+      "readers": ["functions/photo-picker.js"],
+      "writers": ["functions/photo-picker.js"],
+      "migration": "none found",
+      "evidence": "UNKNOWN_REVIEW"
+    },
+    "fileUploadLab": {
+      "key": "copdocx.file-upload.v1",
+      "medium": "localStorage",
+      "owner": "file-upload-lab",
+      "portable": false,
+      "rootType": "json",
+      "schema": null,
+      "authority": "lab-only state, not production Media authority",
+      "readers": ["functions/file-upload.js"],
+      "writers": ["functions/file-upload.js"],
+      "migration": "none found",
+      "evidence": "UNKNOWN_REVIEW"
+    },
+    "investigationWindows": {
+      "key": "copdocx.investigation-windows.v1",
+      "medium": "sessionStorage",
+      "owner": "investigation-wall",
+      "portable": false,
+      "rootType": "object",
+      "schema": null,
+      "authority": "window layout/palette UI state only",
+      "readers": ["functions/investigation-wall.js"],
+      "writers": ["functions/investigation-wall.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "baseballHandoff": {
+      "key": "copdocx.baseball.handoff.v1",
+      "medium": "sessionStorage",
+      "owner": "baseball",
+      "portable": false,
+      "rootType": "object",
+      "schema": null,
+      "authority": "transient page handoff only",
+      "readers": ["functions/baseball-page.js"],
+      "writers": ["functions/book-in.js"],
+      "migration": "consumed/overwritten",
+      "evidence": "VERIFIED"
+    },
+    "baseballCardStyle": {
+      "key": "copdocx.baseball.card-style.v1",
+      "medium": "localStorage",
+      "owner": "baseball",
+      "portable": false,
+      "rootType": "object",
+      "schema": null,
+      "authority": "baseball-card presentation settings",
+      "readers": ["functions/baseballcard.js"],
+      "writers": ["functions/baseballcard.js"],
+      "migration": "none found",
+      "evidence": "VERIFIED"
+    },
+    "geocodeCache": {
+      "key": "addrGeoCache_v1",
+      "medium": "sessionStorage",
+      "owner": "address",
+      "portable": false,
+      "rootType": "object",
+      "schema": null,
+      "authority": "derived geocoder cache; never Location authority",
+      "readers": ["functions/address.js"],
+      "writers": ["functions/address.js"],
+      "migration": "no TTL or migration found",
+      "evidence": "VERIFIED"
+    },
+    "media": {
+      "key": "copdocx.media.v1",
+      "medium": "indexedDB",
+      "owner": "model/media",
+      "portable": true,
+      "rootType": "database",
+      "schema": "database version 1",
+      "authority": "Media metadata and binary roles",
+      "objectStores": {
+        "meta": {
+          "keyPath": "mediaId",
+          "indexes": ["ownerKey", "mediaClass", "sha256", "ownerSha"]
+        },
+        "blobs": {
+          "keyPath": ["mediaId", "role"],
+          "indexes": []
+        }
+      },
+      "readers": ["functions/model/media.js", "functions/integrity.js", "functions/safety-backup.js"],
+      "writers": ["functions/model/media.js", "functions/transfer.js"],
+      "migration": "IndexedDB version 1; no later migration found",
+      "evidence": "VERIFIED"
+    },
+    "warrants": {
+      "key": "copdocx.warrants",
+      "medium": "indexedDB",
+      "owner": "warrant-issue",
+      "portable": false,
+      "rootType": "database",
+      "schema": null,
+      "authority": "nonportable File System Access directory handle, not Warrant domain records",
+      "readers": ["functions/warrant-issue.js", "functions/safety-backup.js"],
+      "writers": ["functions/warrant-issue.js"],
+      "migration": "none found; destination must reauthorize directory access",
+      "evidence": "VERIFIED"
+    },
+    "retiredCaseLayout": {
+      "key": "copdocx.case-view.layout.v1",
+      "medium": "retired",
+      "owner": "leads",
+      "portable": false,
+      "rootType": "unknown",
+      "schema": null,
+      "authority": "retired Case layout preference; retained in registry for visibility",
+      "readers": [],
+      "writers": ["functions/leads.js"],
+      "migration": "current code removes the legacy key",
+      "evidence": "VERIFIED"
+    }
+  },
+  "entities": {
+    "WorkspaceState": {
+      "kind": "persistent root aggregate",
+      "storage": "workspace",
+      "collectionPath": "$",
+      "identifier": { "field": null, "format": "singleton", "generation": "one normalized document per storage key" },
+      "authority": "physical authority for Workspace collections",
+      "fields": {
+        "requiredCurrent": ["schema", "currentLeadId", "people", "leads", "encounters", "investigations", "vehicles", "locations", "businesses", "entities", "associations", "operations"],
+        "optionalCurrent": [],
+        "references": { "currentLeadId": "Lead" },
+        "duplicates": [],
+        "derivedPersisted": [],
+        "legacy": ["unknown root properties preserved by some import/merge paths"],
+        "allowsUnknown": true
+      },
+      "crud": {
+        "create": ["functions/model/store.js:45-105"],
+        "read": ["functions/model/store.js:222-254"],
+        "update": ["functions/model/store.js:256-290"],
+        "delete": ["none: whole Workspace delete is not exposed by the model"],
+        "migrate": ["functions/model/store.js:45-105", "functions/transfer.js:1097-1558"]
+      },
+      "evidence": "VERIFIED"
+    },
+    "LifecycleMeta": {
+      "kind": "embedded lifecycle value",
+      "storage": null,
+      "collectionPath": "multiple .meta fields",
+      "identifier": { "field": null, "format": "embedded", "generation": "factory/save timestamps" },
+      "authority": "owning aggregate",
+      "fields": {
+        "requiredCurrent": ["createdAt", "updatedAt", "markedComplete", "status", "committedAt"],
+        "optionalCurrent": ["completedAt"],
+        "references": {},
+        "duplicates": ["status and markedComplete can encode overlapping lifecycle meaning"],
+        "derivedPersisted": ["updatedAt", "completedAt", "committedAt"],
+        "legacy": [],
+        "allowsUnknown": true
+      },
+      "crud": { "create": ["functions/model/util.js"], "read": ["functions/model/store.js"], "update": ["functions/model/store.js"], "delete": ["with owner"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Lead": {
+      "kind": "persistent aggregate",
+      "storage": "workspace",
+      "collectionPath": "$.leads[leadId]",
+      "identifier": { "field": "leadId", "format": "generated string", "generation": "model newId('lead') unless supplied/imported" },
+      "authority": "authoritative Case aggregate; embedded Person and objects have ambiguous cross-copy authority",
+      "fields": {
+        "requiredCurrent": ["schema", "leadId", "subjectPersonId", "caseRole", "source", "person", "vehicles", "links", "followUps", "history", "assignedOfficerId", "meta"],
+        "optionalCurrent": ["people", "locations"],
+        "references": { "subjectPersonId": "Person", "assignedOfficerId": "Officer", "links[].associationId": "Association" },
+        "duplicates": ["person", "vehicles", "caseRole"],
+        "derivedPersisted": [],
+        "legacy": ["people", "locations", "subjectOf fallbacks"],
+        "allowsUnknown": true
+      },
+      "crud": {
+        "create": ["functions/model/lead.js:47-84", "functions/model/store.js:306-383"],
+        "read": ["functions/model/store.js", "functions/leads.js", "functions/case-edit.js"],
+        "update": ["functions/model/store.js:306-383", "functions/model/store.js:107-220"],
+        "delete": ["functions/model/store.js"],
+        "migrate": ["functions/model/store.js:107-220", "functions/transfer.js"]
+      },
+      "evidence": "VERIFIED"
+    },
+    "LeadSource": {
+      "kind": "embedded value object",
+      "storage": null,
+      "collectionPath": "Lead.source",
+      "identifier": { "field": null, "format": "embedded", "generation": "Lead factory/form collection" },
+      "authority": "owning Lead",
+      "fields": {
+        "requiredCurrent": ["leadSource", "caseNumber", "refAgency", "refAgencyCode", "probationCheck", "leadInfo"],
+        "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": [], "legacy": [], "allowsUnknown": true
+      },
+      "crud": { "create": ["functions/model/lead.js", "functions/lead-source.js"], "read": ["functions/leads.js", "functions/case-edit.js"], "update": ["functions/model/collect.js"], "delete": ["with Lead"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "HistoryEvent": {
+      "kind": "embedded append-style event record",
+      "storage": null,
+      "collectionPath": "Lead.history[] | Investigation.history[] | Operation.history[]",
+      "identifier": { "field": "eventId", "format": "optional generated string", "generation": "varies by writer" },
+      "authority": "owning aggregate history; not a global event log",
+      "fields": {
+        "requiredCurrent": ["at", "type", "text", "source"],
+        "optionalCurrent": ["eventId", "officerId", "officerAlias", "bookinRecordId"],
+        "references": { "officerId": "Officer", "bookinRecordId": "BookInRecord" },
+        "duplicates": ["officerAlias"], "derivedPersisted": ["at"], "legacy": [], "allowsUnknown": true
+      },
+      "crud": { "create": ["functions/model/store.js"], "read": ["functions/leads.js", "functions/investigations.js", "functions/operations.js"], "update": ["owning aggregate save"], "delete": ["with owner; no global event delete"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "Person": {
+      "kind": "persistent shared entity and writable embedded aggregate member",
+      "storage": "workspace",
+      "collectionPath": "$.people[personId] and Lead.person",
+      "identifier": { "field": "personId", "format": "generated string", "generation": "model newId('person') unless supplied/imported" },
+      "authority": "ambiguous between people registry and Lead.person because save paths can project either copy into the other",
+      "fields": {
+        "requiredCurrent": ["personId", "entityType", "caseRole", "junked", "junkedAt", "name", "sex", "dateOfBirth", "age", "citizenship", "ssn", "lexId", "locations", "aliases", "documents", "criminal", "encounters", "arrests", "convictions", "warrants", "immigration"],
+        "optionalCurrent": [],
+        "references": { "locations[]": "Location", "encounters[].encounterId": "FieldEncounter", "arrests[].encounterId": "FieldEncounter", "arrests[].bookinRecordId": "BookInRecord", "warrants[].mediaId": "MediaMetadata" },
+        "duplicates": ["Lead.person", "Lead.caseRole", "EncounterSubject identity scalars", "Book-In identity fields"],
+        "derivedPersisted": ["age", "criminal flags and threatLevel", "encounters projections"],
+        "legacy": ["mixed Person.encounters row shapes", "unknown imported properties"],
+        "allowsUnknown": true
+      },
+      "crud": {
+        "create": ["functions/model/person.js:56-87", "functions/model/store.js:107-220"],
+        "read": ["functions/model/store.js", "functions/leads.js", "functions/encounters.js", "functions/oracle.js"],
+        "update": ["functions/model/store.js:107-383", "functions/model/store.js:1117-1427", "functions/book-in.js", "functions/baseball-page.js", "functions/warrant-issue.js"],
+        "delete": ["soft junk flags and aggregate-specific removal; no universal cascade"],
+        "migrate": ["functions/model/store.js", "functions/transfer.js"]
+      },
+      "evidence": "VERIFIED"
+    },
+    "PersonName": {
+      "kind": "embedded value object", "storage": null, "collectionPath": "Person.name",
+      "identifier": { "field": null, "format": "embedded", "generation": "Person factory/form collection" },
+      "authority": "owning Person copy; cross-copy authority remains ambiguous",
+      "fields": { "requiredCurrent": ["lastName", "firstName", "middleName"], "optionalCurrent": [], "references": {}, "duplicates": ["EncounterSubject and Book-In name scalars"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/person.js"], "read": ["functions/leads.js", "functions/encounters.js", "functions/encounter-narrative.js"], "update": ["functions/model/collect.js", "functions/model/store.js"], "delete": ["with Person"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Alias": {
+      "kind": "embedded child entity", "storage": "workspace", "collectionPath": "Person.aliases[]",
+      "identifier": { "field": "aliasId", "format": "generated string", "generation": "model newId alias prefix unless imported" },
+      "authority": "owning Person",
+      "fields": { "requiredCurrent": ["aliasId", "lastName", "firstName", "middleName"], "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/person.js"], "read": ["functions/leads.js"], "update": ["functions/model/collect.js"], "delete": ["Person child-card removal"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "IdentityDocument": {
+      "kind": "embedded child entity", "storage": "workspace", "collectionPath": "Person.documents[]",
+      "identifier": { "field": "documentId", "format": "generated string", "generation": "model newId document prefix unless imported" },
+      "authority": "owning Person",
+      "fields": { "requiredCurrent": ["documentId", "documentType", "documentNumber", "issuingState", "issuingCountry", "documentIssueDate", "documentExpiration"], "optionalCurrent": [], "references": {}, "duplicates": ["selected Book-In form controls"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/person.js"], "read": ["functions/leads.js"], "update": ["functions/model/collect.js"], "delete": ["Person child-card removal"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "CriminalProfile": {
+      "kind": "embedded value and derived profile", "storage": "workspace", "collectionPath": "Person.criminal",
+      "identifier": { "field": null, "format": "embedded", "generation": "Person factory and rapsheet/manual updates" },
+      "authority": "owning Person for stored profile; several booleans are derived caches",
+      "fields": { "requiredCurrent": ["isCriminal", "hasCriminalRecord", "hasCriminalWarrants", "foreignWarrantsKnown", "hasForeignWarrants", "foreignWarrantCountry", "sexOffender", "foreignFugitive", "armed", "threatLevel", "fbiNumber", "ncicNumber", "stateId", "rapSheet"], "optionalCurrent": [], "references": {}, "duplicates": ["foreign warrant fields on Book-In/BaseballCard"], "derivedPersisted": ["isCriminal", "hasCriminalRecord", "hasCriminalWarrants", "sexOffender", "foreignFugitive", "armed", "threatLevel"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/person.js"], "read": ["functions/leads.js", "functions/oracle.js", "functions/arrest-report.js"], "update": ["functions/rapsheet.js", "functions/baseball-page.js", "functions/model/store.js"], "delete": ["with Person"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "ImmigrationProfile": {
+      "kind": "embedded profile", "storage": "workspace", "collectionPath": "Person.immigration",
+      "identifier": { "field": null, "format": "embedded", "generation": "Person factory/form collection" },
+      "authority": "owning Person; Book-In duplicates selected fields",
+      "fields": { "requiredCurrent": ["alienNumber", "finNumber", "disposition", "status", "finalOrder", "finalOrderDate", "firstDeportationDate", "lastDeportationDate", "baseballCards"], "optionalCurrent": [], "references": { "baseballCards[]": "BaseballCard" }, "duplicates": ["Book-In aNumber/citizenship/disposition"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/person.js"], "read": ["functions/leads.js", "functions/encounter-narrative.js", "functions/arrest-report.js"], "update": ["functions/model/collect.js", "functions/baseball-page.js", "functions/book-in.js"], "delete": ["with Person"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "PersonEncounter": {
+      "kind": "embedded historical/projection row", "storage": "workspace", "collectionPath": "Person.encounters[]",
+      "identifier": { "field": "encounterId", "format": "FieldEncounter ID or legacy string", "generation": "projection from FieldEncounter or imported legacy row" },
+      "authority": "not authoritative for current FieldEncounter; legacy rows may have no top-level aggregate",
+      "fields": { "requiredCurrent": ["encounterId", "encounterDate", "encounterRole", "encounterType", "encounterDisposition", "encounterAgency", "encounterReportNumber", "encounterLocation", "encounterNarrative"], "optionalCurrent": ["subjectId", "personId", "encounterAgencyCode"], "references": { "encounterId": "FieldEncounter", "personId": "Person" }, "duplicates": ["FieldEncounter and EncounterSubject facts"], "derivedPersisted": ["current-format projection rows"], "legacy": ["historical manually entered encounter rows"], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js"], "read": ["functions/leads.js", "functions/oracle.js"], "update": ["functions/model/store.js"], "delete": ["projection cleanup is incomplete"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Arrest": {
+      "kind": "embedded child entity and reporting projection", "storage": "workspace", "collectionPath": "Person.arrests[]",
+      "identifier": { "field": "arrestId", "format": "generated string", "generation": "createArrest/newId or booking promotion" },
+      "authority": "Lead.person.arrests is principal current report source; related event/booking facts remain split",
+      "fields": { "requiredCurrent": ["arrestId", "arrestDate", "arrestTime", "arrestDateTime", "arrestCharge", "arrestStatute", "arrestClass", "arrestAgency", "arrestAgencyCode", "arrestLocation", "latitude", "longitude", "arrestingOfficer", "team", "iceEventNumber", "encounterNumber", "encounterId", "subjectRole", "vehiclePosition", "bookinRecordId", "bookInDateTime", "booking"], "optionalCurrent": ["arrestingOfficerId"], "references": { "encounterId": "FieldEncounter", "bookinRecordId": "BookInRecord", "arrestingOfficerId": "Officer" }, "duplicates": ["EncounterSubject outcome/officer", "FieldEncounter time/location", "Book-In packet"], "derivedPersisted": ["booking projection", "location/display snapshots"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/person.js:174-208", "functions/model/store.js:1117-1427"], "read": ["functions/arrest-report.js", "functions/oracle.js", "functions/arrest-roster.js"], "update": ["functions/model/store.js", "functions/book-in.js", "functions/baseball-page.js"], "delete": ["Person child removal; no Book-In/Encounter cascade"], "migrate": ["functions/model/store.js", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "ArrestBookingProjection": {
+      "kind": "embedded denormalized projection", "storage": "workspace", "collectionPath": "Arrest.booking",
+      "identifier": { "field": null, "format": "embedded", "generation": "Book-In promotion" },
+      "authority": "reporting projection; BookInRecord.formState remains reopen/PDF source",
+      "fields": { "requiredCurrent": ["cash", "travelDocuments", "propertyTag", "holdingCellNumber", "children", "medical"], "optionalCurrent": [], "references": {}, "duplicates": ["BookInRecord.formState"], "derivedPersisted": ["all fields"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js"], "read": ["functions/arrest-report.js", "functions/encounter-narrative.js"], "update": ["functions/model/store.js"], "delete": ["with Arrest"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "Conviction": {
+      "kind": "embedded child entity", "storage": "workspace", "collectionPath": "Person.convictions[]",
+      "identifier": { "field": "convictionId", "format": "generated string", "generation": "model newId conviction prefix unless imported" },
+      "authority": "owning Person",
+      "fields": { "requiredCurrent": ["convictionId", "crime", "convictionStatute", "convictionClass", "disposition", "convictionDate", "dispositionDate", "court", "docketNumber", "sentence"], "optionalCurrent": ["county", "state"], "references": {}, "duplicates": ["rapSheet source text may repeat facts"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/person.js", "functions/rapsheet.js"], "read": ["functions/leads.js", "functions/oracle.js"], "update": ["functions/model/collect.js", "functions/rapsheet.js"], "delete": ["Person child-card removal"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "Warrant": {
+      "kind": "embedded child entity", "storage": "workspace", "collectionPath": "Person.warrants[]",
+      "identifier": { "field": "warrantId", "format": "generated string", "generation": "model newId('wnt') unless imported" },
+      "authority": "Person owns Warrant metadata; generated PDF bytes are independently owned by Media",
+      "fields": { "requiredCurrent": ["warrantId", "charge", "warrantNumber", "warrantDate", "warrantStatus", "warrantIssuer", "warrantIssuerCode", "formType", "fileNo", "pdfFileName", "office", "officerName", "officerTitle", "basis", "inaLaw", "entryPlace", "entryDate", "issuedAt", "mediaId"], "optionalCurrent": [], "references": { "mediaId": "MediaMetadata" }, "duplicates": ["settings/officer display fields"], "derivedPersisted": ["pdfFileName", "issuedAt"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/warrant-issue.js:461-612", "functions/model/person.js"], "read": ["functions/warrant-issue.js", "functions/leads.js"], "update": ["functions/warrant-issue.js", "functions/model/store.js"], "delete": ["Person child removal; Media cascade not guaranteed"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "BaseballCard": {
+      "kind": "embedded output snapshot", "storage": "workspace", "collectionPath": "Person.immigration.baseballCards[]",
+      "identifier": { "field": "cardId", "format": "generated string", "generation": "baseball page/model ID helper" },
+      "authority": "intentional saved presentation snapshot; source facts remain Person, Arrest and Book-In",
+      "fields": { "requiredCurrent": ["cardId", "generatedAt", "text", "html", "photoMediaId", "arrestDate", "disposition", "bookinRecordId", "foreignWarrantsKnown", "hasForeignWarrants", "foreignWarrantCountry"], "optionalCurrent": ["photoDataUrl"], "references": { "photoMediaId": "MediaMetadata", "bookinRecordId": "BookInRecord" }, "duplicates": ["identity/arrest/immigration display facts"], "derivedPersisted": ["text", "html", "generatedAt"], "legacy": ["photoDataUrl inline bytes"], "allowsUnknown": true },
+      "crud": { "create": ["functions/baseball-page.js:765-905"], "read": ["functions/baseball-page.js", "functions/arrest-report.js"], "update": ["functions/baseball-page.js:811-899"], "delete": ["card replacement/removal paths; Media cleanup is reference-checked locally"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "Location": {
+      "kind": "persistent shared entity and writable embedded copy", "storage": "workspace", "collectionPath": "$.locations[locationId], Person.locations[], Vehicle.locations[], Encounter.locations[], Operation locations",
+      "identifier": { "field": "locationId", "aliases": ["id"], "format": "generated string", "generation": "model newId location prefix unless supplied/imported" },
+      "authority": "ambiguous: registry is intended canonical but aggregate saves can write stale embedded copies backward",
+      "fields": { "requiredCurrent": ["locationId", "id", "entityType", "street", "street2", "city", "state", "zip", "latitude", "longitude", "association", "parksHere", "targetPriority", "pinColor", "junked", "junkedAt", "occupancy", "occupiedFrom", "occupiedTo", "notes", "otherResidents"], "optionalCurrent": ["opAssociation", "meta"], "references": {}, "duplicates": ["id alias", "all embedded copies", "Encounter shared address/pin", "Arrest/Book-In location"], "derivedPersisted": [], "legacy": ["id/locationId coexistence", "dynamic operation fields"], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/location.js", "functions/model/store.js"], "read": ["functions/leads.js", "functions/encounters.js", "functions/investigations.js", "functions/map.js"], "update": ["functions/model/store.js", "functions/address.js", "functions/location-map.js"], "delete": ["junked flags and context removal; no universal cascade"], "migrate": ["functions/model/store.js", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Vehicle": {
+      "kind": "persistent shared entity, writable embedded copy, and Admin fleet variant", "storage": "workspace", "collectionPath": "$.vehicles[vehicleId], Lead.vehicles[], Encounter.vehicles[]; AdminState.vehicles[]",
+      "identifier": { "field": "vehicleId", "aliases": ["id"], "format": "generated string", "generation": "model/Admin ID helper unless supplied/imported" },
+      "authority": "ambiguous for Workspace copies; Admin is separate authority for government fleet records",
+      "fields": { "requiredCurrent": ["vehicleId", "id", "entityType", "licensePlate", "plateState", "vehicleYear", "vehicleMake", "vehicleModel", "vehicleColor", "vehicleBodyStyle", "vin", "registeredOwnerName", "junked", "junkedAt", "locations", "governmentVehicle", "unit", "status", "barcode", "driverNumber", "assignedOfficerIds", "equipment", "occupancy", "occupiedFrom", "occupiedTo", "notes", "otherResidents", "meta"], "optionalCurrent": ["plate", "encounterDisposition", "parkedLocationText"], "references": { "locations[]": "Location", "assignedOfficerIds[]": "Officer" }, "duplicates": ["id alias", "plate alias", "Lead/Encounter/Operation snapshots", "Book-In vehicle fields"], "derivedPersisted": [], "legacy": ["plate", "mixed Workspace/fleet shape"], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/vehicle.js", "functions/admin.js"], "read": ["functions/vehicles.js", "functions/leads.js", "functions/encounters.js", "functions/operations.js"], "update": ["functions/model/store.js", "functions/admin.js", "functions/model/collect.js"], "delete": ["junked/context removal; no universal cascade"], "migrate": ["functions/model/store.js", "functions/admin.js", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Business": {
+      "kind": "persistent shared entity", "storage": "workspace", "collectionPath": "$.businesses[businessId]",
+      "identifier": { "field": "businessId", "aliases": ["id"], "format": "generated string", "generation": "model newId business prefix" },
+      "authority": "Workspace business dictionary",
+      "fields": { "requiredCurrent": ["businessId", "id", "entityType", "name", "phone", "notes", "junked", "junkedAt", "meta"], "optionalCurrent": [], "references": {}, "duplicates": ["id alias"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/business.js", "functions/model/store.js"], "read": ["functions/investigations.js", "functions/investigation-wall.js"], "update": ["functions/model/store.js"], "delete": ["junked/removal functions in store"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "CustomEntity": {
+      "kind": "persistent shared generic entity", "storage": "workspace", "collectionPath": "$.entities[entityId]",
+      "identifier": { "field": "entityId", "aliases": ["id"], "format": "generated string", "generation": "model newId entity prefix" },
+      "authority": "Workspace entity dictionary",
+      "fields": { "requiredCurrent": ["entityId", "id", "entityType", "name", "kind", "notes", "junked", "junkedAt", "meta"], "optionalCurrent": [], "references": {}, "duplicates": ["id alias"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/entity.js", "functions/model/store.js"], "read": ["functions/investigations.js", "functions/investigation-wall.js"], "update": ["functions/model/store.js"], "delete": ["junked/removal functions in store"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Endpoint": {
+      "kind": "polymorphic reference value", "storage": null, "collectionPath": "Association.from/to, Link.from/to, MediaMetadata.owner",
+      "identifier": { "field": "id", "format": "type + id pair", "generation": "caller-supplied reference" },
+      "authority": "reference only; target collections are authoritative",
+      "fields": { "requiredCurrent": ["type", "id"], "optionalCurrent": [], "references": { "id": "SharedObject" }, "duplicates": [], "derivedPersisted": [], "legacy": ["type vocabulary is not uniformly constrained"], "allowsUnknown": false },
+      "crud": { "create": ["functions/model/link.js", "functions/model/media.js"], "read": ["functions/model/store.js", "functions/model/media.js"], "update": ["with owner"], "delete": ["with owner"], "migrate": ["normalization by individual owners"] },
+      "evidence": "VERIFIED"
+    },
+    "SharedObject": {
+      "kind": "virtual union for polymorphic references", "storage": null, "collectionPath": "Workspace shared dictionaries and aggregate IDs",
+      "identifier": { "field": "id", "format": "type-discriminated", "generation": "underlying entity factory" },
+      "authority": "underlying Person, Lead, Vehicle, Location, Business, CustomEntity, Investigation, Operation, Encounter or Officer authority",
+      "fields": { "requiredCurrent": ["type", "id"], "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["virtual: underlying factories"], "read": ["functions/model/store.js", "functions/investigation-wall.js"], "update": ["virtual: underlying stores"], "delete": ["virtual: underlying stores"], "migrate": ["none: documentation union"] },
+      "evidence": "INFERRED"
+    },
+    "Link": {
+      "kind": "embedded relationship projection", "storage": "workspace", "collectionPath": "Lead.links[] | Investigation.links[] | FieldEncounter.links[]",
+      "identifier": { "field": "linkId", "format": "generated string", "generation": "link factory unless imported" },
+      "authority": "Association citation/projection; legacy Links can exist without canonical Association",
+      "fields": { "requiredCurrent": ["linkId", "associationId", "from", "to", "reasons", "notes", "label", "otherType"], "optionalCurrent": ["occupancy", "validFrom", "validTo"], "references": { "associationId": "Association", "from": "Endpoint", "to": "Endpoint" }, "duplicates": ["Association relationship facts"], "derivedPersisted": [], "legacy": ["links lacking associationId"], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/link.js", "functions/model/store.js"], "read": ["functions/leads.js", "functions/investigation-wall.js"], "update": ["functions/model/store.js"], "delete": ["aggregate link removal; Association cascade is incomplete"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Association": {
+      "kind": "persistent relationship entity", "storage": "workspace", "collectionPath": "$.associations[associationId]",
+      "identifier": { "field": "associationId", "aliases": ["linkId"], "format": "generated string", "generation": "association/link ID helper unless imported" },
+      "authority": "intended canonical relationship authority, incompletely enforced against embedded Links and nested object copies",
+      "fields": { "requiredCurrent": ["associationId", "linkId", "entityType", "schema", "from", "to", "reason", "reasons", "label", "otherType", "occupancy", "validFrom", "validTo", "notes", "source", "assertedAt", "junked", "junkedAt"], "optionalCurrent": [], "references": { "from": "Endpoint", "to": "Endpoint", "source.investigationId": "Investigation", "source.leadId": "Lead", "source.encounterId": "FieldEncounter", "source.officerId": "Officer" }, "duplicates": ["linkId alias", "embedded Link and nested occupancy facts"], "derivedPersisted": ["assertedAt"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js", "functions/model/link.js"], "read": ["functions/model/store.js", "functions/investigations.js", "functions/map.js"], "update": ["functions/model/store.js"], "delete": ["junked/remove association paths; embedded projections may remain"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Investigation": {
+      "kind": "persistent aggregate", "storage": "workspace", "collectionPath": "$.investigations[investigationId]",
+      "identifier": { "field": "investigationId", "format": "INV{team}-{YYYYMMDD}-{sequence}", "generation": "date/team sequence scan" },
+      "authority": "Workspace Investigation dictionary",
+      "fields": { "requiredCurrent": ["investigationId", "entityType", "schema", "kind", "mode", "title", "team", "parentInvestigationId", "sourceLeadId", "assignedOfficerId", "plates", "nodes", "links", "focusNodeId", "history", "meta"], "optionalCurrent": [], "references": { "parentInvestigationId": "Investigation", "sourceLeadId": "Lead", "assignedOfficerId": "Officer", "nodes[]": "InvestigationNode", "links[]": "Link" }, "duplicates": ["node coordinates and referenced object display state"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/investigation.js", "functions/model/store.js"], "read": ["functions/investigations.js", "functions/investigation-wall.js"], "update": ["functions/model/store.js", "functions/investigation-wall.js"], "delete": ["functions/model/store.js"], "migrate": ["functions/model/store.js", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "InvestigationPlate": {
+      "kind": "embedded child record", "storage": "workspace", "collectionPath": "Investigation.plates[]",
+      "identifier": { "field": "plateId", "format": "generated string", "generation": "investigation UI/model helper" },
+      "authority": "owning Investigation; optional Vehicle reference may coexist with copied plate facts",
+      "fields": { "requiredCurrent": ["plateId", "plate", "state", "status", "notes", "vehicleId"], "optionalCurrent": [], "references": { "vehicleId": "Vehicle" }, "duplicates": ["Vehicle plate/state"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/investigation.js", "functions/investigations.js"], "read": ["functions/investigations.js"], "update": ["functions/investigations.js", "functions/model/store.js"], "delete": ["Investigation child removal"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "InvestigationNode": {
+      "kind": "embedded graph placement", "storage": "workspace", "collectionPath": "Investigation.nodes[]",
+      "identifier": { "field": "nodeId", "format": "generated string", "generation": "investigation wall helper" },
+      "authority": "owning Investigation for placement; referenced object owns domain facts",
+      "fields": { "requiredCurrent": ["nodeId", "objectType", "objectId", "x", "y"], "optionalCurrent": [], "references": { "objectId": "SharedObject" }, "duplicates": [], "derivedPersisted": ["x", "y are presentation state"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/investigation-wall.js"], "read": ["functions/investigation-wall.js"], "update": ["functions/investigation-wall.js"], "delete": ["functions/investigation-wall.js"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "Operation": {
+      "kind": "persistent aggregate", "storage": "workspace", "collectionPath": "$.operations[operationId]",
+      "identifier": { "field": "operationId", "format": "DAL{team}-OP-{YYYYMMDD}-{sequence}", "generation": "date/team sequence scan" },
+      "authority": "Workspace Operation dictionary; freeze and order are intentional commit-time snapshots",
+      "fields": { "requiredCurrent": ["operationId", "operationNumber", "entityType", "schema", "name", "team", "plannedStart", "plannedEnd", "importedTeamKeys", "targets", "teams", "targetAssignments", "opLocations", "medevacRoute", "markup", "mapLayers", "order", "history", "meta"], "optionalCurrent": [], "references": { "targets[]": "OperationTarget", "teams[]": "OperationTeam", "targetAssignments[]": "OperationTargetAssignment", "opLocations[]": "Location", "medevacRoute[]": "Location" }, "duplicates": ["operationNumber", "target freeze", "order"], "derivedPersisted": ["order", "target freeze"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/operation.js", "functions/model/store.js"], "read": ["functions/operations.js", "functions/encounters.js"], "update": ["functions/model/store.js", "functions/operations.js"], "delete": ["functions/model/store.js"], "migrate": ["functions/model/store.js", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "OperationTarget": {
+      "kind": "embedded association/snapshot", "storage": "workspace", "collectionPath": "Operation.targets[]",
+      "identifier": { "field": "targetId", "format": "generated string", "generation": "Operation target import" },
+      "authority": "Lead/Person references own live identity; freeze owns issued-plan snapshot",
+      "fields": { "requiredCurrent": ["targetId", "leadId", "personId", "priority", "freeze"], "optionalCurrent": [], "references": { "leadId": "Lead", "personId": "Person", "freeze": "OperationTargetFreeze" }, "duplicates": ["Lead role/identity and freeze facts"], "derivedPersisted": ["freeze"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/operations.js", "functions/model/store.js"], "read": ["functions/operations.js", "functions/encounters.js"], "update": ["functions/operations.js"], "delete": ["Operation target removal"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "OperationTargetFreeze": {
+      "kind": "embedded immutable-intent snapshot", "storage": "workspace", "collectionPath": "OperationTarget.freeze",
+      "identifier": { "field": null, "format": "embedded", "generation": "Operation issue/commit" },
+      "authority": "issued-plan historical snapshot, not current Person/Vehicle/Location authority",
+      "fields": { "requiredCurrent": ["subjectLabel", "photoMediaId", "places", "vehicles"], "optionalCurrent": [], "references": { "photoMediaId": "MediaMetadata" }, "duplicates": ["Person/Location/Vehicle display facts"], "derivedPersisted": ["all fields"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js", "functions/operations.js"], "read": ["functions/operations.js"], "update": ["regenerated on issue"], "delete": ["with OperationTarget"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "OperationTeam": {
+      "kind": "embedded tactical team", "storage": "workspace", "collectionPath": "Operation.teams[]",
+      "identifier": { "field": "teamId", "format": "generated string", "generation": "Operation planner" },
+      "authority": "owning Operation; distinct from Officer.team organizational label",
+      "fields": { "requiredCurrent": ["teamId", "name", "rosterKey", "vehicleId", "members"], "optionalCurrent": [], "references": { "vehicleId": "Vehicle", "members[]": "OperationMember" }, "duplicates": ["roster display data"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/operations.js"], "read": ["functions/operations.js"], "update": ["functions/operations.js"], "delete": ["Operation team removal"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "OperationMember": {
+      "kind": "embedded tactical assignment", "storage": "workspace", "collectionPath": "OperationTeam.members[]",
+      "identifier": { "field": "officerId", "format": "Admin Officer ID", "generation": "selected reference" },
+      "authority": "Operation for tactical assignment; Admin Officer for identity",
+      "fields": { "requiredCurrent": ["officerId", "assignmentRole", "start", "heading", "sector", "scans", "notes"], "optionalCurrent": [], "references": { "officerId": "Officer" }, "duplicates": ["Officer/team display details in generated brief"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/operations.js"], "read": ["functions/operations.js"], "update": ["functions/operations.js"], "delete": ["Operation member removal"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "OperationTargetAssignment": {
+      "kind": "embedded join entity", "storage": "workspace", "collectionPath": "Operation.targetAssignments[]",
+      "identifier": { "field": null, "format": "targetId + teamId pair", "generation": "Operation planner selection" },
+      "authority": "owning Operation",
+      "fields": { "requiredCurrent": ["targetId", "teamId"], "optionalCurrent": [], "references": { "targetId": "OperationTarget", "teamId": "OperationTeam" }, "duplicates": [], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/operations.js"], "read": ["functions/operations.js"], "update": ["functions/operations.js"], "delete": ["Operation assignment removal"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "OperationOrder": {
+      "kind": "embedded generated snapshot", "storage": "workspace", "collectionPath": "Operation.order",
+      "identifier": { "field": null, "format": "one current order per Operation", "generation": "Operation issue" },
+      "authority": "issued Operation output snapshot",
+      "fields": { "requiredCurrent": ["generatedAt", "narrative", "officerBriefs"], "optionalCurrent": [], "references": { "officerBriefs[]": "OfficerBrief" }, "duplicates": ["Operation/target/officer/location facts"], "derivedPersisted": ["all fields"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js", "functions/operations.js"], "read": ["functions/operations.js"], "update": ["regenerated on issue"], "delete": ["with Operation or reissue"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "OfficerBrief": {
+      "kind": "embedded generated output row", "storage": "workspace", "collectionPath": "Operation.order.officerBriefs[]",
+      "identifier": { "field": "officerId", "format": "Admin Officer ID within order", "generation": "Operation issue" },
+      "authority": "historical generated snapshot",
+      "fields": { "requiredCurrent": ["officerId", "teamId", "teamName", "role", "primary", "secondary", "targetLabel", "address", "start", "heading", "sector", "scans", "rally", "medevac", "teammates"], "optionalCurrent": [], "references": { "officerId": "Officer", "teamId": "OperationTeam" }, "duplicates": ["Officer/Operation/Target/Location display facts"], "derivedPersisted": ["all fields"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js", "functions/operations.js"], "read": ["functions/operations.js"], "update": ["regenerated with order"], "delete": ["with order"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "FieldEncounter": {
+      "kind": "persistent aggregate", "storage": "workspace", "collectionPath": "$.encounters[encounterId]",
+      "identifier": { "field": "encounterId", "format": "{office}{team}-{YYYYMMDD}-{sequence}", "generation": "nextEncounterId scans current Workspace" },
+      "authority": "authoritative working Encounter aggregate; completed is a historical projection",
+      "fields": { "requiredCurrent": ["encounterId", "entityType", "schema", "officeCode", "team", "startedAt", "eventType", "operationId", "officerIds", "centerLocationId", "vehicles", "locations", "subjects", "links", "narratives", "supervisorSummary", "completed", "completedHistory", "meta"], "optionalCurrent": ["unlock"], "references": { "operationId": "Operation", "officerIds[]": "Officer", "centerLocationId": "Location", "vehicles[]": "Vehicle", "locations[]": "Location", "subjects[]": "EncounterSubject", "links[]": "Link", "narratives[]": "NarrativeRecord", "completed": "EncounterCompleted" }, "duplicates": ["subject.shared", "PersonEncounter projections", "Arrest/Book-In event facts", "completed snapshot"], "derivedPersisted": ["supervisorSummary", "completed", "completedHistory"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/encounter.js:315-394", "functions/model/store.js:2408-2434"], "read": ["functions/model/store.js", "functions/encounters.js", "functions/encounter-narrative.js", "functions/oracle.js"], "update": ["functions/model/store.js:2436-2539", "functions/encounters.js", "functions/narratives/narrative-page.js"], "delete": ["functions/model/store.js:2559-2580"], "migrate": ["functions/model/store.js", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "EncounterSubject": {
+      "kind": "embedded event-participant association", "storage": "workspace", "collectionPath": "FieldEncounter.subjects[]",
+      "identifier": { "field": "subjectId", "format": "generated string", "generation": "Encounter subject factory/UI helper" },
+      "authority": "Encounter-owned for event role/outcome; Person owns reusable identity; Book-In owns booking packet",
+      "fields": { "requiredCurrent": ["subjectId", "personId", "leadId", "bookinRecordId", "lastName", "firstName", "alienNumber", "citizenship", "encounterRole", "roleOther", "vehicleRole", "custody", "outcome", "releaseReason", "techniques", "unidentified", "notes", "packetFiledAt", "fledAt", "fledAtPrecision", "arrestingOfficerId", "compliance", "useOfForce", "forceLevel", "docsGeneratedAt", "shared"], "optionalCurrent": [], "references": { "personId": "Person", "leadId": "Lead", "bookinRecordId": "BookInRecord", "arrestingOfficerId": "Officer", "shared": "SharedStop" }, "duplicates": ["Person identity", "Book-In role/booking fields", "Arrest outcome/officer", "Encounter root in shared"], "derivedPersisted": ["shared", "docsGeneratedAt", "packetFiledAt"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/encounter.js", "functions/encounters.js"], "read": ["functions/encounters.js", "functions/encounter-narrative.js", "functions/oracle.js"], "update": ["functions/encounters.js", "functions/model/store.js"], "delete": ["Encounter subject removal; Book-In/Arrest cascade is not guaranteed"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "SharedStop": {
+      "kind": "embedded denormalized event projection", "storage": "workspace", "collectionPath": "EncounterSubject.shared",
+      "identifier": { "field": "encounterId", "format": "copied FieldEncounter ID", "generation": "Encounter sync" },
+      "authority": "not authoritative; projection from Encounter root and center location/vehicles",
+      "fields": { "requiredCurrent": ["encounterId", "startedAt", "eventType", "operationId", "officerIds", "team", "officeCode", "centerLocationId", "city", "address", "latitude", "longitude", "vehicles"], "optionalCurrent": [], "references": { "encounterId": "FieldEncounter", "operationId": "Operation", "officerIds[]": "Officer", "centerLocationId": "Location" }, "duplicates": ["FieldEncounter root, Location, Vehicle"], "derivedPersisted": ["all fields"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js", "functions/model/encounter.js"], "read": ["functions/encounter-narrative.js", "functions/oracle.js"], "update": ["functions/model/store.js"], "delete": ["with EncounterSubject"], "migrate": ["functions/model/store.js"] },
+      "evidence": "VERIFIED"
+    },
+    "SupervisorSummary": {
+      "kind": "embedded derived output", "storage": "workspace", "collectionPath": "FieldEncounter.supervisorSummary",
+      "identifier": { "field": null, "format": "one current summary per Encounter", "generation": "Narrative Build 9 summary derivation" },
+      "authority": "derived cache; source Encounter and Narrative records are primary",
+      "fields": { "requiredCurrent": ["text", "derivedAt", "coverage"], "optionalCurrent": [], "references": {}, "duplicates": ["Narrative coverage and Encounter outcomes"], "derivedPersisted": ["all fields"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/narratives/narrative-page.js:719-734", "functions/narratives/build9/encounter-summary.js"], "read": ["functions/encounters.js", "functions/operations.js"], "update": ["functions/narratives/narrative-page.js"], "delete": ["with Encounter or explicit overwrite"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "EncounterCompleted": {
+      "kind": "embedded completion snapshot", "storage": "workspace", "collectionPath": "FieldEncounter.completed",
+      "identifier": { "field": "encounterId", "format": "copied FieldEncounter ID", "generation": "completeEncounter" },
+      "authority": "historical completion snapshot; not automatically refreshed after unlock/edit",
+      "fields": { "requiredCurrent": ["schema", "generatedAt", "encounterId", "startedAt", "eventType", "operationId", "officerIds", "centerLocationId", "team", "officeCode", "subjects", "locations", "vehicles", "outcomeCounts", "supervisorSummary", "pin"], "optionalCurrent": [], "references": { "encounterId": "FieldEncounter", "operationId": "Operation", "officerIds[]": "Officer", "centerLocationId": "Location" }, "duplicates": ["most Encounter aggregate facts"], "derivedPersisted": ["outcomeCounts", "pin", "all snapshot fields"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js:2110-2289"], "read": ["functions/oracle.js", "functions/map.js", "functions/encounters.js"], "update": ["replaced on completion"], "delete": ["unlock/history paths may move snapshot"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "EncounterCompletionHistory": {
+      "kind": "embedded historical wrapper", "storage": "workspace", "collectionPath": "FieldEncounter.completedHistory[]",
+      "identifier": { "field": "generatedAt", "format": "timestamp-like, not guaranteed unique", "generation": "unlock/recomplete path" },
+      "authority": "owning Encounter historical record",
+      "fields": { "requiredCurrent": ["generatedAt", "unlockedAt", "reason", "snapshot"], "optionalCurrent": ["unlockedByAlias"], "references": { "snapshot": "EncounterCompleted" }, "duplicates": ["completed snapshots"], "derivedPersisted": ["timestamps"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js"], "read": ["functions/encounters.js"], "update": ["append-oriented"], "delete": ["with Encounter"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "EncounterUnlock": {
+      "kind": "embedded lifecycle audit value", "storage": "workspace", "collectionPath": "FieldEncounter.unlock",
+      "identifier": { "field": "unlockedAt", "format": "timestamp-like", "generation": "unlock workflow" },
+      "authority": "owning Encounter",
+      "fields": { "requiredCurrent": ["unlockedAt", "reason", "unlockedByAlias"], "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": ["unlockedAt"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/store.js"], "read": ["functions/encounters.js"], "update": ["replaced by unlock workflow"], "delete": ["with Encounter or relock"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "NarrativeRecord": {
+      "kind": "embedded persistent editorial aggregate", "storage": "workspace", "collectionPath": "FieldEncounter.narratives[]",
+      "identifier": { "field": "narrativeId", "format": "derived/generated string", "generation": "current integration derives primary IDs from adapter participant IDs" },
+      "authority": "Encounter.narratives owns saved narrative state/output; current participant identity mapping is unstable",
+      "fields": { "requiredCurrent": ["schema", "recordType", "narrativeId", "encounterId", "narrativeKind", "focusEncounterParticipantId", "relatedEncounterParticipantIds", "title", "sequence", "workflowStatus", "freshnessStatus", "engine", "output", "bindings", "factsManifest", "validationSnapshot", "sourceSnapshot", "notes", "recordState", "revision", "createdAt", "updatedAt"], "optionalCurrent": [], "references": { "encounterId": "FieldEncounter", "focusEncounterParticipantId": "EncounterSubject", "relatedEncounterParticipantIds[]": "EncounterSubject", "output.sections[]": "NarrativeOutputSection" }, "duplicates": ["sourceSnapshot", "bindings", "generated/resolved/manual/final text variants"], "derivedPersisted": ["generatedResolvedText", "factsManifest", "validationSnapshot", "freshnessStatus"], "legacy": ["adapter-generated participant IDs can replace stable source IDs"], "allowsUnknown": true },
+      "crud": { "create": ["functions/narratives/build9/narrative-domain.js", "functions/narratives/narrative-page.js"], "read": ["functions/narratives/narrative-page.js", "functions/encounters.js"], "update": ["functions/narratives/narrative-page.js", "functions/model/store.js"], "delete": ["archive/void/supersede state; aggregate replacement paths"], "migrate": ["functions/narratives/build9/narrative-domain.js"] },
+      "evidence": "VERIFIED"
+    },
+    "NarrativeOutputSection": {
+      "kind": "embedded editorial section", "storage": "workspace", "collectionPath": "NarrativeRecord.output.sections[]",
+      "identifier": { "field": "sectionId", "format": "template/engine section string", "generation": "Build 9 resolver" },
+      "authority": "finalText/manualText editorial state within NarrativeRecord",
+      "fields": { "requiredCurrent": ["sectionId"], "optionalCurrent": ["templateText", "generatedText", "resolvedText", "manualText", "finalText", "sourceRefs"], "references": {}, "duplicates": ["multiple intentional text stages"], "derivedPersisted": ["generatedText", "resolvedText"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/narratives/build9/narrative-domain.js", "functions/narratives/narrative-builder-engine.js"], "read": ["functions/narratives/narrative-page.js"], "update": ["functions/narratives/narrative-page.js"], "delete": ["with NarrativeRecord/state rebuild"], "migrate": ["functions/narratives/build9/narrative-domain.js"] },
+      "evidence": "VERIFIED"
+    },
+    "NarrativeTemplateRegistry": {
+      "kind": "optional dormant template registry", "storage": "narrativeTemplates", "collectionPath": "$",
+      "identifier": { "field": "template id", "format": "engine-defined", "generation": "template editor/import" },
+      "authority": "engine registry only when local persistence is explicitly enabled; current Narrative page disables it",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["engine-defined registry fields"], "references": {}, "duplicates": [], "derivedPersisted": [], "legacy": ["v1 registry key"], "allowsUnknown": true },
+      "crud": { "create": ["functions/narratives/narrative-builder-engine.js:1704-1748"], "read": ["functions/narratives/narrative-builder-engine.js:1704-1748"], "update": ["functions/narratives/narrative-builder-engine.js:1704-1748"], "delete": ["none found"], "migrate": ["v1 read compatibility in functions/narratives/narrative-builder-engine.js"] },
+      "evidence": "VERIFIED"
+    },
+    "BookInRecord": {
+      "kind": "persistent packet aggregate with dynamic DOM snapshot", "storage": "bookin", "collectionPath": "$[]",
+      "identifier": { "field": "id", "format": "UUID or timestamp/random fallback", "generation": "crypto.randomUUID when available; fallback otherwise" },
+      "authority": "formState for reopen/PDF; selected top-level fields for listing, search and cross-store joins",
+      "fields": { "requiredCurrent": ["id", "createdAt", "updatedAt", "firstName", "lastName", "aNumber", "subjectRole", "vehiclePosition", "dateTime", "arrestTime", "dateOfBirth", "countryOfCitizenship", "team", "encounterId", "encounterRole", "leadId", "personId", "formState"], "optionalCurrent": ["createdWithVersion", "updatedWithVersion", "revision", "fbiNumber", "iceEvent", "encounterNumber", "foreignWarrants", "foreignWarrantCountry", "caseType", "officersName", "arrestId", "dynamic indexed and legacy fields"], "references": { "encounterId": "FieldEncounter", "leadId": "Lead", "personId": "Person", "arrestId": "Arrest", "formState.*": "FormControlSnapshot" }, "duplicates": ["top-level fields versus formState", "Person/EncounterSubject/Arrest facts"], "derivedPersisted": ["search/index projections", "timestamps/version markers"], "legacy": ["unversioned array rows and imported wrapper variants", "full-form and Encounter quick-book producers persist different key sets"], "allowsUnknown": true },
+      "crud": { "create": ["functions/book-in.js:1276-1515", "functions/encounters.js"], "read": ["functions/book-in.js", "functions/encounters.js", "functions/encounter-narrative.js", "functions/model/store.js"], "update": ["functions/book-in.js", "functions/encounters.js"], "delete": ["functions/book-in.js; no Encounter/Arrest cascade"], "migrate": ["functions/book-in.js", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "FormControlSnapshot": {
+      "kind": "embedded dynamic DOM-schema value", "storage": "bookin", "collectionPath": "BookInRecord.formState[controlId]",
+      "identifier": { "field": "controlId map key", "format": "HTML control id", "generation": "DOM collection" },
+      "authority": "Book-In reopen and document-generation value per control ID",
+      "fields": { "requiredCurrent": ["checked", "type", "value"], "optionalCurrent": [], "references": {}, "duplicates": ["selected BookInRecord top-level projections"], "derivedPersisted": [], "legacy": ["removed/renamed HTML control IDs remain possible"], "allowsUnknown": true },
+      "crud": { "create": ["functions/book-in.js"], "read": ["functions/book-in.js"], "update": ["functions/book-in.js"], "delete": ["with BookInRecord or omitted control"], "migrate": ["none: DOM IDs are implicit schema"] },
+      "evidence": "VERIFIED"
+    },
+    "AdminState": {
+      "kind": "persistent root aggregate", "storage": "admin", "collectionPath": "$",
+      "identifier": { "field": null, "format": "singleton", "generation": "one document per storage key" },
+      "authority": "Officer, government fleet Vehicle and Shift arrays",
+      "fields": { "requiredCurrent": ["officers", "vehicles", "shifts"], "optionalCurrent": [], "references": { "officers[]": "Officer", "vehicles[]": "Vehicle", "shifts[]": "Shift" }, "duplicates": [], "derivedPersisted": [], "legacy": ["no root schema tag", "unknown imported properties"], "allowsUnknown": true },
+      "crud": { "create": ["functions/admin.js"], "read": ["functions/admin.js:304-333", "functions/officer-roster.js"], "update": ["functions/admin.js:354-405", "functions/officer-roster.js"], "delete": ["Admin row removal functions"], "migrate": ["functions/admin.js", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Officer": {
+      "kind": "persistent Admin entity", "storage": "admin", "collectionPath": "$.officers[]",
+      "identifier": { "field": "officerId", "aliases": ["id"], "format": "generated or imported string", "generation": "Admin/model officer helper" },
+      "authority": "Admin roster for current identity; event/report display fields are snapshots/free text",
+      "fields": { "requiredCurrent": ["officerId", "id", "entityType", "lastName", "firstName", "middleName", "badge", "callSign", "duty", "role", "team", "eod", "phoneGov", "phonePrivate", "locations", "qualifications", "qualOther", "equipment", "equipNotes", "meta"], "optionalCurrent": ["address", "fieldArrests"], "references": { "locations[]": "Location" }, "duplicates": ["id alias", "address/location legacy shapes", "officer display text across events and reports"], "derivedPersisted": ["fieldArrests"], "legacy": ["address", "ID aliases"], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/officer.js", "functions/admin.js"], "read": ["functions/admin.js", "functions/officer-roster.js", "functions/encounters.js", "functions/operations.js"], "update": ["functions/admin.js", "functions/officer-roster.js"], "delete": ["Admin officer removal; references are not cascaded"], "migrate": ["functions/admin.js"] },
+      "evidence": "VERIFIED"
+    },
+    "Shift": {
+      "kind": "persistent Admin scheduling record", "storage": "admin", "collectionPath": "$.shifts[]",
+      "identifier": { "field": "id", "format": "generated string", "generation": "Admin scheduling helper" },
+      "authority": "Admin schedule",
+      "fields": { "requiredCurrent": ["id", "date", "officerId", "vehicleId", "start", "end", "assignment"], "optionalCurrent": [], "references": { "officerId": "Officer", "vehicleId": "Vehicle" }, "duplicates": ["Officer/fleet display context"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/admin.js"], "read": ["functions/admin.js"], "update": ["functions/admin.js"], "delete": ["functions/admin.js"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "MediaMetadata": {
+      "kind": "persistent IndexedDB entity", "storage": "media", "collectionPath": "meta[mediaId]",
+      "identifier": { "field": "mediaId", "format": "generated string", "generation": "Media repository ID helper unless imported" },
+      "authority": "authoritative attachment metadata; owner foreign key is application-enforced only",
+      "fields": { "requiredCurrent": ["mediaId", "entityType", "schema", "mediaClass", "owner", "ownerKey", "ownerSha", "kind", "documentType", "caption", "captionCustom", "takenAt", "takenAtPrecision", "takenAtApproximate", "takenAtSource", "place", "tags", "notes", "mime", "bytes", "width", "height", "originalName", "sha256", "roles", "crop", "primary", "documentId", "meta"], "optionalCurrent": [], "references": { "owner": "Endpoint" }, "duplicates": ["ownerKey", "ownerSha", "blob row metadata"], "derivedPersisted": ["ownerKey", "ownerSha", "sha256", "bytes", "width", "height", "roles"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/media.js", "functions/photo-picker-modal.js", "functions/warrant-issue.js"], "read": ["functions/model/media.js", "functions/media-card.js", "functions/baseball-page.js"], "update": ["functions/model/media.js"], "delete": ["functions/model/media.js; owner deletion is not a database cascade"], "migrate": ["IndexedDB database version 1 only", "functions/transfer.js"] },
+      "evidence": "VERIFIED"
+    },
+    "MediaBlobRow": {
+      "kind": "persistent IndexedDB binary row", "storage": "media", "collectionPath": "blobs[[mediaId, role]]",
+      "identifier": { "field": ["mediaId", "role"], "format": "compound key", "generation": "Media repository" },
+      "authority": "authoritative bytes for a Media role",
+      "fields": { "requiredCurrent": ["mediaId", "role", "blob"], "optionalCurrent": ["mime", "bytes"], "references": { "mediaId": "MediaMetadata" }, "duplicates": ["mime/bytes metadata"], "derivedPersisted": ["bytes"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/model/media.js"], "read": ["functions/model/media.js"], "update": ["functions/model/media.js", "functions/transfer.js"], "delete": ["functions/model/media.js"], "migrate": ["IndexedDB database version 1 only"] },
+      "evidence": "VERIFIED"
+    },
+    "WarrantDirectoryHandle": {
+      "kind": "persistent browser capability handle", "storage": "warrants", "collectionPath": "handles.warrantsDirectory",
+      "identifier": { "field": "warrantsDirectory", "format": "fixed key", "generation": "File System Access directory selection" },
+      "authority": "browser-granted output destination capability, not Warrant domain data",
+      "fields": { "requiredCurrent": ["FileSystemDirectoryHandle value"], "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/warrant-issue.js:168-227"], "read": ["functions/warrant-issue.js"], "update": ["functions/warrant-issue.js"], "delete": ["none exposed"], "migrate": ["nonportable; destination browser must reauthorize"] },
+      "evidence": "VERIFIED"
+    },
+    "MapViewsState": {
+      "kind": "persistent presentation state", "storage": "mapViews", "collectionPath": "$",
+      "identifier": { "field": null, "format": "singleton home plus named presets", "generation": "Map UI" },
+      "authority": "saved map viewport preferences, never domain Location authority",
+      "fields": { "requiredCurrent": ["home", "presets"], "optionalCurrent": [], "references": { "presets[]": "MapView" }, "duplicates": [], "derivedPersisted": ["viewport state"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/map-views.js"], "read": ["functions/map-views.js"], "update": ["functions/map-views.js"], "delete": ["functions/map-views.js"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "MapView": {
+      "kind": "embedded presentation preset", "storage": "mapViews", "collectionPath": "MapViewsState.home | .presets[]",
+      "identifier": { "field": "id", "format": "optional generated string", "generation": "Map UI" },
+      "authority": "owning MapViewsState",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["id", "name", "center", "zoom", "dynamic map fields"], "references": {}, "duplicates": [], "derivedPersisted": ["center", "zoom"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/map-views.js"], "read": ["functions/map-views.js"], "update": ["functions/map-views.js"], "delete": ["functions/map-views.js"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "MapMarkupState": {
+      "kind": "persistent presentation state", "storage": "mapMarkup", "collectionPath": "$",
+      "identifier": { "field": null, "format": "singleton", "generation": "Map markup UI" },
+      "authority": "current map labels/arrows only",
+      "fields": { "requiredCurrent": ["labels", "arrows"], "optionalCurrent": [], "references": {}, "duplicates": ["Operation.markup can hold separate markup"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/map-markup.js"], "read": ["functions/map-markup.js"], "update": ["functions/map-markup.js"], "delete": ["functions/map-markup.js"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "MapLayersState": {
+      "kind": "persistent presentation state", "storage": "mapLayers", "collectionPath": "$",
+      "identifier": { "field": null, "format": "singleton", "generation": "Map UI" },
+      "authority": "layer visibility/preferences only",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["dynamic layer settings"], "references": {}, "duplicates": ["Operation.mapLayers snapshot"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/map-targets.js"], "read": ["functions/map-targets.js"], "update": ["functions/map-targets.js"], "delete": ["none found"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "MapIconsState": {
+      "kind": "persistent presentation library", "storage": "mapIcons", "collectionPath": "$",
+      "identifier": { "field": null, "format": "dynamic icon registry", "generation": "Map UI" },
+      "authority": "custom icon preference/library only",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["dynamic icon definitions"], "references": {}, "duplicates": [], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/map-targets.js"], "read": ["functions/map-targets.js"], "update": ["functions/map-targets.js"], "delete": ["functions/map-targets.js"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "WarrantSettings": {
+      "kind": "persistent preference object", "storage": "settings", "collectionPath": "$",
+      "identifier": { "field": null, "format": "singleton dynamic settings", "generation": "Warrant UI" },
+      "authority": "operator defaults only; issued Warrant stores a snapshot",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["office", "officerId", "officerName", "officerTitle", "dynamic settings"], "references": { "officerId": "Officer" }, "duplicates": ["Warrant officer/office snapshot"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/warrant-issue.js:64-81"], "read": ["functions/warrant-issue.js", "functions/encounter-narrative.js"], "update": ["functions/warrant-issue.js"], "delete": ["none found"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "BookInColumnPreferences": {
+      "kind": "persistent presentation preference", "storage": "bookinColumns", "collectionPath": "$",
+      "identifier": { "field": null, "format": "selected column keys", "generation": "Book-In saved-record UI" },
+      "authority": "presentation only",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["column keys"], "references": {}, "duplicates": [], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/book-in.js:2201-2231"], "read": ["functions/book-in.js:2201-2231"], "update": ["functions/book-in.js:2201-2231"], "delete": ["none found"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "InvestigationWindowState": {
+      "kind": "session presentation state", "storage": "investigationWindows", "collectionPath": "$[windowId]",
+      "identifier": { "field": "windowId map key", "format": "UI window ID", "generation": "Investigation wall" },
+      "authority": "current tab UI layout only",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["open", "left", "top", "width", "height", "dynamic UI fields"], "references": {}, "duplicates": [], "derivedPersisted": ["window geometry"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/investigation-wall.js:120-159"], "read": ["functions/investigation-wall.js:120-159"], "update": ["functions/investigation-wall.js:120-159"], "delete": ["session end or explicit overwrite"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "BaseballHandoff": {
+      "kind": "session transfer payload", "storage": "baseballHandoff", "collectionPath": "$",
+      "identifier": { "field": null, "format": "single latest payload", "generation": "Book-In navigation" },
+      "authority": "transient handoff only; referenced stores remain authoritative",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["identity", "arrestDate", "disposition", "leadId", "recordId", "dynamic handoff fields"], "references": { "leadId": "Lead", "recordId": "BookInRecord" }, "duplicates": ["Book-In/Person/Arrest facts"], "derivedPersisted": ["all handoff fields"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/book-in.js:4905-4966"], "read": ["functions/baseball-page.js:8-55"], "update": ["functions/book-in.js"], "delete": ["session end/overwrite"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "BaseballCardStyle": {
+      "kind": "persistent presentation preference", "storage": "baseballCardStyle", "collectionPath": "$",
+      "identifier": { "field": null, "format": "dynamic style-control object", "generation": "Baseball Card UI" },
+      "authority": "presentation default only",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["dynamic style controls"], "references": {}, "duplicates": [], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/baseballcard.js:437-455"], "read": ["functions/baseballcard.js:437-455"], "update": ["functions/baseballcard.js:437-455"], "delete": ["none found"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "GeocodeCache": {
+      "kind": "session derived cache", "storage": "geocodeCache", "collectionPath": "$[normalizedAddress]",
+      "identifier": { "field": "normalized address map key", "format": "string", "generation": "address geocoder" },
+      "authority": "never Location authority",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["geocoder result payloads"], "references": {}, "duplicates": ["Location coordinates/address"], "derivedPersisted": ["all values"], "legacy": ["no TTL/version"], "allowsUnknown": true },
+      "crud": { "create": ["functions/address.js:1086-1108"], "read": ["functions/address.js:1086-1108"], "update": ["functions/address.js:1086-1108"], "delete": ["session end"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "ImportDoneSignal": {
+      "kind": "ephemeral cross-window invalidation scalar", "storage": "importDoneSignal", "collectionPath": "$",
+      "identifier": { "field": null, "format": "Date.now string", "generation": "successful import" },
+      "authority": "signal only",
+      "fields": { "requiredCurrent": ["timestamp scalar"], "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": ["all"], "legacy": [], "allowsUnknown": false },
+      "crud": { "create": ["functions/transfer.js:1542-1551"], "read": ["functions/transfer.js:2149-2168"], "update": ["functions/transfer.js:1542-1551"], "delete": ["none; overwritten"], "migrate": ["none found"] },
+      "evidence": "VERIFIED"
+    },
+    "LabUploadState": {
+      "kind": "experimental persistent state", "storage": "photoPickerLab/fileUploadLab", "collectionPath": "$",
+      "identifier": { "field": null, "format": "lab-defined JSON", "generation": "standalone lab pages" },
+      "authority": "lab-only, not production Media authority",
+      "fields": { "requiredCurrent": [], "optionalCurrent": ["lab-defined values and inline payloads"], "references": {}, "duplicates": ["Media concepts"], "derivedPersisted": [], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/photo-picker.js", "functions/file-upload.js"], "read": ["functions/photo-picker.js", "functions/file-upload.js"], "update": ["functions/photo-picker.js", "functions/file-upload.js"], "delete": ["lab UI-dependent"], "migrate": ["none found"] },
+      "evidence": "UNKNOWN_REVIEW"
+    },
+    "IntegrityReport": {
+      "kind": "in-memory/download diagnostic artifact", "storage": null, "collectionPath": "not persisted by scanner",
+      "identifier": { "field": "generatedAt", "format": "schema plus timestamp; not guaranteed unique", "generation": "Stage 0 scan" },
+      "authority": "observation only; must not mutate inspected stores",
+      "fields": { "requiredCurrent": ["schema", "scanner", "generatedAt", "readOnly", "inputs", "summary", "findings"], "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": ["entire report"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/integrity.js", "functions/integrity-page.js"], "read": ["functions/integrity-page.js", "functions/safety-backup.js"], "update": ["none"], "delete": ["memory/page lifecycle"], "migrate": ["none"] },
+      "evidence": "VERIFIED"
+    },
+    "SafetyBackupV1": {
+      "kind": "download-only exact-capture artifact", "storage": null, "collectionPath": "downloaded JSON file",
+      "identifier": { "field": "format/schemaVersion plus metadata", "format": "copdocx.safety-backup.v1", "generation": "Stage 0 capture" },
+      "authority": "raw captured bytes and IndexedDB exports for verified backup evidence; no restore path yet",
+      "fields": { "requiredCurrent": ["format", "schemaVersion", "metadata", "stores", "verification", "integrityReport"], "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": ["hashes, counts, verification"], "legacy": [], "allowsUnknown": true },
+      "crud": { "create": ["functions/safety-backup.js"], "read": ["functions/safety-backup.js", "scripts/test-safety-backup.js"], "update": ["none"], "delete": ["outside application after download"], "migrate": ["no restore/migration path in Stage 0"] },
+      "evidence": "VERIFIED"
+    },
+    "RawStoreCapture": {
+      "kind": "embedded exact-capture row", "storage": null, "collectionPath": "SafetyBackupV1.stores.localStorage[] | sessionStorage[]",
+      "identifier": { "field": "id", "format": "storage registry ID", "generation": "workspace-config registry" },
+      "authority": "captured raw string is authoritative for backup verification",
+      "fields": { "requiredCurrent": ["id", "key", "owner", "portable", "exists", "raw", "byteLength", "sha256"], "optionalCurrent": [], "references": {}, "duplicates": [], "derivedPersisted": ["byteLength", "sha256"], "legacy": [], "allowsUnknown": false },
+      "crud": { "create": ["functions/safety-backup.js"], "read": ["functions/safety-backup.js"], "update": ["none"], "delete": ["with backup file"], "migrate": ["none"] },
+      "evidence": "VERIFIED"
+    }
+  }
+}

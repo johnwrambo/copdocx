@@ -11255,3 +11255,164 @@ button.oracle-kpi.is-selected {
     border-right: none;
   }
 }
+
+/* ============================================================
+   DATA INTEGRITY — read-only Stage 0 safety report
+   ============================================================ */
+body[data-page="integrity"] .page-integrity {
+  max-width: 1240px;
+}
+
+body[data-page="integrity"] .integrity-read-only {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 0.9rem;
+  color: var(--ns-text-soft);
+  background: var(--ns-teal-deep);
+  border: 1px solid var(--ns-teal);
+  border-left-width: 4px;
+  border-radius: 4px;
+}
+
+body[data-page="integrity"] .integrity-read-only strong {
+  color: var(--ns-teal-bright);
+}
+
+body[data-page="integrity"] .integrity-stat-row .stat-card.has-findings {
+  border-color: var(--ns-amber);
+}
+
+body[data-page="integrity"] #integrityCriticalCard.has-findings,
+body[data-page="integrity"] #integrityHighCard.has-findings {
+  border-color: var(--ns-red);
+}
+
+body[data-page="integrity"] #integrityCriticalCard.has-findings .stat-value,
+body[data-page="integrity"] #integrityHighCard.has-findings .stat-value {
+  color: var(--ns-red);
+}
+
+body[data-page="integrity"] #integrityMediumCard.has-findings .stat-value,
+body[data-page="integrity"] #integrityTotalCard.has-findings .stat-value {
+  color: var(--ns-amber);
+}
+
+body[data-page="integrity"] .integrity-status-card,
+body[data-page="integrity"] .integrity-findings-card,
+body[data-page="integrity"] .integrity-backup-card {
+  margin-bottom: 1rem;
+}
+
+body[data-page="integrity"] .integrity-status {
+  margin: 0;
+  font-family: var(--ns-mono);
+}
+
+body[data-page="integrity"] .integrity-status.is-ok,
+body[data-page="integrity"] .integrity-empty.is-ok {
+  color: var(--ns-teal-bright);
+}
+
+body[data-page="integrity"] .integrity-status.is-warning {
+  color: var(--ns-amber);
+}
+
+body[data-page="integrity"] .integrity-status.is-error,
+body[data-page="integrity"] .integrity-empty.is-error {
+  color: var(--ns-red);
+}
+
+body[data-page="integrity"] .integrity-generated-at {
+  margin: 0;
+  color: var(--ns-text-dim);
+  font-family: var(--ns-mono);
+  font-size: 0.8rem;
+}
+
+body[data-page="integrity"] .integrity-inputs-table td,
+body[data-page="integrity"] .integrity-findings-table td {
+  vertical-align: top;
+}
+
+body[data-page="integrity"] .integrity-findings-table {
+  min-width: 980px;
+}
+
+body[data-page="integrity"] .integrity-rule-id,
+body[data-page="integrity"] .integrity-affected {
+  font-family: var(--ns-mono);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+body[data-page="integrity"] .integrity-affected {
+  min-width: 13rem;
+}
+
+body[data-page="integrity"] .integrity-findings-table td:nth-child(4) {
+  min-width: 18rem;
+}
+
+body[data-page="integrity"] .integrity-findings-table td p {
+  margin: 0.25rem 0 0;
+}
+
+body[data-page="integrity"] .integrity-suggested-action {
+  color: var(--ns-text-soft);
+  font-size: 0.82rem;
+}
+
+body[data-page="integrity"] .integrity-evidence-list {
+  min-width: 15rem;
+  margin: 0.45rem 0 0;
+  padding-left: 1.15rem;
+  color: var(--ns-text-soft);
+  font-family: var(--ns-mono);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+body[data-page="integrity"] .integrity-evidence-list li + li {
+  margin-top: 0.35rem;
+}
+
+body[data-page="integrity"] .integrity-findings-table details > summary {
+  color: var(--ns-teal-bright);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+body[data-page="integrity"] .integrity-severity,
+body[data-page="integrity"] .integrity-store-status {
+  border: 1px solid var(--ns-line-strong);
+  color: var(--ns-text-soft);
+  background: var(--ns-panel-raised);
+  white-space: nowrap;
+}
+
+body[data-page="integrity"] .integrity-severity-critical,
+body[data-page="integrity"] .integrity-severity-high,
+body[data-page="integrity"] .integrity-store-status-invalid,
+body[data-page="integrity"] .integrity-store-status-unavailable {
+  border-color: var(--ns-red);
+  color: var(--ns-red);
+  background: var(--ns-red-deep);
+}
+
+body[data-page="integrity"] .integrity-severity-medium {
+  border-color: var(--ns-amber);
+  color: var(--ns-amber);
+  background: var(--ns-amber-deep);
+}
+
+body[data-page="integrity"] .integrity-severity-low,
+body[data-page="integrity"] .integrity-severity-info,
+body[data-page="integrity"] .integrity-store-status-ok {
+  border-color: var(--ns-teal);
+  color: var(--ns-teal-bright);
+  background: var(--ns-teal-deep);
+}
+
+body[data-page="integrity"] .integrity-store-status-missing,
+body[data-page="integrity"] .integrity-store-status-skipped {
+  color: var(--ns-text-dim);
+}

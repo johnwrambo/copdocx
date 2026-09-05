@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Data Integrity</title>
+    <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+  </head>
+  <body data-page="integrity" data-admin-page="integrity">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span id="appVersion" class="app-version" data-version="0.69.2">
+          Version 0.69.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <main class="page page-wide page-integrity">
+      <header class="page-header">
+        <h1>Data Integrity</h1>
+        <div class="page-meta">
+          <p>Inspect relationships and conflicting copies across the COPDoc stores.</p>
+        </div>
+      </header>
+
+      <section class="integrity-read-only" aria-label="Read-only scan">
+        <strong>Read-only scan.</strong>
+        COPDoc reports problems here but does not change or repair any records.
+      </section>
+
+      <div class="stat-row integrity-stat-row" aria-label="Integrity findings summary">
+        <article class="stat-card" id="integrityCriticalCard">
+          <p class="stat-label">Critical</p>
+          <p id="integrityStatCritical" class="stat-value">—</p>
+          <p class="stat-hint">Active corruption or unsafe storage</p>
+        </article>
+        <article class="stat-card" id="integrityHighCard">
+          <p class="stat-label">High</p>
+          <p id="integrityStatHigh" class="stat-value">—</p>
+          <p class="stat-hint">Broken or conflicting relationships</p>
+        </article>
+        <article class="stat-card" id="integrityMediumCard">
+          <p class="stat-label">Medium</p>
+          <p id="integrityStatMedium" class="stat-value">—</p>
+          <p class="stat-hint">Drift requiring review</p>
+        </article>
+        <article class="stat-card" id="integrityTotalCard">
+          <p class="stat-label">All findings</p>
+          <p id="integrityStatTotal" class="stat-value">—</p>
+          <p class="stat-hint">Includes low and informational findings</p>
+        </article>
+      </div>
+
+      <fieldset class="card-static integrity-status-card">
+        <legend>Scan status</legend>
+        <div class="dash-card-head">
+          <p
+            id="integrityStatus"
+            class="section-note integrity-status"
+            role="status"
+            aria-live="polite"
+          >
+            Ready to scan.
+          </p>
+          <p id="integrityGeneratedAt" class="integrity-generated-at">
+            Not scanned
+          </p>
+        </div>
+
+        <p id="integrityInputsEmpty" class="records-empty">
+          Select Run scan to inspect the current browser data.
+        </p>
+        <div id="integrityInputsTableWrap" class="records-table-wrap" hidden>
+          <table class="records-table integrity-inputs-table">
+            <thead>
+              <tr>
+                <th scope="col">Store</th>
+                <th scope="col">Storage key</th>
+                <th scope="col">Status</th>
+                <th scope="col">Contents</th>
+                <th scope="col">Error</th>
+              </tr>
+            </thead>
+            <tbody id="integrityInputsBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static integrity-findings-card">
+        <legend>Findings</legend>
+        <p class="section-note">
+          Findings identify records and paths only. Nothing on this page performs a repair.
+        </p>
+        <p id="integrityFindingsEmpty" class="records-empty">
+          No scan results yet.
+        </p>
+        <div id="integrityFindingsTableWrap" class="records-table-wrap" hidden>
+          <table class="records-table integrity-findings-table">
+            <thead>
+              <tr>
+                <th scope="col">Severity</th>
+                <th scope="col">Rule</th>
+                <th scope="col">Affected record</th>
+                <th scope="col">Finding</th>
+                <th scope="col">Evidence</th>
+              </tr>
+            </thead>
+            <tbody id="integrityFindingsBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static integrity-backup-card">
+        <legend>Safety backup</legend>
+        <p class="section-note">
+          After a successful scan, Download full backup captures the required raw stores,
+          media, and this integrity report. The downloaded file is unencrypted and contains
+          sensitive biographic and medical data. Store it accordingly.
+        </p>
+      </fieldset>
+    </main>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/integrity.js"></script>
+    <script src="functions/safety-backup.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/integrity-page.js"></script>
+  </body>
+</html>

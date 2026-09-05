@@ -1,0 +1,65 @@
+{
+  "schema": "copdocx.stage0-known-risks.v1",
+  "baseline": {
+    "release": "origin/release/0.66.1",
+    "commit": "7ee1436b2016379b085b86a7873c6abdaedbbc0f",
+    "tree": "28e2ddd99bd4fbf9f3a78dc6466f8c338acd4408"
+  },
+  "risks": [
+    {
+      "id": "S0-PERSON-001",
+      "title": "A stale Case save removes newer Person encounter history",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-OBJECT-001",
+      "title": "A stale embedded Vehicle overwrites its newer canonical record",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-OBJECT-002",
+      "title": "A stale embedded Location overwrites its newer canonical record",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-STORAGE-001",
+      "title": "A failed first write leaves a phantom record in live memory",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-BOOKIN-001",
+      "title": "Book-In promotion can persist an Arrest without its packet",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-BOOKIN-002",
+      "title": "Deleting a Book-In packet leaves active Encounter and Arrest references",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-IMPORT-001",
+      "title": "A multi-store import can partially commit before a later write fails",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-NARRATIVE-001",
+      "title": "Narrative adaptation changes a fled outcome to arrested",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-NARRATIVE-002",
+      "title": "Narrative adaptation discards stable subject and person identifiers",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-NARRATIVE-003",
+      "title": "Any linked Book-In packet causes unbooked Encounter subjects to disappear",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-CONCURRENCY-001",
+      "title": "Overlapping tab writes silently lose one successful Encounter update",
+      "expectedCurrentState": "risk_reproduced"
+    }
+  ]
+}

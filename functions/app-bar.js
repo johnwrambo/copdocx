@@ -31,6 +31,11 @@
       href: "schedule.html",
       label: "Schedule",
       pages: ["schedule"]
+    },
+    {
+      href: "integrity.html",
+      label: "Data integrity",
+      pages: ["integrity"]
     }
   ];
 
@@ -279,6 +284,32 @@
         tab: "oracle",
         file: WORKSPACE_FILE,
         actions: []
+      };
+    }
+    if (page === "integrity") {
+      return {
+        tab: "admin",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            label: "Run scan",
+            primary: true,
+            chromeAction: "scan",
+            call: "runIntegrityScan"
+          },
+          {
+            id: "downloadIntegrityReportButton",
+            label: "Download report",
+            call: "downloadIntegrityReport",
+            hidden: true
+          },
+          {
+            id: "downloadIntegrityBackupButton",
+            label: "Download full backup",
+            call: "downloadIntegrityBackup",
+            hidden: true
+          }
+        ]
       };
     }
     if (page === "encounter") {
