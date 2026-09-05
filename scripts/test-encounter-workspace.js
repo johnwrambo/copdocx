@@ -27,6 +27,7 @@ var css = read("style/style.css");
 var narrativePage = read("functions/narratives/narrative-page.js");
 var narrativeHtml = read("narrative.html");
 var narrativeUi = read("functions/narratives/narrative-workspace-ui.js");
+var narrativeLauncher = read("functions/narratives/encounter-launcher.js");
 
 check("product version is 0.69.2", config.indexOf('productVersion: "0.69.2"') !== -1);
 check("encounter form stamps 0.69.2", form.indexOf('data-version="0.69.2"') !== -1);
@@ -104,9 +105,12 @@ check("chrome form has no openEncounterBookIn", /page === \"encounter-form\"[\s\
 check("chrome form keeps Back to encounters", /page === \"encounter-form\"[\s\S]{0,400}Back to encounters/.test(chrome));
 check("nav has no Book-in tab", chrome.indexOf('tabLink("bookin.html"') === -1);
 check(
-  "narrative tab is a stub",
+  "narrative tab opens the live Build 9 workspace",
   form.indexOf('id="tab-narrative"') !== -1 &&
-    form.indexOf("I-213 is not on this encounter yet") !== -1 &&
+    form.indexOf('id="openEncounterNarrativesButton"') !== -1 &&
+    form.indexOf('functions/narratives/encounter-launcher.js') !== -1 &&
+    narrativeLauncher.indexOf('"narrative.html?encounterId=" + encodeURIComponent(id)') !== -1 &&
+    narrativeLauncher.indexOf('autosave.bind({ key: "encounter-form" })') !== -1 &&
     form.indexOf("narrativeEngineHost") === -1 &&
     form.indexOf("narrative-builder-engine.js") === -1
 );

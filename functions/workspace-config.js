@@ -14,6 +14,7 @@
     { id: "bookin", key: "alien-book-in.saved-records.v1", medium: "localStorage", owner: "book-in", portable: true },
     { id: "bookinColumns", key: "alien-book-in.saved-record-columns.v1", medium: "localStorage", owner: "book-in", portable: false },
     { id: "settings", key: "copdocx.settings.v1", medium: "localStorage", owner: "settings", portable: true },
+    { id: "importDoneSignal", key: "copdocx.import.done.v1", medium: "localStorage", owner: "transfer", portable: false },
     { id: "mapViews", key: "copdocx.map.views.v1", medium: "localStorage", owner: "map", portable: true },
     { id: "mapLayers", key: "copdocx.map.layers.v1", medium: "localStorage", owner: "map", portable: true },
     { id: "mapIcons", key: "copdocx.map.icons.v1", medium: "localStorage", owner: "map", portable: true },
