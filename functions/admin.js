@@ -1508,6 +1508,7 @@
           kind.innerHTML = mapApi.kindIconHtml(key);
         }
         var body = document.createElement("div");
+        body.className = "case-map-item-body";
         var label = document.createElement("strong");
         label.textContent = place.title;
         var addr = document.createElement("span");

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Case</title>
-    <link rel="stylesheet" href="style/style.css?v=0.66.1-object-editor-2" />
+    <link rel="stylesheet" href="style/style.css?v=0.69.2-case-history-span" />
     <script src="functions/workspace-config.js"></script>
     <script src="functions/document-context.js"></script>
     <script src="functions/document-registry.js"></script>
@@ -121,16 +121,6 @@
 
           <div class="case-hero-side">
             <fieldset
-              class="card-static case-tile case-documents-tile"
-              data-tile="documents"
-              id="caseDocumentsTile"
-            >
-              <legend>Documents</legend>
-              <p id="caseDocumentsEmpty" class="records-empty">No documents.</p>
-              <div id="caseDocumentsList" class="case-plain-list" hidden></div>
-            </fieldset>
-
-            <fieldset
               class="card-static case-tile case-history-tile"
               data-tile="history"
               id="caseHistoryTile"
@@ -200,6 +190,17 @@
             No associations or linked cases.
           </p>
           <div id="caseAssociationsList" class="case-plain-list" hidden></div>
+        </fieldset>
+
+        <fieldset
+          class="card-static case-tile case-documents-tile"
+          data-tile="documents"
+          data-size="m"
+          id="caseDocumentsTile"
+        >
+          <legend>Documents</legend>
+          <p id="caseDocumentsEmpty" class="records-empty">No documents.</p>
+          <div id="caseDocumentsList" class="case-plain-list" hidden></div>
         </fieldset>
       </div>
     </div>

@@ -821,6 +821,7 @@
           item.classList.add("is-primary");
         }
         var body = document.createElement("div");
+        body.className = "case-map-item-body";
         var label = document.createElement("strong");
         label.textContent =
           place.title + (place.isPrimary ? " · Primary" : "");
@@ -926,7 +927,7 @@
         }
         if (place.navigateUrl) {
           var nav = document.createElement("a");
-          nav.className = "fow-nav-link case-map-nav-link";
+          nav.className = "case-map-nav-link";
           nav.textContent = "Navigate";
           bindNavigateLink(nav, place.navigateUrl);
           actions.appendChild(nav);
@@ -2012,7 +2013,7 @@
       byId("caseDocumentsEmpty"),
       lines
     );
-    setTileEmpty(byId("caseDocumentsTile"), !has);
+    setTileEmpty(byId("caseDocumentsTile"), false);
   }
 
   function personLabelById(id) {
