@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Import</title>
+    <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+  </head>
+  <body data-page="import">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span id="appVersion" class="app-version" data-version="0.69.2">
+          Version 0.69.2
+        </span>
+      </div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <main class="page page-import">
+      <div class="dialog-box dialog-box-transfer import-panel">
+        <h1>Import</h1>
+        <p id="fileImportMeta" class="section-note">
+          Choose a COPDoc JSON backup.
+        </p>
+        <div id="fileImportEmpty">
+          <button type="button" class="action-button" id="fileImportChoose">
+            Choose file
+          </button>
+        </div>
+        <div id="fileImportConfirm" hidden>
+          <div class="dialog-scroll">
+            <ul id="fileImportSummary"></ul>
+            <p>Import</p>
+            <div class="import-mode-list">
+              <label class="radio-option">
+                <input type="radio" name="fileImportMode" value="all" checked />
+                Everything in the file
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="fileImportMode" value="selected" />
+                Selected types
+              </label>
+            </div>
+            <div id="fileImportTypes" class="check-grid"></div>
+            <p class="section-note">
+              Merges by id. Exact duplicates skip. A newer local record is kept.
+              JSON backups also restore settings, map, templates, and photos.
+            </p>
+          </div>
+          <div class="dialog-actions">
+            <button
+              type="button"
+              class="action-button-secondary"
+              id="fileImportCancel"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="action-button-secondary"
+              id="fileImportChooseOther"
+            >
+              Choose another
+            </button>
+            <button type="button" class="action-button" id="fileImportGo">
+              Import
+            </button>
+          </div>
+        </div>
+        <p id="importStatus" class="section-note" role="status"></p>
+      </div>
+      <input
+        type="file"
+        id="fileImportPicker"
+        accept="application/json,.json"
+        hidden
+      />
+    </main>
+
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/media.js"></script>
+    <script src="functions/transfer.js"></script>
+  </body>
+</html>

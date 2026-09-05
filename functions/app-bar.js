@@ -274,6 +274,13 @@
         actions: []
       };
     }
+    if (page === "oracle") {
+      return {
+        tab: "oracle",
+        file: WORKSPACE_FILE,
+        actions: []
+      };
+    }
     if (page === "encounter") {
       return {
         tab: "encounter",
@@ -924,6 +931,7 @@
       )
     );
     nav.appendChild(tabLink("map.html", "Map", tab === "map"));
+    nav.appendChild(tabLink("oracle.html", "Oracle", tab === "oracle" || page === "oracle"));
 
     var admin = document.createElement("details");
     admin.className = "app-bar-menu";

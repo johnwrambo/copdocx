@@ -117,11 +117,15 @@
     if (!host) {
       return;
     }
-    ensureDialog();
     var todayOnly = options.todayOnly === true;
     var encounterId = text(options.encounterId);
     var showDates = !todayOnly && !encounterId;
     var showGenerate = options.showGenerate !== false;
+    var showSelection = options.showSelection !== false;
+    var showColumns = options.showColumns !== false;
+    if (showGenerate) {
+      ensureDialog();
+    }
     var selected = {};
     var sortKey = "arrestDateTime";
     var sortDir = "desc";
@@ -148,19 +152,23 @@
           '<button type="button" class="action-button-secondary compact" data-arrest-clear>Clear</button>' +
           "</div>") +
       '<div class="records-view-toolbar">' +
-      '<details class="records-column-picker"><summary data-arrest-col-summary>Columns</summary>' +
-      '<div class="records-columns-panel"><div class="records-column-options" data-arrest-cols></div></div></details>' +
-      (todayOnly
-        ? ""
-        : '<button type="button" class="action-button-secondary compact" data-arrest-select>Select filtered</button>' +
-          '<button type="button" class="action-button-secondary compact" data-arrest-unselect>Clear selection</button>') +
+      (showColumns
+        ? '<details class="records-column-picker"><summary data-arrest-col-summary>Columns</summary>' +
+          '<div class="records-columns-panel"><div class="records-column-options" data-arrest-cols></div></div></details>'
+        : "") +
+      (showSelection && !todayOnly
+        ? '<button type="button" class="action-button-secondary compact" data-arrest-select>Select filtered</button>' +
+          '<button type="button" class="action-button-secondary compact" data-arrest-unselect>Clear selection</button>'
+        : "") +
       (showGenerate
         ? '<button type="button" class="action-button compact" data-arrest-report>' +
           (todayOnly ? "Generate today's report" : "Generate report") +
           "</button>"
         : "") +
       '<span class="active-record-label" data-arrest-count>0 shown</span>' +
-      '<span class="active-record-label" data-arrest-selected>0 selected</span>' +
+      (showSelection
+        ? '<span class="active-record-label" data-arrest-selected>0 selected</span>'
+        : "") +
       "</div>" +
       '<p class="records-empty" data-arrest-empty>No arrests.</p>' +
       '<div class="records-table-wrap" data-arrest-wrap hidden>' +
@@ -168,20 +176,22 @@
       '<tbody data-arrest-body></tbody></table></div>';
 
     var colBox = host.querySelector("[data-arrest-cols]");
-    COLUMNS.forEach(function (col) {
-      var label = document.createElement("label");
-      var box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = true;
-      box.setAttribute("data-col", col.id);
-      label.appendChild(box);
-      label.appendChild(document.createTextNode(" " + col.label));
-      colBox.appendChild(label);
-      box.addEventListener("change", function () {
-        visible[col.id] = box.checked;
-        paint();
+    if (colBox) {
+      COLUMNS.forEach(function (col) {
+        var label = document.createElement("label");
+        var box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = true;
+        box.setAttribute("data-col", col.id);
+        label.appendChild(box);
+        label.appendChild(document.createTextNode(" " + col.label));
+        colBox.appendChild(label);
+        box.addEventListener("change", function () {
+          visible[col.id] = box.checked;
+          paint();
+        });
       });
-    });
+    }
 
     function queryOpts() {
       var opts = {};
@@ -229,9 +239,11 @@
     function paintHead() {
       var head = host.querySelector("[data-arrest-head]");
       var tr = document.createElement("tr");
-      var sel = document.createElement("th");
-      sel.className = "record-select-column";
-      tr.appendChild(sel);
+      if (showSelection) {
+        var sel = document.createElement("th");
+        sel.className = "record-select-column";
+        tr.appendChild(sel);
+      }
       COLUMNS.forEach(function (col) {
         if (!visible[col.id]) {
           return;
@@ -286,24 +298,26 @@
       list.forEach(function (row) {
         var key = text(row.arrestId || row.bookinRecordId || row.leadId);
         var tr = document.createElement("tr");
-        var tdSel = document.createElement("td");
-        tdSel.className = "record-select-column";
-        var box = document.createElement("input");
-        box.type = "checkbox";
-        box.checked = !!selected[key];
-        if (box.checked) {
-          selectedCount += 1;
-        }
-        box.addEventListener("change", function () {
+        if (showSelection) {
+          var tdSel = document.createElement("td");
+          tdSel.className = "record-select-column";
+          var box = document.createElement("input");
+          box.type = "checkbox";
+          box.checked = !!selected[key];
           if (box.checked) {
-            selected[key] = true;
-          } else {
-            delete selected[key];
+            selectedCount += 1;
           }
-          paint();
-        });
-        tdSel.appendChild(box);
-        tr.appendChild(tdSel);
+          box.addEventListener("change", function () {
+            if (box.checked) {
+              selected[key] = true;
+            } else {
+              delete selected[key];
+            }
+            paint();
+          });
+          tdSel.appendChild(box);
+          tr.appendChild(tdSel);
+        }
         COLUMNS.forEach(function (col) {
           if (!visible[col.id]) {
             return;

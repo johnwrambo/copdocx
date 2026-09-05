@@ -52,7 +52,19 @@ check(
     listJs.indexOf('link.textContent = "View"') === -1 &&
     listJs.indexOf('link.textContent = "Edit"') === -1
 );
-check("cases loads report and roster scripts", cases.indexOf("functions/arrest-report.js") !== -1 && cases.indexOf("functions/arrest-roster.js") !== -1 && cases.indexOf("functions/baseballcard.js") !== -1);
+check("cases loads roster without report scripts", cases.indexOf("functions/arrest-roster.js") !== -1 && cases.indexOf("functions/arrest-report.js") === -1 && cases.indexOf("functions/baseballcard.js") === -1);
+check(
+  "cases arrest roster has no select, columns, or report",
+  listJs.indexOf("showGenerate: false") !== -1 &&
+    listJs.indexOf("showSelection: false") !== -1 &&
+    listJs.indexOf("showColumns: false") !== -1
+);
+check(
+  "arrest roster can hide select and report",
+  roster.indexOf("showSelection !== false") !== -1 &&
+    roster.indexOf("data-arrest-select") !== -1 &&
+    roster.indexOf("data-arrest-report") !== -1
+);
 check("leads.html redirects to cases.html", leads.indexOf('window.location.replace("cases.html"') !== -1);
 check("admin has Today's arrests host", admin.indexOf("Today's arrests") !== -1 && admin.indexOf('id="arrestRosterHost"') !== -1);
 check("admin loads roster scripts", admin.indexOf("functions/arrest-report.js") !== -1 && admin.indexOf("functions/arrest-roster.js") !== -1);

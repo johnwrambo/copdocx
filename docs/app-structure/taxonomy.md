@@ -23,7 +23,7 @@ Always `?id=` in the URL even when the model field is `leadId` / `officerId` / `
 
 Officer pocket brief: `operation-brief.html?id=` (not a tab). Nested Target sheets (**0.66.0**).
 
-`index.html` must change **all three**: `http-equiv` refresh, `<link rel="canonical">`, and the fallback `<a>` — to **`home.html`**. The Home tab is the briefing hub; **Cases** is `cases.html` (store still `leads{}`). `leads.html` redirects. The Cases tab defaults to the **Arrests** roster (search, dates, columns, report); **Case files** is the stage list. Arrest roster + daily report with baseball cards shipped **0.67.0**.
+`index.html` must change **all three**: `http-equiv` refresh, `<link rel="canonical">`, and the fallback `<a>` — to **`home.html`**. The Home tab is the briefing hub; **Cases** is `cases.html` (store still `leads{}`). `leads.html` redirects. The Cases tab defaults to the **Arrests** roster (search, dates; no column picker, select, or report); **Case files** is the stage list. Admin daily arrest report with baseball cards shipped **0.67.0**.
 
 The case triad has shipped. `lead.html` is only a compatibility redirect to `case.html`; all editing lives at `lead-form.html`.
 
@@ -39,11 +39,13 @@ Until book-in is split, `bookin.html` is the working form. Prefill uses **`booki
 
 ### Non-record pages
 
-`home.html` (`data-page="home"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`), `mobile-target-sheet.html` (`data-page="mobile-target-sheet"`).
+`home.html` (`data-page="home"`), `oracle.html` (`data-page="oracle"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`), `mobile-target-sheet.html` (`data-page="mobile-target-sheet"`).
 `i200-form.html` (`data-page="i200-form"`) and `i205-form.html` (`data-page="i205-form"`) are case-view issuance forms (`?id=` is the **leadId**). Cases tab stays current. They are not a warrant triad.
 Operations tab: `operations.html` / `operation.html` / `operation-form.html` (**0.62.0**). Pocket brief `operation-brief.html` (**0.66.0**). `encounter.html` is the 0.11.0 list.
 
 Home is a briefing hub, not a record triad. Its painter makes read-only cross-store projections for filed cases, available officers/fleet, weekly Book-ins, today's shifts, mapped priority targets, and open follow-ups. Its **Tools / Utilities** card owns workspace Import JSON, Export JSON/CSV, and Lock this tab. The transfer dialogs are the only Home actions that write stores.
+
+`oracle.html` is a read-only analysis page (`data-page="oracle"`). Empty action slot. It counts committed arrests and completed encounter snapshots; it does not write workspace, admin, or book-in stores. Chrome tab **Oracle**. Home tile links here.
 
 `photo-picker.html` remains a development workspace for upload / crop / tags with no owner. Owner-scoped Add photo links open it embedded in `photo-picker-modal.js`; Save closes the modal and leaves the parent URL/form/wall intact. It writes media only. Not a chrome tab. Isolated lab key `copdocx.photo-picker.v1`.
 
@@ -66,14 +68,16 @@ Map is a planning board, not a record triad. Action slot: **Brief view** + prima
 
 Icon library (Lucide set on the page, `<details>` closed by default) assigns a glyph to a **category** (click a layer icon/name while a swatch is picked) or a **row**. Overlay tools: Label, Arrow, Delete. **Brief view** hides chrome, overlays, and the dock; action-slot **Print brief** uses the browser print dialog (Save as PDF).
 
-`narrative.html` (`data-page="narrative"`) is the I-213 / Build 9 engine, not
-a chrome tab. The encounter workspace **Narrative** tab embeds
-`narrative.html?encounterId=&embed=1`. **Pop out** opens the live draft with
-`window.open()` so left-side elements can scroll independently. Standalone
-`narrative.html?encounterId=` still works. The Encounters tab stays current. No query → synthetic training lab (Home tile). **`?encounterId=`**
-loads the live encounter via `encounter-narrative.js`. A missing encounter does
-**not** fall back to the demo. **Save I-213** writes `encounter.narratives[]` and
-`supervisorSummary`. Training **Update draft** stays in memory.
+`narrative.html` (`data-page="narrative"`) is the I-213 / Build 9 training lab
+and the standalone live page (`?encounterId=`). The encounter workspace
+**Narrative** tab mounts the same Build 9 engine in-page (`#narrativeEngineHost`,
+`COPDoc.narratives.bootWorkspace`). There is no iframe. The fact pane
+(`narrative-workspace-ui.js`) filters/collapses sections and hides
+encounter-owned fields in live mode. **Pop out** opens the live draft with
+`window.open()`. No query → synthetic training lab (Home tile). A missing
+encounter does **not** fall back to the demo. **Save I-213** writes
+`encounter.narratives[]` and `supervisorSummary`. Training **Update draft**
+stays in memory.
 
 Chrome tab label: **Cases**. Files and `data-page` stay `leads` / `lead-form` / `case`. Person **stage** is `caseRole` Lead / Target / Detainee. Encounter Target / Collateral is `encounterRole`. **Investigate** tab: `investigations.html` / `investigate.html?id=`. Investigation ID `INV{team}-{YYYYMMDD}-{seq}`. Kind uses Case source codes (`tag` Plate Check, `otherLe`, `elite`, `other`, `discovered`). An investigation is a web of objects on a **wall** (place / drag / connect; identity in the Card window), not a Case and not a scrolling form. Objects live in `people{}`, `vehicles{}`, `locations{}`, `businesses{}`, and `entities{}` and are reused across investigations by id. **Spawn** creates a child (`parentInvestigationId`) that overlaps the parent’s focused object plus one-hop neighbors. **Open as case** files a focused PERSON as a working Case (same `personId`; wall stays put). Wall details: [investigation-wall-plan.md](investigation-wall-plan.md).
 
@@ -94,6 +98,7 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | `vehicle.html` | `vehicle` | **`vehicle-view`** |
 | `vehicle-form.html` | `vehicle-form` | `vehicle-form` |
 | `home.html` | `home` | — |
+| `oracle.html` | `oracle` | — |
 | `admin.html` | `dashboard` | `dashboard` |
 | `schedule.html` | `schedule` | `schedule` |
 | `bookin.html` | `bookin` | — |
@@ -107,7 +112,7 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | `encounter.html` | `encounter` | — |
 | `encounter-form.html` | `encounter-form` | — |
 
-`aria-current="page"`: Home tab for `home`; Cases tab for `leads|lead|case|lead-form|i200-form|i205-form|mobile-target-sheet`; Investigate tab for `investigations|investigate`; Encounters tab for `encounter|encounter-form|narrative`; Operations for operation pages; Map for `map`. Book-in is not a product tab. Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
+`aria-current="page"`: Home tab for `home`; Cases tab for `leads|lead|case|lead-form|i200-form|i205-form|mobile-target-sheet`; Investigate tab for `investigations|investigate`; Encounters tab for `encounter|encounter-form|narrative`; Operations for operation pages; Map for `map`; Oracle for `oracle`. Book-in is not a product tab. Admin **summary** for any admin child (`dashboard|officers|officer|officer-form|vehicles|vehicle|vehicle-form|schedule`). `.is-current` is for menu **links**, not buttons.
 
 ## Buttons and IDs
 
@@ -143,7 +148,7 @@ Chrome keys off **`data-page`**. `admin.js` `adminPage()` still reads **`data-ad
 | Add encounter from case | action slot | Add encounter | `encounter-form.html?leadId=` |
 | Encounter workspace tabs | `.enc-tabs` | Stop / Vehicles / Subjects / Evidence / Narrative / Review | in-page, not chrome |
 | Add existing / Add new (encounter form) | `#openAddExisting`, `#openAddSubject` | Add existing / Add new | in-page `#encSubjectFloat`; do not open Book-in |
-| Generate I-213 (encounter form) | `#narrativeFrame` | I-213 engine | Narrative tab embeds `narrative.html?encounterId=&embed=1` |
+| Generate I-213 (encounter form) | `#narrativeEngineHost` | I-213 engine | Narrative tab mounts Build 9 in-page via `bootWorkspace` |
 | Confirm encounter | `#confirmEncounter` | Confirm and close encounter | Review tab; `completeCurrentEncounter` |
 | Book arrested subject | `#confirmBookin` | Book-in | in-page `#encBookFloat`; Arrested only |
 | Unlock encounter | `#unlockEncounter` | Unlock | Review tab; reason required |
@@ -217,6 +222,19 @@ app-bar.js → model/util.js → model/media.js → transfer.js
 ```
 
 Do **not** load `store.js`, `admin.js`, `collect.js`, `hydrate.js`, `workflow.js`, or `cards.js`. Home reads the record stores directly and writes only through explicit transfer dialogs. `media.js` is present so those dialogs include and restore the portable Media bundle.
+
+**Oracle** (`oracle.html`):
+
+```
+workspace-config.js → privacy-gate.js (head)
+app-bar.js → date.js
+→ data/countries.js → data/immigration.js → data/encounter-catalogs.js
+→ model/util.js → model/lead.js → model/person.js → model/location.js
+→ model/vehicle.js → model/encounter.js → model/store.js
+→ vendor/leaflet/leaflet.js → assets/icons/copdoc-icons.js → functions/oracle.js
+```
+
+Read-only. Do **not** load `collect.js`, `hydrate.js`, `admin.js`, `workflow.js`, `transfer.js`, or `location-map.js`. Volume counts committed `person.arrests[]`. Cop/dynamic rates and the map use completed encounter snapshots and pins. Leaflet is vendored; tiles still need a network.
 
 **Photo picker** (`photo-picker.html`):
 

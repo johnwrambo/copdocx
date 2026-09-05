@@ -66,6 +66,11 @@
     return !!(entry && entry.checked);
   }
 
+  function encounterRole(record) {
+    var role = String(formValue(record, "encounterRole") || "").toUpperCase();
+    return role === "TARGET" || role === "COLLATERAL" ? role : "";
+  }
+
   function formSex(record) {
     if (formChecked(record, "sexMale")) {
       return "MALE";
@@ -189,29 +194,47 @@
     }
     var loc = (enc.locations && enc.locations[0]) || {};
     var started = enc.startedAt || (enc.meta && enc.meta.createdAt) || "";
-    var subjects = bookinRecords().filter(function (row) {
+    var linkedBookinSubjects = bookinRecords().filter(function (row) {
       return row && row.encounterId === encounterId;
     });
-    if (!subjects.length) {
-      subjects = (enc.subjects || []).map(function (row) {
-        return {
+    var subjects = [];
+    var subjectSourceIndexes = [];
+    var unassignedParticipantCount = 0;
+    linkedBookinSubjects.forEach(function (row, sourceIndex) {
+      if (encounterRole(row)) {
+        subjects.push(row);
+        subjectSourceIndexes.push(sourceIndex);
+      } else {
+        unassignedParticipantCount += 1;
+      }
+    });
+    if (!linkedBookinSubjects.length) {
+      var encounterSubjects = enc.subjects || [];
+      subjects = [];
+      subjectSourceIndexes = [];
+      unassignedParticipantCount = 0;
+      encounterSubjects.forEach(function (row, sourceIndex) {
+        var role = encounterRole(row);
+        if (!role) {
+          unassignedParticipantCount += 1;
+          return;
+        }
+        subjects.push({
           id: row.bookinRecordId,
           lastName: row.lastName,
           firstName: row.firstName,
           aNumber: row.alienNumber,
           leadId: row.leadId,
-          encounterRole: row.encounterRole
-        };
+          encounterRole: role
+        });
+        subjectSourceIndexes.push(sourceIndex);
       });
     }
     var firstTarget = -1;
     var targetSeq = 0;
     var collateralSeq = 0;
     var sequences = subjects.map(function (row, index) {
-      var role = String((row && row.encounterRole) || "").toUpperCase();
-      if (role !== "COLLATERAL") {
-        role = "TARGET";
-      }
+      var role = encounterRole(row);
       if (role === "TARGET") {
         targetSeq += 1;
         if (firstTarget < 0) {
@@ -273,9 +296,12 @@
             })
           : displayName({ lastName: lastName, firstName: firstName });
       return {
-        encounterParticipantId: "ep_" + (row.id || index),
+        encounterParticipantId:
+          "ep_" + (row.id || subjectSourceIndexes[index]),
         encounterId: enc.encounterId,
-        personId: (person && person.personId) || ("p_enc_" + index),
+        personId:
+          (person && person.personId) ||
+          ("p_enc_" + subjectSourceIndexes[index]),
         encounterRole: seq.role,
         roleSequence: seq.sequence,
         primaryForReport: index === firstTarget,
@@ -417,7 +443,8 @@
         }
       },
       officers: officers,
-      narrativesInitial: []
+      unassignedParticipantCount: unassignedParticipantCount,
+      narrativesInitial: Array.isArray(enc.narratives) ? enc.narratives : []
     };
   }
 

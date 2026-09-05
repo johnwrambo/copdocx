@@ -2291,26 +2291,8 @@
     return { ok: true, encounterId: encounterId, error: "" };
   }
 
-  function saveEncounter(record, opts) {
-    if (!record || !record.encounterId) {
-      return {
-        ok: false,
-        encounterId: "",
-        error: "Encounter is missing an encounterId."
-      };
-    }
-    var fresh = adoptDisk();
-    if (!fresh.ok) {
-      return {
-        ok: false,
-        encounterId: record.encounterId,
-        error: fresh.error
-      };
-    }
+  function persistEncounter(record, opts, previous) {
     var mode = (opts && opts.mode) || "commit";
-    var previous = state.encounters[record.encounterId]
-      ? clone(state.encounters[record.encounterId])
-      : null;
     var saved = mergeRecord(previous, record);
     saved.schema = record.schema || "copdocx.encounter.v1";
     saved.encounterId = record.encounterId;
@@ -2408,10 +2390,100 @@
       return {
         ok: false,
         encounterId: saved.encounterId,
-        error: "Could not write localStorage (quota or private mode)."
+        error: "Could not write localStorage (quota or private mode).",
+        encounter: state.encounters[saved.encounterId]
+          ? clone(state.encounters[saved.encounterId])
+          : null
       };
     }
-    return { ok: true, encounterId: saved.encounterId, error: "" };
+    return {
+      ok: true,
+      encounterId: saved.encounterId,
+      error: "",
+      encounter: clone(saved)
+    };
+  }
+
+  function saveEncounter(record, opts) {
+    if (!record || !record.encounterId) {
+      return {
+        ok: false,
+        encounterId: "",
+        error: "Encounter is missing an encounterId."
+      };
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return {
+        ok: false,
+        encounterId: record.encounterId,
+        error: fresh.error
+      };
+    }
+    var previous = state.encounters[record.encounterId]
+      ? clone(state.encounters[record.encounterId])
+      : null;
+    return persistEncounter(record, opts, previous);
+  }
+
+  /**
+   * Read, change, and write one Encounter against the latest disk snapshot.
+   * The updater runs synchronously after adoptDisk, reducing stale-state
+   * replacements. localStorage has no cross-context transaction, so truly
+   * simultaneous writers remain last-writer-wins.
+   */
+  function updateEncounter(encounterId, updater, opts) {
+    if (!encounterId || typeof updater !== "function") {
+      return {
+        ok: false,
+        encounterId: encounterId || "",
+        error: "Encounter update requires an encounterId and updater."
+      };
+    }
+    var fresh = adoptDisk();
+    if (!fresh.ok) {
+      return {
+        ok: false,
+        encounterId: encounterId,
+        error: fresh.error
+      };
+    }
+    var previous = state.encounters[encounterId]
+      ? clone(state.encounters[encounterId])
+      : null;
+    if (!previous) {
+      return {
+        ok: false,
+        encounterId: encounterId,
+        error: "Encounter not found."
+      };
+    }
+    var next = clone(previous);
+    try {
+      next = updater(next, clone(previous)) || next;
+    } catch (error) {
+      return {
+        ok: false,
+        encounterId: encounterId,
+        error: error && error.message ? error.message : "Encounter update failed.",
+        cause: error,
+        encounter: clone(previous)
+      };
+    }
+    if (!next || next.encounterId !== encounterId) {
+      return {
+        ok: false,
+        encounterId: encounterId,
+        error: "Encounter updater returned the wrong encounter.",
+        encounter: clone(previous)
+      };
+    }
+    var updateOpts = Object.assign({}, opts || {});
+    if (!updateOpts.mode) {
+      updateOpts.mode =
+        model.isCommitted && model.isCommitted(previous) ? "commit" : "draft";
+    }
+    return persistEncounter(next, updateOpts, previous);
   }
 
   function getEncounter(encounterId) {
@@ -7832,6 +7904,7 @@
     getPerson: getPerson,
     upsertPerson: upsertPerson,
     saveEncounter: saveEncounter,
+    updateEncounter: updateEncounter,
     unlockEncounter: unlockEncounter,
     completeEncounter: completeEncounter,
     applyEncounterLocationToArrests: applyEncounterLocationToArrests,

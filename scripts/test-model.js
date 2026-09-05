@@ -776,7 +776,8 @@ enc.subjects.push(
   model.createEncounterSubject({
     lastName: "LOKI",
     firstName: "Laufeyson",
-    alienNumber: "A000111222"
+    alienNumber: "A000111222",
+    encounterRole: "TARGET"
   })
 );
 model.store.saveEncounter(enc, { mode: "commit" });
@@ -860,6 +861,13 @@ context.localStorage.setItem(
       lastName: "TARGET",
       firstName: "A",
       encounterRole: "TARGET"
+    },
+    {
+      id: "bk_unassigned",
+      encounterId: enc.encounterId,
+      lastName: "UNASSIGNED",
+      firstName: "Partial",
+      encounterRole: ""
     }
   ])
 );
@@ -877,6 +885,66 @@ check(
     roleBundle.participants[1].encounterRole === "TARGET" &&
     roleBundle.participants[1].primaryForReport === true &&
     roleBundle.participants[0].primaryForReport === false
+);
+check(
+  "adapter excludes unassigned book-in records",
+  roleBundle.participants.length === 2 &&
+    roleBundle.unassignedParticipantCount === 1
+);
+
+context.localStorage.setItem(
+  "alien-book-in.saved-records.v1",
+  JSON.stringify([
+    {
+      id: "bk_only_unassigned",
+      encounterId: enc.encounterId,
+      lastName: "UNASSIGNED",
+      firstName: "Only",
+      encounterRole: ""
+    }
+  ])
+);
+var unassignedBundle = context.COPDoc.encounterNarrative.bundleFromEncounter(
+  enc.encounterId
+);
+check(
+  "adapter reports all-unassigned book-in records",
+  unassignedBundle.participants.length === 0 &&
+    unassignedBundle.unassignedParticipantCount === 1
+);
+
+var legacyIndexEncounter = model.store.getEncounter(enc.encounterId);
+legacyIndexEncounter.narratives = [{
+  narrativeId: "nar_legacy_ep_1",
+  encounterId: enc.encounterId,
+  narrativeKind: "PRIMARY_SUBJECT",
+  focusEncounterParticipantId: "ep_1"
+}];
+model.store.saveEncounter(legacyIndexEncounter, { mode: "commit" });
+context.localStorage.setItem(
+  "alien-book-in.saved-records.v1",
+  JSON.stringify([
+    {
+      encounterId: enc.encounterId,
+      lastName: "UNASSIGNED",
+      encounterRole: ""
+    },
+    {
+      encounterId: enc.encounterId,
+      lastName: "LEGACY",
+      encounterRole: "TARGET"
+    }
+  ])
+);
+var legacyIndexBundle = context.COPDoc.encounterNarrative.bundleFromEncounter(
+  enc.encounterId
+);
+check(
+  "adapter preserves legacy participant index through role filtering",
+  legacyIndexBundle.participants[0] &&
+    legacyIndexBundle.participants[0].encounterParticipantId === "ep_1" &&
+    legacyIndexBundle.narrativesInitial[0] &&
+    legacyIndexBundle.narrativesInitial[0].focusEncounterParticipantId === "ep_1"
 );
 
 context.localStorage.setItem(
@@ -999,6 +1067,14 @@ check(
   "encounter persists supervisor summary",
   withNar.supervisorSummary &&
     withNar.supervisorSummary.text === "Supervisor line."
+);
+var withNarBundle = context.COPDoc.encounterNarrative.bundleFromEncounter(
+  enc.encounterId
+);
+check(
+  "narrative adapter returns saved narratives",
+  withNarBundle.narrativesInitial[0] &&
+    withNarBundle.narrativesInitial[0].narrativeId === "nar_x"
 );
 
 var doomedEnc = model.createEncounterRecord({

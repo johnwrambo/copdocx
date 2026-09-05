@@ -3521,7 +3521,11 @@
     if (!host || !window.COPDoc || !COPDoc.arrestRoster) {
       return;
     }
-    COPDoc.arrestRoster.mount(host, { showGenerate: true });
+    COPDoc.arrestRoster.mount(host, {
+      showGenerate: false,
+      showSelection: false,
+      showColumns: false
+    });
   }
 
   function bindFilters() {

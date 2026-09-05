@@ -75,6 +75,74 @@ check(
   !!tabB.store.getLead("lead_a")
 );
 
+var encounterId = "enc_shared_narratives";
+check(
+  "shared encounter save ok",
+  tabA.store.saveEncounter({
+    encounterId: encounterId,
+    subjects: [],
+    vehicles: [],
+    locations: [],
+    links: [],
+    narratives: []
+  }).ok
+);
+check(
+  "tab A narrative update ok",
+  tabA.store.updateEncounter(encounterId, function (encounter) {
+    encounter.narratives.push({
+      narrativeId: "nar_subject_a",
+      focusEncounterParticipantId: "ep_a"
+    });
+    return encounter;
+  }).ok
+);
+check(
+  "tab A unrelated encounter update ok",
+  tabA.store.updateEncounter(encounterId, function (encounter) {
+    encounter.dispatchNote = "fresh from tab A";
+    return encounter;
+  }).ok
+);
+check(
+  "tab B narrative update adopts latest encounter",
+  tabB.store.updateEncounter(encounterId, function (encounter) {
+    encounter.narratives.push({
+      narrativeId: "nar_subject_b",
+      focusEncounterParticipantId: "ep_b"
+    });
+    return encounter;
+  }).ok
+);
+disk = JSON.parse(mem["copdocx.store.v1"]);
+check(
+  "sequential stale tabs keep different-subject narratives",
+  disk.encounters[encounterId].narratives.length === 2 &&
+    disk.encounters[encounterId].dispatchNote === "fresh from tab A" &&
+    disk.encounters[encounterId].narratives.some(function (row) {
+      return row.focusEncounterParticipantId === "ep_a";
+    }) &&
+    disk.encounters[encounterId].narratives.some(function (row) {
+      return row.focusEncounterParticipantId === "ep_b";
+    })
+);
+var beforeRejectedUpdate = mem["copdocx.store.v1"];
+var rejectedError = new Error("reject updater");
+var rejectedUpdate = tabB.store.updateEncounter(encounterId, function (encounter) {
+  encounter.dispatchNote = "must not persist";
+  throw rejectedError;
+});
+check(
+  "rejected encounter updater returns cause and prior encounter",
+  rejectedUpdate.ok === false &&
+    rejectedUpdate.cause === rejectedError &&
+    rejectedUpdate.encounter.dispatchNote === "fresh from tab A"
+);
+check(
+  "rejected encounter updater does not write",
+  mem["copdocx.store.v1"] === beforeRejectedUpdate
+);
+
 var corruptMem = { "copdocx.store.v1": "{not json" };
 var corrupt = loadStore(corruptMem);
 corrupt.store.loadFromDisk();

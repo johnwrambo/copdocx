@@ -71,7 +71,9 @@
             return;
           }
           var cases = COPDoc.arrestRoster.mount(document.getElementById("casesHost"), {
-            showGenerate: true
+            showGenerate: false,
+            showSelection: false,
+            showColumns: false
           });
           var admin = COPDoc.arrestRoster.mount(document.getElementById("adminHost"), {
             todayOnly: true,
@@ -87,7 +89,13 @@
           var notes = [];
           if (casesHtml.indexOf("arrestRosterSearch") === -1) notes.push("cases missing search");
           if (casesHtml.indexOf("arrestRosterFrom") === -1) notes.push("cases missing dates");
-          if (casesHtml.indexOf("Generate report") === -1) notes.push("cases missing generate");
+          if (casesHtml.indexOf("Generate report") !== -1) notes.push("cases should not generate");
+          if (casesHtml.indexOf("Select filtered") !== -1) notes.push("cases should not select");
+          if (casesHtml.indexOf("record-select-column") !== -1) notes.push("cases should not have select column");
+          if (casesHtml.indexOf("data-arrest-report") !== -1) notes.push("cases should not have report button");
+          if (casesHtml.indexOf("data-arrest-selected") !== -1) notes.push("cases should not show selected count");
+          if (casesHtml.indexOf("records-column-picker") !== -1) notes.push("cases should not have column picker");
+          if (adminHtml.indexOf("record-select-column") === -1) notes.push("admin missing select column");
           if (adminHtml.indexOf("Generate today's report") === -1) notes.push("admin missing today generate");
           if (adminHtml.indexOf("arrestRosterFrom") !== -1) notes.push("admin should not have dates");
           if (adminHtml.indexOf("arrest today") === -1) notes.push("admin missing today headline");

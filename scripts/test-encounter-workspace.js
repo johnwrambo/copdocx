@@ -25,6 +25,8 @@ var chrome = read("functions/app-bar.js");
 var config = read("functions/workspace-config.js");
 var css = read("style/style.css");
 var narrativePage = read("functions/narratives/narrative-page.js");
+var narrativeHtml = read("narrative.html");
+var narrativeUi = read("functions/narratives/narrative-workspace-ui.js");
 
 check("product version is 0.69.2", config.indexOf('productVersion: "0.69.2"') !== -1);
 check("encounter form stamps 0.69.2", form.indexOf('data-version="0.69.2"') !== -1);
@@ -101,18 +103,23 @@ check("chrome form has no Save", /page === \"encounter-form\"[\s\S]{0,400}commit
 check("chrome form has no openEncounterBookIn", /page === \"encounter-form\"[\s\S]{0,800}openEncounterBookIn/.test(chrome) === false);
 check("chrome form keeps Back to encounters", /page === \"encounter-form\"[\s\S]{0,400}Back to encounters/.test(chrome));
 check("nav has no Book-in tab", chrome.indexOf('tabLink("bookin.html"') === -1);
-check("narrative tab embeds the engine", form.indexOf('id="narrativeFrame"') !== -1);
-check("narrative embed uses encounterId", js.indexOf("narrative.html?encounterId=") !== -1 && js.indexOf("&embed=1") !== -1);
+check("narrative tab mounts the engine in page", form.indexOf('id="narrativeEngineHost"') !== -1);
+check("narrative tab does not iframe the engine", form.indexOf("narrativeFrame") === -1 && form.indexOf("<iframe") === -1);
+check(
+  "narrative tab boots Build 9 in page",
+  js.indexOf("bootWorkspace") !== -1 &&
+    js.indexOf("inPage: true") !== -1 &&
+    js.indexOf("&embed=1") === -1
+);
 check(
   "narrative tab has no supervisor-summary note",
   form.indexOf("encounterSupervisorSummary") === -1 &&
     form.indexOf("No supervisor summary yet") === -1
 );
-check("narrative tab claims remaining viewport", js.indexOf('classList.toggle("enc-narrative-open"') !== -1);
 check(
-  "narrative tab CSS hides status and fills height",
-  css.indexOf("body.enc-narrative-open .app-bar-status") !== -1 &&
-    css.indexOf("body.enc-narrative-open .enc-narrative-frame") !== -1
+  "encounter form loads the Build 9 workspace",
+  form.indexOf("functions/narratives/narrative-workspace-ui.js") !== -1 &&
+    form.indexOf("functions/narratives/narrative-page.js") !== -1
 );
 check(
   "narrative draft popout uses window.open",
@@ -122,13 +129,22 @@ check(
     css.indexOf("narrative-draft-popped") !== -1
 );
 check(
-  "narrative embed page is allowed to scroll",
-  css.indexOf("html:has(> body.narrative-embed)") !== -1 &&
-    /body\.narrative-embed[\s\S]{0,180}overflow:\s*visible/.test(css)
+  "narrative fact pane is installed",
+  narrativeHtml.indexOf("functions/narratives/narrative-workspace-ui.js") !== -1 &&
+    narrativeUi.indexOf("enhanceWorkspace") !== -1 &&
+    css.indexOf(".narrative-input-pane") !== -1
 );
 check(
-  "narrative live draft stays sticky while the page scrolls",
-  /body\.narrative-live \.narrative-engine-host \.narrative-panel[\s\S]{0,120}position:\s*sticky/.test(css)
+  "live narrative hides encounter-owned fields",
+  narrativePage.indexOf("seedFromEncounter") !== -1 &&
+    narrativeUi.indexOf("markEncounterOwnedFields") !== -1 &&
+    css.indexOf("ui-encounter-owned") !== -1
+);
+check(
+  "live I-213 uses the page as the scrollport",
+  css.indexOf("body.narrative-inpage .narrative-engine-host") !== -1 &&
+    css.indexOf("body.narrative-live .narrative-engine-host") !== -1 &&
+    narrativePage.indexOf("bootWorkspace") !== -1
 );
 
 if (fail) {

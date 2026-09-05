@@ -5,7 +5,7 @@ Two-row sticky app bar (`style/style.css`, painted by `COPDoc.chrome` in
 
 ```text
 Row 1  COPDoc     Version x.y.z     {date}                 .app-bar-info
-Row 2  Home | Cases | Investigate | Encounters | Operations | Map | Admin ▾  [ ACTION SLOT ]
+Row 2  Home | Cases | Investigate | Encounters | Operations | Map | Oracle | Admin ▾  [ ACTION SLOT ]
        --------------------------- .app-bar-nav ---------------------------  .app-bar-actions
 Status #appBarStatus
 ```
@@ -26,6 +26,8 @@ stay in that page's action slot.
 The Admin dropdown contains visible text links for Dashboard, Officers,
 Vehicles, and Schedule. `aria-current="page"` belongs on the Admin summary for
 any admin child; `.is-current` belongs on its matching link.
+
+**Oracle** is a product tab (`oracle.html`). Read-only analysis; empty action slot.
 
 I-213, warrants, the Target sheet, media labs, Book-in, and the operation brief are
 sub-pages, not tabs. The associated product tab stays current. Book-in is reached
@@ -63,7 +65,7 @@ handlers. Record scripts own validation and persistence.
 | Map | Print brief | Brief view and planned map exports |
 | Narrative | Save I-213 / Update draft | Back when live, Copy, downloads |
 | Book-in | Save | Contextual Back/Add subject, Generate, Load, Clear, Baseball card, New, Open |
-| Home / Admin dashboard / Schedule | none | Home uses its in-page Tools card |
+| Home / Oracle / Admin dashboard / Schedule | none | Home uses its in-page Tools card |
 
 Record-specific downloads remain available in this slot: case JSON/CSV,
 warrant PDF, Narrative JSON/text, Target sheet, media-lab JSON/clear, and map or
@@ -106,7 +108,7 @@ and remains right-aligned. Do not hide tabs or record actions.
 
 ```js
 COPDoc.chrome.mount({
-  tab: "leads", // home | leads | investigate | encounter | operations | bookin | map | admin
+  tab: "leads", // home | leads | investigate | encounter | operations | bookin | map | oracle | admin
   actions: [
     { label: "Save", primary: true, chromeAction: "save" },
     { label: "Back to cases", href: "leads.html" }

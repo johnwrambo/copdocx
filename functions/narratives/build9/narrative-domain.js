@@ -346,10 +346,11 @@
     if (index < 0) throw new DomainError("NARRATIVE_NOT_FOUND", "Narrative not found: " + id);
     var existing = current[index];
     var expected = options && options.expectedRevision;
-    if (expected != null && Number(expected) !== Number(existing.revision)) {
+    var actualRevision = Number(existing.revision) || 0;
+    if (expected != null && Number(expected) !== actualRevision) {
       throw new DomainError("REVISION_CONFLICT", "Narrative revision conflict", {
         expectedRevision: Number(expected),
-        actualRevision: Number(existing.revision),
+        actualRevision: actualRevision,
       });
     }
 
@@ -402,7 +403,7 @@
     if (index < 0) throw new DomainError("NARRATIVE_NOT_FOUND", "Narrative not found: " + id);
     var existing = current[index];
     var expected = options && options.expectedRevision;
-    if (expected != null && Number(expected) !== Number(existing.revision)) {
+    if (expected != null && Number(expected) !== (Number(existing.revision) || 0)) {
       throw new DomainError("REVISION_CONFLICT", "Narrative revision conflict");
     }
     var next = clone(existing);

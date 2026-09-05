@@ -7,21 +7,31 @@
 (function (global) {
   "use strict";
 
-  var fixture = global.COPDocNarrativeDemoFixture;
-  var liveEncounter = false;
-  var liveEncounterId = "";
-  var liveMiss = false;
-  var embedded = false;
-  try {
-    var params = new URLSearchParams(window.location.search);
-    embedded = params.get("embed") === "1";
-    liveEncounterId = params.get("encounterId") || "";
-    if (liveEncounterId) {
+  var narratives = global.COPDoc && global.COPDoc.narratives;
+  var domain = narratives && narratives.build9;
+  if (!narratives || !domain) {
+    throw new Error("Narrative Build 9 dependencies did not load.");
+  }
+
+  var bootGeneration = 0;
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function loadLiveFixture(encounterId) {
+    var liveEncounter = false;
+    var liveMiss = false;
+    var fixture = global.COPDocNarrativeDemoFixture;
+    if (!encounterId) {
+      return { liveEncounter: liveEncounter, liveMiss: liveMiss, fixture: fixture };
+    }
+    try {
       var live =
         global.COPDoc &&
         COPDoc.encounterNarrative &&
         typeof COPDoc.encounterNarrative.bundleFromEncounter === "function"
-          ? COPDoc.encounterNarrative.bundleFromEncounter(liveEncounterId)
+          ? COPDoc.encounterNarrative.bundleFromEncounter(encounterId)
           : null;
       if (live && live.encounter) {
         liveEncounter = true;
@@ -34,12 +44,13 @@
           location: live.location,
           officers: live.officers || [],
           vehicles: live.vehicles || [],
+          unassignedParticipantCount: live.unassignedParticipantCount || 0,
           narrativesInitial: live.narrativesInitial || []
         };
       } else {
         liveMiss = true;
         fixture = {
-          encounter: { encounterId: liveEncounterId },
+          encounter: { encounterId: encounterId },
           participants: [],
           events: [],
           encounterVehicles: [],
@@ -48,27 +59,60 @@
           narrativesInitial: []
         };
       }
+    } catch (error) {
+      console.warn(error);
+      liveMiss = true;
+      fixture = {
+        encounter: { encounterId: encounterId },
+        participants: [],
+        events: [],
+        encounterVehicles: [],
+        officers: [],
+        vehicles: [],
+        narrativesInitial: []
+      };
     }
-  } catch (error) {
-    console.warn(error);
+    return { liveEncounter: liveEncounter, liveMiss: liveMiss, fixture: fixture };
   }
-  var narratives = global.COPDoc && global.COPDoc.narratives;
-  var domain = narratives && narratives.build9;
-  if (!narratives || !domain) {
-    throw new Error("Narrative Build 9 dependencies did not load.");
+
+  function bootWorkspace(options) {
+  options = options || {};
+  if (typeof narratives.flushWorkspace === "function") {
+    try {
+      narratives.flushWorkspace();
+    } catch (error) {
+      console.warn(error);
+    }
   }
+  var inPage = !!options.inPage;
+  var liveEncounterId = String(options.encounterId || "").trim();
+  var loaded = loadLiveFixture(liveEncounterId);
+  var liveEncounter = loaded.liveEncounter;
+  var liveMiss = loaded.liveMiss;
+  var fixture = loaded.fixture;
   if (!liveMiss && !fixture) {
     throw new Error("Narrative Build 9 dependencies did not load.");
   }
 
-  function initNarrativePage() {
-  if (embedded) {
-    document.body.classList.add("narrative-embed");
+  bootGeneration += 1;
+  var session = bootGeneration;
+  global.OpDocNarrative = undefined;
+  document.body.classList.remove(
+    "narrative-embed",
+    "narrative-empty",
+    "narrative-live",
+    "narrative-training",
+    "narrative-inpage"
+  );
+  if (inPage) {
+    document.body.classList.add("narrative-inpage");
   }
-  var host = document.getElementById("narrativeEngineHost");
+
+  var host = byId("narrativeEngineHost");
   if (!host) {
     throw new Error("Narrative page host is missing.");
   }
+  host.__copdocNarrativeWorkspaceUi = null;
 
   var liveEmpty = liveEncounter && !(fixture.participants && fixture.participants.length);
   var emptyState = byId("narrativeEmptyState");
@@ -77,6 +121,7 @@
   var workspace = byId("narrativeWorkspace");
   var liveHeader = byId("narrativeLiveHeader");
   if (liveMiss || liveEmpty) {
+    var needsRoles = liveEmpty && Number(fixture.unassignedParticipantCount) > 0;
     document.body.classList.add("narrative-empty");
     if (workspace) workspace.hidden = true;
     if (liveHeader) liveHeader.hidden = true;
@@ -84,23 +129,29 @@
     if (emptyText) {
       emptyText.textContent = liveMiss
         ? "Encounter not found."
-        : embedded
-          ? "Add subjects on the Subjects tab before writing an I-213."
-          : "Add subjects before writing an I-213.";
+        : needsRoles
+          ? "Assign each subject a Target or Collateral role before writing an I-213."
+          : inPage
+            ? "Add subjects on the Subjects tab before writing an I-213."
+            : "Add subjects before writing an I-213.";
     }
-    if (emptyLink && liveEmpty && liveEncounterId && !embedded) {
+    if (emptyLink && liveEmpty && liveEncounterId && !inPage) {
       emptyLink.hidden = false;
       emptyLink.href =
         "encounter-form.html?id=" + encodeURIComponent(liveEncounterId);
-      emptyLink.textContent = "Back to encounter";
+      emptyLink.textContent = needsRoles ? "Assign subject roles" : "Back to encounter";
     }
-    document.title = "I-213";
+    if (!inPage) {
+      document.title = "I-213";
+    }
     showStatus(
       liveMiss
         ? "Encounter not found."
-        : embedded
-          ? "Add subjects on the Subjects tab before writing an I-213."
-          : "Add subjects before writing an I-213.",
+        : needsRoles
+          ? "Assign Target or Collateral roles before writing an I-213."
+          : inPage
+            ? "Add subjects on the Subjects tab before writing an I-213."
+            : "Add subjects before writing an I-213.",
       false
     );
     return;
@@ -108,8 +159,10 @@
 
   document.body.classList.add(liveEncounter ? "narrative-live" : "narrative-training");
   if (liveEncounter) {
-    document.title = "I-213";
-    if (liveHeader) liveHeader.hidden = embedded;
+    if (!inPage) {
+      document.title = "I-213";
+    }
+    if (liveHeader) liveHeader.hidden = inPage;
     var pageHeader = byId("narrativePageHeader");
     if (pageHeader) pageHeader.hidden = true;
   }
@@ -120,27 +173,23 @@
     enableTestPacket: false,
     enableJsonImport: false,
     enableLocalStorage: false,
-    canEditTemplates: false,
+    canEditTemplates: !liveEncounter,
+    canComposeNarrative: true,
     canEditSourceValues: false,
     requireResolvedBeforeCopy: false,
     allowUnknownFields: false
   };
   host.innerHTML = narratives.ENGINE_MARKUP;
   var engine = global.__opdocNarrativeBootstrap();
+  if (typeof narratives.enhanceWorkspace === "function") {
+    narratives.enhanceWorkspace({ host: host, engine: engine });
+  } else if (narratives.installWorkspaceEnhancements) {
+    narratives.installWorkspaceEnhancements(engine);
+  }
   var store = domain.createNarrativeStore(fixture.narrativesInitial);
-  if (liveEncounter && liveEncounterId && global.COPDoc && COPDoc.model && COPDoc.model.store) {
-    COPDoc.model.store.loadFromDisk();
-    var storedEncounter = COPDoc.model.store.getEncounter(liveEncounterId);
-    if (storedEncounter && Array.isArray(storedEncounter.narratives) && storedEncounter.narratives.length) {
-      store.replaceAll(storedEncounter.narratives);
-    }
-  }
   var unsavedDraftStateByParticipant = new Map();
+  var conflictedParticipantIds = new Set();
   var activeParticipantId = null;
-
-  function byId(id) {
-    return document.getElementById(id);
-  }
 
   function bindDraftPopout() {
     var hostEl = document.getElementById("narrativeEngineHost");
@@ -375,74 +424,334 @@
     return !text || text === "unknown" || text === "null";
   }
 
-  function seedFinalDisposition(participant) {
-    var selections = {};
-    if (!participant) {
-      return selections;
+  function liveStoreEncounter() {
+    var model = global.COPDoc && COPDoc.model;
+    if (!model || !model.store || !liveEncounterId) {
+      return null;
     }
-    if (String(participant.finalOutcome || "").toUpperCase() === "ARRESTED") {
-      selections.final_outcome = "transported_ice_office";
+    model.store.loadFromDisk();
+    return model.store.getEncounter(liveEncounterId) || null;
+  }
+
+  function digits(value) {
+    return String(value == null ? "" : value).replace(/\D/g, "");
+  }
+
+  function matchLiveSubject(participant) {
+    var enc = liveStoreEncounter();
+    if (!enc || !participant) {
+      return null;
+    }
+    var subjects = enc.subjects || [];
+    var aNumber = digits(
+      participant.identitySnapshot && participant.identitySnapshot.aNumber
+    );
+    var last = String(
+      (participant.identitySnapshot &&
+        participant.identitySnapshot.displayName) ||
+        ""
+    )
+      .split(",")[0]
+      .trim()
+      .toUpperCase();
+    var personId = String(participant.personId || "");
+    var leadId = String(participant.leadId || "");
+    var i;
+    for (i = 0; i < subjects.length; i++) {
+      var row = subjects[i];
+      if (!row) {
+        continue;
+      }
+      if (personId && row.personId === personId) {
+        return row;
+      }
+      if (leadId && row.leadId === leadId) {
+        return row;
+      }
+      if (aNumber && digits(row.alienNumber) === aNumber) {
+        return row;
+      }
+      if (last && String(row.lastName || "").trim().toUpperCase() === last) {
+        return row;
+      }
+    }
+    return subjects.length === 1 ? subjects[0] : null;
+  }
+
+  function seedFromEncounter(participant) {
+    var selections = {};
+    var hideIds = [];
+    function take(fieldId, optionId) {
+      if (!optionId) {
+        return;
+      }
+      selections[fieldId] = optionId;
+      hideIds.push(fieldId);
+    }
+    function hide(fieldId) {
+      if (hideIds.indexOf(fieldId) === -1) {
+        hideIds.push(fieldId);
+      }
+    }
+    if (!liveEncounter || !participant) {
+      return { selections: selections, hideIds: hideIds };
+    }
+    var enc = liveStoreEncounter() || fixture.encounter || {};
+    var eventType = String(enc.eventType || "").toUpperCase();
+    if (eventType === "TARGETED_ARREST") {
+      take("origin_type", "preplanned_targeted_arrest");
+    } else if (eventType === "COLLATERAL_CONTACT") {
+      take("origin_type", "collateral_encounter");
+    }
+    var center = null;
+    (enc.locations || []).forEach(function (loc) {
+      if (enc.centerLocationId && loc && loc.locationId === enc.centerLocationId) {
+        center = loc;
+      }
+    });
+    if (!center) {
+      center = (enc.locations || [])[0] || null;
+    }
+    var assoc = String(
+      (center && (center.association || center.locationAssociation)) || ""
+    ).toLowerCase();
+    if (assoc === "target") {
+      take("encounter_location_type", "residence");
+    } else if (assoc === "stop" || assoc === "arrest") {
+      take(
+        "encounter_location_type",
+        eventType === "VEHICLE_STOP" ? "moving_vehicle" : "public_place"
+      );
+    } else if (assoc === "vehicle-left") {
+      take("encounter_location_type", "parked_vehicle");
+    } else if (assoc === "staging") {
+      take("encounter_location_type", "custodial_transfer");
+    } else if (assoc === "other") {
+      take("encounter_location_type", "other_context");
+    } else if (eventType === "VEHICLE_STOP") {
+      take("encounter_location_type", "moving_vehicle");
+    } else if (eventType === "WORKSITE") {
+      take("encounter_location_type", "workplace");
+    } else if (eventType === "KNOCK_AND_TALK") {
+      take("encounter_location_type", "residence");
+    }
+    var vehicles = enc.vehicles || [];
+    if (!vehicles.length) {
+      hide("vehicle_disposition");
+    } else {
+      var moved = vehicles.some(function (row) {
+        return String((row && row.encounterDisposition) || "").toUpperCase() === "MOVED";
+      });
+      var left = vehicles.some(function (row) {
+        return String((row && row.encounterDisposition) || "").toUpperCase() === "LEFT";
+      });
+      if (moved) {
+        take("vehicle_disposition", "vehicle_released");
+      } else if (left) {
+        take("vehicle_disposition", "vehicle_left_secured");
+      }
+    }
+    take("incident_subject", "primary_subject");
+    var subject = matchLiveSubject(participant);
+    var outcome = String(
+      (subject && subject.outcome) || participant.finalOutcome || ""
+    ).toUpperCase();
+    if (outcome === "FLED_FOOT") {
+      take("flight", "fled_on_foot");
+    } else if (outcome === "FLED_VEHICLE") {
+      take("flight", "fled_in_vehicle");
+    } else if (outcome) {
+      hide("flight");
+    }
+    if (outcome === "ARRESTED") {
+      take("enforcement_action", "warrantless_administrative_arrest");
+      take("final_outcome", "transported_ice_office");
+    } else if (outcome === "RELEASED") {
+      take("enforcement_action", "released_no_action");
+      take("final_outcome", "released_scene");
+    } else if (outcome === "FLED_FOOT" || outcome === "FLED_VEHICLE") {
+      hide("enforcement_action");
+      hide("final_outcome");
+    }
+    var compliance = String((subject && subject.compliance) || "").toUpperCase();
+    if (compliance === "COMPLIANT") {
+      take("subject_conduct", "fully_compliant");
+    } else if (compliance === "NON_COMPLIANT" || compliance === "NONCOMPLIANT") {
+      take("subject_conduct", "refused_commands");
+    }
+    var uof = String((subject && subject.useOfForce) || "").toLowerCase();
+    var forceLevel = String((subject && subject.forceLevel) || "").toUpperCase();
+    if (uof === "no") {
+      hide("force_type");
+      hide("force_result");
+    } else if (uof === "yes") {
+      if (forceLevel === "HARD") {
+        take("force_type", "takedown");
+      } else if (forceLevel === "LETHAL") {
+        take("force_type", "other_force");
+      } else {
+        take("force_type", "physical_control");
+      }
     }
     var closing = participant.closing || {};
     var health = String(closing.health || "").trim();
     if (!looksEmptyUnknown(health) && /good|none|n\/a/.test(health.toLowerCase())) {
-      selections.claimed_health = "claims_good_health";
+      take("claimed_health", "claims_good_health");
     }
     var meds = String(closing.medication || closing.medications || "").trim();
     if (!looksEmptyUnknown(meds)) {
-      selections.medication_statement = /^(none|no\b)/i.test(meds)
-        ? "claims_no_medications"
-        : "claims_named_medications";
+      take(
+        "medication_statement",
+        /^(none|no\b)/i.test(meds) ? "claims_no_medications" : "claims_named_medications"
+      );
     }
     var minors = String(closing.minors || "").trim();
     if (!looksEmptyUnknown(minors) && /^(none|no\b)/i.test(minors)) {
-      selections.minor_children_statement = "claims_no_minor_children_us";
+      take("minor_children_statement", "claims_no_minor_children_us");
     }
     var cash = closing.currency && closing.currency.amountUsd;
     if (cash) {
-      selections.currency_statement = "usd_in_possession";
+      take("currency_statement", "usd_in_possession");
     }
-    var others = (fixture.participants || []).filter(function (row) {
-      return row &&
-        row.encounterParticipantId !== participant.encounterParticipantId &&
-        String(row.finalOutcome || "").toUpperCase() === "ARRESTED";
+    var docs = String(closing.identityDocuments || "").trim();
+    if (!looksEmptyUnknown(docs)) {
+      take(
+        "identity_documents",
+        /^(none|no\b)/i.test(docs) ? "no_identity_documents" : "documents_in_property"
+      );
+    }
+    var nationality = String(
+      (participant.identitySnapshot &&
+        participant.identitySnapshot.nationalityDisplay) ||
+        (participant.identitySnapshot &&
+          participant.identitySnapshot.nationalityCountryCode) ||
+        (subject && subject.citizenship) ||
+        ""
+    ).toLowerCase();
+    if (nationality === "mexico" || nationality === "mx" || nationality === "mexican") {
+      take("subject_nationality", "mexican");
+    } else if (nationality && !looksEmptyUnknown(nationality)) {
+      take("subject_nationality", "other_nationality");
+    }
+    var others = (enc.subjects || fixture.participants || []).filter(function (row) {
+      if (!row) {
+        return false;
+      }
+      if (row.encounterParticipantId) {
+        return (
+          row.encounterParticipantId !== participant.encounterParticipantId &&
+          String(row.finalOutcome || row.outcome || "").toUpperCase() === "ARRESTED"
+        );
+      }
+      return (
+        row !== subject &&
+        String(row.outcome || "").toUpperCase() === "ARRESTED"
+      );
     });
     if (others.length) {
-      selections.other_arrested = "include_all_other_arrested";
+      take("other_arrested", "include_all_other_arrested");
+    } else {
+      hide("other_arrested");
     }
-    return selections;
+    return { selections: selections, hideIds: hideIds };
   }
 
-  function persistLiveEncounter() {
+  function applyEncounterOwnedUi(hideIds) {
+    if (
+      global.COPDoc &&
+      COPDoc.narratives &&
+      typeof COPDoc.narratives.markEncounterOwnedFields === "function"
+    ) {
+      COPDoc.narratives.markEncounterOwnedFields(liveEncounter ? hideIds || [] : []);
+    }
+  }
+
+  function isNarrativeConflict(error) {
+    return error && [
+      "REVISION_CONFLICT",
+      "NARRATIVE_ID_DUPLICATE",
+      "NARRATIVE_LOGICAL_DUPLICATE"
+    ].indexOf(error.code) !== -1;
+  }
+
+  function narrativeErrorMessage(error) {
+    if (isNarrativeConflict(error)) {
+      return "This subject's narrative changed in another window. Reload this page before editing it again.";
+    }
+    if (error && error.code === "FINALIZED_NARRATIVE_IMMUTABLE") {
+      return "This narrative is finalized. Create a supplement or a new version instead of changing it.";
+    }
+    return (error && error.message) || "The narrative could not be saved.";
+  }
+
+  function persistLiveEncounter(change) {
     if (!liveEncounter || !liveEncounterId) {
-      return;
+      return true;
+    }
+    if (!change || !change.record) {
+      return true;
     }
     var model = global.COPDoc && COPDoc.model;
-    if (!model || !model.store) {
-      return;
+    if (
+      !model ||
+      !model.store ||
+      typeof model.store.updateEncounter !== "function"
+    ) {
+      showStatus("Narrative storage is unavailable.", false);
+      return false;
     }
-    model.store.loadFromDisk();
-    var enc = model.store.getEncounter(liveEncounterId);
-    if (!enc) {
-      return;
-    }
-    enc.narratives = store.all();
-    var coverage = currentCoverage();
-    var summary = domain.deriveEncounterSummary(demoBundle(), {
-      narrativeCoverage: coverage,
-      now: new Date().toISOString()
+    var result = model.store.updateEncounter(liveEncounterId, function (enc) {
+      var diskNarratives = Array.isArray(enc.narratives) ? enc.narratives : [];
+      var mergeResult = change.kind === "create"
+        ? domain.addNarrative(diskNarratives, change.record, {
+            now: change.record.updatedAt
+          })
+        : domain.saveNarrativeById(
+            diskNarratives,
+            change.record.narrativeId,
+            change.record,
+            {
+              expectedRevision: change.expectedRevision,
+              now: change.record.updatedAt
+            }
+          );
+      var coverage = coverageFor(mergeResult.narratives);
+      var summaryBundle = demoBundle();
+      summaryBundle.narratives = mergeResult.narratives;
+      var summary = domain.deriveEncounterSummary(summaryBundle, {
+        narrativeCoverage: coverage,
+        now: change.record.updatedAt || new Date().toISOString()
+      });
+      enc.narratives = mergeResult.narratives;
+      enc.supervisorSummary = Object.assign({}, summary, {
+        text: summary.generatedSupervisorText || "",
+        derivedAt: summary.generatedAt,
+        coverage: {
+          complete: !!(coverage && coverage.coverageComplete),
+          missing: (coverage && coverage.missingParticipantIds) || []
+        }
+      });
+      return enc;
     });
-    enc.supervisorSummary = {
-      text: (summary && summary.generatedSupervisorText) || "",
-      derivedAt: new Date().toISOString(),
-      coverage: {
-        complete: !!(coverage && coverage.coverageComplete),
-        missing: (coverage && coverage.missingParticipantIds) || []
+    if (!result || !result.ok) {
+      var error = result && result.cause;
+      var persisted = result && result.encounter;
+      if (persisted && Array.isArray(persisted.narratives)) {
+        store.replaceAll(persisted.narratives);
       }
-    };
-    model.store.saveEncounter(enc, {
-      mode: model.isCommitted && model.isCommitted(enc) ? "commit" : "draft"
-    });
+      if (isNarrativeConflict(error) && change.record.focusEncounterParticipantId) {
+        conflictedParticipantIds.add(change.record.focusEncounterParticipantId);
+      }
+      showStatus(
+        error
+          ? narrativeErrorMessage(error)
+          : (result && result.error) || "The narrative could not be saved.",
+        false
+      );
+      return false;
+    }
+    store.replaceAll(result.encounter.narratives);
+    return true;
   }
 
   function primaryFor(participantId) {
@@ -490,16 +799,23 @@
     return fixture.vehicles.find(function (vehicle) { return vehicle.vehicleId === vehicleId; }) || null;
   }
 
-  function currentCoverage() {
+  function coverageFor(narrativeRecords) {
     return domain.validateCoverage({
       encounterId: fixture.encounter.encounterId,
       participants: fixture.participants,
-      narratives: store.all()
+      narratives: narrativeRecords || []
     });
+  }
+
+  function currentCoverage() {
+    return coverageFor(store.all());
   }
 
   function renderParticipantList() {
     var container = byId("participantNarratives");
+    if (!container) {
+      return;
+    }
     container.replaceChildren();
     fixture.participants.forEach(function (participant) {
       var primary = primaryFor(participant.encounterParticipantId);
@@ -509,6 +825,10 @@
       button.className = "narrative-participant" +
         (participant.encounterParticipantId === activeParticipantId ? " is-active" : "");
       button.dataset.participantId = participant.encounterParticipantId;
+      button.setAttribute(
+        "aria-pressed",
+        participant.encounterParticipantId === activeParticipantId ? "true" : "false"
+      );
 
       var code = document.createElement("span");
       code.className = "narrative-role-code";
@@ -520,10 +840,24 @@
       name.textContent = participantName(participant);
       var meta = document.createElement("span");
       meta.className = "narrative-participant-meta";
-      meta.textContent = (primary ? primary.workflowStatus || "DRAFT" : "MISSING") +
-        " · " + participant.finalOutcome.replaceAll("_", " ") +
+      var narrativeStatus = primary ? primary.workflowStatus || "DRAFT" : "MISSING";
+      var outcome = String(participant.finalOutcome || "UNKNOWN").replaceAll("_", " ");
+      meta.textContent = narrativeStatus +
+        " · " + outcome +
         (participant.iceEventNumber ? " · " + participant.iceEventNumber : "") +
         (supplements.length ? " · +" + supplements.length : "");
+      button.setAttribute(
+        "aria-label",
+        [
+          roleCode(participant),
+          participantName(participant),
+          narrativeStatus,
+          outcome,
+          supplements.length
+            ? supplements.length + " supplement" + (supplements.length === 1 ? "" : "s")
+            : ""
+        ].filter(Boolean).join(", ")
+      );
       text.append(name, document.createElement("br"), meta);
 
       var dot = document.createElement("span");
@@ -541,11 +875,16 @@
   function renderCoverageAndSummary() {
     var coverage = currentCoverage();
     var coverageBadge = byId("coverageBadge");
-    coverageBadge.textContent = coverage.coveredCount + "/" + coverage.requiredCount;
-    coverageBadge.className = "narrative-status " +
-      (coverage.coverageComplete ? "is-ok" : "is-warn");
+    if (coverageBadge) {
+      coverageBadge.textContent = coverage.coveredCount + "/" + coverage.requiredCount;
+      coverageBadge.className = "narrative-status " +
+        (coverage.coverageComplete ? "is-ok" : "is-warn");
+    }
 
     var details = byId("coverageDetails");
+    if (!details) {
+      return;
+    }
     details.replaceChildren();
     [
       ["Required primary narratives", coverage.requiredCount],
@@ -568,6 +907,9 @@
     });
 
     var missingButton = byId("completeMissingNarrativeButton");
+    if (!missingButton) {
+      return;
+    }
     missingButton.disabled = coverage.missingParticipantIds.length === 0;
     if (!coverage.missingParticipantIds.length) {
       missingButton.textContent = "Primary coverage complete";
@@ -606,25 +948,31 @@
       [summary.how.windowBreakIncidentCount, "Window break"]
     ];
     var grid = byId("metricGrid");
-    grid.replaceChildren();
-    metrics.forEach(function (metric) {
-      var card = document.createElement("div");
-      card.className = "stat-card narrative-metric";
-      var value = document.createElement("strong");
-      value.className = "stat-value";
-      value.textContent = metric[0];
-      var label = document.createElement("span");
-      label.className = "stat-label";
-      label.textContent = metric[1];
-      card.append(value, label);
-      grid.appendChild(card);
-    });
-    byId("supervisorSummaryText").textContent = summary.generatedSupervisorText;
+    if (grid) {
+      grid.replaceChildren();
+      metrics.forEach(function (metric) {
+        var card = document.createElement("div");
+        card.className = "stat-card narrative-metric";
+        var value = document.createElement("strong");
+        value.className = "stat-value";
+        value.textContent = metric[0];
+        var label = document.createElement("span");
+        label.className = "stat-label";
+        label.textContent = metric[1];
+        card.append(value, label);
+        grid.appendChild(card);
+      });
+    }
+    var summaryText = byId("supervisorSummaryText");
+    if (summaryText) {
+      summaryText.textContent = summary.generatedSupervisorText;
+    }
   }
 
   function seededSelections(record, participant) {
     var state = record && record.engine && record.engine.state;
-    var selections = Object.assign({}, state && state.encounter && state.encounter.selections || {});
+    var seed = seedFromEncounter(participant);
+    var selections = Object.assign({}, seed.selections, state && state.encounter && state.encounter.selections || {});
     if (
       selections.subject_conduct ||
       selections.force_type ||
@@ -632,9 +980,7 @@
     ) {
       selections.incident_subject = selections.incident_subject || "primary_subject";
     }
-    if (liveEncounter && !(state && state.encounter && state.encounter.selections)) {
-      selections = Object.assign(seedFinalDisposition(participant), selections);
-    }
+    applyEncounterOwnedUi(seed.hideIds);
     return selections;
   }
 
@@ -661,56 +1007,85 @@
     var participant = fixture.participants.find(function (row) {
       return row.encounterParticipantId === activeParticipantId;
     });
-    if (existing) {
-      store.save(existing.narrativeId, {
-        engine: {
-          version: engine.version,
-          build: engine.build,
-          stateSchema: engine.schemas.state,
-          state: state
-        },
-        output: output,
-        bindings: output.bindings,
-        factsManifest: output.factsManifest,
-        validationSnapshot: output.validation,
-        freshnessStatus: "CURRENT"
-      });
-      if (!options.silent) showStatus("Dynamic narrative updated for " + participantName(participant) + ".");
-    } else if (options.createMissing) {
-      store.create({
-        narrativeId: liveEncounter
-          ? "nar_" + liveEncounterId + "_" + activeParticipantId + "_primary"
-          : "nar_demo_" + activeParticipantId + "_primary",
-        encounterId: fixture.encounter.encounterId,
-        narrativeKind: domain.NARRATIVE_KINDS.PRIMARY_SUBJECT,
-        focusEncounterParticipantId: activeParticipantId,
-        relatedEncounterParticipantIds: fixture.participants.map(function (row) {
-          return row.encounterParticipantId;
-        }),
-        title: participantName(participant) + " — Primary subject narrative",
-        workflowStatus: "DRAFT",
-        freshnessStatus: "CURRENT",
-        engine: {
-          version: engine.version,
-          build: engine.build,
-          stateSchema: engine.schemas.state,
-          state: state
-        },
-        output: output,
-        bindings: output.bindings,
-        factsManifest: output.factsManifest,
-        validationSnapshot: output.validation,
-        sourceSnapshot: {
-          encounterId: fixture.encounter.encounterId,
-          iceEventNumber: participant.iceEventNumber || ""
-        }
-      });
-      unsavedDraftStateByParticipant.delete(activeParticipantId);
-      if (!options.silent) showStatus("Primary narrative created for " + participantName(participant) + ".");
-    } else {
-      unsavedDraftStateByParticipant.set(activeParticipantId, state);
+    if (conflictedParticipantIds.has(activeParticipantId)) {
+      showStatus(
+        "This subject's narrative changed in another window. Reload this page before editing it again.",
+        false
+      );
+      return false;
     }
-    persistLiveEncounter();
+    var successMessage = "";
+    var persistenceChange = null;
+    try {
+      if (existing) {
+        var updated = store.save(existing.narrativeId, {
+          engine: {
+            version: engine.version,
+            build: engine.build,
+            stateSchema: engine.schemas.state,
+            state: state
+          },
+          output: output,
+          bindings: output.bindings,
+          factsManifest: output.factsManifest,
+          validationSnapshot: output.validation,
+          freshnessStatus: "CURRENT"
+        });
+        persistenceChange = {
+          kind: "save",
+          record: updated,
+          expectedRevision: Number(existing.revision) || 0
+        };
+        successMessage = "Dynamic narrative updated for " + participantName(participant) + ".";
+      } else if (options.createMissing) {
+        var created = store.create({
+          narrativeId: liveEncounter
+            ? "nar_" + liveEncounterId + "_" + activeParticipantId + "_primary"
+            : "nar_demo_" + activeParticipantId + "_primary",
+          encounterId: fixture.encounter.encounterId,
+          narrativeKind: domain.NARRATIVE_KINDS.PRIMARY_SUBJECT,
+          focusEncounterParticipantId: activeParticipantId,
+          relatedEncounterParticipantIds: fixture.participants.map(function (row) {
+            return row.encounterParticipantId;
+          }),
+          title: participantName(participant) + " — Primary subject narrative",
+          workflowStatus: "DRAFT",
+          freshnessStatus: "CURRENT",
+          engine: {
+            version: engine.version,
+            build: engine.build,
+            stateSchema: engine.schemas.state,
+            state: state
+          },
+          output: output,
+          bindings: output.bindings,
+          factsManifest: output.factsManifest,
+          validationSnapshot: output.validation,
+          sourceSnapshot: {
+            encounterId: fixture.encounter.encounterId,
+            iceEventNumber: participant.iceEventNumber || ""
+          }
+        });
+        persistenceChange = { kind: "create", record: created };
+        unsavedDraftStateByParticipant.delete(activeParticipantId);
+        successMessage = "Primary narrative created for " + participantName(participant) + ".";
+      } else {
+        unsavedDraftStateByParticipant.set(activeParticipantId, state);
+      }
+    } catch (error) {
+      showStatus(narrativeErrorMessage(error), false);
+      return false;
+    }
+    var persisted = persistLiveEncounter(persistenceChange);
+    if (!persisted) {
+      renderParticipantList();
+      renderCoverageAndSummary();
+      renderOutputAudit();
+      return false;
+    }
+    if (!options.silent && successMessage) {
+      showStatus(successMessage);
+    }
     renderParticipantList();
     renderCoverageAndSummary();
     renderOutputAudit();
@@ -723,7 +1098,16 @@
       return row.encounterParticipantId === participantId;
     });
     if (!participant) return;
-    if (activeParticipantId) captureCurrent({ silent: true, createMissing: false });
+    var currentRecord = activeParticipantId
+      ? primaryFor(activeParticipantId)
+      : null;
+    if (
+      activeParticipantId &&
+      !(currentRecord && currentRecord.workflowStatus === "FINALIZED") &&
+      captureCurrent({ silent: true, createMissing: false }) === false
+    ) {
+      return;
+    }
     activeParticipantId = participantId;
     var existing = primaryFor(participantId);
     var packet = narratives.buildPacketFromBundle(demoBundle(), participantId, {
@@ -745,10 +1129,14 @@
     } else {
       engine.setSelections(seededSelections(existing, participant), { rebuild: true });
     }
+    applyEncounterOwnedUi(seedFromEncounter(participant).hideIds);
     engine.setView("values");
-    byId("activeNarrativeTitle").textContent =
-      roleCode(participant) + " · " + participantName(participant) +
-      (existing ? " · " + (existing.workflowStatus || "DRAFT") : " · MISSING PRIMARY");
+    var title = byId("activeNarrativeTitle");
+    if (title) {
+      title.textContent =
+        roleCode(participant) + " · " + participantName(participant) +
+        (existing ? " · " + (existing.workflowStatus || "DRAFT") : " · MISSING PRIMARY");
+    }
     renderParticipantList();
     renderCoverageAndSummary();
     renderOutputAudit();
@@ -756,8 +1144,9 @@
 
   function renderOutputAudit() {
     if (!activeParticipantId) return;
-    var output = engine.getOutput();
     var container = byId("sectionAudit");
+    if (!container) return;
+    var output = engine.getOutput();
     container.replaceChildren();
     output.sections.forEach(function (section) {
       var row = document.createElement("div");
@@ -778,11 +1167,17 @@
       .filter(Boolean)
       .join("\n\n");
     var exactBreaks = canonical === output.generatedResolvedText;
-    byId("outputSchemaBadge").textContent =
-      output.schema + (exactBreaks ? " · breaks verified" : " · break mismatch");
-    byId("outputSchemaBadge").className = "narrative-status " +
-      (exactBreaks ? "is-ok" : "is-warn");
-    byId("outputJson").textContent = JSON.stringify(output, null, 2);
+    var badge = byId("outputSchemaBadge");
+    if (badge) {
+      badge.textContent =
+        output.schema + (exactBreaks ? " · breaks verified" : " · break mismatch");
+      badge.className = "narrative-status " +
+        (exactBreaks ? "is-ok" : "is-warn");
+    }
+    var outputJson = byId("outputJson");
+    if (outputJson) {
+      outputJson.textContent = JSON.stringify(output, null, 2);
+    }
   }
 
   function activeFileStem() {
@@ -822,11 +1217,24 @@
     showStatus("Narrative text downloaded.");
   }
 
+  function saveNarrative() {
+    captureCurrent({ createMissing: true });
+  }
+  narratives.flushWorkspace = function () {
+    if (session !== bootGeneration) {
+      return;
+    }
+    if (liveEncounter) {
+      captureCurrent({ silent: true, createMissing: false });
+    }
+  };
   var primaryAction = byId("appBarPrimaryAction");
   if (primaryAction) {
-    primaryAction.addEventListener("click", function () {
-      captureCurrent({ createMissing: true });
-    });
+    primaryAction.addEventListener("click", saveNarrative);
+  }
+  var inPageSave = byId("saveEncounterNarrativeButton");
+  if (inPageSave) {
+    inPageSave.addEventListener("click", saveNarrative);
   }
   var copyAction = byId("copyNarrativeButton");
   if (copyAction) {
@@ -849,9 +1257,17 @@
       }
     });
   }
-  byId("downloadNarrativeJsonButton").addEventListener("click", downloadOutputJson);
-  byId("downloadNarrativeTextButton").addEventListener("click", downloadOutputText);
-  byId("completeMissingNarrativeButton").addEventListener("click", function () {
+  var downloadJson = byId("downloadNarrativeJsonButton");
+  if (downloadJson) {
+    downloadJson.addEventListener("click", downloadOutputJson);
+  }
+  var downloadText = byId("downloadNarrativeTextButton");
+  if (downloadText) {
+    downloadText.addEventListener("click", downloadOutputText);
+  }
+  var completeMissing = byId("completeMissingNarrativeButton");
+  if (completeMissing) {
+  completeMissing.addEventListener("click", function () {
     var coverage = currentCoverage();
     var participantId = coverage.missingParticipantIds[0];
     if (!participantId) return;
@@ -876,33 +1292,34 @@
       );
     }
   });
+  }
 
   global.addEventListener(engine.events.narrativeChange, function () {
-    global.requestAnimationFrame(renderOutputAudit);
+    if (session !== bootGeneration) {
+      return;
+    }
+    global.requestAnimationFrame(function () {
+      if (session !== bootGeneration) {
+        return;
+      }
+      renderOutputAudit();
+      var focused = fixture.participants.find(function (row) {
+        return row && row.encounterParticipantId === activeParticipantId;
+      });
+      if (focused) {
+        applyEncounterOwnedUi(seedFromEncounter(focused).hideIds);
+      }
+    });
   });
 
   var master = narratives.MASTER_NARRATIVE_SECTIONS;
   var fields = master.flatMap(function (section) { return section.fields; });
   var options = fields.flatMap(function (field) { return field.options; });
-  byId("libraryVerification").textContent =
-    "Prose libraries verified · " + master.length + "/" + fields.length + "/" + options.length;
-  byId("libraryVerification").className = "narrative-status is-ok";
-
-  if (liveEncounter) {
-    var headingActions = document.querySelector(".narrative-heading-actions");
-    if (headingActions && !document.getElementById("narrativeAdvancedButton")) {
-      var advanced = document.createElement("button");
-      advanced.id = "narrativeAdvancedButton";
-      advanced.type = "button";
-      advanced.className = "compact ghost";
-      advanced.textContent = "Advanced";
-      advanced.setAttribute("aria-pressed", "false");
-      advanced.addEventListener("click", function () {
-        var on = document.body.classList.toggle("narrative-advanced");
-        advanced.setAttribute("aria-pressed", on ? "true" : "false");
-      });
-      headingActions.insertBefore(advanced, headingActions.firstChild);
-    }
+  var libraryVerification = byId("libraryVerification");
+  if (libraryVerification) {
+    libraryVerification.textContent =
+      "Prose libraries verified · " + master.length + "/" + fields.length + "/" + options.length;
+    libraryVerification.className = "narrative-status is-ok";
   }
 
   bindDraftPopout();
@@ -914,9 +1331,24 @@
   );
   }
 
+  narratives.bootWorkspace = bootWorkspace;
+
+  function autoBootStandalone() {
+    if (!document.body || document.body.getAttribute("data-page") !== "narrative") {
+      return;
+    }
+    var encounterId = "";
+    try {
+      encounterId = new URLSearchParams(window.location.search).get("encounterId") || "";
+    } catch (error) {
+      encounterId = "";
+    }
+    bootWorkspace({ encounterId: encounterId, inPage: false });
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initNarrativePage, { once: true });
+    document.addEventListener("DOMContentLoaded", autoBootStandalone, { once: true });
   } else {
-    initNarrativePage();
+    autoBootStandalone();
   }
 })(typeof window !== "undefined" ? window : globalThis);

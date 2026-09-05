@@ -235,15 +235,47 @@
 
         <section class="enc-panel" id="tab-narrative" role="tabpanel" aria-labelledby="tabbtn-narrative" hidden>
           <p id="narrativeNeedSubjects" class="section-note" hidden>
-            Add subjects before writing an I-213.
+            Add subjects on the Subjects tab before writing an I-213.
           </p>
-          <iframe
-            id="narrativeFrame"
-            class="enc-narrative-frame"
-            title="I-213"
-            scrolling="yes"
-            hidden
-          ></iframe>
+          <div class="card-static narrative-empty" id="narrativeEmptyState" hidden>
+            <p id="narrativeEmptyText"></p>
+          </div>
+          <div class="narrative-layout" id="narrativeWorkspace" hidden>
+            <aside class="narrative-sidebar" aria-label="Narrative overview">
+              <fieldset class="card-static narrative-sidebar-subjects">
+                <legend>Narratives</legend>
+                <div id="participantNarratives" class="narrative-participant-list"></div>
+              </fieldset>
+              <fieldset class="card-static narrative-sidebar-coverage">
+                <legend>Primary coverage</legend>
+                <div class="narrative-card-heading">
+                  <span class="section-note">Required participant narratives</span>
+                  <span id="coverageBadge" class="narrative-status">0/0</span>
+                </div>
+                <div id="coverageDetails" class="narrative-compact-list"></div>
+                <button
+                  type="button"
+                  id="completeMissingNarrativeButton"
+                  class="action-button narrative-full-action"
+                >
+                  Create missing narrative
+                </button>
+              </fieldset>
+            </aside>
+            <section class="narrative-main" aria-label="Active narrative workspace">
+              <div class="narrative-inpage-actions">
+                <h2 id="activeNarrativeTitle">I-213</h2>
+                <button type="button" id="saveEncounterNarrativeButton" class="action-button">
+                  Save I-213
+                </button>
+              </div>
+              <section
+                id="narrativeEngineHost"
+                class="narrative-engine-host"
+                aria-label="COPDoc Narrative Builder"
+              ></section>
+            </section>
+          </div>
         </section>
 
         <section class="enc-panel" id="tab-review" role="tabpanel" aria-labelledby="tabbtn-review" hidden>
@@ -717,6 +749,29 @@
     <script src="functions/model/encounter.js"></script>
     <script src="functions/model/operation.js"></script>
     <script src="functions/model/store.js"></script>
+    <script src="data/immigration.js"></script>
+    <script src="data/narratives/narrative-shared-options.js"></script>
+    <script src="data/narratives/sections/01-origin.js"></script>
+    <script src="data/narratives/sections/02-authority.js"></script>
+    <script src="data/narratives/sections/03-context.js"></script>
+    <script src="data/narratives/sections/04-observation.js"></script>
+    <script src="data/narratives/sections/05-contact.js"></script>
+    <script src="data/narratives/sections/06-conduct-incidents.js"></script>
+    <script src="data/narratives/sections/07-confirmation.js"></script>
+    <script src="data/narratives/sections/08-custody.js"></script>
+    <script src="data/narratives/sections/09-vehicle-property.js"></script>
+    <script src="data/narratives/sections/10-final-disposition.js"></script>
+    <script src="data/narratives/narrative-master.js"></script>
+    <script src="functions/narratives/narrative-markup.js"></script>
+    <script src="functions/narratives/narrative-builder-engine.js"></script>
+    <script src="functions/narratives/narrative-workspace-ui.js"></script>
+    <script src="functions/narratives/packet-builder.js"></script>
+    <script src="functions/narratives/build9/narrative-domain.js"></script>
+    <script src="functions/narratives/build9/narrative-coverage.js"></script>
+    <script src="functions/narratives/build9/encounter-summary.js"></script>
+    <script src="functions/narratives/build9/index.js"></script>
+    <script src="functions/encounter-narrative.js"></script>
+    <script src="functions/narratives/narrative-page.js"></script>
     <script src="functions/officer-roster.js"></script>
     <script src="functions/model/media.js"></script>
     <script src="functions/model/autosave.js"></script>

@@ -188,7 +188,14 @@
 
   function showEncounterTab(id) {
     var narrative = id === "tab-narrative";
-    document.body.classList.toggle("enc-narrative-open", narrative);
+    if (
+      !narrative &&
+      window.COPDoc &&
+      COPDoc.narratives &&
+      typeof COPDoc.narratives.flushWorkspace === "function"
+    ) {
+      COPDoc.narratives.flushWorkspace();
+    }
     if (narrative) {
       setStatus("");
     }
@@ -2715,7 +2722,8 @@
 
   function paintNarrativeTab() {
     var need = byId("narrativeNeedSubjects");
-    var frame = byId("narrativeFrame");
+    var workspace = byId("narrativeWorkspace");
+    var empty = byId("narrativeEmptyState");
     var id = (byId("encounterId") && byId("encounterId").value) || queryId();
     var subjects =
       encounterSubjects.length
@@ -2727,14 +2735,17 @@
             model().store.getEncounter(id).subjects) ||
           []);
     if (!id || !subjects.length) {
-      if (frame) {
-        frame.hidden = true;
+      if (workspace) {
+        workspace.hidden = true;
+      }
+      if (empty) {
+        empty.hidden = true;
       }
       if (need) {
         need.hidden = false;
         need.textContent = !id
           ? "Create the encounter first."
-          : "Add subjects before writing an I-213.";
+          : "Add subjects on the Subjects tab before writing an I-213.";
       }
       return;
     }
@@ -2744,17 +2755,18 @@
     if (need) {
       need.hidden = true;
     }
-    if (!frame) {
+    if (workspace) {
+      workspace.hidden = false;
+    }
+    if (
+      !window.COPDoc ||
+      !COPDoc.narratives ||
+      typeof COPDoc.narratives.bootWorkspace !== "function"
+    ) {
+      setStatus("The I-213 engine did not load.");
       return;
     }
-    var url =
-      "narrative.html?encounterId=" +
-      encodeURIComponent(id) +
-      "&embed=1";
-    if (frame.getAttribute("src") !== url) {
-      frame.src = url;
-    }
-    frame.hidden = false;
+    COPDoc.narratives.bootWorkspace({ encounterId: id, inPage: true });
   }
 
   function generateEncounterNarrative() {

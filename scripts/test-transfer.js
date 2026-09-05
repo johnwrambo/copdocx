@@ -356,7 +356,205 @@ check(
     repeatedBookin.arrestId === linkedBookin.arrestId
 );
 
-if (fail) {
-  process.exit(1);
+function testImportPopupOpensCompact() {
+  var opened = null;
+  var resized = null;
+  var doc = {
+    readyState: "complete",
+    body: {
+      dataset: {},
+      getAttribute: function () {
+        return "home";
+      }
+    },
+    head: { appendChild: function () {} },
+    getElementById: function () {
+      return null;
+    },
+    querySelector: function () {
+      return null;
+    },
+    querySelectorAll: function () {
+      return [];
+    },
+    addEventListener: function () {}
+  };
+  var sandbox = {
+    window: {},
+    document: doc,
+    console: console,
+    Date: Date,
+    JSON: JSON,
+    Array: Array,
+    Object: Object,
+    Promise: Promise,
+    setTimeout: setTimeout,
+    clearTimeout: clearTimeout,
+    addEventListener: function () {},
+    screen: { availWidth: 1920, availHeight: 1080 },
+    location: { href: "http://localhost/home.html" },
+    URL: URL,
+    localStorage: {
+      getItem: function () {
+        return null;
+      },
+      setItem: function () {}
+    },
+    open: function (url, name, features) {
+      opened = { url: url, name: name, features: String(features || "") };
+      return {
+        closed: false,
+        resizeTo: function (width, height) {
+          resized = [width, height];
+        },
+        moveTo: function () {},
+        focus: function () {}
+      };
+    }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname, "..", "functions/transfer.js"), "utf8"),
+    sandbox
+  );
+  sandbox.openFileImport();
+  check("import popup opens", !!(opened && opened.name === "copdoc-import"));
+  check(
+    "import popup starts compact",
+    !!(
+      opened &&
+      /width=480/.test(opened.features) &&
+      /height=280/.test(opened.features)
+    ),
+    opened && opened.features
+  );
+  check(
+    "import popup resize stays compact",
+    !!(resized && resized[0] === 480 && resized[1] === 280),
+    resized
+  );
 }
-console.log("ok transfer");
+
+testImportPopupOpensCompact();
+
+function testLoadModelScriptReady() {
+  var hung = false;
+  var existing = {
+    dataset: {},
+    addEventListener: function () {
+      hung = true;
+    }
+  };
+  var created = [];
+  var doc = {
+    readyState: "complete",
+    body: {
+      dataset: {},
+      getAttribute: function () {
+        return "import";
+      }
+    },
+    head: {
+      appendChild: function (el) {
+        created.push(el && el.src);
+      }
+    },
+    getElementById: function () {
+      return null;
+    },
+    querySelector: function (sel) {
+      if (String(sel).indexOf("functions/model/util.js") !== -1) {
+        return existing;
+      }
+      return null;
+    },
+    querySelectorAll: function () {
+      return [];
+    },
+    addEventListener: function () {}
+  };
+  var sandbox = {
+    window: {},
+    document: doc,
+    console: console,
+    Date: Date,
+    JSON: JSON,
+    Array: Array,
+    Object: Object,
+    Promise: Promise,
+    setTimeout: setTimeout,
+    clearTimeout: clearTimeout,
+    localStorage: {
+      getItem: function () {
+        return null;
+      },
+      setItem: function () {}
+    }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname, "..", "functions/transfer.js"), "utf8"),
+    sandbox
+  );
+  return sandbox.COPDoc.transfer
+    .loadModelScript("functions/model/util.js")
+    .then(function () {
+      check("already-loaded util.js does not wait on load", !hung);
+    });
+}
+
+var demoPath = path.join(__dirname, "..", "COPDoc_demo.json");
+if (fs.existsSync(demoPath)) {
+  var demoParsed = t.parseTransfer(fs.readFileSync(demoPath, "utf8"));
+  check("demo json parses", demoParsed.format === "copdocx.transfer.v1");
+  check(
+    "demo json has the briefing types",
+    demoParsed.leads.length >= 12 &&
+      demoParsed.officers.length >= 10 &&
+      demoParsed.vehicles.length >= 4 &&
+      demoParsed.shifts.length >= 8 &&
+      demoParsed.bookin.length >= 4,
+    {
+      leads: demoParsed.leads.length,
+      officers: demoParsed.officers.length,
+      vehicles: demoParsed.vehicles.length,
+      shifts: demoParsed.shifts.length,
+      bookin: demoParsed.bookin.length
+    }
+  );
+  var demoStats = t.applyImport(demoParsed, [
+    "leads",
+    "officers",
+    "vehicles",
+    "shifts",
+    "bookin"
+  ]);
+  check(
+    "demo json import writes new records",
+    demoStats.added >= 12 && !demoStats.error,
+    demoStats
+  );
+}
+
+var hangTimer = setTimeout(function () {
+  console.log("FAIL already-loaded util.js hung waiting on load");
+  process.exit(1);
+}, 2000);
+
+testLoadModelScriptReady()
+  .then(function () {
+    clearTimeout(hangTimer);
+    if (fail) {
+      process.exit(1);
+    }
+    console.log("ok transfer");
+  })
+  .catch(function (error) {
+    clearTimeout(hangTimer);
+    console.log("FAIL loadModelScript", error && error.message ? error.message : error);
+    process.exit(1);
+  });

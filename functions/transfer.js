@@ -43,7 +43,16 @@
     return document.body.getAttribute("data-page") || "";
   }
 
+  function isImportPage() {
+    return pageKey() === "import";
+  }
+
   function setStatus(message, ok) {
+    var local = typeof document !== "undefined" ? byId("importStatus") : null;
+    if (local) {
+      local.hidden = !message;
+      local.textContent = message || "";
+    }
     if (global.COPDoc && COPDoc.setAppBarStatus) {
       COPDoc.setAppBarStatus(message, ok ? { ok: true } : undefined);
     }
@@ -982,21 +991,49 @@
     return summary;
   }
 
+  function scriptAlreadyExecuted(scriptEl) {
+    if (!scriptEl) {
+      return false;
+    }
+    if (scriptEl.dataset && scriptEl.dataset.loaded === "true") {
+      return true;
+    }
+    if (scriptEl.dataset && scriptEl.dataset.loaded === "pending") {
+      return false;
+    }
+    if (canonicalBookInStore()) {
+      return true;
+    }
+    return typeof document !== "undefined" && document.readyState !== "loading";
+  }
+
   function loadModelScript(src) {
     return new Promise(function (resolve, reject) {
+      if (typeof document === "undefined") {
+        resolve();
+        return;
+      }
       var existing = document.querySelector('script[src="' + src + '"]');
       if (existing) {
-        if (existing.dataset.loaded === "true" || canonicalBookInStore()) {
+        if (scriptAlreadyExecuted(existing)) {
           resolve();
           return;
         }
-        existing.addEventListener("load", resolve, { once: true });
+        existing.addEventListener(
+          "load",
+          function () {
+            existing.dataset.loaded = "true";
+            resolve();
+          },
+          { once: true }
+        );
         existing.addEventListener("error", reject, { once: true });
         return;
       }
       var script = document.createElement("script");
       script.src = src;
       script.async = false;
+      script.dataset.loaded = "pending";
       script.addEventListener(
         "load",
         function () {
@@ -1309,6 +1346,229 @@
     });
   }
 
+  function screenAvail() {
+    var screenObj = global.screen;
+    return {
+      width: Number((screenObj && (screenObj.availWidth || screenObj.width)) || 1440),
+      height: Number((screenObj && (screenObj.availHeight || screenObj.height)) || 900),
+      left: Number((screenObj && screenObj.availLeft) || 0),
+      top: Number((screenObj && screenObj.availTop) || 0)
+    };
+  }
+
+  function popupFeatures() {
+    var avail = screenAvail();
+    var width = 480;
+    var height = 280;
+    var left = Math.max(16, Math.round((avail.width - width) / 2) + avail.left);
+    var top = Math.max(16, Math.round((avail.height - height) / 2) + avail.top);
+    return {
+      width: width,
+      height: height,
+      left: left,
+      top: top,
+      text: [
+        "popup=yes",
+        "popup=true",
+        "width=" + width,
+        "height=" + height,
+        "left=" + left,
+        "top=" + top,
+        "scrollbars=yes",
+        "resizable=yes"
+      ].join(",")
+    };
+  }
+
+  function importWindowChrome() {
+    var chromeW = (Number(global.outerWidth) || 0) - (Number(global.innerWidth) || 0);
+    var chromeH = (Number(global.outerHeight) || 0) - (Number(global.innerHeight) || 0);
+    if (!isFinite(chromeW) || chromeW < 0 || chromeW > 80) {
+      chromeW = 16;
+    }
+    if (!isFinite(chromeH) || chromeH < 8 || chromeH > 240) {
+      chromeH = 72;
+    }
+    return { width: chromeW, height: chromeH };
+  }
+
+  function importConfirming() {
+    var confirmBox = byId("fileImportConfirm");
+    return !!(confirmBox && !confirmBox.hidden);
+  }
+
+  function measureImportContent() {
+    var root = document.documentElement;
+    if (root) {
+      root.classList.add("is-import-measuring");
+    }
+    var width = 0;
+    var height = 0;
+    try {
+      var panel = document.querySelector(".import-panel");
+      var panelBox = panel && panel.getBoundingClientRect ? panel.getBoundingClientRect() : null;
+      width = Math.ceil(
+        Math.max(
+          panelBox ? panelBox.width : 0,
+          document.body ? document.body.scrollWidth : 0,
+          root ? root.scrollWidth : 0
+        )
+      );
+      height = Math.ceil(
+        Math.max(
+          document.body ? document.body.scrollHeight : 0,
+          root ? root.scrollHeight : 0,
+          document.body ? document.body.offsetHeight : 0
+        )
+      );
+    } catch (err) {}
+    if (root) {
+      root.classList.remove("is-import-measuring");
+    }
+    return { width: width, height: height };
+  }
+
+  function fitImportWindow() {
+    if (!isImportPage() || typeof global.resizeTo !== "function") {
+      return;
+    }
+    var confirming = importConfirming();
+    var avail = screenAvail();
+    var chrome = importWindowChrome();
+    var content = measureImportContent();
+    var minW = confirming ? 560 : 460;
+    var minH = confirming ? 600 : 260;
+    var innerW = Math.max(minW - chrome.width, content.width || 0, confirming ? 540 : 420);
+    var innerH = Math.max(minH - chrome.height, content.height || 0, confirming ? 560 : 220);
+    if (innerH < 80) {
+      innerH = confirming ? 640 : 240;
+    }
+    var width = Math.min(avail.width - 24, Math.max(minW, innerW + chrome.width + 8));
+    var height = Math.min(avail.height - 24, Math.max(minH, innerH + chrome.height + 12));
+    var clamped = height >= avail.height - 24;
+    if (document.body) {
+      document.body.classList.toggle("import-window-clamped", clamped);
+    }
+    try {
+      global.resizeTo(width, height);
+    } catch (err) {}
+    if (typeof global.moveTo !== "function") {
+      return;
+    }
+    var left = Number(global.screenX);
+    var top = Number(global.screenY);
+    if (!isFinite(left)) {
+      left = avail.left + 16;
+    }
+    if (!isFinite(top)) {
+      top = avail.top + 16;
+    }
+    if (left + width > avail.left + avail.width - 8) {
+      left = Math.max(avail.left + 8, avail.left + avail.width - width - 8);
+    }
+    if (top + height > avail.top + avail.height - 8) {
+      top = Math.max(avail.top + 8, avail.top + avail.height - height - 8);
+    }
+    if (left < avail.left + 8) {
+      left = avail.left + 8;
+    }
+    if (top < avail.top + 8) {
+      top = avail.top + 8;
+    }
+    try {
+      global.moveTo(left, top);
+    } catch (err2) {}
+  }
+
+  function scheduleFitImportWindow() {
+    if (!isImportPage()) {
+      return;
+    }
+    function run() {
+      try {
+        fitImportWindow();
+      } catch (err) {}
+    }
+    if (typeof global.requestAnimationFrame === "function") {
+      global.requestAnimationFrame(function () {
+        global.requestAnimationFrame(run);
+      });
+    } else if (typeof global.setTimeout === "function") {
+      global.setTimeout(run, 0);
+    } else {
+      run();
+    }
+    if (typeof global.setTimeout === "function") {
+      global.setTimeout(run, 80);
+    }
+  }
+
+  function openImportPopup() {
+    if (typeof global.open !== "function") {
+      return null;
+    }
+    var href = "import.html";
+    try {
+      if (global.location && global.location.href && typeof URL === "function") {
+        href = new URL("import.html", global.location.href).href;
+      }
+    } catch (err) {}
+    var size = popupFeatures();
+    var win = null;
+    try {
+      win = global.open(href, "copdoc-import", size.text);
+    } catch (err2) {}
+    if (!win) {
+      return null;
+    }
+    try {
+      if (typeof win.resizeTo === "function") {
+        win.resizeTo(size.width, size.height);
+      }
+      if (typeof win.moveTo === "function") {
+        win.moveTo(size.left, size.top);
+      }
+    } catch (err3) {}
+    try {
+      if (typeof win.focus === "function") {
+        win.focus();
+      }
+    } catch (err4) {}
+    return win;
+  }
+
+  function notifyOpenerImported() {
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("copdocx.import.done.v1", String(Date.now()));
+      }
+    } catch (err) {}
+    try {
+      if (global.opener && !global.opener.closed) {
+        if (typeof global.opener.postMessage === "function") {
+          global.opener.postMessage({ type: "copdocx-import-done" }, "*");
+        }
+        try {
+          if (global.opener.location && typeof global.opener.location.reload === "function") {
+            global.opener.location.reload();
+          }
+        } catch (errReload) {}
+        if (typeof global.opener.focus === "function") {
+          global.opener.focus();
+        }
+      }
+    } catch (err2) {}
+  }
+
+  function clickImportPicker() {
+    var picker = byId("fileImportPicker");
+    if (!picker) {
+      return;
+    }
+    picker.value = "";
+    picker.click();
+  }
+
   function checkedTypes(name) {
     var boxes = document.querySelectorAll('input[name="' + name + '"]:checked');
     return Array.prototype.map.call(boxes, function (el) {
@@ -1316,8 +1576,87 @@
     });
   }
 
+  function bindTransferUi() {
+    if (typeof document === "undefined" || !document.body) {
+      return;
+    }
+    if (document.body.dataset.transferBound === "true") {
+      return;
+    }
+    document.body.dataset.transferBound = "true";
+    var exportCancel = byId("fileExportCancel");
+    if (exportCancel) {
+      exportCancel.addEventListener("click", hideDialogs);
+    }
+    var importCancel = byId("fileImportCancel");
+    if (importCancel) {
+      importCancel.addEventListener("click", function () {
+        if (isImportPage()) {
+          pendingParsed = null;
+          try {
+            global.close();
+          } catch (err) {}
+          return;
+        }
+        hideDialogs();
+      });
+    }
+    var exportBox = byId("fileExportDialog");
+    if (exportBox) {
+      exportBox.addEventListener("click", function (event) {
+        if (event.target === exportBox) {
+          hideDialogs();
+        }
+      });
+    }
+    var importBox = byId("fileImportDialog");
+    if (importBox) {
+      importBox.addEventListener("click", function (event) {
+        if (event.target === importBox) {
+          hideDialogs();
+        }
+      });
+    }
+    var exportGo = byId("fileExportGo");
+    if (exportGo) {
+      exportGo.addEventListener("click", runExport);
+    }
+    var importGo = byId("fileImportGo");
+    if (importGo) {
+      importGo.addEventListener("click", runImport);
+    }
+    var fileInput = byId("fileImportPicker");
+    if (fileInput) {
+      fileInput.addEventListener("change", onPickFile);
+    }
+    var choose = byId("fileImportChoose");
+    if (choose) {
+      choose.addEventListener("click", clickImportPicker);
+    }
+    var chooseOther = byId("fileImportChooseOther");
+    if (chooseOther) {
+      chooseOther.addEventListener("click", clickImportPicker);
+    }
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        if (isImportPage()) {
+          try {
+            global.close();
+          } catch (err) {}
+          return;
+        }
+        hideDialogs();
+      }
+    });
+  }
+
   function ensureUi() {
+    if (isImportPage()) {
+      bindTransferUi();
+      return;
+    }
     if (byId("fileExportDialog")) {
+      bindTransferUi();
       return;
     }
     var exportBox = document.createElement("div");
@@ -1357,8 +1696,10 @@
       '<div class="dialog-scroll">' +
       '<ul id="fileImportSummary"></ul>' +
       "<p>Import</p>" +
-      '<label><input type="radio" name="fileImportMode" value="all" checked> Everything in the file</label>' +
-      '<label><input type="radio" name="fileImportMode" value="selected"> Selected types</label>' +
+      '<div class="import-mode-list">' +
+      '<label class="radio-option"><input type="radio" name="fileImportMode" value="all" checked> Everything in the file</label>' +
+      '<label class="radio-option"><input type="radio" name="fileImportMode" value="selected"> Selected types</label>' +
+      "</div>" +
       '<div id="fileImportTypes" class="check-grid"></div>' +
       '<p class="section-note">Merges by id. Exact duplicates skip. A newer local record is kept. JSON backups also restore settings, map, templates, and photos.</p>' +
       "</div>" +
@@ -1376,27 +1717,7 @@
     document.body.appendChild(exportBox);
     document.body.appendChild(importBox);
     document.body.appendChild(fileInput);
-
-    byId("fileExportCancel").addEventListener("click", hideDialogs);
-    byId("fileImportCancel").addEventListener("click", hideDialogs);
-    exportBox.addEventListener("click", function (event) {
-      if (event.target === exportBox) {
-        hideDialogs();
-      }
-    });
-    importBox.addEventListener("click", function (event) {
-      if (event.target === importBox) {
-        hideDialogs();
-      }
-    });
-    byId("fileExportGo").addEventListener("click", runExport);
-    byId("fileImportGo").addEventListener("click", runImport);
-    fileInput.addEventListener("change", onPickFile);
-    document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") {
-        hideDialogs();
-      }
-    });
+    bindTransferUi();
   }
 
   function paintExportTypes() {
@@ -1499,10 +1820,11 @@
   }
 
   function openFileImport() {
+    if (!isImportPage() && openImportPopup()) {
+      return;
+    }
     ensureUi();
-    var picker = byId("fileImportPicker");
-    picker.value = "";
-    picker.click();
+    clickImportPicker();
   }
 
   function onPickFile(event) {
@@ -1574,14 +1896,48 @@
     if (!list.childNodes.length) {
       setStatus("That file has no importable records.");
       pendingParsed = null;
+      scheduleFitImportWindow();
       return;
     }
     var all = document.querySelector('input[name="fileImportMode"][value="all"]');
     if (all) {
       all.checked = true;
     }
-    hideDialogs();
-    byId("fileImportDialog").hidden = false;
+    var empty = byId("fileImportEmpty");
+    var confirmBox = byId("fileImportConfirm");
+    if (empty) {
+      empty.hidden = true;
+    }
+    if (confirmBox) {
+      confirmBox.hidden = false;
+    }
+    if (!isImportPage()) {
+      hideDialogs();
+      var dialog = byId("fileImportDialog");
+      if (dialog) {
+        dialog.hidden = false;
+      }
+      return;
+    }
+    scheduleFitImportWindow();
+  }
+
+  function withTimeout(promise, ms, message) {
+    return new Promise(function (resolve, reject) {
+      var timer = global.setTimeout(function () {
+        reject(new Error(message || "Timed out."));
+      }, ms);
+      promise.then(
+        function (value) {
+          global.clearTimeout(timer);
+          resolve(value);
+        },
+        function (error) {
+          global.clearTimeout(timer);
+          reject(error);
+        }
+      );
+    });
   }
 
   async function runImport() {
@@ -1605,21 +1961,46 @@
       setStatus("Pick at least one record type to import.");
       return;
     }
-    var parsed = pendingParsed;
-    if (types.indexOf("bookin") !== -1) {
-      try {
-        await ensureCanonicalBookInStore();
-      } catch (error) {
-        console.error(error);
-      }
+    var go = byId("fileImportGo");
+    if (go) {
+      go.disabled = true;
     }
-    var result = applyImport(parsed, types);
+    setStatus("Importing…");
+    var parsed = pendingParsed;
+    var result;
+    try {
+      result = applyImport(parsed, types);
+    } catch (error) {
+      if (go) {
+        go.disabled = false;
+      }
+      setStatus(
+        (error && error.message) || "Import failed."
+      );
+      return;
+    }
+    try {
+      if (
+        isImportPage() &&
+        global.opener &&
+        !global.opener.closed &&
+        global.opener.COPDoc &&
+        global.opener.COPDoc.transfer &&
+        typeof global.opener.COPDoc.transfer.applyImport === "function"
+      ) {
+        global.opener.COPDoc.transfer.applyImport(parsed, types);
+      }
+    } catch (errOpener) {}
     if (
       types.indexOf("bookin") !== -1 &&
       !result.bookinPromotionAttempted
     ) {
       try {
-        await ensureCanonicalBookInStore();
+        await withTimeout(
+          ensureCanonicalBookInStore(),
+          8000,
+          "Timed out loading the case model."
+        );
         addPromotionStats(result, promoteStoredBookInCases());
         if (!result.bookinPromotionAttempted) {
           result.error =
@@ -1660,6 +2041,9 @@
                 caseNote
               : "")
         );
+        if (go) {
+          go.disabled = false;
+        }
       } else {
         setStatus(
           "Imported " +
@@ -1673,6 +2057,20 @@
             (mediaNote || ""),
           true
         );
+      }
+      if (isImportPage()) {
+        if (wrote || parsed.settings || parsed.map || parsed.templates) {
+          notifyOpenerImported();
+          window.setTimeout(
+            function () {
+              try {
+                global.close();
+              } catch (err) {}
+            },
+            result.error ? 1600 : 600
+          );
+        }
+        return;
       }
       if (wrote || parsed.settings || parsed.map || parsed.templates) {
         window.setTimeout(function () {
@@ -1718,13 +2116,61 @@
     inRange: inRange,
     jsonEqual: jsonEqual,
     openFileExport: openFileExport,
-    openFileImport: openFileImport
+    openFileImport: openFileImport,
+    loadModelScript: loadModelScript
   };
 
   var root = (global.COPDoc = global.COPDoc || {});
   root.transfer = api;
   global.openFileExport = openFileExport;
   global.openFileImport = openFileImport;
+
+  function listenImportDone() {
+    if (typeof window === "undefined" || isImportPage()) {
+      return;
+    }
+    if (typeof window.addEventListener !== "function") {
+      return;
+    }
+    var reloading = false;
+    function reloadHome() {
+      if (reloading) {
+        return;
+      }
+      reloading = true;
+      window.location.reload();
+    }
+    window.addEventListener("message", function (event) {
+      if (!event.data || event.data.type !== "copdocx-import-done") {
+        return;
+      }
+      reloadHome();
+    });
+    window.addEventListener("storage", function (event) {
+      if (event.key !== "copdocx.import.done.v1") {
+        return;
+      }
+      reloadHome();
+    });
+  }
+
+  if (typeof document !== "undefined") {
+    function bootTransferPage() {
+      if (isImportPage()) {
+        ensureUi();
+        scheduleFitImportWindow();
+        if (typeof global.addEventListener === "function") {
+          global.addEventListener("load", scheduleFitImportWindow, { once: true });
+        }
+      }
+      listenImportDone();
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", bootTransferPage);
+    } else {
+      bootTransferPage();
+    }
+  }
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Oracle</title>
+    <link rel="stylesheet" href="style/style.css" />
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/privacy-gate.js"></script>
+  </head>
+  <body data-page="oracle">
+    <!--
+      Read-only analysis. Does not write leads, encounters, admin, or book-in.
+    -->
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span
+          id="appVersion"
+          class="app-version"
+          data-version="0.69.2"
+        >
+          Version 0.69.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+
+    <div class="page page-wide page-oracle">
+      <header class="page-header">
+        <h1>Oracle</h1>
+        <div class="page-meta">
+          <p>
+            Cop stop vs dynamic. Hit is whether a stop produced an arrest.
+            Yield is arrests per stop. Map uses completed encounter pins.
+          </p>
+        </div>
+      </header>
+
+      <fieldset class="card-static oracle-context">
+        <legend>Scope</legend>
+        <div class="oracle-context-row">
+          <div>
+            <p class="section-note">Period</p>
+            <div class="record-filter-chips" role="group" aria-label="Reporting period">
+              <button type="button" data-oracle-period="today" aria-pressed="true">Today</button>
+              <button type="button" data-oracle-period="week" aria-pressed="false">This week</button>
+              <button type="button" data-oracle-period="fy" aria-pressed="false">This FY</button>
+              <button type="button" data-oracle-period="custom" aria-pressed="false">Custom</button>
+            </div>
+          </div>
+          <div id="oracleCustomDates" class="oracle-custom-dates" hidden>
+            <label for="oracleFrom">From</label>
+            <input type="date" id="oracleFrom" />
+            <label for="oracleTo">To</label>
+            <input type="date" id="oracleTo" />
+          </div>
+          <div class="field">
+            <label for="oracleTeam">Team</label>
+            <select id="oracleTeam">
+              <option value="">All teams</option>
+            </select>
+          </div>
+        </div>
+        <p class="section-note" id="oracleBasisNote">
+          Stops use completed encounter start. Volume X uses booked arrest date.
+          Cop stop = vehicle / consensual / knock-and-talk / collateral contact.
+          Dynamic = targeted arrest / at-large. Worksite is other.
+        </p>
+      </fieldset>
+
+      <p class="oracle-sentence" id="oracleSentence">No filed arrests in this period.</p>
+      <p class="oracle-sentence-meta" id="oracleSentenceMeta"></p>
+
+      <div class="stat-row" aria-label="Volume">
+        <article class="stat-card">
+          <p class="stat-label">Subjects arrested</p>
+          <p id="oracleStatArrests" class="stat-value">—</p>
+          <p class="stat-hint">Booked arrest episodes</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Encounters with arrests</p>
+          <p id="oracleStatEncountersWithArrests" class="stat-value">—</p>
+          <p class="stat-hint">Y in “X in Y”</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Completed stops</p>
+          <p id="oracleStatCompleted" class="stat-value">—</p>
+          <p class="stat-hint">Locked snapshots</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Unmapped stops</p>
+          <p id="oracleStatUnmapped" class="stat-value">—</p>
+          <p class="stat-hint">Completed, no pin</p>
+        </article>
+      </div>
+
+      <fieldset class="card-static">
+        <legend>Cop stop vs dynamic</legend>
+        <p class="section-note" id="oracleBoardNote">
+          Same six rates on both families. Hit ≠ yield. Worksite/other stays out of both columns.
+        </p>
+        <div class="records-table-wrap">
+          <table class="records-table oracle-board">
+            <thead>
+              <tr>
+                <th>Rate</th>
+                <th>Cop stop</th>
+                <th>Dynamic</th>
+                <th>All stops</th>
+              </tr>
+            </thead>
+            <tbody id="oracleBoardBody"></tbody>
+          </table>
+        </div>
+        <p class="oracle-share" id="oracleShare"></p>
+        <p class="section-note" id="oracleOtherNote"></p>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Team comparison</legend>
+        <p class="section-note">
+          All teams in the period, even if scope is one team. Default sort is yield, not raw arrests.
+          Click a row to filter the rest of the page to that team.
+        </p>
+        <div class="record-filter-chips" role="group" aria-label="Team sort">
+          <button type="button" data-oracle-team-sort="yield" aria-pressed="true">Sort by yield</button>
+          <button type="button" data-oracle-team-sort="hit" aria-pressed="false">Hit rate</button>
+          <button type="button" data-oracle-team-sort="perDay" aria-pressed="false">Arrests / active day</button>
+          <button type="button" data-oracle-team-sort="raw" aria-pressed="false">Raw arrests</button>
+        </div>
+        <p class="section-note" id="oracleTeamNote"></p>
+        <div id="oracleTeamEmpty" class="records-empty">No completed stops to compare.</div>
+        <div id="oracleTeamWrap" class="records-table-wrap" hidden>
+          <table class="records-table oracle-board">
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th>Stops</th>
+                <th>Arrests</th>
+                <th>Hit</th>
+                <th>Yield</th>
+                <th>Per active day</th>
+                <th>Cop yield</th>
+                <th>Dynamic yield</th>
+                <th>Flee</th>
+                <th>Empty</th>
+                <th>Index</th>
+              </tr>
+            </thead>
+            <tbody id="oracleTeamBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Spread</legend>
+        <p class="section-note" id="oracleSpreadNote">
+          Mean is the average. Median is the middle value. SD is sample standard deviation.
+        </p>
+        <div class="stat-row oracle-spread-row" aria-label="Arrests per active day">
+          <article class="stat-card">
+            <p class="stat-label">Arrests / active day · mean</p>
+            <p id="oracleSpreadDayMean" class="stat-value">—</p>
+            <p class="stat-hint">Average on days with a stop</p>
+          </article>
+          <article class="stat-card">
+            <p class="stat-label">Median</p>
+            <p id="oracleSpreadDayMedian" class="stat-value">—</p>
+            <p class="stat-hint">Middle active day</p>
+          </article>
+          <article class="stat-card">
+            <p class="stat-label">SD</p>
+            <p id="oracleSpreadDaySd" class="stat-value">—</p>
+            <p class="stat-hint">n=<span id="oracleSpreadDayN">—</span></p>
+          </article>
+        </div>
+        <div class="stat-row oracle-spread-row" aria-label="Arrests per calendar day">
+          <article class="stat-card">
+            <p class="stat-label">Arrests / calendar day · mean</p>
+            <p id="oracleSpreadCalMean" class="stat-value">—</p>
+            <p class="stat-hint">Includes days with zero stops</p>
+          </article>
+          <article class="stat-card">
+            <p class="stat-label">Median</p>
+            <p id="oracleSpreadCalMedian" class="stat-value">—</p>
+            <p class="stat-hint">Middle calendar day</p>
+          </article>
+          <article class="stat-card">
+            <p class="stat-label">SD</p>
+            <p id="oracleSpreadCalSd" class="stat-value">—</p>
+            <p class="stat-hint">n=<span id="oracleSpreadCalN">—</span></p>
+          </article>
+        </div>
+        <div class="stat-row oracle-spread-row" aria-label="Yield per stop">
+          <article class="stat-card">
+            <p class="stat-label">Yield / stop · mean</p>
+            <p id="oracleSpreadYieldMean" class="stat-value">—</p>
+            <p class="stat-hint">Average arrests on one stop</p>
+          </article>
+          <article class="stat-card">
+            <p class="stat-label">Median</p>
+            <p id="oracleSpreadYieldMedian" class="stat-value">—</p>
+            <p class="stat-hint">Middle stop</p>
+          </article>
+          <article class="stat-card">
+            <p class="stat-label">SD</p>
+            <p id="oracleSpreadYieldSd" class="stat-value">—</p>
+            <p class="stat-hint">n=<span id="oracleSpreadYieldN">—</span></p>
+          </article>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static oracle-explain">
+        <legend>This number</legend>
+        <p id="oracleExplain" class="section-note"></p>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>GEOINT</legend>
+        <div class="oracle-map-controls">
+          <div class="record-filter-chips" role="group" aria-label="Map family">
+            <button type="button" data-oracle-map-family="all" aria-pressed="true">All</button>
+            <button type="button" data-oracle-map-family="cop" aria-pressed="false">Cop</button>
+            <button type="button" data-oracle-map-family="dynamic" aria-pressed="false">Dynamic</button>
+          </div>
+          <div class="record-filter-chips" role="group" aria-label="Map layer">
+            <button type="button" data-oracle-map-layer="both" aria-pressed="true">Dots + cells</button>
+            <button type="button" data-oracle-map-layer="dots" aria-pressed="false">Dots</button>
+            <button type="button" data-oracle-map-layer="cells" aria-pressed="false">Cells</button>
+          </div>
+          <div class="record-filter-chips" role="group" aria-label="Cell metric">
+            <button type="button" data-oracle-map-metric="hit" aria-pressed="true">Hit</button>
+            <button type="button" data-oracle-map-metric="yield" aria-pressed="false">Yield</button>
+            <button type="button" data-oracle-map-metric="flee" aria-pressed="false">Flee</button>
+            <button type="button" data-oracle-map-metric="empty" aria-pressed="false">Empty</button>
+          </div>
+          <div class="record-filter-chips" role="group" aria-label="Dot outcome">
+            <button type="button" data-oracle-map-outcome="all" aria-pressed="true">All outcomes</button>
+            <button type="button" data-oracle-map-outcome="hit" aria-pressed="false">Hits</button>
+            <button type="button" data-oracle-map-outcome="empty" aria-pressed="false">Empty</button>
+            <button type="button" data-oracle-map-outcome="flee" aria-pressed="false">Fled</button>
+          </div>
+        </div>
+        <p class="section-note" id="oracleMapNote">
+          Teal = cop stop. Amber = dynamic. Hollow = empty-handed. Red ring = someone fled.
+          Cells under 3 stops stay faint.
+        </p>
+        <div id="oracleMap" class="oracle-map" role="img" aria-label="Completed stop pins"></div>
+        <p class="section-note" id="oracleMapCoverage"></p>
+      </fieldset>
+
+      <div class="oracle-split">
+        <fieldset class="card-static">
+          <legend>By city</legend>
+          <p class="section-note">Hit and yield for mapped completed stops. Click a row to zoom.</p>
+          <div id="oraclePlaceEmpty" class="records-empty">No mapped stops in this period.</div>
+          <div id="oraclePlaceWrap" class="records-table-wrap" hidden>
+            <table class="records-table">
+              <thead>
+                <tr>
+                  <th>City</th>
+                  <th>Stops</th>
+                  <th>Hit</th>
+                  <th>Yield</th>
+                  <th>Flee</th>
+                  <th>Cop</th>
+                  <th>Dynamic</th>
+                </tr>
+              </thead>
+              <tbody id="oraclePlaceBody"></tbody>
+            </table>
+          </div>
+        </fieldset>
+        <fieldset class="card-static">
+          <legend>Unlocated</legend>
+          <p class="section-note" id="oracleUnlocatedNote">Completed stops with no pin. They stay in the rates.</p>
+          <ul id="oracleUnlocated" class="dash-preview" hidden></ul>
+        </fieldset>
+      </div>
+
+      <fieldset class="card-static">
+        <legend>By weekday</legend>
+        <p class="section-note">
+          Local weekday of the completed stop. Normalize so FY Fridays are not “best” just because there are more of them.
+        </p>
+        <div class="record-filter-chips" role="group" aria-label="Normalize">
+          <button type="button" data-oracle-norm="raw" aria-pressed="true">Raw arrests</button>
+          <button type="button" data-oracle-norm="perStop" aria-pressed="false">Per stop</button>
+          <button type="button" data-oracle-norm="perWeekday" aria-pressed="false">Per weekday in range</button>
+          <button type="button" data-oracle-norm="index" aria-pressed="false">Index 100 = mean</button>
+          <button type="button" data-oracle-norm="z" aria-pressed="false">Z-score</button>
+        </div>
+        <p class="section-note" id="oracleWeekdayNote"></p>
+        <div class="records-table-wrap">
+          <table class="records-table oracle-board">
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Stops</th>
+                <th>Arrests</th>
+                <th>Hit</th>
+                <th>Cop yield</th>
+                <th>Dynamic yield</th>
+                <th>Normalized</th>
+              </tr>
+            </thead>
+            <tbody id="oracleWeekdayBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+
+      <fieldset class="card-static">
+        <legend>Location × weekday</legend>
+        <p class="section-note">
+          Same normalize chips as above. Mapped completed stops only. Click a city to zoom the map.
+        </p>
+        <div id="oraclePlaceDayEmpty" class="records-empty">No mapped stops in this period.</div>
+        <div id="oraclePlaceDayWrap" class="records-table-wrap" hidden>
+          <table class="records-table oracle-heat">
+            <thead>
+              <tr>
+                <th>City</th>
+                <th>Sun</th>
+                <th>Mon</th>
+                <th>Tue</th>
+                <th>Wed</th>
+                <th>Thu</th>
+                <th>Fri</th>
+                <th>Sat</th>
+              </tr>
+            </thead>
+            <tbody id="oraclePlaceDayBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+
+      <div class="oracle-split">
+        <fieldset class="card-static">
+          <legend>Last 14 days</legend>
+          <p class="section-note">Booked arrests by local day. Team filter applies.</p>
+          <div id="oracleSpark" class="oracle-spark" aria-label="Arrests by day"></div>
+        </fieldset>
+        <fieldset class="card-static">
+          <legend>Quality</legend>
+          <p class="section-note" id="oracleQualityNote">No quality flags in this period.</p>
+          <ul id="oracleQuality" class="dash-preview" hidden></ul>
+        </fieldset>
+      </div>
+
+      <div class="oracle-split">
+        <fieldset class="card-static">
+          <legend>Disposition</legend>
+          <div id="oracleMixDisposition" class="oracle-mix"></div>
+        </fieldset>
+        <fieldset class="card-static">
+          <legend>Event type</legend>
+          <div id="oracleMixEvent" class="oracle-mix"></div>
+        </fieldset>
+        <fieldset class="card-static">
+          <legend>Citizenship</legend>
+          <div id="oracleMixCountry" class="oracle-mix"></div>
+        </fieldset>
+        <fieldset class="card-static">
+          <legend>Role on the stop</legend>
+          <div id="oracleMixRole" class="oracle-mix"></div>
+        </fieldset>
+      </div>
+
+      <fieldset class="card-static">
+        <legend>Contributing arrests</legend>
+        <p class="section-note" id="oracleTableNote">
+          One row per booked arrest. Family comes from the linked encounter type.
+        </p>
+        <div id="oracleTableEmpty" class="records-empty">No filed arrests in this period.</div>
+        <div id="oracleTableWrap" class="records-table-wrap" hidden>
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Subject</th>
+                <th>Family</th>
+                <th>Role</th>
+                <th>Disposition</th>
+                <th>Country</th>
+                <th>Encounter</th>
+                <th>Team</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="oracleTableBody"></tbody>
+          </table>
+        </div>
+      </fieldset>
+    </div>
+
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="data/countries.js"></script>
+    <script src="data/immigration.js"></script>
+    <script src="data/encounter-catalogs.js"></script>
+    <script src="functions/model/util.js"></script>
+    <script src="functions/model/lead.js"></script>
+    <script src="functions/model/person.js"></script>
+    <script src="functions/model/location.js"></script>
+    <script src="functions/model/vehicle.js"></script>
+    <script src="functions/model/encounter.js"></script>
+    <script src="functions/model/store.js"></script>
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="assets/icons/copdoc-icons.js"></script>
+    <script src="functions/oracle.js"></script>
+  </body>
+</html>
