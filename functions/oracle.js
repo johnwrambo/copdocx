@@ -215,16 +215,89 @@
     return [name.lastName, given].filter(Boolean).join(", ") || "Unnamed subject";
   }
 
-  function subjectForPerson(encounter, personId) {
+  function subjectForPerson(encounter, personId, subjectId, bookingId, leadId) {
     var id = text(personId);
-    var subjects = (encounter && encounter.subjects) || [];
-    var i;
-    for (i = 0; i < subjects.length; i++) {
-      if (subjects[i] && text(subjects[i].personId) === id) {
-        return subjects[i];
-      }
+    var ownerLeadId = text(leadId);
+    var canonicalSubjectId = text(subjectId);
+    var canonicalBookingId = text(bookingId);
+    var subjects = Array.isArray(encounter && encounter.subjects)
+      ? encounter.subjects
+      : [];
+    function subjectBookingId(subject) {
+      return text(subject && (subject.bookingId || subject.bookinRecordId));
     }
-    return null;
+    function bookingIsCompatible(subject, subjectIndex) {
+      if (!canonicalBookingId) {
+        return true;
+      }
+      var ownedBookingId = subjectBookingId(subject);
+      if (ownedBookingId && ownedBookingId !== canonicalBookingId) {
+        return false;
+      }
+      return !subjects.some(function (other, index) {
+        return (
+          index !== subjectIndex &&
+          subjectBookingId(other) === canonicalBookingId
+        );
+      });
+    }
+    if (canonicalSubjectId) {
+      var subjectMatches = [];
+      subjects.forEach(function (subject, index) {
+        if (subject && text(subject.subjectId) === canonicalSubjectId) {
+          subjectMatches.push({ subject: subject, index: index });
+        }
+      });
+      if (subjectMatches.length !== 1) {
+        return null;
+      }
+      var exactSubject = subjectMatches[0].subject;
+      var subjectPersonId = text(exactSubject.personId);
+      var subjectLeadId = text(exactSubject.leadId);
+      var anotherOwnsPerson =
+        !subjectPersonId &&
+        id &&
+        subjects.some(function (other, index) {
+          return (
+            index !== subjectMatches[0].index &&
+            text(other && other.personId) === id
+          );
+        });
+      var anotherOwnsLead =
+        !subjectLeadId &&
+        ownerLeadId &&
+        subjects.some(function (other, index) {
+          return (
+            index !== subjectMatches[0].index &&
+            text(other && other.leadId) === ownerLeadId
+          );
+        });
+      if (
+        anotherOwnsPerson ||
+        anotherOwnsLead ||
+        (subjectPersonId && subjectPersonId !== id) ||
+        (subjectLeadId && ownerLeadId && subjectLeadId !== ownerLeadId) ||
+        !bookingIsCompatible(exactSubject, subjectMatches[0].index)
+      ) {
+        return null;
+      }
+      return exactSubject;
+    }
+    var personMatches = [];
+    subjects.forEach(function (subject, index) {
+      if (
+        subject &&
+        id &&
+        text(subject.personId) === id &&
+        (!text(subject.leadId) ||
+          !ownerLeadId ||
+          text(subject.leadId) === ownerLeadId) &&
+        bookingIsCompatible(subject, index)
+      ) {
+        personMatches.push(subject);
+      }
+    });
+    return personMatches.length === 1 ? personMatches[0] : null;
   }
 
   function countMapInc(map, key) {
@@ -549,7 +622,22 @@
         }
         var encounterId = text(arrest.encounterId || arrest.encounterNumber);
         var encounter = encounterId ? encounterById[encounterId] : null;
-        var subject = encounter ? subjectForPerson(encounter, person.personId) : null;
+        var arrestBookingClaims = [];
+        [arrest.bookingId, arrest.bookinRecordId].forEach(function (value) {
+          value = text(value);
+          if (value && arrestBookingClaims.indexOf(value) === -1) {
+            arrestBookingClaims.push(value);
+          }
+        });
+        var subject = encounter && arrestBookingClaims.length <= 1
+          ? subjectForPerson(
+              encounter,
+              person.personId,
+              arrest.subjectId,
+              arrestBookingClaims[0] || "",
+              lead.leadId
+            )
+          : null;
         var role = text(
           (subject && subject.encounterRole) || arrest.subjectRole
         ).toUpperCase();
@@ -563,6 +651,7 @@
         rows.push({
           leadId: text(lead.leadId),
           personId: text(person.personId),
+          subjectId: text((subject && subject.subjectId) || arrest.subjectId),
           arrestId: text(arrest.arrestId),
           name: personName(person),
           date: dateKey(arrest.arrestDate || arrest.arrestDateTime),

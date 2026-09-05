@@ -33,7 +33,12 @@
     },
     {
       "id": "S0-BOOKIN-002",
-      "title": "Deleting a Book-In packet leaves active Encounter and Arrest references",
+      "title": "Deleting a Book-In packet leaves its active Encounter subject booking reference",
+      "expectedCurrentState": "risk_reproduced"
+    },
+    {
+      "id": "S0-BOOKIN-003",
+      "title": "Deleting a Book-In packet leaves its historical Arrest booking reference",
       "expectedCurrentState": "risk_reproduced"
     },
     {

@@ -1570,6 +1570,82 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       return normalized;
     }
 
+    function normalizeImportedIdentifier(value, label) {
+      const normalized = normalizeImportedMetadataValue(value, label).trim();
+      if (normalized.length > 200) {
+        throw new Error(`${label} is too long.`);
+      }
+      return normalized;
+    }
+
+    function importedArrestFieldPresence(record) {
+      const formState = isPlainRecordObject(record?.formState)
+        ? record.formState
+        : {};
+      const hasAny = (directKeys, formKeys) =>
+        directKeys.some(key => Object.prototype.hasOwnProperty.call(record, key)) ||
+        formKeys.some(key => Object.prototype.hasOwnProperty.call(formState, key));
+      const hasDate = hasAny(
+        ["arrestDate", "arrestDateTime", "bookInDateTime", "dateTime"],
+        ["dateTime", "date_time"]
+      );
+      return {
+        arrestDate: hasDate,
+        arrestTime: hasAny(
+          ["arrestTime"],
+          ["arrestTime", "arrest_time", "arrestTimeManual", "arrest_time_manual"]
+        ),
+        arrestDateTime:
+          hasDate || hasAny(["arrestTime"], ["arrestTime", "arrest_time"]),
+        arrestingOfficer: hasAny(
+          ["arrestingOfficer", "officersName"],
+          ["arrestingOfficer", "officersName", "officers_name"]
+        ),
+        team: hasAny(["team"], ["team"]),
+        iceEventNumber: hasAny(
+          ["iceEventNumber", "iceEvent"],
+          ["iceEventNumber", "iceEvent", "ice_event"]
+        ),
+        encounterNumber: hasAny(
+          ["encounterNumber"],
+          ["encounterNumber", "encounter_number"]
+        ),
+        encounterId: hasAny(["encounterId"], []),
+        subjectRole: hasAny(
+          ["subjectRole", "encounterRole"],
+          [
+            "subject_role_target",
+            "subject_role_collateral",
+            "encounterRoleTarget",
+            "encounterRoleCollateral"
+          ]
+        ),
+        vehiclePosition: hasAny(
+          ["vehiclePosition"],
+          ["vehiclePosition", "vehicle_position"]
+        ),
+        bookInDateTime: hasDate,
+        booking: hasAny(
+          ["booking", "cash", "travelDocs", "propertyTag", "cellNum", "children"],
+          [
+            "cash",
+            "travelDocs",
+            "travel_docs",
+            "propertyTag",
+            "property_tag",
+            "cellNum",
+            "cell_num",
+            "children",
+            "medicalIssues",
+            "medical_issues",
+            "medicine",
+            "additionalObservations",
+            "additional_observations"
+          ]
+        )
+      };
+    }
+
     function normalizeImportedFormState(
       formState,
       recordNumber,
@@ -1650,6 +1726,27 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           `Imported record ${recordNumber} has an invalid record ID.`
         );
       }
+
+      const bookingClaims = [
+        id,
+        normalizeImportedIdentifier(
+          record.bookingId,
+          `Imported record ${recordNumber} booking`
+        ),
+        normalizeImportedIdentifier(
+          record.bookinRecordId,
+          `Imported record ${recordNumber} Book-In reference`
+        )
+      ].filter((value, claimIndex, values) =>
+        value && values.indexOf(value) === claimIndex
+      );
+      if (bookingClaims.length !== 1) {
+        throw new Error(
+          `Imported record ${recordNumber} has contradictory booking identifiers.`
+        );
+      }
+
+      const arrestFieldPresence = importedArrestFieldPresence(record);
 
       const formState = normalizeImportedFormState(
         record.formState,
@@ -1791,26 +1888,37 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           getImportedStateValue(formState, "case_type", record.caseType)
         ),
         team: getImportedStateValue(formState, "team", record.team),
-        encounterId: normalizeImportedMetadataValue(
+        encounterId: normalizeImportedIdentifier(
           record.encounterId,
           `Imported record ${recordNumber} encounter`
+        ),
+        subjectId: normalizeImportedIdentifier(
+          record.subjectId,
+          `Imported record ${recordNumber} encounter subject`
         ),
         encounterRole:
           importedRole === "TARGET" || importedRole === "COLLATERAL"
             ? importedRole
             : "",
-        leadId: normalizeImportedMetadataValue(
+        leadId: normalizeImportedIdentifier(
           record.leadId,
           `Imported record ${recordNumber} lead`
         ),
-        personId: normalizeImportedMetadataValue(
+        personId: normalizeImportedIdentifier(
           record.personId,
           `Imported record ${recordNumber} person`
         ),
-        arrestId: normalizeImportedMetadataValue(
+        arrestId: normalizeImportedIdentifier(
           record.arrestId,
           `Imported record ${recordNumber} arrest`
         ),
+        encounterProjectionFiledAt: normalizeImportedTimestamp(
+          record.encounterProjectionFiledAt,
+          "",
+          `Imported record ${recordNumber} Encounter projection date`
+        ),
+        encounterProjectionDraft: record.encounterProjectionDraft === true,
+        __copdocImportArrestFieldPresence: arrestFieldPresence,
         formState
       };
     }
@@ -1956,6 +2064,16 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         delete copy.personId;
         delete copy.arrestId;
         delete copy.canonicalizedAt;
+        delete copy.__copdocImportArrestFieldPresence;
+        if (!String(copy.subjectId || "").trim()) {
+          delete copy.subjectId;
+        }
+        if (!String(copy.encounterProjectionFiledAt || "").trim()) {
+          delete copy.encounterProjectionFiledAt;
+        }
+        if (copy.encounterProjectionDraft !== true) {
+          delete copy.encounterProjectionDraft;
+        }
         return copy;
       };
       return JSON.stringify(comparable(left)) === JSON.stringify(comparable(right));
@@ -1971,6 +2089,71 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       return id;
     }
 
+    function detachImportedCanonicalLinks(record, replacementId) {
+      const copy = { ...(record || {}) };
+      delete copy.__copdocImportArrestFieldPresence;
+      if (replacementId) {
+        copy.id = replacementId;
+      }
+      delete copy.bookingId;
+      delete copy.bookinRecordId;
+      copy.encounterId = "";
+      copy.encounterRole = "";
+      copy.subjectRole = "";
+      copy.vehiclePosition = "";
+      copy.subjectId = "";
+      copy.personId = "";
+      copy.leadId = "";
+      copy.arrestId = "";
+      delete copy.encounterProjectionFiledAt;
+      copy.encounterProjectionDraft = true;
+      return copy;
+    }
+
+    function stripImportedControlFields(record) {
+      const copy = { ...(record || {}) };
+      delete copy.__copdocImportArrestFieldPresence;
+      return copy;
+    }
+
+    function alignImportedPacketProjection(record) {
+      if (!record || !isPlainRecordObject(record.formState)) {
+        return record;
+      }
+      const role = String(record.encounterRole || record.subjectRole || "")
+        .trim()
+        .toUpperCase();
+      if (role === "TARGET" || role === "COLLATERAL") {
+        record.encounterRole = role;
+        record.subjectRole = role;
+        [
+          ["encounterRoleTarget", "TARGET"],
+          ["encounterRoleCollateral", "COLLATERAL"],
+          ["subject_role_target", "TARGET"],
+          ["subject_role_collateral", "COLLATERAL"]
+        ].forEach(([id, value]) => {
+          if (id.startsWith("encounterRole") || record.formState[id]) {
+            record.formState[id] = {
+              checked: role === value,
+              type: "radio",
+              value
+            };
+          }
+        });
+      }
+      const occupant = String(record.vehiclePosition || "").trim();
+      if (occupant) {
+        setRecordFormStateValue(
+          record,
+          "vehiclePosition",
+          "vehicle_position",
+          occupant,
+          "select-one"
+        );
+      }
+      return record;
+    }
+
     function mergeImportedRecords(existingRecords, importedRecords) {
       const merged = [...existingRecords];
       const existingById = new Map(
@@ -1980,6 +2163,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       let importedCount = 0;
       let duplicateCount = 0;
       let conflictCount = 0;
+      const promotionRecordIds = [];
 
       importedRecords.forEach(record => {
         const existing = existingById.get(record.id);
@@ -1989,6 +2173,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           existingById.set(record.id, record);
           usedIds.add(record.id);
           importedCount += 1;
+          promotionRecordIds.push(record.id);
           return;
         }
 
@@ -1997,27 +2182,29 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           return;
         }
 
-        const conflictCopy = {
-          ...record,
-          id: createUniqueImportedRecordId(usedIds)
-        };
+        const conflictCopy = detachImportedCanonicalLinks(
+          record,
+          createUniqueImportedRecordId(usedIds)
+        );
 
         merged.push(conflictCopy);
         existingById.set(conflictCopy.id, conflictCopy);
         usedIds.add(conflictCopy.id);
         importedCount += 1;
         conflictCount += 1;
+        promotionRecordIds.push(conflictCopy.id);
       });
 
       return {
         records: merged,
         importedCount,
         duplicateCount,
-        conflictCount
+        conflictCount,
+        promotionRecordIds
       };
     }
 
-    function promoteRecordsToCases(records) {
+    function promoteRecordsToCases(records, options) {
       const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
       if (!store || typeof store.promoteBookInRecords !== "function") {
         return {
@@ -2031,7 +2218,75 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         };
       }
       store.loadFromDisk();
-      return store.promoteBookInRecords(records);
+      return store.promoteBookInRecords(records, options || {});
+    }
+
+    function promoteImportRecords(records, requestedRecordIds) {
+      const source = Array.isArray(records) ? records : [];
+      const requested = Array.isArray(requestedRecordIds)
+        ? new Set(requestedRecordIds)
+        : null;
+      const eligible = source.filter(record => {
+        const quietDraft = Boolean(
+          record &&
+          record.encounterProjectionDraft === true &&
+          !String(record.encounterProjectionFiledAt || "").trim() &&
+          !String(record.arrestId || "").trim()
+        );
+        return (
+          record &&
+          (!requested || requested.has(record.id)) &&
+          !quietDraft
+        );
+      });
+      if (!eligible.length) {
+        return {
+          ok: true,
+          rows: source.map(stripImportedControlFields),
+          promoted: 0,
+          created: 0,
+          reused: 0,
+          failed: 0,
+          errors: []
+        };
+      }
+      const promoted = promoteRecordsToCases(eligible, {
+        preserveMissingArrestFields: true
+      });
+      const promotedById = new Map(
+        (promoted.rows || []).map(record => [record.id, record])
+      );
+      const failedIds = new Set(
+        (promoted.errors || [])
+          .map(error => String((error && error.recordId) || "").trim())
+          .filter(Boolean)
+      );
+      const unidentifiedFailures = Boolean(
+        promoted.failed && !failedIds.size
+      );
+      return {
+        ...promoted,
+        rows: source.map(record => {
+          if (
+            record &&
+            (!requested || requested.has(record.id)) &&
+            !(
+              record.encounterProjectionDraft === true &&
+              !String(record.encounterProjectionFiledAt || "").trim() &&
+              !String(record.arrestId || "").trim()
+            ) &&
+            (failedIds.has(record.id) || unidentifiedFailures)
+          ) {
+            return detachImportedCanonicalLinks(record);
+          }
+          const promotedRecord = promotedById.get(record.id);
+          return stripImportedControlFields(
+            promotedRecord
+              ? alignImportedPacketProjection(promotedRecord)
+              : record
+          );
+        })
+      };
     }
 
     function promotionStatusText(summary) {
@@ -2057,6 +2312,103 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       return pieces.length ? ` ${pieces.join("; ")}.` : "";
     }
 
+    function omittedCanonicalRecordsForReplace(existingRecords, importedRecords) {
+      const incomingIds = new Set(
+        (Array.isArray(importedRecords) ? importedRecords : [])
+          .map(record => String((record && record.id) || "").trim())
+          .filter(Boolean)
+      );
+      const modelApi = window.COPDoc && COPDoc.model;
+      const store = modelApi && modelApi.store;
+      if (store && typeof store.loadFromDisk === "function") {
+        store.loadFromDisk();
+      }
+      const workspace =
+        store && typeof store.getState === "function" ? store.getState() : {};
+      const activelyOwnedBookings = new Set();
+      Object.values((workspace && workspace.encounters) || {}).forEach(encounter => {
+        (Array.isArray(encounter && encounter.subjects)
+          ? encounter.subjects
+          : []
+        ).forEach(subject => {
+          const claims = [subject && subject.bookingId, subject && subject.bookinRecordId]
+            .map(value => String(value || "").trim())
+            .filter((value, index, values) =>
+              value && values.indexOf(value) === index
+            );
+          if (claims.length === 1) {
+            activelyOwnedBookings.add(claims[0]);
+          }
+        });
+      });
+      return (Array.isArray(existingRecords) ? existingRecords : []).filter(record => {
+        const id = String((record && record.id) || "").trim();
+        if (!id || incomingIds.has(id)) {
+          return false;
+        }
+        return Boolean(
+          String(record.encounterProjectionFiledAt || "").trim() ||
+          String(record.arrestId || "").trim() ||
+          activelyOwnedBookings.has(id) ||
+          (
+            String(record.encounterId || "").trim() &&
+            String(record.subjectId || "").trim()
+          )
+        );
+      });
+    }
+
+    function prepareCanonicalReplaceRecords(existingRecords, importedRecords) {
+      const existingById = new Map(
+        (Array.isArray(existingRecords) ? existingRecords : []).map(record => [
+          String((record && record.id) || "").trim(),
+          record
+        ])
+      );
+      const immutableFields = [
+        "encounterId",
+        "subjectId",
+        "leadId",
+        "personId",
+        "arrestId"
+      ];
+      return (Array.isArray(importedRecords) ? importedRecords : []).map(record => {
+        const next = { ...(record || {}) };
+        const id = String(next.id || "").trim();
+        const current = existingById.get(id);
+        if (!current) {
+          return next;
+        }
+        immutableFields.forEach(field => {
+          const currentValue = String(current[field] || "").trim();
+          const incomingValue = String(next[field] || "").trim();
+          if (currentValue && incomingValue && currentValue !== incomingValue) {
+            throw new Error(
+              `Restore blocked: Book-In ${id} conflicts with its existing ${field}.`
+            );
+          }
+          if (currentValue && !incomingValue) {
+            next[field] = currentValue;
+          }
+        });
+        const currentRole = String(
+          current.encounterRole || current.subjectRole || ""
+        ).trim().toUpperCase();
+        if (currentRole === "TARGET" || currentRole === "COLLATERAL") {
+          next.encounterRole = currentRole;
+          next.subjectRole = currentRole;
+        }
+        if (String(current.vehiclePosition || "").trim()) {
+          next.vehiclePosition = String(current.vehiclePosition).trim();
+        }
+        if (String(current.encounterProjectionFiledAt || "").trim()) {
+          next.encounterProjectionFiledAt = current.encounterProjectionFiledAt;
+          delete next.encounterProjectionDraft;
+        }
+        return next;
+      });
+    }
+
     function reconcileUnlinkedBookInRecords() {
       const records = readSavedRecords();
       const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
@@ -2064,6 +2416,9 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         return null;
       }
       const pending = records.filter(record => {
+        if (record.encounterProjectionDraft === true) {
+          return false;
+        }
         if (record.leadId && record.personId && record.arrestId) {
           return false;
         }
@@ -2103,6 +2458,21 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         const existingRecords = readSavedRecords();
 
         if (pendingRecordsImportMode === "replace") {
+          const unsafeOmissions = omittedCanonicalRecordsForReplace(
+            existingRecords,
+            backup.records
+          );
+          if (unsafeOmissions.length) {
+            setStatus(
+              `Restore blocked: the backup omits ${unsafeOmissions.length} locally filed or Encounter-linked Book-In record${unsafeOmissions.length === 1 ? "" : "s"}. Use merge, or unlink and reconcile those records first.`,
+              "error"
+            );
+            return;
+          }
+          const replacementRecords = prepareCanonicalReplaceRecords(
+            existingRecords,
+            backup.records
+          );
           const confirmed = window.confirm(
             `Restore ${backup.records.length} saved record${backup.records.length === 1 ? "" : "s"} from this backup?\n\nThis will replace all ${existingRecords.length} record${existingRecords.length === 1 ? "" : "s"} currently saved in this browser.`
           );
@@ -2112,8 +2482,15 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
             return;
           }
 
-          const promotion = promoteRecordsToCases(backup.records);
-          writeSavedRecords(promotion.rows || backup.records);
+          const promotion = promoteImportRecords(replacementRecords);
+          if (promotion.failed) {
+            setStatus(
+              `Restore blocked: ${promotion.failed} imported Book-In record${promotion.failed === 1 ? "" : "s"} could not be reconciled with canonical identity. Existing records were kept.`,
+              "error"
+            );
+            return;
+          }
+          writeSavedRecords(promotion.rows || replacementRecords);
           activeRecordId = null;
           renderSavedRecords();
           setStatus(
@@ -2128,7 +2505,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           backup.records
         );
 
-        const promotion = promoteRecordsToCases(result.records);
+        const promotion = promoteImportRecords(
+          result.records,
+          result.promotionRecordIds
+        );
         writeSavedRecords(promotion.rows || result.records);
         renderSavedRecords();
 
@@ -2473,6 +2853,184 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       }
     }
 
+    function currentEncounterSubjectId() {
+      try {
+        return new URLSearchParams(window.location.search).get("subjectId") || "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function encounterSubjectForLink(encounterId, subjectId) {
+      const modelApi = window.COPDoc && COPDoc.model;
+      const store = modelApi && modelApi.store;
+      if (!encounterId || !subjectId || !store || typeof store.getEncounter !== "function") {
+        return null;
+      }
+      store.loadFromDisk();
+      const encounter = store.getEncounter(encounterId);
+      if (!encounter) {
+        return null;
+      }
+      const subjects = encounter && Array.isArray(encounter.subjects)
+        ? encounter.subjects
+        : [];
+      const matches = subjects.filter(subject => {
+        const id = modelApi && typeof modelApi.encounterSubjectId === "function"
+          ? modelApi.encounterSubjectId(subject)
+          : String((subject && subject.subjectId) || "").trim();
+        return id === subjectId;
+      });
+      return matches.length === 1 ? matches[0] : null;
+    }
+
+    function validateEncounterSubjectLink(encounterId, subjectId, packet) {
+      if (!encounterId) {
+        if (String(subjectId || "").trim()) {
+          return {
+            ok: false,
+            subject: null,
+            error: "A Book-In subject requires a linked Encounter. No changes were saved."
+          };
+        }
+        return { ok: true, subject: null, error: "" };
+      }
+      const modelApi = window.COPDoc && COPDoc.model;
+      const store = modelApi && modelApi.store;
+      if (!store || typeof store.getEncounter !== "function") {
+        return {
+          ok: false,
+          subject: null,
+          error: "The linked Encounter subject is missing or ambiguous. Reload the Encounter and try again."
+        };
+      }
+      store.loadFromDisk();
+      const encounter = store.getEncounter(encounterId);
+      if (!encounter) {
+        return {
+          ok: false,
+          subject: null,
+          error: "The linked Encounter no longer exists. Reload the Encounter and try again."
+        };
+      }
+      const subjects = encounter && Array.isArray(encounter.subjects)
+        ? encounter.subjects
+        : [];
+      const subjectIdOf = row =>
+        modelApi && typeof modelApi.encounterSubjectId === "function"
+          ? modelApi.encounterSubjectId(row)
+          : String((row && row.subjectId) || "").trim();
+      const bookingIdOf = row =>
+        modelApi && typeof modelApi.encounterSubjectBookingId === "function"
+          ? modelApi.encounterSubjectBookingId(row)
+          : String((row && (row.bookingId || row.bookinRecordId)) || "").trim();
+      const packetId = String((packet && packet.id) || "").trim();
+      const packetPersonId = String((packet && packet.personId) || "").trim();
+      const packetLeadId = String((packet && packet.leadId) || "").trim();
+      const requestedSubjectId = String(subjectId || "").trim();
+      const indexesMatching = predicate => {
+        const matches = [];
+        subjects.forEach((row, index) => {
+          if (predicate(row)) {
+            matches.push(index);
+          }
+        });
+        return matches;
+      };
+      const conflict = subject => ({
+        ok: false,
+        subject: subject || null,
+        error: "This Book-In record conflicts with another Encounter subject. No changes were saved."
+      });
+      let subjectIndex = -1;
+      if (requestedSubjectId) {
+        const exactMatches = indexesMatching(row => subjectIdOf(row) === requestedSubjectId);
+        if (exactMatches.length !== 1) {
+          return {
+            ok: false,
+            subject: null,
+            error: "The linked Encounter subject is missing or ambiguous. Reload the Encounter and try again."
+          };
+        }
+        subjectIndex = exactMatches[0];
+      } else {
+        let exactClaimExists = false;
+        const compatible = indexesMatching((candidate, index) => {
+          const candidateBookingId = bookingIdOf(candidate);
+          const candidatePersonId = String((candidate && candidate.personId) || "").trim();
+          const candidateLeadId = String((candidate && candidate.leadId) || "").trim();
+          const exactClaim = !!(
+            (packetId && candidateBookingId === packetId) ||
+            (packetPersonId && candidatePersonId === packetPersonId) ||
+            (packetLeadId && candidateLeadId === packetLeadId)
+          );
+          exactClaimExists = exactClaimExists || exactClaim;
+          if (!exactClaim) {
+            return false;
+          }
+          if (
+            (packetId && candidateBookingId && candidateBookingId !== packetId) ||
+            (packetPersonId && candidatePersonId && candidatePersonId !== packetPersonId) ||
+            (packetLeadId && candidateLeadId && candidateLeadId !== packetLeadId)
+          ) {
+            return false;
+          }
+          return !subjects.some((other, otherIndex) => {
+            if (!other || otherIndex === index) {
+              return false;
+            }
+            return (
+              (packetId &&
+                !candidateBookingId &&
+                bookingIdOf(other) === packetId) ||
+              (packetPersonId &&
+                !candidatePersonId &&
+                String(other.personId || "").trim() === packetPersonId) ||
+              (packetLeadId &&
+                !candidateLeadId &&
+                String(other.leadId || "").trim() === packetLeadId)
+            );
+          });
+        });
+        if (compatible.length > 1 || (compatible.length === 0 && exactClaimExists)) {
+          return conflict(null);
+        }
+        if (compatible.length === 1) {
+          subjectIndex = compatible[0];
+        } else {
+          return { ok: true, subject: null, error: "" };
+        }
+      }
+      const subject = subjects[subjectIndex];
+      const subjectBookingId = bookingIdOf(subject);
+      const anotherSubjectOwnsPacket = packetId && subjects.some((row, index) => {
+        return index !== subjectIndex && bookingIdOf(row) === packetId;
+      });
+      const anotherSubjectOwnsPerson =
+        !subject.personId &&
+        packetPersonId &&
+        subjects.some((row, index) => {
+          return index !== subjectIndex && row.personId === packetPersonId;
+        });
+      const anotherSubjectOwnsLead =
+        !subject.leadId &&
+        packetLeadId &&
+        subjects.some((row, index) => {
+          return index !== subjectIndex && row.leadId === packetLeadId;
+        });
+      if (
+        anotherSubjectOwnsPacket ||
+        anotherSubjectOwnsPerson ||
+        anotherSubjectOwnsLead ||
+        (packetId && subjectBookingId && packetId !== subjectBookingId) ||
+        (packetPersonId && subject.personId && packetPersonId !== subject.personId) ||
+        (packetLeadId && subject.leadId && packetLeadId !== subject.leadId)
+      ) {
+        return conflict(subject);
+      }
+      return { ok: true, subject, error: "" };
+    }
+
     function currentEncounterRole() {
       const target = document.getElementById("encounterRoleTarget");
       const collateral = document.getElementById("encounterRoleCollateral");
@@ -2522,7 +3080,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
     function syncEncounterSubjects(record) {
       const encounterId = currentEncounterId() || (record && record.encounterId) || "";
-      const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+      const modelApi = window.COPDoc && COPDoc.model;
+      const store = modelApi && modelApi.store;
       if (!encounterId || !store || typeof store.getEncounter !== "function") {
         return;
       }
@@ -2531,54 +3090,297 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       if (!encounter) {
         return;
       }
-      const packets = recordsForEncounter(encounterId);
-      const existing = Array.isArray(encounter.subjects)
+      const allPackets = readSavedRecords();
+      const linkedPackets =
+        modelApi && typeof modelApi.recordsForEncounter === "function"
+          ? modelApi.recordsForEncounter(allPackets, encounterId)
+          : allPackets.filter(row => row && row.encounterId === encounterId);
+      const recordId = String((record && record.id) || "").trim();
+      // A save projects only that packet. Encounter-wide reconciliation remains
+      // available to explicit callers that do not supply a Book-In record ID.
+      const packets = recordId
+        ? linkedPackets.filter(row => {
+            return (
+              String((row && row.id) || "").trim() === recordId &&
+              Boolean(String((row && row.encounterProjectionFiledAt) || "").trim())
+            );
+          })
+        : linkedPackets;
+      let existing = Array.isArray(encounter.subjects)
         ? encounter.subjects.slice()
         : [];
-      packets.forEach(row => {
+      if (modelApi && typeof modelApi.normalizeEncounterSubjects === "function") {
+        existing = modelApi.normalizeEncounterSubjects(existing, { encounterId });
+      } else if (modelApi && typeof modelApi.createEncounterSubject === "function") {
+        existing = existing.map(row => modelApi.createEncounterSubject(row));
+      }
+      let packetsChanged = false;
+      const subjectMatches = (subject, refs) => {
+        if (modelApi && typeof modelApi.encounterSubjectMatches === "function") {
+          return modelApi.encounterSubjectMatches(subject, refs);
+        }
+        if (refs.subjectId) {
+          return Boolean(subject && subject.subjectId === refs.subjectId);
+        }
+        if (refs.bookingId) {
+          return Boolean(
+            subject &&
+              (subject.bookingId === refs.bookingId ||
+                subject.bookinRecordId === refs.bookingId)
+          );
+        }
+        if (refs.personId) {
+          return Boolean(subject && subject.personId === refs.personId);
+        }
+        return Boolean(refs.leadId && subject && subject.leadId === refs.leadId);
+      };
+      const subjectIdOf = subject =>
+        modelApi && typeof modelApi.encounterSubjectId === "function"
+          ? modelApi.encounterSubjectId(subject)
+          : String((subject && subject.subjectId) || "");
+      const subjectBookingIdOf = subject =>
+        modelApi && typeof modelApi.encounterSubjectBookingId === "function"
+          ? modelApi.encounterSubjectBookingId(subject)
+          : String((subject && (subject.bookingId || subject.bookinRecordId)) || "");
+      const subjectRoleOf = subject =>
+        modelApi && typeof modelApi.encounterSubjectRole === "function"
+          ? modelApi.encounterSubjectRole(subject)
+          : String((subject && (subject.role || subject.encounterRole)) || "")
+              .trim()
+              .toUpperCase();
+      const subjectOccupantRoleOf = subject =>
+        modelApi && typeof modelApi.encounterSubjectOccupantRole === "function"
+          ? modelApi.encounterSubjectOccupantRole(subject)
+          : String((subject && (subject.occupantRole || subject.vehicleRole)) || "")
+              .trim()
+              .toUpperCase();
+      const matchingSubjectIndexes = refs => {
+        const matches = [];
+        existing.forEach((item, index) => {
+          if (subjectMatches(item, refs)) {
+            matches.push(index);
+          }
+        });
+        return matches;
+      };
+      const occupantRoleFromPacket = value => {
+        const normalized = String(value || "").trim().toUpperCase();
+        return normalized === "DRIVER" ||
+          normalized === "PASSENGER" ||
+          normalized === "OTHER"
+          ? normalized
+          : "";
+      };
+      const subjectConflicts = [];
+      packets.forEach((row, packetIndex) => {
         if (!row) {
           return;
         }
-        const role = String(row.encounterRole || "").toUpperCase();
-        if (role && role !== "TARGET" && role !== "COLLATERAL") {
+        const packetSubjectId = String(row.subjectId || "").trim();
+        const role = String(row.encounterRole || row.subjectRole || "").toUpperCase();
+        if (role !== "TARGET" && role !== "COLLATERAL") {
           return;
         }
-        const idx = existing.findIndex(item =>
-          Boolean(
-            item &&
-              ((row.id && item.bookinRecordId === row.id) ||
-                (row.personId && item.personId === row.personId))
-          )
-        );
+        let idx = -1;
+        if (packetSubjectId) {
+          const idMatches = matchingSubjectIndexes({ subjectId: packetSubjectId });
+          if (idMatches.length === 1) {
+            idx = idMatches[0];
+          } else {
+            subjectConflicts.push({
+              bookinRecordId: row.id || "",
+              subjectId: packetSubjectId,
+              reason: idMatches.length > 1 ? "duplicate-subject-id" : "missing-subject-id"
+            });
+            return;
+          }
+        } else {
+          let exactClaimExists = false;
+          const compatibleMatches = [];
+          existing.forEach((candidate, candidateIndex) => {
+            const candidateBookingId = subjectBookingIdOf(candidate);
+            const candidatePersonId = String((candidate && candidate.personId) || "").trim();
+            const candidateLeadId = String((candidate && candidate.leadId) || "").trim();
+            const packetPersonId = String(row.personId || "").trim();
+            const packetLeadId = String(row.leadId || "").trim();
+            const exactClaim = !!(
+              (row.id && candidateBookingId === row.id) ||
+              (packetPersonId && candidatePersonId === packetPersonId) ||
+              (packetLeadId && candidateLeadId === packetLeadId)
+            );
+            exactClaimExists = exactClaimExists || exactClaim;
+            if (
+              !exactClaim ||
+              (row.id && candidateBookingId && candidateBookingId !== row.id) ||
+              (packetPersonId && candidatePersonId && candidatePersonId !== packetPersonId) ||
+              (packetLeadId && candidateLeadId && candidateLeadId !== packetLeadId)
+            ) {
+              return;
+            }
+            const blankClaimOwnedElsewhere = existing.some((other, otherIndex) => {
+              if (!other || otherIndex === candidateIndex) {
+                return false;
+              }
+              return (
+                (row.id &&
+                  !candidateBookingId &&
+                  subjectBookingIdOf(other) === row.id) ||
+                (packetPersonId &&
+                  !candidatePersonId &&
+                  String(other.personId || "").trim() === packetPersonId) ||
+                (packetLeadId &&
+                  !candidateLeadId &&
+                  String(other.leadId || "").trim() === packetLeadId)
+              );
+            });
+            if (!blankClaimOwnedElsewhere) {
+              compatibleMatches.push(candidateIndex);
+            }
+          });
+          if (compatibleMatches.length > 1 || (compatibleMatches.length === 0 && exactClaimExists)) {
+            subjectConflicts.push({
+              bookinRecordId: row.id || "",
+              subjectId: "",
+              reason: "ambiguous-or-conflicting-legacy-identity"
+            });
+            return;
+          }
+          idx = compatibleMatches.length === 1 ? compatibleMatches[0] : -1;
+        }
+        const prior = idx >= 0 ? existing[idx] : null;
+        const priorBookingId = subjectBookingIdOf(prior);
+        const anotherSubjectOwnsBooking = row.id && existing.some((subject, index) => {
+          return index !== idx && subjectBookingIdOf(subject) === row.id;
+        });
+        const anotherSubjectOwnsPerson =
+          prior &&
+          !prior.personId &&
+          row.personId &&
+          existing.some((subject, index) => {
+            return index !== idx && subject && subject.personId === row.personId;
+          });
+        const anotherSubjectOwnsLead =
+          prior &&
+          !prior.leadId &&
+          row.leadId &&
+          existing.some((subject, index) => {
+            return index !== idx && subject && subject.leadId === row.leadId;
+          });
+        let conflictReason = "";
+        if (anotherSubjectOwnsBooking) {
+          conflictReason = "booking-id-owned-by-another-subject";
+        } else if (anotherSubjectOwnsPerson) {
+          conflictReason = "person-id-owned-by-another-subject";
+        } else if (anotherSubjectOwnsLead) {
+          conflictReason = "lead-id-owned-by-another-subject";
+        } else if (priorBookingId && row.id && priorBookingId !== row.id) {
+          conflictReason = "booking-id-mismatch";
+        } else if (prior && prior.personId && row.personId && prior.personId !== row.personId) {
+          conflictReason = "person-id-mismatch";
+        } else if (prior && prior.leadId && row.leadId && prior.leadId !== row.leadId) {
+          conflictReason = "lead-id-mismatch";
+        }
+        if (
+          prior &&
+          conflictReason
+        ) {
+          subjectConflicts.push({
+            bookinRecordId: row.id || "",
+            subjectId: row.subjectId || subjectIdOf(prior),
+            reason: conflictReason
+          });
+          return;
+        }
+        const canonicalRole = subjectRoleOf(prior) || role;
+        const packetOccupantRole = occupantRoleFromPacket(row.vehiclePosition);
+        const canonicalOccupantRole = subjectOccupantRoleOf(prior) || packetOccupantRole;
         const patch = {
-          personId: row.personId || "",
-          leadId: row.leadId || "",
+          subjectId: packetSubjectId,
+          encounterId,
+          bookingId: row.id,
           bookinRecordId: row.id,
-          lastName: row.lastName || "",
-          firstName: row.firstName || "",
-          alienNumber: row.aNumber || "",
-          encounterRole: row.encounterRole || role,
+          role: canonicalRole,
+          encounterRole: canonicalRole,
           outcome: "ARRESTED",
-          custody: "IN_CUSTODY",
-          packetFiledAt: row.updatedAt || row.createdAt || ""
+          custody: "IN_CUSTODY"
         };
+        [
+          ["personId", row.personId],
+          ["leadId", row.leadId],
+          ["lastName", row.lastName],
+          ["firstName", row.firstName],
+          ["alienNumber", row.aNumber],
+          ["packetFiledAt", row.updatedAt || row.createdAt]
+        ].forEach(([key, value]) => {
+          if (
+            String(value || "").trim() &&
+            (!prior || !String(prior[key] || "").trim() || key === "packetFiledAt")
+          ) {
+            patch[key] = value;
+          }
+        });
+        if (canonicalOccupantRole) {
+          patch.occupantRole = canonicalOccupantRole;
+          patch.vehicleRole = canonicalOccupantRole;
+        }
         if (idx >= 0) {
+          patch.subjectId = subjectIdOf(existing[idx]) || patch.subjectId;
           existing[idx] = Object.assign({}, existing[idx], patch);
-        } else if (window.COPDoc && COPDoc.model && COPDoc.model.createEncounterSubject) {
-          existing.push(COPDoc.model.createEncounterSubject(patch));
+          if (modelApi && typeof modelApi.normalizeEncounterSubject === "function") {
+            existing[idx] = modelApi.normalizeEncounterSubject(existing[idx], {
+              encounterId,
+              index: idx
+            });
+          }
+        } else if (modelApi && typeof modelApi.normalizeEncounterSubject === "function") {
+          existing.push(
+            modelApi.normalizeEncounterSubject(patch, {
+              encounterId,
+              index: existing.length + packetIndex
+            })
+          );
+        } else if (modelApi && typeof modelApi.createEncounterSubject === "function") {
+          existing.push(modelApi.createEncounterSubject(patch));
         } else {
           existing.push(patch);
+        }
+        const canonicalSubjectId = subjectIdOf(existing[idx >= 0 ? idx : existing.length - 1]);
+        if (canonicalSubjectId && row.subjectId !== canonicalSubjectId) {
+          row.subjectId = canonicalSubjectId;
+          packetsChanged = true;
+        }
+        if (record && record.id === row.id && canonicalSubjectId) {
+          record.subjectId = canonicalSubjectId;
         }
       });
       encounter.subjects = existing;
       const committed =
-        COPDoc.model.isCommitted && COPDoc.model.isCommitted(encounter);
+        modelApi.isCommitted && modelApi.isCommitted(encounter);
       const saved = store.saveEncounter(encounter, {
         mode: committed ? "commit" : "draft"
       });
       if (saved && !saved.ok) {
         setStatus(saved.error || "Could not update the encounter.", "error");
+        return saved;
       }
+      if (packetsChanged) {
+        writeSavedRecords(allPackets);
+      }
+      if (subjectConflicts.length) {
+        const warning =
+          "Skipped " +
+          subjectConflicts.length +
+          " Book-In packet" +
+          (subjectConflicts.length === 1 ? "" : "s") +
+          " because the subject identity conflicts with this Encounter.";
+        setStatus(warning, "warning");
+        return {
+          ok: true,
+          warning,
+          conflicts: subjectConflicts
+        };
+      }
+      return { ok: true, warning: "", conflicts: [] };
     }
 
     function inlineAge(dateOfBirth) {
@@ -2733,7 +3535,22 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       setRecordFormStateValue(record, "arrestTimeManual", "arrest_time_manual", record.arrestTime ? "true" : "", "hidden");
 
       const promoted = promoteRecordsToCases([record]);
+      if (!promoted || !promoted.ok || promoted.failed) {
+        const promotionError =
+          promoted &&
+          promoted.errors &&
+          promoted.errors[0] &&
+          promoted.errors[0].error;
+        setStatus(
+          promotionError || "Could not update the canonical case. No changes were saved.",
+          "error"
+        );
+        return;
+      }
       const linked = (promoted.rows && promoted.rows[0]) || record;
+      linked.encounterProjectionFiledAt =
+        linked.encounterProjectionFiledAt || record.updatedAt;
+      delete linked.encounterProjectionDraft;
       records[index] = linked;
       writeSavedRecords(records);
       if (activeRecordId === linked.id) {
@@ -2744,7 +3561,9 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         suppressAutoSave = false;
       }
       inlineRecordEditState = null;
-      syncEncounterSubjects(linked);
+      if (linked.encounterProjectionFiledAt) {
+        syncEncounterSubjects(linked);
+      }
       renderSavedRecords();
       setStatus(
         `Saved table edits and updated ${linked.leadId ? "the canonical case" : "the Book-In record"}.${promotionStatusText(promoted)}`,
@@ -2909,6 +3728,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           status: getValue("immigrationStatus"),
           iceEventNumber: data.iceEvent || "",
           encounterId: record.encounterId || "",
+          subjectId: record.subjectId || currentEncounterSubjectId(),
           encounterNumber: data.encounterNumber || record.encounterId || "",
           subjectRole: record.encounterRole || data.subjectRole || "",
           bookInDateTime: data.dateTime || "",
@@ -2948,7 +3768,30 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
         const encounterId =
           currentEncounterId() || (existing && existing.encounterId) || "";
-        const encounterRole = currentEncounterRole();
+        const urlSubjectId = currentEncounterSubjectId();
+        const existingSubjectId = String(
+          (existing && existing.subjectId) || ""
+        ).trim();
+        if (
+          urlSubjectId &&
+          existingSubjectId &&
+          urlSubjectId !== existingSubjectId
+        ) {
+          setStatus(
+            "That Book-In record is linked to a different Encounter subject. No changes were saved.",
+            "error"
+          );
+          return false;
+        }
+        const requestedSubjectId =
+          urlSubjectId || existingSubjectId;
+        const linkedSubject = encounterSubjectForLink(encounterId, requestedSubjectId);
+        const linkedRole = linkedSubject
+          ? String(linkedSubject.role || linkedSubject.encounterRole || "")
+              .trim()
+              .toUpperCase()
+          : "";
+        const encounterRole = linkedRole || currentEncounterRole();
         if (encounterId && !encounterRole && !quiet) {
           setStatus("Select Target or Collateral for this encounter.", "error");
           return false;
@@ -2980,23 +3823,93 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           caseType: data.caseType,
           team: data.team,
           encounterId: encounterId,
+          subjectId: requestedSubjectId,
           encounterRole: encounterRole || (existing && existing.encounterRole) || "",
-          leadId: pendingLeadId || (existing && existing.leadId) || "",
-          personId: (existing && existing.personId) || "",
+          leadId:
+            (linkedSubject && linkedSubject.leadId) ||
+            pendingLeadId ||
+            (existing && existing.leadId) ||
+            "",
+          personId:
+            (linkedSubject && linkedSubject.personId) ||
+            (existing && existing.personId) ||
+            "",
           formState: captureFormState()
         };
 
+        const subjectLink = validateEncounterSubjectLink(
+          encounterId,
+          requestedSubjectId,
+          existing || record
+        );
+        if (!subjectLink.ok) {
+          setStatus(subjectLink.error, "error");
+          return false;
+        }
+        let subjectAlreadyOwnsBooking = false;
+        if (subjectLink.subject) {
+          const canonicalSubject = subjectLink.subject;
+          const canonicalSubjectId =
+            window.COPDoc &&
+            COPDoc.model &&
+            typeof COPDoc.model.encounterSubjectId === "function"
+              ? COPDoc.model.encounterSubjectId(canonicalSubject)
+              : String(canonicalSubject.subjectId || "").trim();
+          const canonicalRole = String(
+            canonicalSubject.role || canonicalSubject.encounterRole || ""
+          )
+            .trim()
+            .toUpperCase();
+          const canonicalBookingId =
+            window.COPDoc &&
+            COPDoc.model &&
+            typeof COPDoc.model.encounterSubjectBookingId === "function"
+              ? COPDoc.model.encounterSubjectBookingId(canonicalSubject)
+              : String(
+                  canonicalSubject.bookingId ||
+                    canonicalSubject.bookinRecordId ||
+                    ""
+                ).trim();
+          subjectAlreadyOwnsBooking =
+            Boolean(canonicalBookingId) && canonicalBookingId === record.id;
+          record.subjectId = canonicalSubjectId || record.subjectId;
+          record.personId = canonicalSubject.personId || record.personId;
+          record.leadId = canonicalSubject.leadId || record.leadId;
+          record.encounterRole = canonicalRole || record.encounterRole;
+        }
+        if (
+          quiet &&
+          !record.encounterProjectionFiledAt &&
+          !record.arrestId &&
+          !subjectAlreadyOwnsBooking
+        ) {
+          record.encounterProjectionDraft = true;
+        }
+
         let promoteError = "";
         let linkError = "";
+        let projectionFiled = false;
         if (shouldPromote) {
           const promoted = promoteBookInRecord(record, data);
           if (promoted && promoted.ok) {
             record.leadId = promoted.leadId || record.leadId;
             record.personId = promoted.personId || record.personId;
             record.arrestId = promoted.arrestId || record.arrestId || "";
+            record.subjectRole = promoted.subjectRole || record.subjectRole || "";
+            record.encounterRole =
+              promoted.subjectRole || record.encounterRole || "";
+            record.vehiclePosition =
+              promoted.vehiclePosition || record.vehiclePosition || "";
+            record.encounterProjectionFiledAt = now;
+            delete record.encounterProjectionDraft;
+            projectionFiled = true;
             pendingLeadId = record.leadId || pendingLeadId;
-          } else if (promoted && promoted.error) {
-            promoteError = promoted.error;
+          } else {
+            promoteError =
+              (promoted && promoted.error) ||
+              "The canonical case could not be updated. No changes were saved.";
+            setStatus(promoteError, "error");
+            return false;
           }
         }
 
@@ -3010,7 +3923,13 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         activeRecordId = record.id;
         renderSavedRecords();
         rememberFormSignature();
-        syncEncounterSubjects(record);
+        let subjectSync = null;
+        if (projectionFiled) {
+          subjectSync = syncEncounterSubjects(record);
+          if (subjectSync && (subjectSync.error || subjectSync.warning)) {
+            linkError = subjectSync.error || subjectSync.warning;
+          }
+        }
         if (!quiet && record.encounterId && window.COPDoc && COPDoc.model && COPDoc.model.store) {
           const pinStore = COPDoc.model.store;
           if (typeof pinStore.applyEncounterLocationToArrests === "function") {
@@ -3037,13 +3956,13 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           rememberLeadInUrl(record.leadId);
         }
 
-        if (quiet) {
-          setStatus("Auto-saved.", "success");
-        } else if (promoteError || linkError) {
+        if (linkError) {
           setStatus(
-            `Book-in saved. ${promoteError || linkError}`,
+            `Book-in saved, but its Encounter links are incomplete. ${linkError}`,
             "warning"
           );
+        } else if (quiet) {
+          setStatus("Auto-saved.", "success");
         } else if (record.leadId && record.encounterId) {
           setStatus(
             `Saved ${getRecordSubjectLabel(record)} to this encounter.`,
@@ -3076,7 +3995,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
             "encounter-form.html?id=" +
             encodeURIComponent(currentEncounterId());
         }
-        return true;
+        return !linkError;
       } catch (error) {
         console.error(error);
         setStatus(`Error: ${error.message}`, "error");
@@ -3116,6 +4035,205 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       });
     }
 
+    function unlinkDeletedBookInFromEncounter(record, options) {
+      options = options || {};
+      let encounterId = String((record && record.encounterId) || "").trim();
+      const packetId = String((record && record.id) || "").trim();
+      if (!packetId) {
+        return { ok: true, changed: false, previous: null, error: "" };
+      }
+      const packetBookingClaims = [
+        packetId,
+        String((record && record.bookingId) || "").trim(),
+        String((record && record.bookinRecordId) || "").trim()
+      ].filter((value, index, values) => value && values.indexOf(value) === index);
+      if (packetBookingClaims.length > 1) {
+        return {
+          ok: false,
+          changed: false,
+          previous: null,
+          error: "This Book-In record has contradictory booking identifiers. Run Integrity before deleting it."
+        };
+      }
+      const modelApi = window.COPDoc && COPDoc.model;
+      const store = modelApi && modelApi.store;
+      if (!store || typeof store.getEncounter !== "function") {
+        return {
+          ok: false,
+          changed: false,
+          previous: null,
+          error: "The Encounter store is not available. No record was deleted."
+        };
+      }
+      if (typeof store.loadFromDisk === "function") {
+        store.loadFromDisk();
+      }
+      if (typeof store.diskError === "function" && store.diskError()) {
+        return {
+          ok: false,
+          changed: false,
+          previous: null,
+          error: store.diskError() || "Could not reload the Encounter store."
+        };
+      }
+      const workspace =
+        typeof store.getState === "function" ? store.getState() : {};
+      const subjectId = String((record && record.subjectId) || "").trim();
+      const bookingClaimsOf = subject =>
+        [subject && subject.bookingId, subject && subject.bookinRecordId]
+          .map(value => String(value || "").trim())
+          .filter((value, index, values) =>
+            value && values.indexOf(value) === index
+          );
+      const subjectIdOf = subject =>
+        modelApi && typeof modelApi.encounterSubjectId === "function"
+          ? String(modelApi.encounterSubjectId(subject) || "").trim()
+          : String((subject && subject.subjectId) || "").trim();
+      const globalBookingOwners = [];
+      const globalSubjectOwners = [];
+      let contradictoryOwner = false;
+      Object.entries((workspace && workspace.encounters) || {}).forEach(
+        ([ownerEncounterId, ownerEncounter]) => {
+          (Array.isArray(ownerEncounter && ownerEncounter.subjects)
+            ? ownerEncounter.subjects
+            : []
+          ).forEach(subject => {
+            const claims = bookingClaimsOf(subject);
+            if (claims.length > 1 && claims.includes(packetId)) {
+              contradictoryOwner = true;
+            }
+            if (claims.length === 1 && claims[0] === packetId) {
+              globalBookingOwners.push({
+                encounterId: ownerEncounterId,
+                subject
+              });
+            }
+            if (subjectId && subjectIdOf(subject) === subjectId) {
+              globalSubjectOwners.push({
+                encounterId: ownerEncounterId,
+                subject
+              });
+            }
+          });
+        }
+      );
+      if (
+        contradictoryOwner ||
+        globalBookingOwners.length > 1 ||
+        globalSubjectOwners.length > 1
+      ) {
+        return {
+          ok: false,
+          changed: false,
+          previous: null,
+          error: "The Book-In identity has ambiguous Encounter ownership. Run Integrity before deleting it."
+        };
+      }
+      if (globalBookingOwners.length === 1) {
+        const ownerEncounterId = globalBookingOwners[0].encounterId;
+        if (encounterId && encounterId !== ownerEncounterId) {
+          return {
+            ok: false,
+            changed: false,
+            previous: null,
+            error: "The Book-In record points to a different Encounter than its booking owner. Run Integrity before deleting it."
+          };
+        }
+        encounterId = ownerEncounterId;
+      } else if (!encounterId) {
+        if (globalSubjectOwners.length === 1) {
+          const claims = bookingClaimsOf(globalSubjectOwners[0].subject);
+          if (claims.length) {
+            return {
+              ok: false,
+              changed: false,
+              previous: null,
+              error: "The Book-In subject belongs to a different booking. Run Integrity before deleting it."
+            };
+          }
+        }
+        return { ok: true, changed: false, previous: null, error: "" };
+      }
+      const encounter = store.getEncounter(encounterId);
+      if (!encounter) {
+        return { ok: true, changed: false, previous: null, error: "" };
+      }
+      const previous = JSON.parse(JSON.stringify(encounter));
+      let subjects = Array.isArray(encounter.subjects)
+        ? encounter.subjects.slice()
+        : [];
+      if (modelApi && typeof modelApi.normalizeEncounterSubjects === "function") {
+        subjects = modelApi.normalizeEncounterSubjects(subjects, { encounterId });
+      }
+      const bookingIdOf = subject =>
+        bookingClaimsOf(subject).length === 1
+          ? bookingClaimsOf(subject)[0]
+          : "";
+      const matches = subjects
+        .map((subject, index) => ({ subject, index }))
+        .filter(entry =>
+          subjectId
+            ? subjectIdOf(entry.subject) === subjectId
+            : bookingIdOf(entry.subject) === packetId
+        );
+      const bookingOwners = subjects.filter(subject => bookingIdOf(subject) === packetId);
+      if (!matches.length && !bookingOwners.length) {
+        return { ok: true, changed: false, previous, error: "" };
+      }
+      if (matches.length === 1 && !bookingOwners.length) {
+        return { ok: true, changed: false, previous, error: "" };
+      }
+      if (
+        matches.length !== 1 ||
+        bookingOwners.length !== 1 ||
+        matches[0].subject !== bookingOwners[0]
+      ) {
+        return {
+          ok: false,
+          changed: false,
+          previous,
+          error: "The Book-In record does not have one exact Encounter subject and booking owner. Run Integrity before deleting it."
+        };
+      }
+      if (options.validateOnly) {
+        return {
+          ok: true,
+          changed: true,
+          previous,
+          subjectId: subjectIdOf(matches[0].subject),
+          bookingId: packetId,
+          error: ""
+        };
+      }
+      if (typeof store.unlinkEncounterSubjectBooking !== "function") {
+        return {
+          ok: false,
+          changed: false,
+          previous,
+          error: "The Encounter booking unlink service is not available."
+        };
+      }
+      const saved = store.unlinkEncounterSubjectBooking(
+        encounterId,
+        subjectIdOf(matches[0].subject),
+        packetId
+      );
+      if (!saved || !saved.ok) {
+        return {
+          ok: false,
+          changed: false,
+          previous,
+          error: (saved && saved.error) || "Could not clear the Encounter booking link."
+        };
+      }
+      return {
+        ok: true,
+        changed: true,
+        previous,
+        error: ""
+      };
+    }
+
     function deleteSavedRecord(recordId) {
       const records = readSavedRecords();
       const record = records.find(item => item.id === recordId);
@@ -3132,17 +4250,41 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       ) {
         return;
       }
-
-      writeSavedRecords(
-        records.filter(item => item.id !== recordId)
-      );
+      const unlinkPlan = unlinkDeletedBookInFromEncounter(record, {
+        validateOnly: true
+      });
+      if (!unlinkPlan.ok) {
+        setStatus(unlinkPlan.error || "No record was deleted.", "error");
+        return;
+      }
+      try {
+        writeSavedRecords(records.filter(item => item.id !== recordId));
+      } catch (error) {
+        setStatus(error.message || "No record was deleted.", "error");
+        return;
+      }
+      if (unlinkPlan.changed) {
+        const unlinked = unlinkDeletedBookInFromEncounter(record);
+        if (!unlinked.ok) {
+          try {
+            writeSavedRecords(records);
+          } catch (error) {
+            setStatus(
+              "The Encounter unlink failed and the Book-In record could not be restored. Run Integrity now.",
+              "error"
+            );
+            return;
+          }
+          setStatus(unlinked.error || "No record was deleted.", "error");
+          return;
+        }
+      }
 
       if (activeRecordId === recordId) {
         activeRecordId = null;
       }
 
       renderSavedRecords();
-      syncEncounterSubjects(record);
       setStatus(
         `Saved record deleted: ${getRecordSubjectLabel(record)}`,
         "warning"
@@ -3188,13 +4330,18 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           rec &&
           encounterId &&
           rec.encounterId === encounterId &&
-          !rec.leadId &&
-          !rec.personId
+          (rec.encounterProjectionDraft === true ||
+            (!rec.encounterProjectionFiledAt &&
+              !rec.arrestId &&
+              !rec.leadId &&
+              !rec.personId))
         ) {
           rec.encounterId = "";
           rec.encounterRole = "";
+          rec.subjectId = "";
+          delete rec.encounterProjectionFiledAt;
+          rec.encounterProjectionDraft = true;
           writeSavedRecords(records);
-          syncEncounterSubjects({ encounterId: encounterId });
         }
       }
       if (encounterId) {
@@ -4873,6 +6020,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         })();
         if (recordId) {
           const match = readSavedRecords().find(item => item && item.id === recordId);
+          const requestedSubjectId = currentEncounterSubjectId();
+          const packetSubjectId = String((match && match.subjectId) || "").trim();
           if (!match) {
             setStatus("The selected Book-in record was not found.", "error");
           } else if (
@@ -4881,8 +6030,26 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
             match.encounterId !== encounterId
           ) {
             setStatus("That Book-in record is not on this encounter.", "error");
+          } else if (
+            requestedSubjectId &&
+            packetSubjectId &&
+            requestedSubjectId !== packetSubjectId
+          ) {
+            setStatus(
+              "That Book-in record is linked to a different Encounter subject.",
+              "error"
+            );
           } else {
-            loadSavedRecord(recordId);
+            const subjectLink = validateEncounterSubjectLink(
+              encounterId || match.encounterId || "",
+              requestedSubjectId || packetSubjectId,
+              match
+            );
+            if (!subjectLink.ok) {
+              setStatus(subjectLink.error, "error");
+            } else {
+              loadSavedRecord(recordId);
+            }
           }
         } else {
           prefillFromLeadQuery();

@@ -5,6 +5,7 @@
   "use strict";
 
   var transientEncounter = null;
+  var encounterEditMeta = null;
   var recordFilter = "all";
   var encounterOfficerIds = [];
   var encounterSubjects = [];
@@ -119,25 +120,47 @@
     );
   }
 
-  function cloneSubject(row) {
+  function cloneSubject(row, encounterId, index) {
     var m = model();
-    if (m && typeof m.createEncounterSubject === "function") {
-      return m.createEncounterSubject(row || {});
+    var source = row ? Object.assign({}, row) : {};
+    if (encounterId && !source.encounterId) {
+      source.encounterId = encounterId;
     }
-    return row ? Object.assign({}, row) : {};
+    if (m && typeof m.normalizeEncounterSubject === "function") {
+      return m.normalizeEncounterSubject(source, {
+        encounterId: encounterId || source.encounterId || "",
+        index: typeof index === "number" ? index : 0
+      });
+    }
+    if (m && typeof m.createEncounterSubject === "function") {
+      return m.createEncounterSubject(source);
+    }
+    return source;
   }
 
-  function rosterFromPackets(encounterId) {
-    return subjectsForEncounter(encounterId).map(function (row) {
-      return cloneSubject(row);
+  function normalizeRoster(rows, encounterId, previousSubjects) {
+    var m = model();
+    if (m && typeof m.normalizeEncounterSubjects === "function") {
+      return m.normalizeEncounterSubjects(rows || [], {
+        encounterId: encounterId || "",
+        previousSubjects: previousSubjects || [],
+        mergePrevious: !!(previousSubjects && previousSubjects.length)
+      });
+    }
+    return (rows || []).map(function (row, index) {
+      return cloneSubject(row, encounterId, index);
     });
   }
 
+  function rosterFromPackets(encounterId) {
+    return normalizeRoster(subjectsForEncounter(encounterId), encounterId);
+  }
+
   function loadRoster(record) {
-    var rows = (record && Array.isArray(record.subjects) && record.subjects.length)
+    var rows = record && Array.isArray(record.subjects)
       ? record.subjects
       : rosterFromPackets(record && record.encounterId);
-    encounterSubjects = rows.map(cloneSubject);
+    encounterSubjects = normalizeRoster(rows, record && record.encounterId);
   }
 
   function officerApi() {
@@ -670,11 +693,11 @@
   function evidenceAssocOptions() {
     var opts = [{ value: "scene", label: "Encounter (scene)" }];
     encounterSubjects.forEach(function (row) {
-      if (!row || !row.bookinRecordId) {
+      if (!row || !subjectBookingId(row)) {
         return;
       }
       opts.push({
-        value: "subject:" + (row.subjectId || row.personId),
+        value: "subject:" + subjectKey(row),
         label:
           ([row.lastName, row.firstName].filter(Boolean).join(", ") || "Subject") +
           " (booked)"
@@ -729,14 +752,30 @@
     return "scene";
   }
 
-  function setEvidenceLinks() {
+  function setEvidenceLinks(record) {
     var id = (byId("encounterId") && byId("encounterId").value) || queryId();
     var photo = byId("addEncounterPhoto");
     var file = byId("addEncounterFile");
-    if (!id) {
+    var m = model();
+    if (m && m.store && typeof m.store.loadFromDisk === "function") {
+      m.store.loadFromDisk();
+    }
+    var stored =
+      id && m && m.store && typeof m.store.getEncounter === "function"
+        ? m.store.getEncounter(id)
+        : null;
+    var persisted = stored || record;
+    var unavailable = !id || !stored || isComplete(persisted);
+    if (unavailable) {
+      [photo, file].forEach(function (link) {
+        if (!link) {
+          return;
+        }
+        link.removeAttribute("href");
+        link.setAttribute("aria-disabled", "true");
+      });
       return;
     }
-    saveDraftQuiet({ force: true });
     var q =
       "ownerType=ENCOUNTER&id=" +
       encodeURIComponent(id) +
@@ -746,15 +785,17 @@
       encodeURIComponent("encounter-form.html?id=" + id);
     if (photo) {
       photo.href = "photo-picker.html?" + q;
+      photo.removeAttribute("aria-disabled");
     }
     if (file) {
       file.href = "file-upload.html?" + q;
+      file.removeAttribute("aria-disabled");
     }
   }
 
-  function paintEvidence() {
+  function paintEvidence(record) {
     fillEvidenceOwnerSelect();
-    setEvidenceLinks();
+    setEvidenceLinks(record);
     var grid = byId("evidenceGrid");
     var media = window.COPDoc && COPDoc.media;
     var id = (byId("encounterId") && byId("encounterId").value) || queryId();
@@ -1206,7 +1247,9 @@
       setStatus("This encounter is completed and locked.");
       return;
     }
-    saveDraftQuiet({ force: true });
+    if (saveDraftQuiet({ force: true, preserveStatus: true }) === false) {
+      return;
+    }
     subjectFloatState.mode = "existing";
     subjectFloatState.fromBrowse = true;
     if (byId("encFloatTitle")) {
@@ -1226,7 +1269,9 @@
       setStatus("This encounter is completed and locked.");
       return;
     }
-    saveDraftQuiet({ force: true });
+    if (saveDraftQuiet({ force: true, preserveStatus: true }) === false) {
+      return;
+    }
     resetSubjectFields();
     subjectFloatState.mode = opts.mode || "new";
     subjectFloatState.fromBrowse = !!opts.fromBrowse;
@@ -1344,10 +1389,10 @@
         (person && person.immigration && person.immigration.alienNumber) ||
         "",
       dateOfBirth: (person && person.dateOfBirth) || "",
-      encounterRole: row.encounterRole || "",
+      encounterRole: subjectRole(row),
       roleOther: row.roleOther || "",
       outcome: row.outcome || "",
-      vehicleRole: row.vehicleRole || "",
+      vehicleRole: subjectOccupantRole(row),
       compliance: row.compliance || "",
       useOfForce: row.useOfForce || "",
       forceLevel: row.forceLevel || "",
@@ -1361,10 +1406,27 @@
       return { ok: false, error: "Could not save the person." };
     }
     m.store.loadFromDisk();
+    var lockedPersonId = String(fields.lockedPersonId || "").trim();
+    if (
+      lockedPersonId &&
+      fields.personId &&
+      String(fields.personId) !== lockedPersonId
+    ) {
+      return {
+        ok: false,
+        error: "An existing Encounter subject cannot be reassigned to another person."
+      };
+    }
     var previous = fields.personId ? m.store.getPerson(fields.personId) : null;
     if (fields.alienNumber) {
       var hit = findPersonByAlienNumber(fields.alienNumber);
       if (hit && hit.personId && hit.personId !== fields.personId) {
+        if (lockedPersonId && hit.personId !== lockedPersonId) {
+          return {
+            ok: false,
+            error: "That A-Number belongs to a different person. Add a separate subject instead."
+          };
+        }
         if (subjectAlreadyOnEncounter(hit.personId, fields.editKey)) {
           return {
             ok: false,
@@ -1430,15 +1492,47 @@
       return;
     }
     var editKey = (byId("subEditKey") && byId("subEditKey").value) || "";
+    var previousSubject = null;
+    if (editKey) {
+      encounterSubjects.some(function (row) {
+        if (subjectKey(row) === editKey) {
+          previousSubject = row;
+          return true;
+        }
+        return false;
+      });
+      if (!previousSubject) {
+        setStatus("That subject changed or was removed. Reload the encounter and try again.");
+        return;
+      }
+    }
     var personId = (byId("subPersonId") && byId("subPersonId").value) || "";
+    var priorPersonId = String((previousSubject && previousSubject.personId) || "").trim();
+    if (priorPersonId && personId && personId !== priorPersonId) {
+      setStatus("An existing Encounter subject cannot be reassigned to another person.");
+      return;
+    }
+    if (priorPersonId) {
+      personId = priorPersonId;
+    }
     if (personId && subjectAlreadyOnEncounter(personId, editKey)) {
       setStatus("That person is already on this encounter.");
       return;
     }
+    var requestedLeadId = (byId("subLeadId") && byId("subLeadId").value) || "";
+    var priorLeadId = String((previousSubject && previousSubject.leadId) || "").trim();
+    if (priorLeadId && requestedLeadId && requestedLeadId !== priorLeadId) {
+      setStatus("An existing Encounter subject cannot be reassigned to another case.");
+      return;
+    }
     var fields = {
       personId: personId,
-      leadId: (byId("subLeadId") && byId("subLeadId").value) || "",
-      subjectId: (byId("subSubjectId") && byId("subSubjectId").value) || "",
+      lockedPersonId: priorPersonId,
+      leadId: priorLeadId || requestedLeadId,
+      subjectId:
+        (previousSubject && subjectKey(previousSubject)) ||
+        (byId("subSubjectId") && byId("subSubjectId").value) ||
+        "",
       editKey: editKey,
       lastName: lastName,
       firstName: firstName,
@@ -1446,6 +1540,61 @@
       alienNumber: String((byId("subAlien") && byId("subAlien").value) || "").trim(),
       dateOfBirth: (byId("subDob") && byId("subDob").value) || ""
     };
+    var encounterId =
+      (byId("encounterId") && byId("encounterId").value) || queryId();
+    var m = model();
+    if (fields.leadId && !fields.personId) {
+      setStatus(
+        "The selected case is missing its Person link. Reselect the subject before saving."
+      );
+      return;
+    }
+    if (
+      m &&
+      m.store &&
+      typeof m.store.validateEncounterSubjectRoster === "function" &&
+      typeof m.createEncounterSubject === "function"
+    ) {
+      var preflightPersonId = fields.personId;
+      if (fields.alienNumber) {
+        var preflightPerson = findPersonByAlienNumber(fields.alienNumber);
+        preflightPersonId =
+          (preflightPerson && preflightPerson.personId) || preflightPersonId;
+      }
+      var preflightSubject = m.createEncounterSubject(
+        Object.assign({}, previousSubject || {}, {
+          subjectId: fields.subjectId,
+          encounterId: encounterId,
+          personId: preflightPersonId,
+          leadId: fields.leadId
+        })
+      );
+      fields.subjectId = subjectKey(preflightSubject);
+      var preflightRoster = encounterSubjects.slice();
+      if (editKey) {
+        preflightRoster = preflightRoster.map(function (row) {
+          return subjectKey(row) === editKey ? preflightSubject : row;
+        });
+      } else {
+        preflightRoster.push(preflightSubject);
+      }
+      var rosterCheck = m.store.validateEncounterSubjectRoster({
+        encounterId: encounterId,
+        subjects: preflightRoster,
+        meta: encounterEditMeta
+          ? JSON.parse(JSON.stringify(encounterEditMeta))
+          : undefined
+      }, {
+        prospectivePersonIds: preflightPersonId ? [preflightPersonId] : []
+      });
+      if (!rosterCheck || !rosterCheck.ok) {
+        setStatus(
+          (rosterCheck && rosterCheck.error) ||
+            "That subject conflicts with the saved Encounter roster."
+        );
+        return;
+      }
+    }
     var personResult = upsertSubjectPerson(fields);
     if (!personResult.ok) {
       setStatus(personResult.error);
@@ -1459,17 +1608,21 @@
     var useOfForce = selectedRadio("subUof") || "no";
     var forceLevel = useOfForce === "yes" ? selectedRadio("subForceLevel") : "";
     var techniques = forceLevel ? [forceLevel] : [];
-    var extra = {
+    var occupantRole = encounterHasVehicles() ? selectedRadio("subVehicleRole") : "";
+    var extra = Object.assign({}, previousSubject || {}, {
       subjectId: fields.subjectId,
+      encounterId: encounterId,
       personId: person.personId,
       leadId: fields.leadId,
       lastName: (person.name && person.name.lastName) || lastName,
       firstName: (person.name && person.name.firstName) || firstName,
       alienNumber: (person.immigration && person.immigration.alienNumber) || fields.alienNumber,
       citizenship: person.citizenship || fields.citizenship,
+      role: role,
       encounterRole: role,
       roleOther: role === "OTHER" ? roleOther : "",
-      vehicleRole: encounterHasVehicles() ? selectedRadio("subVehicleRole") : "",
+      occupantRole: occupantRole,
+      vehicleRole: occupantRole,
       outcome: outcome,
       custody: outcome === "ARRESTED" ? "IN_CUSTODY" : "NOT_IN_CUSTODY",
       arrestingOfficerId: outcome === "ARRESTED" ? ((byId("arrestingOfficer") && byId("arrestingOfficer").value) || "") : "",
@@ -1477,31 +1630,36 @@
       useOfForce: useOfForce,
       forceLevel: forceLevel,
       techniques: techniques
-    };
+    });
+    var rosterBeforeSave = encounterSubjects.slice();
+    if (editKey) {
+      // The generated-doc marker describes the prior editable facts. Preserve
+      // unrelated hidden fields, but require regeneration after any edit.
+      extra.docsGeneratedAt = "";
+    }
     var subject =
       model() && typeof model().encounterSubjectFromPerson === "function"
         ? model().encounterSubjectFromPerson(person, extra)
-        : cloneSubject(extra);
+        : cloneSubject(extra, encounterId);
+    subject = cloneSubject(subject, encounterId);
     if (editKey) {
-      var replaced = false;
       encounterSubjects = encounterSubjects.map(function (row) {
         if (subjectKey(row) === editKey) {
-          replaced = true;
-          subject.bookinRecordId = row.bookinRecordId || "";
-          subject.packetFiledAt = row.packetFiledAt || "";
-          subject.docsGeneratedAt = "";
-          subject.subjectId = row.subjectId || subject.subjectId;
           return subject;
         }
         return row;
       });
-      if (!replaced) {
-        encounterSubjects.push(subject);
-      }
     } else {
       encounterSubjects.push(subject);
     }
-    saveDraftQuiet({ force: true });
+    if (saveDraftQuiet({ force: true }) === false) {
+      encounterSubjects = rosterBeforeSave;
+      paintSubjectsTable(
+        (byId("encounterId") && byId("encounterId").value) || queryId()
+      );
+      paintBanner();
+      return;
+    }
     paintSubjectsTable(
       (byId("encounterId") && byId("encounterId").value) || queryId()
     );
@@ -1600,14 +1758,29 @@
       window.COPDoc.config.storageKey("bookin")) ||
     "alien-book-in.saved-records.v1";
 
-  function bookinRecords() {
+  function readBookinRecords() {
     try {
       var raw = localStorage.getItem(BOOKIN_KEY);
       var list = raw ? JSON.parse(raw) : [];
-      return Array.isArray(list) ? list : [];
+      if (!Array.isArray(list)) {
+        return {
+          ok: false,
+          records: [],
+          error: "Book-In storage is damaged. No Book-In changes were made."
+        };
+      }
+      return { ok: true, records: list, error: "" };
     } catch (error) {
-      return [];
+      return {
+        ok: false,
+        records: [],
+        error: "Book-In storage is damaged. No Book-In changes were made."
+      };
     }
+  }
+
+  function bookinRecords() {
+    return readBookinRecords().records;
   }
 
   function writeBookinRecords(list) {
@@ -1620,20 +1793,39 @@
     }
     return bookinRecords()
       .filter(function (row) {
-        if (!row || row.encounterId !== encounterId) {
+        if (
+          !row ||
+          row.encounterId !== encounterId ||
+          row.encounterProjectionDraft === true
+        ) {
           return false;
         }
-        var role = String(row.encounterRole || "").toUpperCase();
+        var role = String(row.encounterRole || row.subjectRole || "").toUpperCase();
         return role === "TARGET" || role === "COLLATERAL";
       })
       .map(function (row) {
+        var role = String(row.encounterRole || row.subjectRole || "")
+          .trim()
+          .toUpperCase();
+        var occupantRole = String(row.vehiclePosition || "")
+          .trim()
+          .toUpperCase();
         return {
+          subjectId: row.subjectId || "",
+          encounterId: encounterId,
+          personId: row.personId || "",
+          bookingId: row.id,
           bookinRecordId: row.id,
           leadId: row.leadId || "",
           lastName: row.lastName || "",
           firstName: row.firstName || "",
           alienNumber: row.aNumber || "",
-          encounterRole: row.encounterRole || "",
+          role: role,
+          encounterRole: role,
+          occupantRole: occupantRole,
+          vehicleRole: occupantRole,
+          outcome: "ARRESTED",
+          custody: "IN_CUSTODY",
           updatedAt: row.updatedAt || ""
         };
       });
@@ -1687,6 +1879,9 @@
     }
     rows.forEach(function (row) {
       var full = m.store.getEncounter(row.encounterId) || row;
+      var roster = Array.isArray(full.subjects)
+        ? full.subjects
+        : subjectsForEncounter(full.encounterId);
       var tr = document.createElement("tr");
       var committed = isCommitted(full);
       var complete = isComplete(full);
@@ -1695,8 +1890,7 @@
         full.startedAt || "—",
         vehicleLine(full) || "—",
         formatAddress((full.locations || [])[0]) || "—",
-        subjectsLine({ subjects: subjectsForEncounter(full.encounterId) }) ||
-          "—",
+        subjectsLine({ subjects: roster }) || "—",
         complete ? "Completed" : committed ? "Filed" : "Working"
       ].forEach(function (text, index) {
         var td = document.createElement("td");
@@ -1878,7 +2072,11 @@
     });
     if (previous) {
       record = Object.assign({}, previous, record);
-      record.meta = previous.meta;
+      record.meta = Object.assign(
+        {},
+        previous.meta || {},
+        encounterEditMeta || {}
+      );
       record.completed = previous.completed || null;
       record.completedHistory = Array.isArray(previous.completedHistory)
         ? previous.completedHistory.slice()
@@ -1913,7 +2111,11 @@
       var centerCard = center.closest("fieldset");
       record.centerLocationId = (centerCard && centerCard.dataset.entityId) || "";
     }
-    record.subjects = encounterSubjects.map(cloneSubject);
+    record.subjects = normalizeRoster(
+      encounterSubjects,
+      record.encounterId,
+      previous && previous.subjects
+    );
     if (previous) {
       record.narratives = Array.isArray(previous.narratives)
         ? previous.narratives.slice()
@@ -1982,6 +2184,9 @@
     if (!record) {
       return;
     }
+    encounterEditMeta = record.meta
+      ? JSON.parse(JSON.stringify(record.meta))
+      : null;
     if (byId("encounterId")) {
       byId("encounterId").value = record.encounterId || "";
     }
@@ -2077,7 +2282,7 @@
     paintSubjectsTable(record.encounterId);
     paintSupervisorSummary(record);
     paintBanner(record);
-    paintEvidence();
+    paintEvidence(record);
     lockEncounterForm(isComplete(record));
   }
 
@@ -2136,7 +2341,7 @@
     return [first, last].filter(Boolean).join(" ") || "this subject";
   }
 
-  function bookinHref(encounterId, recordId) {
+  function bookinHref(encounterId, recordId, subjectId) {
     var parts = [];
     if (encounterId) {
       parts.push("encounterId=" + encodeURIComponent(encounterId));
@@ -2144,20 +2349,81 @@
     if (recordId) {
       parts.push("recordId=" + encodeURIComponent(recordId));
     }
+    if (subjectId) {
+      parts.push("subjectId=" + encodeURIComponent(subjectId));
+    }
     return parts.length ? "bookin.html?" + parts.join("&") : "bookin.html";
   }
 
   function subjectKey(row) {
-    return (row && (row.subjectId || row.bookinRecordId || row.personId)) || "";
+    var m = model();
+    if (m && typeof m.encounterSubjectId === "function") {
+      return m.encounterSubjectId(row);
+    }
+    return (row && row.subjectId) || "";
+  }
+
+  function subjectBookingId(row) {
+    var m = model();
+    if (m && typeof m.encounterSubjectBookingId === "function") {
+      return m.encounterSubjectBookingId(row);
+    }
+    return (row && (row.bookingId || row.bookinRecordId)) || "";
+  }
+
+  function subjectRole(row) {
+    var m = model();
+    if (m && typeof m.encounterSubjectRole === "function") {
+      return m.encounterSubjectRole(row);
+    }
+    return (row && (row.role || row.encounterRole)) || "";
+  }
+
+  function subjectOccupantRole(row) {
+    var m = model();
+    if (m && typeof m.encounterSubjectOccupantRole === "function") {
+      return m.encounterSubjectOccupantRole(row);
+    }
+    return (row && (row.occupantRole || row.vehicleRole)) || "";
+  }
+
+  function clearBookinEncounterAssociation(record) {
+    if (!record) {
+      return record;
+    }
+    record.encounterId = "";
+    record.subjectId = "";
+    record.encounterRole = "";
+    record.subjectRole = "";
+    if (record.encounterProjectionFiledAt || record.arrestId) {
+      // This remains a canonically promoted Book-In packet even though its
+      // Encounter projection was detached. Do not relabel it as a quiet draft;
+      // backup/transfer restore must still rebuild its Person/Lead/Arrest links.
+      delete record.encounterProjectionDraft;
+    } else {
+      record.encounterProjectionDraft = true;
+    }
+    return record;
   }
 
   function unlinkEncounterSubject(encounterId, key) {
-    var row = null;
-    encounterSubjects.forEach(function (item) {
-      if (item && subjectKey(item) === key) {
-        row = item;
-      }
+    var matches = encounterSubjects.filter(function (item) {
+      return item && subjectKey(item) === key;
     });
+    if (matches.length !== 1) {
+      setStatus(
+        matches.length
+          ? "This Encounter has duplicate subject identities. Run Integrity before removing either row."
+          : "That subject changed or was already removed. Reload the Encounter."
+      );
+      return;
+    }
+    var packetStore = readBookinRecords();
+    if (!packetStore.ok) {
+      setStatus(packetStore.error);
+      return;
+    }
+    var row = matches[0];
     if (
       !window.confirm(
         "Remove " +
@@ -2167,19 +2433,115 @@
     ) {
       return;
     }
+    var rosterBeforeSave = encounterSubjects.slice();
+    var bookingId = subjectBookingId(row);
+    var originalPackets = JSON.parse(JSON.stringify(packetStore.records));
+    var changed = false;
+    var contradictoryPacket = false;
+    var list = packetStore.records.map(function (storedItem) {
+      var item = storedItem ? Object.assign({}, storedItem) : storedItem;
+      if (!item || item.encounterId !== encounterId) {
+        return item;
+      }
+      var packetSubjectId = String(item.subjectId || "").trim();
+      var bookingClaims = [item.id, item.bookingId, item.bookinRecordId]
+        .map(function (value) {
+          return String(value || "").trim();
+        })
+        .filter(function (value, index, values) {
+          return value && values.indexOf(value) === index;
+        });
+      var packetBooking = bookingClaims.length === 1 ? bookingClaims[0] : "";
+
+      function uniqueWeakOwner() {
+        var packetPersonId = String(item.personId || "").trim();
+        var packetLeadId = String(item.leadId || "").trim();
+        if (!packetPersonId && !packetLeadId) {
+          return false;
+        }
+        var weakMatches = rosterBeforeSave.filter(function (candidate) {
+          if (!candidate) {
+            return false;
+          }
+          var candidatePersonId = String(candidate.personId || "").trim();
+          var candidateLeadId = String(candidate.leadId || "").trim();
+          var exact = !!(
+            (packetPersonId && candidatePersonId === packetPersonId) ||
+            (packetLeadId && candidateLeadId === packetLeadId)
+          );
+          return !!(
+            exact &&
+            !(
+              (packetPersonId &&
+                candidatePersonId &&
+                candidatePersonId !== packetPersonId) ||
+              (packetLeadId &&
+                candidateLeadId &&
+                candidateLeadId !== packetLeadId)
+            )
+          );
+        });
+        return weakMatches.length === 1 && subjectKey(weakMatches[0]) === key;
+      }
+
+      var shouldClear = false;
+      if (bookingClaims.length > 1) {
+        contradictoryPacket = contradictoryPacket ||
+          packetSubjectId === key ||
+          Boolean(bookingId && bookingClaims.indexOf(bookingId) !== -1);
+      } else if (packetSubjectId) {
+        shouldClear =
+          packetSubjectId === key &&
+          (!bookingId || !packetBooking || packetBooking === bookingId);
+        if (
+          (!shouldClear && packetSubjectId === key) ||
+          (!shouldClear && bookingId && packetBooking === bookingId)
+        ) {
+          contradictoryPacket = true;
+        }
+      } else if (bookingId) {
+        shouldClear = packetBooking === bookingId;
+      } else {
+        shouldClear = uniqueWeakOwner();
+      }
+      if (shouldClear) {
+        changed = true;
+        clearBookinEncounterAssociation(item);
+      }
+      return item;
+    });
+    if (contradictoryPacket) {
+      setStatus(
+        "A contradictory Book-In packet may own this subject. Run Integrity before removing it."
+      );
+      return;
+    }
+    if (changed) {
+      try {
+        writeBookinRecords(list);
+      } catch (error) {
+        setStatus("Could not unlink the Book-In packet. The subject was not removed.");
+        return;
+      }
+    }
     encounterSubjects = encounterSubjects.filter(function (item) {
       return subjectKey(item) !== key;
     });
-    if (row && row.bookinRecordId) {
-      var list = bookinRecords().map(function (item) {
-        if (item && item.id === row.bookinRecordId) {
-          item.encounterId = "";
+    if (saveDraftQuiet({ force: true }) === false) {
+      encounterSubjects = rosterBeforeSave;
+      if (changed) {
+        try {
+          writeBookinRecords(originalPackets);
+        } catch (error) {
+          setStatus(
+            "The Encounter save failed and the Book-In link could not be restored. Run Integrity now."
+          );
         }
-        return item;
-      });
-      writeBookinRecords(list);
+      }
+      paintSubjectsTable(encounterId);
+      paintBanner();
+      return;
     }
-    saveDraftQuiet({ force: true });
     paintSubjectsTable(encounterId);
     paintBanner();
     setStatus("Subject removed from this encounter.", true);
@@ -2193,7 +2555,7 @@
     if (row && row.docsGeneratedAt) {
       return "generated";
     }
-    if (row && row.bookinRecordId) {
+    if (subjectBookingId(row)) {
       return "booked";
     }
     return "";
@@ -2222,7 +2584,7 @@
       setStatus("Book-in is only for arrested subjects.");
       return;
     }
-    if (row.bookinRecordId) {
+    if (subjectBookingId(row)) {
       setStatus("This subject is already booked-in.");
       return;
     }
@@ -2230,7 +2592,9 @@
       setStatus("This encounter is completed and locked.");
       return;
     }
-    saveDraftQuiet({ force: true });
+    if (saveDraftQuiet({ force: true, preserveStatus: true }) === false) {
+      return;
+    }
     if (byId("bookSubjectKey")) {
       byId("bookSubjectKey").value = subjectKey(row);
     }
@@ -2265,27 +2629,74 @@
   }
 
   function generateSubjectDocs(row) {
-    if (!row || !row.bookinRecordId) {
+    var bookingId = subjectBookingId(row);
+    if (!row || !bookingId) {
       setStatus("Book the subject before generating docs.");
       return;
     }
-    row.docsGeneratedAt = new Date().toISOString();
+    var key = subjectKey(row);
+    var matches = encounterSubjects.filter(function (item) {
+      return item && subjectKey(item) === key;
+    });
+    if (matches.length !== 1) {
+      setStatus(
+        "This Encounter has a missing or duplicate subject identity. Run Integrity before generating documents."
+      );
+      return;
+    }
+    var encId =
+      (byId("encounterId") && byId("encounterId").value) || queryId();
+    var packetStore = readBookinRecords();
+    if (!packetStore.ok) {
+      setStatus(packetStore.error);
+      return;
+    }
+    var packetMatches = packetStore.records.filter(function (item) {
+      if (!item || item.encounterId !== encId) {
+        return false;
+      }
+      var packetBookingIds = [item.id, item.bookingId, item.bookinRecordId]
+        .map(function (value) {
+          return String(value || "").trim();
+        })
+        .filter(function (value, index, values) {
+          return value && values.indexOf(value) === index;
+        });
+      return (
+        packetBookingIds.length === 1 &&
+        packetBookingIds[0] === bookingId &&
+        String(item.subjectId || "").trim() === key
+      );
+    });
+    if (packetMatches.length !== 1) {
+      setStatus(
+        "The Book-In packet does not uniquely match this Encounter subject. Run Integrity before generating documents."
+      );
+      return;
+    }
+    var rosterBeforeSave = encounterSubjects.map(function (item) {
+      return cloneSubject(item, item && item.encounterId);
+    });
+    var generatedAt = new Date().toISOString();
     encounterSubjects = encounterSubjects.map(function (item) {
-      if (subjectKey(item) === subjectKey(row)) {
-        item.docsGeneratedAt = row.docsGeneratedAt;
+      if (subjectKey(item) === key) {
+        var updated = cloneSubject(item, item && item.encounterId);
+        updated.docsGeneratedAt = generatedAt;
+        return updated;
       }
       return item;
     });
-    saveDraftQuiet({ force: true });
+    if (saveDraftQuiet({ force: true }) === false) {
+      encounterSubjects = rosterBeforeSave;
+      paintSubjectsTable(
+        (byId("encounterId") && byId("encounterId").value) || queryId()
+      );
+      return;
+    }
     paintSubjectsTable(
       (byId("encounterId") && byId("encounterId").value) || queryId()
     );
-    var encId = (byId("encounterId") && byId("encounterId").value) || queryId();
-    window.location.href =
-      "bookin.html?encounterId=" +
-      encodeURIComponent(encId) +
-      "&recordId=" +
-      encodeURIComponent(row.bookinRecordId);
+    window.location.href = bookinHref(encId, bookingId, key);
   }
 
   function saveBookToEncounter() {
@@ -2304,7 +2715,12 @@
       setStatus("Book-in is only for arrested subjects.");
       return;
     }
-    if (saveDraftQuiet({ force: true }) === false) {
+    var packetStore = readBookinRecords();
+    if (!packetStore.ok) {
+      setStatus(packetStore.error);
+      return;
+    }
+    if (saveDraftQuiet({ force: true, preserveStatus: true }) === false) {
       return;
     }
     var m = model();
@@ -2338,6 +2754,7 @@
     var input =
       m && typeof m.arrestInputFromSubject === "function"
         ? m.arrestInputFromSubject(row, shared, {
+            subjectId: subjectKey(row),
             bookinRecordId: packetId,
             bookInDateTime: now,
             arrestingOfficer: officerName,
@@ -2354,8 +2771,10 @@
     }
     var packet = {
       id: packetId,
+      subjectId: subjectKey(row),
       createdAt: now,
       updatedAt: now,
+      encounterProjectionFiledAt: now,
       firstName: row.firstName || "",
       lastName: row.lastName || "",
       aNumber: row.alienNumber || "",
@@ -2364,9 +2783,9 @@
       dateTime: now,
       arrestTime: input.arrestTime || "",
       encounterId: encounter.encounterId,
-      encounterRole: row.encounterRole || "",
-      subjectRole: row.encounterRole || "",
-      vehiclePosition: input.vehiclePosition || "",
+      encounterRole: subjectRole(row),
+      subjectRole: subjectRole(row),
+      vehiclePosition: input.vehiclePosition || subjectOccupantRole(row),
       team: shared.team || encounter.team || "",
       officersName: officerName,
       personId: promoted.personId || row.personId || "",
@@ -2393,24 +2812,41 @@
         )
       }
     };
-    var packets = bookinRecords();
+    var packets = packetStore.records;
     packets.push(packet);
     writeBookinRecords(packets);
+    row.bookingId = packetId;
     row.bookinRecordId = packetId;
     row.packetFiledAt = now;
     row.leadId = promoted.leadId || row.leadId || "";
     row.personId = promoted.personId || row.personId || "";
     row.docsGeneratedAt = "";
+    row = cloneSubject(row, encounter.encounterId);
     encounterSubjects = encounterSubjects.map(function (item) {
       return subjectKey(item) === key ? row : item;
     });
+    if (saveDraftQuiet({ force: true }) === false) {
+      paintSubjectsTable(encounter.encounterId);
+      paintBanner();
+      setStatus(
+        "The case and Book-In packet were saved, but the Encounter link did not finish. Retry from the linked packet."
+      );
+      return;
+    }
+    var linkageWarnings = [];
     if (encounter.encounterId && row.personId && m.store.linkEncounterVehiclesToPerson) {
-      m.store.linkEncounterVehiclesToPerson({
+      var vehicleLink = m.store.linkEncounterVehiclesToPerson({
         encounterId: encounter.encounterId,
+        subjectId: subjectKey(row),
         bookinRecordId: packetId,
         leadId: row.leadId,
         personId: row.personId
       });
+      if (!vehicleLink || !vehicleLink.ok) {
+        linkageWarnings.push(
+          (vehicleLink && vehicleLink.error) || "Encounter vehicles were not linked."
+        );
+      }
     }
     if (
       row.arrestingOfficerId &&
@@ -2421,15 +2857,20 @@
       COPDoc.officers.recordFieldArrest(row.arrestingOfficerId, {
         arrestId: promoted.arrestId || "",
         encounterId: encounter.encounterId,
+        subjectId: subjectKey(row),
         personId: row.personId,
         bookedAt: now
       });
     }
-    saveDraftQuiet({ force: true });
     closeBookFloat();
     paintSubjectsTable(encounter.encounterId);
     paintBanner();
-    setStatus("Booked-in " + subjectLabel(row) + ".", true);
+    setStatus(
+      linkageWarnings.length
+        ? "Booked-in " + subjectLabel(row) + ", with warning: " + linkageWarnings.join(" ")
+        : "Booked-in " + subjectLabel(row) + ".",
+      linkageWarnings.length === 0
+    );
   }
 
   function bindBookFloat() {
@@ -2505,7 +2946,7 @@
       var name =
         [row.lastName, row.firstName].filter(Boolean).join(", ") ||
         (row.unidentified ? "Unidentified" : "—");
-      var role = String(row.encounterRole || "").toUpperCase();
+      var role = String(subjectRole(row) || "").toUpperCase();
       var roleLabel =
         role === "OTHER"
           ? "Other"
@@ -2630,6 +3071,9 @@
 
   function rememberPersistedEncounter(record) {
     transientEncounter = null;
+    encounterEditMeta = record && record.meta
+      ? JSON.parse(JSON.stringify(record.meta))
+      : null;
     if (record.encounterId && window.history && window.history.replaceState) {
       window.history.replaceState(
         {},
@@ -2647,20 +3091,33 @@
     var m = model();
     var record = collectEncounter();
     if (!record.encounterId) {
-      return;
+      setStatus("Create the encounter before saving changes.");
+      return false;
     }
     if (!options.force && !encounterHasMeaningfulData(record)) {
       return true;
     }
-    if (isComplete(record) || isComplete(m.store.getEncounter(record.encounterId))) {
-      return true;
-    }
-    var saved = m.store.saveEncounter(record, { mode: "draft" });
-    if (saved && !saved.ok) {
-      setStatus(saved.error || "Could not save the encounter.");
+    var fresh =
+      m && m.store && typeof m.store.loadFromDisk === "function"
+        ? m.store.loadFromDisk()
+        : { ok: true };
+    if (fresh && fresh.ok === false) {
+      setStatus(fresh.error || "Could not reload the encounter store.");
       return false;
     }
-    rememberPersistedEncounter(record);
+    var previous = m.store.getEncounter(record.encounterId);
+    if (isComplete(record) || isComplete(previous)) {
+      setStatus("This encounter was completed in another window and is locked.");
+      return false;
+    }
+    var mode =
+      options.preserveStatus && isCommitted(previous) ? "commit" : "draft";
+    var saved = m.store.saveEncounter(record, { mode: mode });
+    if (!saved || !saved.ok) {
+      setStatus((saved && saved.error) || "Could not save the encounter.");
+      return false;
+    }
+    rememberPersistedEncounter(saved.encounter || record);
     return true;
   }
 
@@ -2680,14 +3137,7 @@
       setStatus(saved.error || "Could not save the encounter.");
       return;
     }
-    transientEncounter = null;
-    if (record.encounterId && window.history && window.history.replaceState) {
-      window.history.replaceState(
-        {},
-        "",
-        "encounter-form.html?id=" + encodeURIComponent(record.encounterId)
-      );
-    }
+    rememberPersistedEncounter(saved.encounter || record);
     setStatus("Encounter filed.", true);
   }
 
@@ -2703,7 +3153,7 @@
       setStatus("This encounter is completed and locked.");
       return;
     }
-    if (saveDraftQuiet({ force: true }) === false) {
+    if (saveDraftQuiet({ force: true, preserveStatus: true }) === false) {
       return;
     }
     window.location.href = bookinHref(id);
@@ -2713,21 +3163,39 @@
     showEncounterTab("tab-narrative");
   }
 
-  function unlinkBookinPacketsFromEncounter(encounterId) {
+  function unlinkBookinPacketsFromEncounter(encounterId, records) {
     if (!encounterId) {
-      return;
+      return { ok: true, changed: false, original: [], records: [] };
     }
+    var original = JSON.parse(
+      JSON.stringify(Array.isArray(records) ? records : bookinRecords())
+    );
     var changed = false;
-    var list = bookinRecords().map(function (item) {
-      if (item && item.encounterId === encounterId) {
+    var list = original.map(function (storedItem) {
+      var item = storedItem ? Object.assign({}, storedItem) : storedItem;
+      if (
+        item &&
+        String(item.encounterId || "").trim() === String(encounterId).trim()
+      ) {
         changed = true;
-        item.encounterId = "";
+        clearBookinEncounterAssociation(item);
       }
       return item;
     });
     if (changed) {
-      writeBookinRecords(list);
+      try {
+        writeBookinRecords(list);
+      } catch (error) {
+        return {
+          ok: false,
+          changed: false,
+          original: original,
+          records: original,
+          error: "Could not unlink the Book-In packets. The Encounter was not deleted."
+        };
+      }
     }
+    return { ok: true, changed: changed, original: original, records: list };
   }
 
   function deleteEncounterRecord(encounterId, options) {
@@ -2758,15 +3226,38 @@
       setStatus("That encounter was not found.");
       return false;
     }
-    unlinkBookinPacketsFromEncounter(id);
+    var packetStore = readBookinRecords();
+    if (!packetStore.ok) {
+      setStatus(packetStore.error);
+      return false;
+    }
+    var packetUnlink = unlinkBookinPacketsFromEncounter(
+      id,
+      packetStore.records
+    );
+    if (!packetUnlink.ok) {
+      setStatus(packetUnlink.error);
+      return false;
+    }
     if (existing) {
       var result = m.store.deleteEncounter(id);
       if (!result || !result.ok) {
+        if (packetUnlink.changed) {
+          try {
+            writeBookinRecords(packetUnlink.original);
+          } catch (error) {
+            setStatus(
+              "The Encounter delete failed and its Book-In links could not be restored. Run Integrity now."
+            );
+            return false;
+          }
+        }
         setStatus((result && result.error) || "Could not delete the encounter.");
         return false;
       }
     }
     transientEncounter = null;
+    encounterEditMeta = null;
     setStatus("Deleted encounter " + id + ".", true);
     if (options.redirect !== false) {
       if (pageKey() === "encounter") {
@@ -2956,8 +3447,9 @@
     var seed = applyEntrySeeds(created);
     hydrateEncounter(created);
     if (seed.seeded) {
-      saveDraftQuiet({ force: true });
-      setStatus(seed.message, true);
+      if (saveDraftQuiet({ force: true }) !== false) {
+        setStatus(seed.message, true);
+      }
     }
     return created;
   }
@@ -2996,8 +3488,24 @@
         teamEl.value = current.team || "3";
         return;
       }
-      if (subjectsForEncounter(id).length) {
-        setStatus("Team cannot change after subjects are booked to this encounter.");
+      // Renaming a persisted Encounter is a cross-store/media migration, not a
+      // normal draft save. The previous implementation cloned the record and
+      // deleted the original, which could orphan Book-In references and delete
+      // media still used by the replacement. Keep the ID stable once the first
+      // draft reaches storage; a later migration stage can provide an atomic
+      // rename operation.
+      if (stored) {
+        setStatus("Team is locked after the encounter is first saved.");
+        teamEl.value = current.team || "3";
+        return;
+      }
+      if (
+        (Array.isArray(current.subjects) && current.subjects.length) ||
+        bookinRecords().some(function (row) {
+          return row && row.encounterId === id;
+        })
+      ) {
+        setStatus("Team cannot change after subjects are added to this encounter.");
         teamEl.value = current.team || "3";
         return;
       }
@@ -3008,29 +3516,29 @@
         existingIds: existingEncounterIds(id)
       });
       if (nextId === id) {
+        var sameIdTeam = current.team;
         current.team = String(team);
-        if (stored) {
-          m.store.saveEncounter(current, { mode: "draft" });
-          rememberPersistedEncounter(current);
-        } else {
+        transientEncounter = current;
+        hydrateEncounter(current);
+        if (saveDraftQuiet({ force: true }) === false) {
+          current.team = sameIdTeam;
           transientEncounter = current;
           hydrateEncounter(current);
-          saveDraftQuiet({ force: true });
         }
         return;
       }
+      var previousTeam = current.team;
+      var previousId = current.encounterId;
       current.team = String(team);
       current.encounterId = nextId;
-      if (stored) {
-        m.store.saveEncounter(current, { mode: "draft" });
-        if (m.store.deleteEncounter) {
-          m.store.deleteEncounter(id);
-        }
-        rememberPersistedEncounter(current);
-      } else {
+      transientEncounter = current;
+      hydrateEncounter(current);
+      if (saveDraftQuiet({ force: true }) === false) {
+        current.team = previousTeam;
+        current.encounterId = previousId;
         transientEncounter = current;
         hydrateEncounter(current);
-        saveDraftQuiet({ force: true });
+        return;
       }
       hydrateEncounter(current);
       setStatus("Encounter ID updated for team " + team + ".", true);
@@ -3117,6 +3625,47 @@
         paintEvidence();
       });
     }
+    [byId("addEncounterPhoto"), byId("addEncounterFile")].forEach(function (link) {
+      if (!link || link.dataset.bound === "true") {
+        return;
+      }
+      link.dataset.bound = "true";
+      link.addEventListener("click", function (event) {
+        var id =
+          (byId("encounterId") && byId("encounterId").value) || queryId();
+        var m = model();
+        if (m && m.store && typeof m.store.loadFromDisk === "function") {
+          m.store.loadFromDisk();
+        }
+        var existing =
+          id && m && m.store && typeof m.store.getEncounter === "function"
+            ? m.store.getEncounter(id)
+            : null;
+        if (!id || isComplete(existing)) {
+          event.preventDefault();
+          setStatus(
+            existing
+              ? "This encounter is completed and locked."
+              : "Create the encounter before adding evidence."
+          );
+          setEvidenceLinks(existing);
+          return;
+        }
+        if (!existing && saveDraftQuiet({ force: true }) === false) {
+          event.preventDefault();
+          setEvidenceLinks();
+          return;
+        }
+        if (!existing) {
+          event.preventDefault();
+          setEvidenceLinks();
+          var href = link.getAttribute("href");
+          if (href) {
+            window.location.href = href;
+          }
+        }
+      });
+    });
     var narrativeBtn = byId("openEncounterNarrativesButton");
     if (narrativeBtn && narrativeBtn.dataset.bound !== "true") {
       narrativeBtn.dataset.bound = "true";

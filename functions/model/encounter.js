@@ -48,21 +48,136 @@
     return prefix + next;
   }
 
-  function createEncounterSubject(extra) {
-    extra = extra || {};
+  var hasOwn = Object.prototype.hasOwnProperty;
+
+  function subjectText(value) {
+    return String(value == null ? "" : value).trim();
+  }
+
+  function subjectOwn(row, key) {
+    return !!row && hasOwn.call(row, key);
+  }
+
+  function encounterSubjectId(subject) {
+    return subjectText(subject && subject.subjectId);
+  }
+
+  function encounterSubjectBookingId(subject) {
+    if (subjectOwn(subject, "bookingId")) {
+      return subjectText(subject.bookingId);
+    }
+    return subjectText(subject && subject.bookinRecordId);
+  }
+
+  function encounterSubjectRole(subject) {
+    if (subjectOwn(subject, "role")) {
+      return subjectText(subject.role).toUpperCase();
+    }
+    return subjectText(subject && subject.encounterRole).toUpperCase();
+  }
+
+  function encounterSubjectOccupantRole(subject) {
+    if (subjectOwn(subject, "occupantRole")) {
+      return subjectText(subject.occupantRole).toUpperCase();
+    }
+    return subjectText(subject && subject.vehicleRole).toUpperCase();
+  }
+
+  /**
+   * A stable migration identifier for an embedded EncounterSubject that predates
+   * subjectId. It is deliberately based on the owning Encounter and the
+   * strongest legacy reference available. The row index is used only when the
+   * legacy row has no usable reference of its own.
+   */
+  function deterministicEncounterSubjectId(encounterId, subject, index) {
+    subject = subject || {};
+    var identity = "";
+    var bookingId = encounterSubjectBookingId(subject);
+    var personId = subjectText(subject.personId);
+    var leadId = subjectText(subject.leadId);
+    var alienNumber = subjectText(subject.alienNumber).replace(/\D/g, "");
+    var name = [
+      subjectText(subject.lastName).toUpperCase(),
+      subjectText(subject.firstName).toUpperCase()
+    ].join("|");
+    if (bookingId) {
+      identity = "booking|" + bookingId;
+    } else if (personId) {
+      identity = "person|" + personId;
+    } else if (leadId) {
+      identity = "lead|" + leadId;
+    } else if (alienNumber) {
+      identity = "alien|" + alienNumber + "|" + name;
+    } else if (name !== "|") {
+      identity = "name|" + name;
+    } else {
+      identity = "row|" + String(index == null ? 0 : index);
+    }
+    var seed = subjectText(encounterId) + "|" + identity;
+    var hash = 5381;
+    var secondaryHash = 2166136261;
+    var i;
+    for (i = 0; i < seed.length; i += 1) {
+      hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+      secondaryHash ^= seed.charCodeAt(i);
+      secondaryHash =
+        (secondaryHash +
+          (secondaryHash << 1) +
+          (secondaryHash << 4) +
+          (secondaryHash << 7) +
+          (secondaryHash << 8) +
+          (secondaryHash << 24)) |
+        0;
+    }
+    var encoded = (hash >>> 0).toString(36);
+    var secondaryEncoded = (secondaryHash >>> 0).toString(36);
+    while (encoded.length < 7) {
+      encoded = "0" + encoded;
+    }
+    while (secondaryEncoded.length < 7) {
+      secondaryEncoded = "0" + secondaryEncoded;
+    }
+    return "sub_legacy_" + encoded + secondaryEncoded;
+  }
+
+  function normalizeEncounterSubject(extra, opts) {
+    extra = extra && typeof extra === "object" && !Array.isArray(extra) ? extra : {};
+    opts = opts || {};
+    var encounterId =
+      subjectText(opts.encounterId) ||
+      subjectText(extra.encounterId) ||
+      subjectText(extra.shared && extra.shared.encounterId);
+    var bookingId = encounterSubjectBookingId(extra);
+    var role = encounterSubjectRole(extra);
+    var occupantRole = encounterSubjectOccupantRole(extra);
+    var subjectId = encounterSubjectId(extra) || subjectText(opts.subjectId);
+    if (!subjectId && encounterId && opts.deterministic !== false) {
+      subjectId = deterministicEncounterSubjectId(encounterId, extra, opts.index);
+    }
+    if (!subjectId && opts.mintId !== false) {
+      subjectId = model.newId
+        ? model.newId("sub")
+        : "sub_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+    }
     var built = model.assign(
       {
-        subjectId: extra.subjectId || (model.newId ? model.newId("sub") : ""),
+        entityType: "ENCOUNTER_SUBJECT",
+        schema: "copdocx.encounter-subject.v1",
+        subjectId: subjectId,
+        encounterId: encounterId,
         personId: "",
         leadId: "",
-        bookinRecordId: "",
+        bookingId: bookingId,
+        bookinRecordId: bookingId,
         lastName: "",
         firstName: "",
         alienNumber: "",
-        encounterRole: "",
+        role: role,
+        encounterRole: role,
         roleOther: "",
         citizenship: "",
-        vehicleRole: "",
+        occupantRole: occupantRole,
+        vehicleRole: occupantRole,
         custody: "",
         outcome: "",
         releaseReason: "",
@@ -81,8 +196,22 @@
       },
       extra
     );
+    built.entityType = built.entityType || "ENCOUNTER_SUBJECT";
+    built.schema = built.schema || "copdocx.encounter-subject.v1";
+    built.subjectId = subjectId;
+    built.encounterId = encounterId;
+    built.personId = subjectText(built.personId);
+    built.leadId = subjectText(built.leadId);
+    built.bookingId = bookingId;
+    built.bookinRecordId = bookingId;
+    built.role = role;
+    built.encounterRole = role;
+    built.occupantRole = occupantRole;
+    built.vehicleRole = occupantRole;
     if (!Array.isArray(built.techniques)) {
       built.techniques = [];
+    } else {
+      built.techniques = built.techniques.slice();
     }
     built.unidentified = !!built.unidentified;
     if (!built.shared || typeof built.shared !== "object" || Array.isArray(built.shared)) {
@@ -90,14 +219,228 @@
     }
     if (!Array.isArray(built.shared.officerIds)) {
       built.shared.officerIds = built.shared.officerIds ? [].concat(built.shared.officerIds) : [];
+    } else {
+      built.shared.officerIds = built.shared.officerIds.slice();
     }
     if (!Array.isArray(built.shared.vehicles)) {
       built.shared.vehicles = [];
+    } else {
+      built.shared.vehicles = built.shared.vehicles.slice();
     }
-    if (!built.subjectId && model.newId) {
-      built.subjectId = model.newId("sub");
+    var seenLegacyIds = {};
+    built.legacyEncounterParticipantIds = (
+      Array.isArray(built.legacyEncounterParticipantIds)
+        ? built.legacyEncounterParticipantIds
+        : []
+    ).reduce(function (ids, value) {
+      var id = subjectText(value);
+      if (id && !seenLegacyIds[id]) {
+        seenLegacyIds[id] = true;
+        ids.push(id);
+      }
+      return ids;
+    }, []);
+    var bookingAlias = bookingId ? "ep_" + bookingId : "";
+    if (bookingAlias && !seenLegacyIds[bookingAlias]) {
+      built.legacyEncounterParticipantIds.push(bookingAlias);
     }
     return built;
+  }
+
+  function cloneSubject(subject) {
+    return JSON.parse(JSON.stringify(subject || {}));
+  }
+
+  function applyIncomingSubjectAliases(merged, incoming) {
+    var value;
+    if (subjectOwn(incoming, "bookingId")) {
+      value = subjectText(incoming.bookingId);
+      merged.bookingId = value;
+      merged.bookinRecordId = value;
+    } else if (subjectOwn(incoming, "bookinRecordId")) {
+      value = subjectText(incoming.bookinRecordId);
+      merged.bookingId = value;
+      merged.bookinRecordId = value;
+    }
+    if (subjectOwn(incoming, "role")) {
+      value = subjectText(incoming.role);
+      merged.role = value;
+      merged.encounterRole = value;
+    } else if (subjectOwn(incoming, "encounterRole")) {
+      value = subjectText(incoming.encounterRole);
+      merged.role = value;
+      merged.encounterRole = value;
+    }
+    if (subjectOwn(incoming, "occupantRole")) {
+      value = subjectText(incoming.occupantRole);
+      merged.occupantRole = value;
+      merged.vehicleRole = value;
+    } else if (subjectOwn(incoming, "vehicleRole")) {
+      value = subjectText(incoming.vehicleRole);
+      merged.occupantRole = value;
+      merged.vehicleRole = value;
+    }
+    return merged;
+  }
+
+  function unusedSubjectMatch(rows, used, valueFor, value) {
+    if (!value) {
+      return -1;
+    }
+    var matches = [];
+    rows.forEach(function (row, index) {
+      if (!used[index] && valueFor(row) === value) {
+        matches.push(index);
+      }
+    });
+    return matches.length === 1 ? matches[0] : -1;
+  }
+
+  function matchingPreviousSubject(rows, used, subject) {
+    var requestedSubjectId = encounterSubjectId(subject);
+    if (requestedSubjectId) {
+      return unusedSubjectMatch(
+        rows,
+        used,
+        encounterSubjectId,
+        requestedSubjectId
+      );
+    }
+    var match = unusedSubjectMatch(
+      rows,
+      used,
+      encounterSubjectBookingId,
+      encounterSubjectBookingId(subject)
+    );
+    if (match >= 0) {
+      return match;
+    }
+    match = unusedSubjectMatch(rows, used, function (row) {
+      return subjectText(row && row.personId);
+    }, subjectText(subject && subject.personId));
+    if (match >= 0) {
+      return match;
+    }
+    return unusedSubjectMatch(rows, used, function (row) {
+      return subjectText(row && row.leadId);
+    }, subjectText(subject && subject.leadId));
+  }
+
+  function normalizeEncounterSubjects(subjects, opts) {
+    opts = opts || {};
+    var rows = Array.isArray(subjects) ? subjects : [];
+    var encounterId = subjectText(opts.encounterId);
+    var previous = Array.isArray(opts.previousSubjects)
+      ? normalizeEncounterSubjects(opts.previousSubjects, { encounterId: encounterId })
+      : [];
+    var usedPrevious = {};
+    var reservedIds = {};
+    previous.forEach(function (row) {
+      var id = encounterSubjectId(row);
+      if (id) {
+        reservedIds[id] = true;
+      }
+    });
+    rows.forEach(function (row) {
+      var id = encounterSubjectId(row);
+      if (id) {
+        reservedIds[id] = true;
+      }
+    });
+    return rows.map(function (row, index) {
+      var incoming = row && typeof row === "object" && !Array.isArray(row) ? row : {};
+      var previousIndex = matchingPreviousSubject(previous, usedPrevious, incoming);
+      var prior = previousIndex >= 0 ? previous[previousIndex] : null;
+      var incomingHasCanonicalShape =
+        subjectText(incoming.entityType) === "ENCOUNTER_SUBJECT" &&
+        subjectText(incoming.schema) === "copdocx.encounter-subject.v1";
+      var priorHasCanonicalShape = !!(
+        prior &&
+        subjectText(prior.entityType) === "ENCOUNTER_SUBJECT" &&
+        subjectText(prior.schema) === "copdocx.encounter-subject.v1"
+      );
+      var source = incoming;
+      if (prior && opts.mergePrevious !== false) {
+        source = model.assign(cloneSubject(prior), incoming);
+        source = applyIncomingSubjectAliases(source, incoming);
+        source.subjectId = prior.subjectId;
+      } else if (prior && !encounterSubjectId(incoming)) {
+        source = cloneSubject(incoming);
+        source.subjectId = prior.subjectId;
+      }
+      if (previousIndex >= 0) {
+        usedPrevious[previousIndex] = true;
+      }
+      var hadStableId = !!encounterSubjectId(source);
+      var normalized = normalizeEncounterSubject(source, {
+        encounterId: encounterId,
+        index: index,
+        deterministic: true
+      });
+      if (!hadStableId) {
+        var baseId = normalized.subjectId;
+        var candidate = baseId;
+        var suffix = 2;
+        while (reservedIds[candidate]) {
+          candidate = baseId + "_" + suffix;
+          suffix += 1;
+        }
+        normalized.subjectId = candidate;
+      }
+      /*
+       * The former Narrative adapter focused unbooked rows by ep_<index>,
+       * including older rows that already carried an ad-hoc subjectId. Stamp
+       * that alias only while upgrading a pre-v1 shape. Reordering a canonical
+       * row must never manufacture a new index alias.
+       */
+      if (!incomingHasCanonicalShape && !priorHasCanonicalShape) {
+        var legacyAlias = "ep_" + index;
+        normalized.legacyEncounterParticipantIds = Array.isArray(
+          normalized.legacyEncounterParticipantIds
+        )
+          ? normalized.legacyEncounterParticipantIds.slice()
+          : [];
+        if (normalized.legacyEncounterParticipantIds.indexOf(legacyAlias) === -1) {
+          normalized.legacyEncounterParticipantIds.push(legacyAlias);
+        }
+      }
+      reservedIds[normalized.subjectId] = true;
+      return normalized;
+    });
+  }
+
+  function mergeEncounterSubjects(previousSubjects, incomingSubjects, opts) {
+    opts = opts || {};
+    return normalizeEncounterSubjects(incomingSubjects, {
+      encounterId: opts.encounterId,
+      previousSubjects: previousSubjects,
+      mergePrevious: true
+    });
+  }
+
+  function encounterSubjectMatches(subject, reference) {
+    reference = reference || {};
+    var value = encounterSubjectId(reference);
+    if (value) {
+      return encounterSubjectId(subject) === value;
+    }
+    value = encounterSubjectBookingId(reference);
+    if (value) {
+      return encounterSubjectBookingId(subject) === value;
+    }
+    value = subjectText(reference.personId);
+    if (value) {
+      return subjectText(subject && subject.personId) === value;
+    }
+    value = subjectText(reference.leadId);
+    if (value) {
+      return subjectText(subject && subject.leadId) === value;
+    }
+    return false;
+  }
+
+  function createEncounterSubject(extra) {
+    return normalizeEncounterSubject(extra, { deterministic: false, mintId: true });
   }
 
   function formatSharedAddress(loc) {
@@ -152,7 +495,9 @@
   }
 
   function stampSharedStop(subject, sharedOrEncounter) {
-    var built = createEncounterSubject(subject || {});
+    var built = normalizeEncounterSubject(subject || {}, {
+      encounterId: subjectText(sharedOrEncounter && sharedOrEncounter.encounterId)
+    });
     if (
       sharedOrEncounter &&
       (sharedOrEncounter.entityType === "ENCOUNTER" ||
@@ -181,6 +526,7 @@
         ? sharedOrEncounter.vehicles.slice()
         : []
     };
+    built.encounterId = built.shared.encounterId || built.encounterId || "";
     return built;
   }
 
@@ -192,7 +538,7 @@
       subjectId: subject.subjectId || "",
       personId: subject.personId || "",
       encounterDate: shared.startedAt || "",
-      encounterRole: subject.encounterRole || "",
+      encounterRole: encounterSubjectRole(subject),
       encounterType: shared.eventType || "",
       encounterDisposition: subject.outcome || "",
       encounterLocation: shared.address || shared.city || "",
@@ -215,17 +561,24 @@
     person.encounters = Array.isArray(person.encounters) ? person.encounters : [];
     var row = leEncounterFromSubject(subject, shared);
     var index = -1;
+    var exactIndexes = [];
+    var legacyIndexes = [];
     person.encounters.forEach(function (item, i) {
       if (!item || String(item.encounterId || "") !== key) {
         return;
       }
-      if (subjectId && item.subjectId && String(item.subjectId) !== subjectId) {
-        return;
-      }
-      if (index < 0) {
-        index = i;
+      var itemSubjectId = String(item.subjectId || "");
+      if (subjectId && itemSubjectId === subjectId) {
+        exactIndexes.push(i);
+      } else if (!itemSubjectId) {
+        legacyIndexes.push(i);
       }
     });
+    if (exactIndexes.length) {
+      index = exactIndexes[0];
+    } else if (legacyIndexes.length === 1) {
+      index = legacyIndexes[0];
+    }
     if (index >= 0) {
       person.encounters[index] = model.assign(person.encounters[index], row);
     } else {
@@ -240,12 +593,20 @@
     shared = shared || subject.shared || {};
     var started = String(shared.startedAt || extra.arrestDateTime || "");
     var vehiclePosition = "";
-    if (subject.vehicleRole === "DRIVER") {
+    var occupantRole = encounterSubjectOccupantRole(subject);
+    var subjectRole = encounterSubjectRole(subject);
+    var bookingId = subjectOwn(extra, "bookingId")
+      ? subjectText(extra.bookingId)
+      : subjectOwn(extra, "bookinRecordId")
+        ? subjectText(extra.bookinRecordId)
+        : encounterSubjectBookingId(subject);
+    if (occupantRole === "DRIVER") {
       vehiclePosition = "driver";
-    } else if (subject.vehicleRole === "PASSENGER") {
+    } else if (occupantRole === "PASSENGER") {
       vehiclePosition = "passenger";
     }
     return {
+      subjectId: encounterSubjectId(subject) || subjectText(extra.subjectId),
       personId: subject.personId || extra.personId || "",
       leadId: subject.leadId || extra.leadId || "",
       lastName: subject.lastName || extra.lastName || "",
@@ -254,8 +615,10 @@
       citizenship: subject.citizenship || extra.citizenship || "",
       encounterId: shared.encounterId || extra.encounterId || "",
       encounterNumber: shared.encounterId || extra.encounterNumber || "",
-      subjectRole: subject.encounterRole || extra.subjectRole || "",
+      subjectRole: subjectRole || extra.subjectRole || "",
+      role: subjectRole || extra.role || extra.subjectRole || "",
       vehiclePosition: extra.vehiclePosition || vehiclePosition,
+      occupantRole: occupantRole || extra.occupantRole || "",
       arrestingOfficer: extra.arrestingOfficer || "",
       arrestingOfficerId: subject.arrestingOfficerId || extra.arrestingOfficerId || "",
       team: shared.team || extra.team || "",
@@ -267,7 +630,8 @@
       arrestLocation: extra.arrestLocation || shared.address || "",
       latitude: extra.latitude || shared.latitude || "",
       longitude: extra.longitude || shared.longitude || "",
-      bookinRecordId: extra.bookinRecordId || subject.bookinRecordId || "",
+      bookingId: bookingId,
+      bookinRecordId: bookingId,
       bookInDateTime: extra.bookInDateTime || "",
       booking: extra.booking || {}
     };
@@ -372,6 +736,9 @@
     if (!Array.isArray(built.subjects)) {
       built.subjects = [];
     }
+    built.subjects = normalizeEncounterSubjects(built.subjects, {
+      encounterId: built.encounterId
+    });
     if (!Array.isArray(built.links)) {
       built.links = [];
     }
@@ -488,6 +855,7 @@
     ) {
       encounter.subjects.push(
         encounterSubjectFromPerson(person, {
+          encounterId: encounter.encounterId || "",
           leadId: lead.leadId || "",
           encounterRole: roleFromCaseRole(person.caseRole || lead.caseRole)
         })
@@ -588,6 +956,7 @@
         if (!subjectAlreadyListed(encounter.subjects, target.personId)) {
           encounter.subjects.push(
             createEncounterSubject({
+              encounterId: encounter.encounterId || "",
               personId: target.personId,
               leadId: target.leadId || "",
               lastName: String(bits[0] || "").trim(),
@@ -625,6 +994,15 @@
   model.nextEncounterId = nextEncounterId;
   model.createEncounterRecord = createEncounterRecord;
   model.createEncounterSubject = createEncounterSubject;
+  model.normalizeEncounterSubject = normalizeEncounterSubject;
+  model.normalizeEncounterSubjects = normalizeEncounterSubjects;
+  model.mergeEncounterSubjects = mergeEncounterSubjects;
+  model.deterministicEncounterSubjectId = deterministicEncounterSubjectId;
+  model.encounterSubjectId = encounterSubjectId;
+  model.encounterSubjectBookingId = encounterSubjectBookingId;
+  model.encounterSubjectRole = encounterSubjectRole;
+  model.encounterSubjectOccupantRole = encounterSubjectOccupantRole;
+  model.encounterSubjectMatches = encounterSubjectMatches;
   model.encounterSubjectFromPerson = encounterSubjectFromPerson;
   model.sharedStopFromEncounter = sharedStopFromEncounter;
   model.stampSharedStop = stampSharedStop;

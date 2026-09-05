@@ -66,11 +66,6 @@
     return !!(entry && entry.checked);
   }
 
-  function encounterRole(record) {
-    var role = String(formValue(record, "encounterRole") || "").toUpperCase();
-    return role === "TARGET" || role === "COLLATERAL" ? role : "";
-  }
-
   function formSex(record) {
     if (formChecked(record, "sexMale")) {
       return "MALE";
@@ -182,59 +177,365 @@
     return "WARRANTLESS_ADMINISTRATIVE";
   }
 
-  function bundleFromEncounter(encounterId) {
-    var model = global.COPDoc && COPDoc.model;
-    if (!model || !model.store || !encounterId) {
-      return null;
+  function text(value) {
+    return String(value == null ? "" : value).trim();
+  }
+
+  function uniqueStrings(values) {
+    var seen = Object.create(null);
+    return (values || []).reduce(function (output, value) {
+      var key = text(value);
+      if (key && !seen[key]) {
+        seen[key] = true;
+        output.push(key);
+      }
+      return output;
+    }, []);
+  }
+
+  function subjectRole(subject) {
+    var model = global.COPDoc && global.COPDoc.model;
+    var role = text(
+      model && typeof model.encounterSubjectRole === "function"
+        ? model.encounterSubjectRole(subject)
+        : subject && (subject.role || subject.encounterRole)
+    ).toUpperCase();
+    return role === "TARGET" || role === "COLLATERAL" ? role : "";
+  }
+
+  function subjectBookingId(subject) {
+    var model = global.COPDoc && global.COPDoc.model;
+    return text(
+      model && typeof model.encounterSubjectBookingId === "function"
+        ? model.encounterSubjectBookingId(subject)
+        : subject && (subject.bookingId || subject.bookinRecordId)
+    );
+  }
+
+  function subjectBookingIds(subject) {
+    return uniqueStrings([
+      subjectBookingId(subject),
+      subject && subject.bookingId,
+      subject && subject.bookinRecordId
+    ]);
+  }
+
+  function recordBookingIds(record) {
+    return uniqueStrings([
+      record && record.bookingId,
+      record && record.bookinRecordId,
+      record && record.id
+    ]);
+  }
+
+  function legacySubjectFromBookin(record, encounterId, index, model) {
+    record = record || {};
+    var role = text(
+      formValue(record, "encounterRole") ||
+      record.role ||
+      record.encounterRole ||
+      record.subjectRole
+    ).toUpperCase();
+    var input = {
+      subjectId: text(record.subjectId),
+      encounterId: encounterId,
+      personId: text(record.personId),
+      leadId: text(record.leadId),
+      bookingId: text(record.bookingId || record.bookinRecordId || record.id),
+      bookinRecordId: text(record.bookingId || record.bookinRecordId || record.id),
+      lastName: formValue(record, "lastName") || record.lastName || "",
+      firstName: formValue(record, "firstName") || record.firstName || "",
+      alienNumber:
+        formValue(record, "alienNumber") || record.aNumber || record.alienNumber || "",
+      role: role,
+      encounterRole: role,
+      occupantRole: record.occupantRole || record.vehiclePosition || "",
+      vehicleRole: record.occupantRole || record.vehiclePosition || "",
+      outcome: "ARRESTED",
+      custody: "IN_CUSTODY",
+      packetFiledAt: record.updatedAt || record.createdAt || ""
+    };
+    if (model && typeof model.normalizeEncounterSubject === "function") {
+      return model.normalizeEncounterSubject(input, {
+        encounterId: encounterId,
+        index: index
+      });
     }
-    model.store.loadFromDisk();
-    var enc = model.store.getEncounter(encounterId);
-    if (!enc) {
+    return input;
+  }
+
+  function valuesIntersect(left, right) {
+    var lookup = Object.create(null);
+    (left || []).forEach(function (value) {
+      var key = text(value);
+      if (key) {
+        lookup[key] = true;
+      }
+    });
+    return (right || []).some(function (value) {
+      return !!lookup[text(value)];
+    });
+  }
+
+  function identifiersAgree(left, right) {
+    var leftIds = uniqueStrings(left);
+    var rightIds = uniqueStrings(right);
+    if (leftIds.length > 1 || rightIds.length > 1) {
+      return false;
+    }
+    if (!leftIds.length || !rightIds.length) {
+      return true;
+    }
+    return uniqueStrings(leftIds.concat(rightIds)).length === 1;
+  }
+
+  /**
+   * Assign each Book-In packet to at most one EncounterSubject. Strong IDs are
+   * considered before legacy references, and a fallback is used only when the
+   * match is unique in both directions.
+   */
+  function matchBookinRecords(subjects, records) {
+    var assignments = new Array(subjects.length);
+    var usedRecords = Object.create(null);
+    var blockedSubjects = Object.create(null);
+
+    function claimedByOtherSubject(
+      subjectIndex,
+      subject,
+      record,
+      ignoreWeakOwnership
+    ) {
+      var recordSubjectId = text(record && record.subjectId);
+      var recordBookings = recordBookingIds(record);
+      var recordPersonId = text(record && record.personId);
+      var recordLeadId = text(record && record.leadId);
+      return subjects.some(function (other, otherIndex) {
+        if (!other || otherIndex === subjectIndex) {
+          return false;
+        }
+        return (
+          (recordSubjectId && text(other.subjectId) === recordSubjectId) ||
+          (recordBookings.length &&
+            valuesIntersect(subjectBookingIds(other), recordBookings)) ||
+          ((!ignoreWeakOwnership || !text(subject && subject.personId)) &&
+            recordPersonId &&
+            text(other.personId) === recordPersonId) ||
+          ((!ignoreWeakOwnership || !text(subject && subject.leadId)) &&
+            recordLeadId &&
+            text(other.leadId) === recordLeadId)
+        );
+      });
+    }
+
+    function identifiersCompatible(subject, record, subjectIndex, tierOptions) {
+      if (!subject || !record) {
+        return false;
+      }
+      if (
+        !identifiersAgree([subject.subjectId], [record.subjectId]) ||
+        !identifiersAgree(subjectBookingIds(subject), recordBookingIds(record)) ||
+        !identifiersAgree([subject.personId], [record.personId]) ||
+        !identifiersAgree([subject.leadId], [record.leadId])
+      ) {
+        return false;
+      }
+      return !claimedByOtherSubject(
+        subjectIndex,
+        subject,
+        record,
+        tierOptions && tierOptions.ignoreWeakOwnership
+      );
+    }
+
+    function assignTier(matches, tierOptions) {
+      subjects.forEach(function (subject, subjectIndex) {
+        if (assignments[subjectIndex] || blockedSubjects[subjectIndex]) {
+          return;
+        }
+        var candidates = [];
+        records.forEach(function (record, recordIndex) {
+          if (
+            !usedRecords[recordIndex] &&
+            identifiersCompatible(subject, record, subjectIndex, tierOptions) &&
+            matches(subject, record)
+          ) {
+            candidates.push({ record: record, recordIndex: recordIndex });
+          }
+        });
+        if (candidates.length > 1) {
+          blockedSubjects[subjectIndex] = true;
+          return;
+        }
+        if (!candidates.length) {
+          return;
+        }
+        var candidate = candidates[0];
+        var competingSubjects = [];
+        subjects.forEach(function (other, otherIndex) {
+          if (
+            !assignments[otherIndex] &&
+            !blockedSubjects[otherIndex] &&
+            identifiersCompatible(other, candidate.record, otherIndex, tierOptions) &&
+            matches(other, candidate.record)
+          ) {
+            competingSubjects.push(otherIndex);
+          }
+        });
+        if (competingSubjects.length === 1) {
+          assignments[subjectIndex] = candidate.record;
+          usedRecords[candidate.recordIndex] = true;
+        } else if (competingSubjects.length > 1) {
+          competingSubjects.forEach(function (otherIndex) {
+            blockedSubjects[otherIndex] = true;
+          });
+        }
+      });
+    }
+
+    assignTier(function (subject, record) {
+      var subjectId = text(subject && subject.subjectId);
+      return subjectId && subjectId === text(record && record.subjectId);
+    }, { ignoreWeakOwnership: true });
+    assignTier(function (subject, record) {
+      var bookingId = subjectBookingId(subject);
+      return (
+        bookingId &&
+        valuesIntersect([bookingId], recordBookingIds(record))
+      );
+    }, { ignoreWeakOwnership: true });
+    assignTier(function (subject, record) {
+      var personId = text(subject && subject.personId);
+      return (
+        personId &&
+        personId === text(record && record.personId)
+      );
+    });
+    assignTier(function (subject, record) {
+      var leadId = text(subject && subject.leadId);
+      return (
+        leadId &&
+        leadId === text(record && record.leadId)
+      );
+    });
+
+    return assignments;
+  }
+
+  function participantIds(participant) {
+    return uniqueStrings([
+      participant && participant.encounterParticipantId,
+      participant && participant.subjectId
+    ].concat(
+      participant && Array.isArray(participant.legacyEncounterParticipantIds)
+        ? participant.legacyEncounterParticipantIds
+        : []
+    ));
+  }
+
+  function resolveEncounterParticipantId(participants, candidateId) {
+    var candidate = text(candidateId);
+    if (!candidate) {
+      return "";
+    }
+    var matches = (Array.isArray(participants) ? participants : []).filter(function (participant) {
+      return participantIds(participant).indexOf(candidate) !== -1;
+    });
+    if (matches.length !== 1) {
+      return "";
+    }
+    return text(matches[0].encounterParticipantId || matches[0].subjectId);
+  }
+
+  /**
+   * Return a detached engine state whose legacy participant object bindings
+   * point at the current packet objects. Focus IDs and narrative text are not
+   * touched, and ambiguous aliases remain unchanged for manual review.
+   */
+  function remapNarrativeStateParticipantIds(state, participants) {
+    if (!state || typeof state !== "object") {
+      return state;
+    }
+    var remapped = JSON.parse(JSON.stringify(state));
+    var encounterState = remapped.encounter;
+    var bindings = encounterState && encounterState.tokenBindings;
+
+    function remapBinding(binding) {
+      if (
+        !binding ||
+        binding.mode !== "object" ||
+        text(binding.objectId).indexOf("ep_") !== 0
+      ) {
+        return;
+      }
+      var canonicalId = resolveEncounterParticipantId(
+        participants,
+        binding.objectId
+      );
+      if (canonicalId) {
+        binding.objectId = canonicalId;
+      }
+    }
+
+    if (Array.isArray(bindings)) {
+      bindings.forEach(function (entry) {
+        if (Array.isArray(entry) && entry.length > 1) {
+          remapBinding(entry[1]);
+        }
+      });
+    } else if (bindings && typeof bindings === "object") {
+      Object.keys(bindings).forEach(function (key) {
+        remapBinding(bindings[key]);
+      });
+    }
+    return remapped;
+  }
+
+  function bundleFromEncounterRecord(enc, options) {
+    options = options || {};
+    var model = global.COPDoc && COPDoc.model;
+    var encounterId = text(enc && enc.encounterId);
+    if (!model || !model.store || !encounterId) {
       return null;
     }
     var loc = (enc.locations && enc.locations[0]) || {};
     var started = enc.startedAt || (enc.meta && enc.meta.createdAt) || "";
-    var linkedBookinSubjects = bookinRecords().filter(function (row) {
-      return row && row.encounterId === encounterId;
+    var packetSource = Array.isArray(options.bookinRecords)
+      ? options.bookinRecords
+      : bookinRecords();
+    var linkedBookinSubjects = packetSource.filter(function (row) {
+      return (
+        row &&
+        row.encounterId === encounterId &&
+        row.encounterProjectionDraft !== true
+      );
     });
-    var subjects = [];
-    var subjectSourceIndexes = [];
-    var unassignedParticipantCount = 0;
-    linkedBookinSubjects.forEach(function (row, sourceIndex) {
-      if (encounterRole(row)) {
-        subjects.push(row);
-        subjectSourceIndexes.push(sourceIndex);
-      } else {
-        unassignedParticipantCount += 1;
-      }
-    });
-    if (!linkedBookinSubjects.length) {
-      var encounterSubjects = enc.subjects || [];
-      subjects = [];
-      subjectSourceIndexes = [];
-      unassignedParticipantCount = 0;
-      encounterSubjects.forEach(function (row, sourceIndex) {
-        var role = encounterRole(row);
-        if (!role) {
-          unassignedParticipantCount += 1;
-          return;
-        }
-        subjects.push({
-          id: row.bookinRecordId,
-          lastName: row.lastName,
-          firstName: row.firstName,
-          aNumber: row.alienNumber,
-          leadId: row.leadId,
-          encounterRole: role
+    var hasEncounterRoster = Array.isArray(enc.subjects);
+    var encounterSubjects = hasEncounterRoster
+      ? enc.subjects
+      : linkedBookinSubjects.map(function (record, index) {
+          return legacySubjectFromBookin(record, encounterId, index, model);
         });
-        subjectSourceIndexes.push(sourceIndex);
+    var matchedBookins = matchBookinRecords(encounterSubjects, linkedBookinSubjects);
+    var subjects = [];
+    var unassignedParticipantCount = 0;
+    encounterSubjects.forEach(function (subject, sourceIndex) {
+      var role = subjectRole(subject);
+      if (!role) {
+        unassignedParticipantCount += 1;
+        return;
+      }
+      subjects.push({
+        subject: subject,
+        bookin: matchedBookins[sourceIndex] || null,
+        sourceIndex: sourceIndex,
+        role: role
       });
-    }
+    });
     var firstTarget = -1;
     var targetSeq = 0;
     var collateralSeq = 0;
     var sequences = subjects.map(function (row, index) {
-      var role = encounterRole(row);
+      var role = row.role;
       if (role === "TARGET") {
         targetSeq += 1;
         if (firstTarget < 0) {
@@ -249,43 +550,72 @@
       firstTarget = 0;
     }
     var reportingName = "";
-    var participants = subjects.map(function (row, index) {
-      var lead = row.leadId && model.store.getLead(row.leadId);
-      var person = lead && model.subjectOf ? model.subjectOf(lead) : null;
+    var participants = subjects.map(function (source, index) {
+      var row = source.subject || {};
+      var bookin = source.bookin || {};
+      var leadId = text(row.leadId || bookin.leadId);
+      var lead = leadId && model.store.getLead(leadId);
+      var person = row.personId && model.store.getPerson
+        ? model.store.getPerson(row.personId)
+        : null;
+      if (!person && lead && model.subjectOf) {
+        var leadPerson = model.subjectOf(lead);
+        if (
+          leadPerson &&
+          (!text(row.personId) || text(leadPerson.personId) === text(row.personId))
+        ) {
+          person = leadPerson;
+        }
+      }
       var immigration = (person && person.immigration) || {};
       var seq = sequences[index];
-      var lastName = formValue(row, "lastName") || row.lastName || "";
-      var firstName = formValue(row, "firstName") || row.firstName || "";
+      var lastName = formValue(bookin, "lastName") || bookin.lastName || row.lastName || "";
+      var firstName = formValue(bookin, "firstName") || bookin.firstName || row.firstName || "";
       var aNumber =
-        formValue(row, "alienNumber") ||
+        formValue(bookin, "alienNumber") ||
+        bookin.aNumber ||
         row.aNumber ||
         row.alienNumber ||
         immigration.alienNumber ||
         "";
       var dob =
-        formValue(row, "dateOfBirth") || (person && person.dateOfBirth) || "";
-      var sex = formSex(row) || String((person && person.sex) || "").toUpperCase();
+        formValue(bookin, "dateOfBirth") || row.dateOfBirth || (person && person.dateOfBirth) || "";
+      var sex = formSex(bookin) || bookin.gender || String((person && person.sex) || "").toUpperCase();
       if (sex === "M") {
         sex = "MALE";
       }
       if (sex === "F") {
         sex = "FEMALE";
       }
+      sex = String(sex || "").toUpperCase();
       var countryCode =
-        formValue(row, "citizenship") || (person && person.citizenship) || "";
-      var iceEvent = formValue(row, "iceEvent") || row.iceEvent || "";
-      var arrestAt = formValue(row, "dateTime") || started;
-      var officerName = formValue(row, "officersName") || row.officersName || "";
+        formValue(bookin, "citizenship") ||
+        bookin.countryOfCitizenship ||
+        row.citizenship ||
+        (person && person.citizenship) ||
+        "";
+      var iceEvent = formValue(bookin, "iceEvent") || bookin.iceEvent || row.iceEvent || "";
+      var outcome = text(row.outcome || row.outcomeCategory).toUpperCase() || "UNKNOWN";
+      var outcomeAt = row.outcomeAt || row.finalOutcomeAt || started;
+      if (outcome.indexOf("FLED") === 0) {
+        outcomeAt = row.fledAt || outcomeAt;
+      } else if (outcome === "ARRESTED") {
+        outcomeAt = formValue(bookin, "dateTime") || bookin.dateTime || outcomeAt;
+      }
+      var officerName = formValue(bookin, "officersName") || bookin.officersName || "";
       if (!reportingName && officerName) {
         reportingName = officerName;
       }
-      var cash = formValue(row, "cash");
-      var medicine = formValue(row, "medicine");
-      var children = formValue(row, "children");
-      var medical = formValue(row, "medicalIssues");
-      var travelDocs = formValue(row, "travelDocs");
+      var cash = formValue(bookin, "cash") || bookin.cash || "";
+      var medicine = formValue(bookin, "medicine") || bookin.medicine || "";
+      var children = formValue(bookin, "children") || bookin.children || "";
+      var medical = formValue(bookin, "medicalIssues") || bookin.medicalIssues || "";
+      var travelDocs = formValue(bookin, "travelDocs") || bookin.travelDocs || "";
       var disposition =
-        formValue(row, "immigrationDisposition") || immigration.disposition || "";
+        formValue(bookin, "immigrationDisposition") ||
+        bookin.caseType ||
+        immigration.disposition ||
+        "";
       var display =
         person && model.formatPersonLabel
           ? model.formatPersonLabel({
@@ -295,13 +625,24 @@
               }
             })
           : displayName({ lastName: lastName, firstName: firstName });
+      var subjectId = text(row.subjectId);
+      var bookingId = subjectBookingId(row) || text(bookin.id || bookin.bookingId);
+      var legacyParticipantIds = uniqueStrings(
+        [bookingId && "ep_" + bookingId, bookin.id && "ep_" + bookin.id].concat(
+          Array.isArray(row.legacyEncounterParticipantIds)
+            ? row.legacyEncounterParticipantIds
+            : []
+        )
+      );
       return {
-        encounterParticipantId:
-          "ep_" + (row.id || subjectSourceIndexes[index]),
+        encounterParticipantId: subjectId,
+        subjectId: subjectId,
         encounterId: enc.encounterId,
-        personId:
-          (person && person.personId) ||
-          ("p_enc_" + subjectSourceIndexes[index]),
+        personId: text(row.personId || (person && person.personId)),
+        leadId: leadId,
+        bookingId: bookingId,
+        bookinRecordId: bookingId,
+        legacyEncounterParticipantIds: legacyParticipantIds,
         encounterRole: seq.role,
         roleSequence: seq.sequence,
         primaryForReport: index === firstTarget,
@@ -314,8 +655,8 @@
           sex: sex || "UNKNOWN",
           capturedAt: started
         },
-        finalOutcome: "ARRESTED",
-        finalOutcomeAt: arrestAt,
+        finalOutcome: outcome,
+        finalOutcomeAt: outcomeAt,
         enforcementBasisCode: enforcementBasis(person),
         iceEventNumber: iceEvent || null,
         immigrationSnapshot: {
@@ -448,8 +789,21 @@
     };
   }
 
+  function bundleFromEncounter(encounterId) {
+    var model = global.COPDoc && COPDoc.model;
+    if (!model || !model.store || !encounterId) {
+      return null;
+    }
+    model.store.loadFromDisk();
+    var enc = model.store.getEncounter(encounterId);
+    return enc ? bundleFromEncounterRecord(enc) : null;
+  }
+
   global.COPDoc = global.COPDoc || {};
   global.COPDoc.encounterNarrative = {
-    bundleFromEncounter: bundleFromEncounter
+    bundleFromEncounter: bundleFromEncounter,
+    bundleFromEncounterRecord: bundleFromEncounterRecord,
+    resolveEncounterParticipantId: resolveEncounterParticipantId,
+    remapNarrativeStateParticipantIds: remapNarrativeStateParticipantIds
   };
 })(typeof window !== "undefined" ? window : globalThis);

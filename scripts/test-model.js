@@ -199,7 +199,9 @@ check(
 );
 check(
   "list includes untitled",
-  model.store.listLeads()[0].label === "Untitled case"
+  model.store.listLeads().some(function (row) {
+    return row.leadId === blank.leadId && row.label === "Untitled case";
+  })
 );
 
 var loaded = model.store.getLead(blank.leadId);
@@ -588,6 +590,8 @@ var arrestedSub = model.stampSharedStop(
   }),
   model.sharedStopFromEncounter(stopEnc)
 );
+storedStop.subjects.push(arrestedSub);
+model.store.saveEncounter(storedStop, { mode: "draft" });
 var bookInput = model.arrestInputFromSubject(arrestedSub, arrestedSub.shared, {
   bookinRecordId: "pkt-c1",
   bookInDateTime: "2026-09-04T14:10",
@@ -760,6 +764,7 @@ check(
 );
 
 model.store.saveEncounter(enc, { mode: "draft" });
+enc = model.store.getEncounter(enc.encounterId);
 check(
   "draft encounter listed",
   model.store.listEncounters().some(function (row) {
@@ -774,10 +779,13 @@ check(
 enc.startedAt = "2026-08-30T12:00";
 enc.subjects.push(
   model.createEncounterSubject({
+    subjectId: "sub_model_target",
+    encounterId: enc.encounterId,
     lastName: "LOKI",
     firstName: "Laufeyson",
     alienNumber: "A000111222",
-    encounterRole: "TARGET"
+    encounterRole: "TARGET",
+    outcome: "ARRESTED"
   })
 );
 model.store.saveEncounter(enc, { mode: "commit" });
@@ -845,11 +853,33 @@ check(
     String(bundle.participants[0].identitySnapshot.displayName).indexOf("LOKI") !== -1
 );
 
+enc = model.store.getEncounter(enc.encounterId);
+enc.subjects.push(
+  model.createEncounterSubject({
+    subjectId: "sub_model_collateral",
+    encounterId: enc.encounterId,
+    legacyEncounterParticipantIds: ["ep_1"],
+    lastName: "WALK",
+    firstName: "In",
+    encounterRole: "COLLATERAL",
+    outcome: "RELEASED"
+  }),
+  model.createEncounterSubject({
+    subjectId: "sub_model_unassigned",
+    encounterId: enc.encounterId,
+    lastName: "UNASSIGNED",
+    firstName: "Partial",
+    encounterRole: "",
+    outcome: "UNKNOWN"
+  })
+);
+model.store.saveEncounter(enc, { mode: "commit" });
 context.localStorage.setItem(
   "alien-book-in.saved-records.v1",
   JSON.stringify([
     {
       id: "bk_c",
+      subjectId: "sub_model_collateral",
       encounterId: enc.encounterId,
       lastName: "COLL",
       firstName: "B",
@@ -857,17 +887,19 @@ context.localStorage.setItem(
     },
     {
       id: "bk_t",
+      subjectId: "sub_model_target",
       encounterId: enc.encounterId,
       lastName: "TARGET",
       firstName: "A",
       encounterRole: "TARGET"
     },
     {
-      id: "bk_unassigned",
+      id: "bk_orphan",
+      subjectId: "sub_not_in_encounter",
       encounterId: enc.encounterId,
-      lastName: "UNASSIGNED",
-      firstName: "Partial",
-      encounterRole: ""
+      lastName: "ORPHAN",
+      firstName: "Packet",
+      encounterRole: "TARGET"
     }
   ])
 );
@@ -875,42 +907,28 @@ var roleBundle = context.COPDoc.encounterNarrative.bundleFromEncounter(
   enc.encounterId
 );
 check(
-  "adapter keeps collateral role",
+  "adapter keeps Encounter-owned target and collateral roles",
   roleBundle.participants[0] &&
-    roleBundle.participants[0].encounterRole === "COLLATERAL"
+    roleBundle.participants[0].encounterRole === "TARGET" &&
+    roleBundle.participants[1] &&
+    roleBundle.participants[1].encounterRole === "COLLATERAL"
 );
 check(
-  "adapter primary is first target",
-  roleBundle.participants[1] &&
-    roleBundle.participants[1].encounterRole === "TARGET" &&
-    roleBundle.participants[1].primaryForReport === true &&
-    roleBundle.participants[0].primaryForReport === false
+  "adapter primary is first Encounter target",
+  roleBundle.participants[0] &&
+    roleBundle.participants[0].primaryForReport === true &&
+    roleBundle.participants[1].primaryForReport === false
 );
 check(
-  "adapter excludes unassigned book-in records",
+  "adapter roster comes from Encounter and excludes its unassigned subject",
   roleBundle.participants.length === 2 &&
     roleBundle.unassignedParticipantCount === 1
 );
-
-context.localStorage.setItem(
-  "alien-book-in.saved-records.v1",
-  JSON.stringify([
-    {
-      id: "bk_only_unassigned",
-      encounterId: enc.encounterId,
-      lastName: "UNASSIGNED",
-      firstName: "Only",
-      encounterRole: ""
-    }
-  ])
-);
-var unassignedBundle = context.COPDoc.encounterNarrative.bundleFromEncounter(
-  enc.encounterId
-);
 check(
-  "adapter reports all-unassigned book-in records",
-  unassignedBundle.participants.length === 0 &&
-    unassignedBundle.unassignedParticipantCount === 1
+  "adapter ignores Book-In packets outside the Encounter roster",
+  !roleBundle.participants.some(function (row) {
+    return row.subjectId === "sub_not_in_encounter";
+  })
 );
 
 var legacyIndexEncounter = model.store.getEncounter(enc.encounterId);
@@ -925,14 +943,18 @@ context.localStorage.setItem(
   "alien-book-in.saved-records.v1",
   JSON.stringify([
     {
+      id: "bk_t",
+      subjectId: "sub_model_target",
       encounterId: enc.encounterId,
-      lastName: "UNASSIGNED",
-      encounterRole: ""
+      lastName: "LOKI",
+      encounterRole: "TARGET"
     },
     {
+      id: "bk_c",
+      subjectId: "sub_model_collateral",
       encounterId: enc.encounterId,
       lastName: "LEGACY",
-      encounterRole: "TARGET"
+      encounterRole: "COLLATERAL"
     }
   ])
 );
@@ -940,11 +962,17 @@ var legacyIndexBundle = context.COPDoc.encounterNarrative.bundleFromEncounter(
   enc.encounterId
 );
 check(
-  "adapter preserves legacy participant index through role filtering",
-  legacyIndexBundle.participants[0] &&
-    legacyIndexBundle.participants[0].encounterParticipantId === "ep_1" &&
+  "adapter preserves legacy participant index as an alias",
+  legacyIndexBundle.participants[1] &&
+    legacyIndexBundle.participants[1].encounterParticipantId ===
+      "sub_model_collateral" &&
+    legacyIndexBundle.participants[1].legacyEncounterParticipantIds.indexOf("ep_1") !== -1 &&
     legacyIndexBundle.narrativesInitial[0] &&
-    legacyIndexBundle.narrativesInitial[0].focusEncounterParticipantId === "ep_1"
+    legacyIndexBundle.narrativesInitial[0].focusEncounterParticipantId === "ep_1" &&
+    context.COPDoc.encounterNarrative.resolveEncounterParticipantId(
+      legacyIndexBundle.participants,
+      "ep_1"
+    ) === "sub_model_collateral"
 );
 
 context.localStorage.setItem(
@@ -952,6 +980,7 @@ context.localStorage.setItem(
   JSON.stringify([
     {
       id: "bk_live",
+      subjectId: "sub_model_target",
       encounterId: enc.encounterId,
       lastName: "LOKI",
       firstName: "Laufeyson",
@@ -977,6 +1006,7 @@ context.localStorage.setItem(
     },
     {
       id: "bk_col",
+      subjectId: "sub_model_collateral",
       encounterId: enc.encounterId,
       lastName: "WALK",
       firstName: "In",
@@ -989,6 +1019,7 @@ context.localStorage.setItem(
     }
   ])
 );
+enc = model.store.getEncounter(enc.encounterId);
 enc.vehicles = [
   {
     vehicleId: "veh_1",
@@ -1030,6 +1061,21 @@ check(
     liveBundle.participants[1].roleSequence === 1
 );
 check(
+  "live participant IDs and outcomes come from Encounter subjects",
+  liveBundle.participants[0].encounterParticipantId === "sub_model_target" &&
+    liveBundle.participants[0].finalOutcome === "ARRESTED" &&
+    liveBundle.participants[1].encounterParticipantId === "sub_model_collateral" &&
+    liveBundle.participants[1].finalOutcome === "RELEASED"
+);
+check(
+  "live Book-In participant IDs remain compatibility aliases",
+  liveBundle.participants[0].legacyEncounterParticipantIds.indexOf("ep_bk_live") !== -1 &&
+    context.COPDoc.encounterNarrative.resolveEncounterParticipantId(
+      liveBundle.participants,
+      "ep_bk_live"
+    ) === "sub_model_target"
+);
+check(
   "live ice event and arrest time",
   liveBundle.participants[0].iceEventNumber === "DAL-1" &&
     String(liveBundle.participants[0].finalOutcomeAt).indexOf("2026-08-31") !== -1
@@ -1055,6 +1101,7 @@ check(
 );
 check("live has no events", liveBundle.events.length === 0);
 
+enc = model.store.getEncounter(enc.encounterId);
 enc.narratives = [{ narrativeId: "nar_x", iceEventNumber: "DAL-1" }];
 enc.supervisorSummary = { text: "Supervisor line.", derivedAt: "2026-08-31T00:00:00.000Z" };
 model.store.saveEncounter(enc, { mode: "commit" });
@@ -1133,6 +1180,7 @@ model.store.saveLead(completeLead, { mode: "commit" });
 completeEnc.subjects[0].leadId = completeLead.leadId;
 completeEnc.subjects[0].personId = completeLead.person.personId;
 model.store.saveEncounter(completeEnc, { mode: "commit" });
+completeEnc = model.store.getEncounter(completeEnc.encounterId);
 var completedSave = model.store.saveEncounter(completeEnc, { mode: "complete" });
 check("completeEncounter ok", completedSave.ok === true);
 var completedRow = model.store.getEncounter(completeEnc.encounterId);
@@ -1145,13 +1193,17 @@ check(
     completedRow.completed.pin.latitude === "32.78"
 );
 completedRow.startedAt = "2026-09-05T11:00";
-model.store.saveEncounter(completedRow, { mode: "draft" });
+var lockedSave = model.store.saveEncounter(completedRow, { mode: "draft" });
+check(
+  "completed Encounter rejects edits until unlocked",
+  lockedSave.ok === false && lockedSave.code === "ENCOUNTER_LOCKED"
+);
 var afterEdit = model.store.getEncounter(completeEnc.encounterId);
 check(
-  "later draft does not replace the completed snapshot",
+  "rejected draft preserves the completed Encounter and snapshot",
   afterEdit.meta.markedComplete === true &&
     afterEdit.completed.pin.latitude === "32.78" &&
-    afterEdit.startedAt === "2026-09-05T11:00"
+    afterEdit.startedAt === "2026-09-04T10:00"
 );
 var pinnedArrest = model.store.getLead(completeLead.leadId).person.arrests[0];
 check(
@@ -4064,6 +4116,7 @@ var encounterCanonicalVehicle = model.createVehicle({
   locations: [encounterCanonicalLocation]
 });
 var canonicalEncounter = model.createEncounterRecord({
+  encounterId: "enc_model_canonical_objects",
   vehicles: [encounterCanonicalVehicle],
   locations: [encounterCanonicalLocation]
 });
@@ -4073,7 +4126,9 @@ check(
   !!model.store.getObjectRecord("VEHICLE", encounterCanonicalVehicle.vehicleId) &&
     !!model.store.getObjectRecord("LOCATION", encounterCanonicalLocation.locationId)
 );
-var partialEncounter = model.createEncounterRecord();
+var partialEncounter = model.createEncounterRecord({
+  encounterId: "enc_model_partial_objects"
+});
 partialEncounter.vehicles = [
   { licensePlate: "RAW808", vehicleMake: "Honda", locations: null }
 ];

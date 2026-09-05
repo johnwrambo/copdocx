@@ -157,6 +157,7 @@
     return model.assign(
       {
         encounterId: model.newId("enc"),
+        subjectId: "",
         encounterDate: "",
         encounterRole: "",
         encounterType: "",
@@ -191,6 +192,7 @@
         iceEventNumber: "",
         encounterNumber: "",
         encounterId: "",
+        subjectId: "",
         subjectRole: "",
         vehiclePosition: "",
         bookinRecordId: "",

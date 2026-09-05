@@ -134,19 +134,92 @@
       })[0] || null;
   }
 
-  function cardForArrest(cards, arrest) {
-    var recordId = text(arrest && arrest.bookinRecordId);
+  function uniqueText(values) {
+    var seen = Object.create(null);
+    return (values || []).reduce(function (output, value) {
+      var key = text(value);
+      if (key && !seen[key]) {
+        seen[key] = true;
+        output.push(key);
+      }
+      return output;
+    }, []);
+  }
+
+  function bookingClaims(record, includePacketId) {
+    return uniqueText([
+      includePacketId ? record && record.id : "",
+      record && record.bookingId,
+      record && record.bookinRecordId
+    ]);
+  }
+
+  function unambiguousBookingId(record, includePacketId) {
+    var claims = bookingClaims(record, includePacketId);
+    return claims.length === 1 ? claims[0] : "";
+  }
+
+  function bookingCompatible(arrest, candidate, includePacketId) {
+    var arrestClaims = bookingClaims(arrest, false);
+    var candidateClaims = bookingClaims(candidate, includePacketId);
+    if (candidateClaims.length > 1 || arrestClaims.length > 1) {
+      return false;
+    }
+    return !(
+      arrestClaims.length &&
+      candidateClaims.length &&
+      arrestClaims[0] !== candidateClaims[0]
+    );
+  }
+
+  function cardForArrest(cards, arrest, owner) {
+    owner = owner || {};
+    var subjectId = text(arrest && arrest.subjectId);
+    var recordId = unambiguousBookingId(arrest, false);
     var arrestDate = text(arrest && arrest.arrestDate);
+    function compatibleOwner(card) {
+      var personId = text(card && card.personId);
+      var encounterId = text(card && card.encounterId);
+      return !(
+        (personId && owner.personId && personId !== owner.personId) ||
+        (encounterId && owner.encounterId && encounterId !== owner.encounterId)
+      );
+    }
+    var exactSubject = (cards || []).filter(function (card) {
+      var cardRecordId = unambiguousBookingId(card, false);
+      return (
+        subjectId &&
+        text(card && card.subjectId) === subjectId &&
+        bookingCompatible(arrest, card, false) &&
+        (!recordId || !cardRecordId || cardRecordId === recordId) &&
+        compatibleOwner(card)
+      );
+    });
+    if (exactSubject.length) {
+      return latestCard(exactSubject);
+    }
     var exactRecord = (cards || []).filter(function (card) {
-      return recordId && text(card && card.bookinRecordId) === recordId;
+      var cardSubjectId = text(card && card.subjectId);
+      var cardRecordId = unambiguousBookingId(card, false);
+      return (
+        recordId &&
+        cardRecordId === recordId &&
+        bookingCompatible(arrest, card, false) &&
+        (!subjectId || !cardSubjectId || cardSubjectId === subjectId) &&
+        compatibleOwner(card)
+      );
     });
     if (exactRecord.length) {
       return latestCard(exactRecord);
     }
     var exactDate = (cards || []).filter(function (card) {
+      var cardSubjectId = text(card && card.subjectId);
       return (
         arrestDate &&
-        !text(card && card.bookinRecordId) &&
+        !unambiguousBookingId(card, false) &&
+        bookingClaims(card, false).length < 2 &&
+        (!subjectId || !cardSubjectId || cardSubjectId === subjectId) &&
+        compatibleOwner(card) &&
         text(card && card.arrestDate) === arrestDate
       );
     });
@@ -156,11 +229,73 @@
   function bookInMap(records) {
     var map = {};
     (records || []).forEach(function (record) {
-      if (record && record.id) {
-        map[record.id] = record;
+      var id = unambiguousBookingId(record, true);
+      if (id) {
+        map[id] = map[id] || [];
+        map[id].push(record);
       }
     });
     return map;
+  }
+
+  function bookInForArrest(records, arrest, byRecordId, owner, resolveInput) {
+    owner = owner || {};
+    var subjectId = text(arrest && arrest.subjectId);
+    var recordId = unambiguousBookingId(arrest, false);
+    function compatibleOwner(record) {
+      var input =
+        typeof resolveInput === "function" ? resolveInput(record) || {} : {};
+      var personId = text(record && record.personId);
+      var encounterId = text(
+        (record && record.encounterId) || input.encounterId
+      );
+      var encounterNumber = text(
+        (record && record.encounterNumber) || input.encounterNumber
+      );
+      var leadId = text(record && record.leadId);
+      return !(
+        (personId && owner.personId && personId !== owner.personId) ||
+        (encounterId && owner.encounterId && encounterId !== owner.encounterId) ||
+        (encounterNumber &&
+          owner.encounterNumber &&
+          encounterNumber !== owner.encounterNumber) ||
+        (leadId && owner.leadId && leadId !== owner.leadId)
+      );
+    }
+    if (subjectId) {
+      var subjectMatches = (records || []).filter(function (record) {
+        var candidateRecordId = unambiguousBookingId(record, true);
+        return (
+          record &&
+          text(record.subjectId) === subjectId &&
+          bookingCompatible(arrest, record, true) &&
+          (!recordId || !candidateRecordId || candidateRecordId === recordId) &&
+          compatibleOwner(record)
+        );
+      });
+      if (subjectMatches.length === 1) {
+        return subjectMatches[0];
+      }
+      if (subjectMatches.length > 1) {
+        return {};
+      }
+    }
+    var legacyMatches = (recordId && byRecordId[recordId]) || [];
+    if (legacyMatches.length !== 1) {
+      return {};
+    }
+    var legacyMatch = legacyMatches[0];
+    if (
+      legacyMatch &&
+      (!bookingCompatible(arrest, legacyMatch, true) ||
+        !compatibleOwner(legacyMatch) ||
+        (subjectId &&
+          text(legacyMatch.subjectId) &&
+          text(legacyMatch.subjectId) !== subjectId))
+    ) {
+      return {};
+    }
+    return legacyMatch || {};
   }
 
   function collect(store, bookinRecords, options) {
@@ -204,7 +339,7 @@
         if (!arrest) {
           return;
         }
-        var recordId = text(arrest.bookinRecordId);
+        var recordId = unambiguousBookingId(arrest, false);
         if (selectedOnly && !selected[recordId]) {
           return;
         }
@@ -218,7 +353,21 @@
         if ((options.from || options.to) && !dateKey) {
           return;
         }
-        var sourceRecord = (recordId && records[recordId]) || {};
+        var arrestEncounterId = text(arrest.encounterId);
+        var sourceRecord = bookInForArrest(
+          bookinRecords,
+          arrest,
+          records,
+          {
+            personId: text(person.personId),
+            leadId: text(snap.leadId),
+            encounterId: arrestEncounterId,
+            encounterNumber: text(arrest.encounterNumber)
+          },
+          typeof store.bookInPromotionInput === "function"
+            ? store.bookInPromotionInput.bind(store)
+            : null
+        );
         var sourceInput =
           typeof store.bookInPromotionInput === "function"
             ? store.bookInPromotionInput(sourceRecord)
@@ -243,6 +392,7 @@
         var row = {
           leadId: text(snap.leadId),
           personId: text(person.personId),
+          subjectId: text(arrest.subjectId || sourceRecord.subjectId || sourceInput.subjectId),
           arrestId: text(arrest.arrestId),
           bookinRecordId: recordId,
           name: personName(person),
@@ -265,7 +415,10 @@
           ),
           officer: text(arrest.arrestingOfficer || sourceInput.arrestingOfficer),
           team: text(arrest.team || sourceInput.team),
-          card: cardForArrest(cards, arrest)
+          card: cardForArrest(cards, arrest, {
+            personId: text(person.personId),
+            encounterId: encounterId
+          })
         };
         if (options.q) {
           var hay = [

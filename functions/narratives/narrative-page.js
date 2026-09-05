@@ -437,15 +437,168 @@
     return String(value == null ? "" : value).replace(/\D/g, "");
   }
 
+  function participantReferenceIds(participant) {
+    var seen = Object.create(null);
+    return [
+      participant && participant.encounterParticipantId,
+      participant && participant.subjectId
+    ].concat(
+      participant && Array.isArray(participant.legacyEncounterParticipantIds)
+        ? participant.legacyEncounterParticipantIds
+        : []
+    ).reduce(function (output, value) {
+      var id = String(value || "").trim();
+      if (id && !seen[id]) {
+        seen[id] = true;
+        output.push(id);
+      }
+      return output;
+    }, []);
+  }
+
+  function participantForReference(candidateId) {
+    var id = String(candidateId || "").trim();
+    if (!id) {
+      return null;
+    }
+    var matches = fixture.participants.filter(function (participant) {
+      return participantReferenceIds(participant).indexOf(id) !== -1;
+    });
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function recordFocusesParticipant(record, participantId) {
+    var focused = participantForReference(
+      record && record.focusEncounterParticipantId
+    );
+    return !!focused && focused.encounterParticipantId === participantId;
+  }
+
+  function liveSubjectMatch(subjects, predicate) {
+    var matches = (subjects || []).filter(function (row) {
+      return row && predicate(row);
+    });
+    return {
+      subject: matches.length === 1 ? matches[0] : null,
+      ambiguous: matches.length > 1
+    };
+  }
+
+  function liveSubjectCompatible(subjects, subject, participant) {
+    var role = String(
+      (subject && (subject.role || subject.encounterRole)) || ""
+    )
+      .trim()
+      .toUpperCase();
+    if (role !== "TARGET" && role !== "COLLATERAL") {
+      return false;
+    }
+    var bookingId = String(
+      (participant && (participant.bookingId || participant.bookinRecordId)) || ""
+    ).trim();
+    var personId = String((participant && participant.personId) || "").trim();
+    var leadId = String((participant && participant.leadId) || "").trim();
+    var subjectBookingId = String(
+      (subject && (subject.bookingId || subject.bookinRecordId)) || ""
+    ).trim();
+    var subjectPersonId = String((subject && subject.personId) || "").trim();
+    var subjectLeadId = String((subject && subject.leadId) || "").trim();
+    if (
+      (bookingId && subjectBookingId && bookingId !== subjectBookingId) ||
+      (personId && subjectPersonId && personId !== subjectPersonId) ||
+      (leadId && subjectLeadId && leadId !== subjectLeadId)
+    ) {
+      return false;
+    }
+    return !(subjects || []).some(function (other) {
+      if (!other || other === subject) {
+        return false;
+      }
+      var otherBookingId = String(
+        other.bookingId || other.bookinRecordId || ""
+      ).trim();
+      return (
+        (bookingId && !subjectBookingId && otherBookingId === bookingId) ||
+        (personId && !subjectPersonId && String(other.personId || "").trim() === personId) ||
+        (leadId && !subjectLeadId && String(other.leadId || "").trim() === leadId)
+      );
+    });
+  }
+
   function matchLiveSubject(participant) {
     var enc = liveStoreEncounter();
     if (!enc || !participant) {
       return null;
     }
-    var subjects = enc.subjects || [];
+    var subjects = Array.isArray(enc.subjects) ? enc.subjects : [];
+    var subjectId = String(participant.subjectId || "").trim();
+    if (!subjectId) {
+      var participantId = String(participant.encounterParticipantId || "").trim();
+      if (participantId && participantId.indexOf("ep_") !== 0) {
+        subjectId = participantId;
+      }
+    }
+    var result;
+    if (subjectId) {
+      result = liveSubjectMatch(subjects, function (row) {
+        return String(row.subjectId || "").trim() === subjectId;
+      });
+      // A canonical ID is authoritative. If it no longer exists (or is
+      // duplicated in damaged data), do not seed this narrative from a
+      // different association that happens to share a weaker identity.
+      return result.subject && liveSubjectCompatible(subjects, result.subject, participant)
+        ? result.subject
+        : null;
+    }
+    var bookingId = String(
+      participant.bookingId || participant.bookinRecordId || ""
+    ).trim();
+    result = liveSubjectMatch(subjects, function (row) {
+      var rowBookingId = String(row.bookingId || row.bookinRecordId || "").trim();
+      return (
+        bookingId &&
+        rowBookingId === bookingId &&
+        liveSubjectCompatible(subjects, row, participant)
+      );
+    });
+    if (result.subject || result.ambiguous) {
+      return result.subject;
+    }
+    var personId = String(participant.personId || "");
+    result = liveSubjectMatch(subjects, function (row) {
+      return (
+        personId &&
+        String(row.personId || "") === personId &&
+        liveSubjectCompatible(subjects, row, participant)
+      );
+    });
+    if (result.subject || result.ambiguous) {
+      return result.subject;
+    }
+    var leadId = String(participant.leadId || "");
+    result = liveSubjectMatch(subjects, function (row) {
+      return (
+        leadId &&
+        String(row.leadId || "") === leadId &&
+        liveSubjectCompatible(subjects, row, participant)
+      );
+    });
+    if (result.subject || result.ambiguous) {
+      return result.subject;
+    }
     var aNumber = digits(
       participant.identitySnapshot && participant.identitySnapshot.aNumber
     );
+    result = liveSubjectMatch(subjects, function (row) {
+      return (
+        aNumber &&
+        digits(row.alienNumber || row.aNumber) === aNumber &&
+        liveSubjectCompatible(subjects, row, participant)
+      );
+    });
+    if (result.subject || result.ambiguous) {
+      return result.subject;
+    }
     var last = String(
       (participant.identitySnapshot &&
         participant.identitySnapshot.displayName) ||
@@ -454,28 +607,19 @@
       .split(",")[0]
       .trim()
       .toUpperCase();
-    var personId = String(participant.personId || "");
-    var leadId = String(participant.leadId || "");
-    var i;
-    for (i = 0; i < subjects.length; i++) {
-      var row = subjects[i];
-      if (!row) {
-        continue;
-      }
-      if (personId && row.personId === personId) {
-        return row;
-      }
-      if (leadId && row.leadId === leadId) {
-        return row;
-      }
-      if (aNumber && digits(row.alienNumber) === aNumber) {
-        return row;
-      }
-      if (last && String(row.lastName || "").trim().toUpperCase() === last) {
-        return row;
-      }
+    result = liveSubjectMatch(subjects, function (row) {
+      return (
+        last &&
+        String(row.lastName || "").trim().toUpperCase() === last &&
+        liveSubjectCompatible(subjects, row, participant)
+      );
+    });
+    if (result.subject || result.ambiguous) {
+      return result.subject;
     }
-    return subjects.length === 1 ? subjects[0] : null;
+    return subjects.length === 1 && liveSubjectCompatible(subjects, subjects[0], participant)
+      ? subjects[0]
+      : null;
   }
 
   function seedFromEncounter(participant) {
@@ -556,9 +700,10 @@
     var outcome = String(
       (subject && subject.outcome) || participant.finalOutcome || ""
     ).toUpperCase();
-    if (outcome === "FLED_FOOT") {
+    var flightMode = String((subject && subject.flightMode) || "").toUpperCase();
+    if (outcome === "FLED_FOOT" || (outcome === "FLED" && flightMode === "FOOT")) {
       take("flight", "fled_on_foot");
-    } else if (outcome === "FLED_VEHICLE") {
+    } else if (outcome === "FLED_VEHICLE" || (outcome === "FLED" && flightMode === "VEHICLE")) {
       take("flight", "fled_in_vehicle");
     } else if (outcome) {
       hide("flight");
@@ -569,7 +714,7 @@
     } else if (outcome === "RELEASED") {
       take("enforcement_action", "released_no_action");
       take("final_outcome", "released_scene");
-    } else if (outcome === "FLED_FOOT" || outcome === "FLED_VEHICLE") {
+    } else if (outcome === "FLED" || outcome === "FLED_FOOT" || outcome === "FLED_VEHICLE") {
       hide("enforcement_action");
       hide("final_outcome");
     }
@@ -670,11 +815,15 @@
     return error && [
       "REVISION_CONFLICT",
       "NARRATIVE_ID_DUPLICATE",
-      "NARRATIVE_LOGICAL_DUPLICATE"
+      "NARRATIVE_LOGICAL_DUPLICATE",
+      "NARRATIVE_SUBJECT_STALE"
     ].indexOf(error.code) !== -1;
   }
 
   function narrativeErrorMessage(error) {
+    if (error && error.code === "NARRATIVE_SUBJECT_STALE") {
+      return "This subject was removed or is no longer assigned a narrative role. Reload the Narrative workspace.";
+    }
     if (isNarrativeConflict(error)) {
       return "This subject's narrative changed in another window. Reload this page before editing it again.";
     }
@@ -701,26 +850,146 @@
       return false;
     }
     var result = model.store.updateEncounter(liveEncounterId, function (enc) {
+      var adapter = global.COPDoc && COPDoc.encounterNarrative;
+      var latestBundle =
+        adapter && typeof adapter.bundleFromEncounterRecord === "function"
+          ? adapter.bundleFromEncounterRecord(enc)
+          : null;
+      var latestParticipants =
+        latestBundle && Array.isArray(latestBundle.participants)
+          ? latestBundle.participants
+          : [];
+      var recordToSave = Object.assign({}, change.record);
+      var subjectNarrative =
+        recordToSave.narrativeKind === domain.NARRATIVE_KINDS.PRIMARY_SUBJECT ||
+        recordToSave.narrativeKind === domain.NARRATIVE_KINDS.SUBJECT_SUPPLEMENT;
+      if (subjectNarrative) {
+        var intendedFocusId = String(
+          change.expectedFocusEncounterParticipantId || ""
+        ).trim();
+        var intendedMatches = latestParticipants.filter(function (participant) {
+          return participant.encounterParticipantId === intendedFocusId;
+        });
+        var latestFocusedParticipant =
+          intendedMatches.length === 1 ? intendedMatches[0] : null;
+        var canonicalFocusId =
+          adapter && typeof adapter.resolveEncounterParticipantId === "function"
+            ? adapter.resolveEncounterParticipantId(
+                latestParticipants,
+                recordToSave.focusEncounterParticipantId
+              )
+            : "";
+        var expectedParticipant = change.expectedParticipantIdentity || {};
+        function identityValue(participant, key, alias) {
+          return String(
+            (participant && (participant[key] || participant[alias])) || ""
+          ).trim();
+        }
+        function focusIdentityCompatible() {
+          if (!latestFocusedParticipant) {
+            return false;
+          }
+          return [
+            ["bookingId", "bookinRecordId"],
+            ["personId", "personId"],
+            ["leadId", "leadId"]
+          ].every(function (keys) {
+            var expectedValue = identityValue(
+              expectedParticipant,
+              keys[0],
+              keys[1]
+            );
+            var latestValue = identityValue(
+              latestFocusedParticipant,
+              keys[0],
+              keys[1]
+            );
+            if (expectedValue && latestValue && expectedValue !== latestValue) {
+              return false;
+            }
+            if (!expectedValue || latestValue) {
+              return true;
+            }
+            return !latestParticipants.some(function (other) {
+              return (
+                other !== latestFocusedParticipant &&
+                identityValue(other, keys[0], keys[1]) === expectedValue
+              );
+            });
+          });
+        }
+        if (
+          !intendedFocusId ||
+          canonicalFocusId !== intendedFocusId ||
+          !focusIdentityCompatible()
+        ) {
+          throw new domain.DomainError(
+            "NARRATIVE_SUBJECT_STALE",
+            "The focused Encounter subject is no longer eligible for a narrative."
+          );
+        }
+        if (change.kind === "create") {
+          recordToSave.focusEncounterParticipantId = canonicalFocusId;
+        }
+        var relatedSeen = Object.create(null);
+        recordToSave.relatedEncounterParticipantIds = (
+          Array.isArray(recordToSave.relatedEncounterParticipantIds)
+            ? recordToSave.relatedEncounterParticipantIds
+            : []
+        ).reduce(function (ids, participantId) {
+          var canonicalRelatedId =
+            adapter && typeof adapter.resolveEncounterParticipantId === "function"
+              ? adapter.resolveEncounterParticipantId(
+                  latestParticipants,
+                  participantId
+                )
+              : "";
+          var retainedRelatedId =
+            canonicalRelatedId ||
+            (change.kind === "create" ? "" : String(participantId || "").trim());
+          if (retainedRelatedId && !relatedSeen[retainedRelatedId]) {
+            relatedSeen[retainedRelatedId] = true;
+            ids.push(retainedRelatedId);
+          }
+          return ids;
+        }, []);
+      }
       var diskNarratives = Array.isArray(enc.narratives) ? enc.narratives : [];
       var mergeResult = change.kind === "create"
-        ? domain.addNarrative(diskNarratives, change.record, {
-            now: change.record.updatedAt
+        ? domain.addNarrative(diskNarratives, recordToSave, {
+            now: recordToSave.updatedAt
           })
         : domain.saveNarrativeById(
             diskNarratives,
-            change.record.narrativeId,
-            change.record,
+            recordToSave.narrativeId,
+            recordToSave,
             {
               expectedRevision: change.expectedRevision,
-              now: change.record.updatedAt
+              now: recordToSave.updatedAt
             }
           );
-      var coverage = coverageFor(mergeResult.narratives);
-      var summaryBundle = demoBundle();
+      var coverage = domain.validateCoverage({
+        encounterId: enc.encounterId,
+        participants: latestParticipants,
+        narratives: mergeResult.narratives
+      });
+      var summaryBundle = latestBundle
+        ? {
+            encounter: latestBundle.encounter,
+            operation: latestBundle.operation,
+            participants: latestParticipants,
+            events: latestBundle.events || [],
+            vehicles: latestBundle.encounterVehicles || [],
+            primaryLocation: latestBundle.location,
+            officers: latestBundle.officers || [],
+            narratives: mergeResult.narratives,
+            narrativeFacts: {}
+          }
+        : demoBundle();
       summaryBundle.narratives = mergeResult.narratives;
       var summary = domain.deriveEncounterSummary(summaryBundle, {
         narrativeCoverage: coverage,
-        now: change.record.updatedAt || new Date().toISOString()
+        now: recordToSave.updatedAt || new Date().toISOString()
       });
       enc.narratives = mergeResult.narratives;
       enc.supervisorSummary = Object.assign({}, summary, {
@@ -740,7 +1009,14 @@
         store.replaceAll(persisted.narratives);
       }
       if (isNarrativeConflict(error) && change.record.focusEncounterParticipantId) {
-        conflictedParticipantIds.add(change.record.focusEncounterParticipantId);
+        var conflicted = participantForReference(
+          change.record.focusEncounterParticipantId
+        );
+        conflictedParticipantIds.add(
+          conflicted
+            ? conflicted.encounterParticipantId
+            : change.record.focusEncounterParticipantId
+        );
       }
       showStatus(
         error
@@ -759,7 +1035,7 @@
       return record &&
         (record.recordState || "ACTIVE") === "ACTIVE" &&
         record.narrativeKind === domain.NARRATIVE_KINDS.PRIMARY_SUBJECT &&
-        record.focusEncounterParticipantId === participantId;
+        recordFocusesParticipant(record, participantId);
     }) || null;
   }
 
@@ -768,7 +1044,7 @@
       return record &&
         (record.recordState || "ACTIVE") === "ACTIVE" &&
         record.narrativeKind === domain.NARRATIVE_KINDS.SUBJECT_SUPPLEMENT &&
-        record.focusEncounterParticipantId === participantId;
+        recordFocusesParticipant(record, participantId);
     });
   }
 
@@ -985,8 +1261,17 @@
   }
 
   function resumableStateFor(record) {
-    var state = record && record.engine && record.engine.state;
-    if (!state) return null;
+    var storedState = record && record.engine && record.engine.state;
+    if (!storedState) return null;
+    var adapter = global.COPDoc && COPDoc.encounterNarrative;
+    var state =
+      adapter &&
+      typeof adapter.remapNarrativeStateParticipantIds === "function"
+        ? adapter.remapNarrativeStateParticipantIds(
+            storedState,
+            fixture.participants
+          )
+        : JSON.parse(JSON.stringify(storedState));
     if (state.template && Array.isArray(state.template.sections)) return state;
 
     // Build 9 fixtures predate the extracted template envelope. Project their
@@ -1034,10 +1319,18 @@
         persistenceChange = {
           kind: "save",
           record: updated,
-          expectedRevision: Number(existing.revision) || 0
+          expectedRevision: Number(existing.revision) || 0,
+          expectedFocusEncounterParticipantId: activeParticipantId,
+          expectedParticipantIdentity: {
+            subjectId: participant.subjectId,
+            bookingId: participant.bookingId || participant.bookinRecordId || "",
+            personId: participant.personId || "",
+            leadId: participant.leadId || ""
+          }
         };
+        unsavedDraftStateByParticipant.delete(activeParticipantId);
         successMessage = "Dynamic narrative updated for " + participantName(participant) + ".";
-      } else if (options.createMissing) {
+      } else if (!existing && options.createMissing) {
         var created = store.create({
           narrativeId: liveEncounter
             ? "nar_" + liveEncounterId + "_" + activeParticipantId + "_primary"
@@ -1066,7 +1359,17 @@
             iceEventNumber: participant.iceEventNumber || ""
           }
         });
-        persistenceChange = { kind: "create", record: created };
+        persistenceChange = {
+          kind: "create",
+          record: created,
+          expectedFocusEncounterParticipantId: activeParticipantId,
+          expectedParticipantIdentity: {
+            subjectId: participant.subjectId,
+            bookingId: participant.bookingId || participant.bookinRecordId || "",
+            personId: participant.personId || "",
+            leadId: participant.leadId || ""
+          }
+        };
         unsavedDraftStateByParticipant.delete(activeParticipantId);
         successMessage = "Primary narrative created for " + participantName(participant) + ".";
       } else {

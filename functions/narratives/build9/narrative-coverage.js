@@ -36,6 +36,48 @@
     return String(record && record.encounterParticipantId || "").trim();
   }
 
+  function participantAliases(record) {
+    var seen = Object.create(null);
+    return [participantId(record), record && record.subjectId].concat(
+      record && Array.isArray(record.legacyEncounterParticipantIds)
+        ? record.legacyEncounterParticipantIds
+        : []
+    ).reduce(function (output, value) {
+      var id = String(value || "").trim();
+      if (id && !seen[id]) {
+        seen[id] = true;
+        output.push(id);
+      }
+      return output;
+    }, []);
+  }
+
+  function participantAliasIndex(participants, warnings) {
+    var claims = Object.create(null);
+    (participants || []).forEach(function (participant) {
+      var canonicalId = participantId(participant);
+      participantAliases(participant).forEach(function (alias) {
+        claims[alias] = claims[alias] || Object.create(null);
+        claims[alias][canonicalId] = true;
+      });
+    });
+    var resolved = Object.create(null);
+    Object.keys(claims).forEach(function (alias) {
+      var ids = Object.keys(claims[alias]);
+      if (ids.length === 1) {
+        resolved[alias] = ids[0];
+        return;
+      }
+      warnings.push({
+        code: "PARTICIPANT_ALIAS_AMBIGUOUS",
+        encounterParticipantAlias: alias,
+        encounterParticipantIds: ids.sort(),
+        message: "A legacy participant alias matches more than one active participant."
+      });
+    });
+    return resolved;
+  }
+
   function participantRole(record) {
     return String(record && record.encounterRole || "").trim().toUpperCase();
   }
@@ -100,8 +142,33 @@
     var required = uniqueByParticipantId(source.participants, warnings).filter(function (record) {
       return !record.encounterId || record.encounterId === encounterId;
     });
+    var identityCollisionParticipantIds = warnings
+      .filter(function (warning) {
+        return warning && warning.code === "PARTICIPANT_ID_DUPLICATE";
+      })
+      .map(function (warning) {
+        return warning.encounterParticipantId;
+      });
+    var missingIdentityCount = warnings.filter(function (warning) {
+      return warning && warning.code === "PARTICIPANT_ID_MISSING";
+    }).length;
+    if (missingIdentityCount) {
+      errors.push({
+        code: "PARTICIPANT_ID_MISSING",
+        count: missingIdentityCount,
+        message: "Every required Encounter participant must have a canonical identity.",
+      });
+    }
+    identityCollisionParticipantIds.forEach(function (id) {
+      errors.push({
+        code: "PARTICIPANT_ID_DUPLICATE",
+        encounterParticipantId: id,
+        message: "Duplicate canonical Encounter participant identity: " + id,
+      });
+    });
     var requiredMap = Object.create(null);
     required.forEach(function (record) { requiredMap[participantId(record)] = record; });
+    var aliasIndex = participantAliasIndex(required, warnings);
 
     var activePrimary = (Array.isArray(source.narratives) ? source.narratives : [])
       .filter(isActive)
@@ -120,12 +187,13 @@
     activePrimary.forEach(function (record) {
       var id = String(record.narrativeId || "");
       var focusId = String(record.focusEncounterParticipantId || "");
-      if (!focusId || !requiredMap[focusId]) {
+      var canonicalFocusId = aliasIndex[focusId] || "";
+      if (!canonicalFocusId || !requiredMap[canonicalFocusId]) {
         if (id) orphanNarrativeIds.push(id);
         return;
       }
-      if (!grouped[focusId]) grouped[focusId] = [];
-      grouped[focusId].push(record);
+      if (!grouped[canonicalFocusId]) grouped[canonicalFocusId] = [];
+      grouped[canonicalFocusId].push(record);
       if (record.workflowStatus !== "FINALIZED" && id) draftNarrativeIds.push(id);
       if (record.freshnessStatus === "STALE" && id) staleNarrativeIds.push(id);
       if (record.freshnessStatus !== "CURRENT" && record.freshnessStatus !== "STALE" && id) {
@@ -196,6 +264,8 @@
     });
 
     var coverageComplete =
+      missingIdentityCount === 0 &&
+      identityCollisionParticipantIds.length === 0 &&
       missingParticipantIds.length === 0 &&
       duplicateParticipantIds.length === 0 &&
       orphanNarrativeIds.length === 0;
@@ -213,6 +283,8 @@
       coveredParticipantIds: coveredParticipantIds,
       missingParticipantIds: missingParticipantIds,
       duplicateParticipantIds: duplicateParticipantIds,
+      identityCollisionParticipantIds: identityCollisionParticipantIds,
+      missingIdentityCount: missingIdentityCount,
       draftNarrativeIds: draftNarrativeIds.sort(),
       staleNarrativeIds: staleNarrativeIds.sort(),
       unknownFreshnessNarrativeIds: unknownFreshnessNarrativeIds.sort(),

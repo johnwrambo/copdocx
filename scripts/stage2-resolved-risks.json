@@ -1,0 +1,11 @@
+{
+  "schema": "copdocx.stage2-resolved-risks.v1",
+  "stage": 2,
+  "scope": "EncounterSubject identity, Book-In projection, and narrative projection",
+  "resolvedRiskIds": [
+    "S0-BOOKIN-002",
+    "S0-NARRATIVE-001",
+    "S0-NARRATIVE-002",
+    "S0-NARRATIVE-003"
+  ]
+}

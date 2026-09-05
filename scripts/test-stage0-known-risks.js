@@ -19,6 +19,11 @@ const strict = process.argv.includes("--strict");
 const baseline = JSON.parse(
   fs.readFileSync(path.join(__dirname, "stage0-known-risks.json"), "utf8")
 );
+const resolutionFile = path.join(__dirname, "stage2-resolved-risks.json");
+const resolution = fs.existsSync(resolutionFile)
+  ? JSON.parse(fs.readFileSync(resolutionFile, "utf8"))
+  : { resolvedRiskIds: [] };
+const resolvedRiskIds = new Set(resolution.resolvedRiskIds || []);
 
 function requireOk(result, step) {
   if (!result || !result.ok) {
@@ -178,7 +183,7 @@ function probePartialBookIn() {
   };
 }
 
-function probeBookInDeleteResidue() {
+function bookInDeleteResidueFixture() {
   const storage = createMemoryStorage();
   const { context, model } = loadBookInRuntime(storage, {
     search: "?encounterId=enc_delete_residue",
@@ -233,13 +238,29 @@ function probeBookInDeleteResidue() {
     (row) => row && row.bookinRecordId === "bk_delete_residue"
   );
   return {
-    reproduced: packets.length === 0 && subjectReference && arrestReference,
-    observed: {
-      packetCount: packets.length,
-      encounterSubjectReferenceStillActive: subjectReference,
-      arrestReferenceStillActive: arrestReference,
-      caseStillPresent: !!after.leads[promoted.leadId]
-    }
+    packetCount: packets.length,
+    encounterSubjectReferenceStillActive: subjectReference,
+    arrestReferenceStillActive: arrestReference,
+    caseStillPresent: !!after.leads[promoted.leadId]
+  };
+}
+
+function probeBookInDeleteEncounterResidue() {
+  const observed = bookInDeleteResidueFixture();
+  return {
+    reproduced:
+      observed.packetCount === 0 &&
+      observed.encounterSubjectReferenceStillActive,
+    observed
+  };
+}
+
+function probeBookInDeleteArrestResidue() {
+  const observed = bookInDeleteResidueFixture();
+  return {
+    reproduced:
+      observed.packetCount === 0 && observed.arrestReferenceStillActive,
+    observed
   };
 }
 
@@ -477,7 +498,8 @@ const probes = {
   "S0-OBJECT-002": probeLocationRollback,
   "S0-STORAGE-001": probeFailedFirstWritePhantom,
   "S0-BOOKIN-001": probePartialBookIn,
-  "S0-BOOKIN-002": probeBookInDeleteResidue,
+  "S0-BOOKIN-002": probeBookInDeleteEncounterResidue,
+  "S0-BOOKIN-003": probeBookInDeleteArrestResidue,
   "S0-IMPORT-001": probePartialImport,
   "S0-NARRATIVE-001": probeNarrativeOutcome,
   "S0-NARRATIVE-002": probeNarrativeIdentity,
@@ -487,6 +509,14 @@ const probes = {
 
 let unexpected = 0;
 let reproduced = 0;
+let resolved = 0;
+
+resolvedRiskIds.forEach((riskId) => {
+  if (!baseline.risks.some((risk) => risk.id === riskId)) {
+    unexpected += 1;
+    console.error("HARNESS_ERROR", riskId, "Resolution manifest references an unknown risk.");
+  }
+});
 
 baseline.risks.forEach((risk) => {
   const probe = probes[risk.id];
@@ -497,6 +527,28 @@ baseline.risks.forEach((risk) => {
   }
   try {
     const result = probe();
+    if (resolvedRiskIds.has(risk.id)) {
+      if (!result.reproduced) {
+        resolved += 1;
+        console.log(
+          "KNOWN_RISK_RESOLVED",
+          risk.id,
+          "-",
+          risk.title,
+          JSON.stringify(result.observed)
+        );
+        return;
+      }
+      unexpected += 1;
+      console.error(
+        "RESOLVED_RISK_REGRESSED",
+        risk.id,
+        "-",
+        risk.title,
+        JSON.stringify(result.observed)
+      );
+      return;
+    }
     if (result.reproduced) {
       reproduced += 1;
       const prefix = strict ? "STRICT_FAILURE" : "KNOWN_RISK_REPRODUCED";
@@ -532,6 +584,8 @@ baseline.risks.forEach((risk) => {
 });
 
 const expected = baseline.risks.length;
+const expectedResolved = resolvedRiskIds.size;
+const expectedReproduced = expected - expectedResolved;
 if (strict) {
   if (reproduced || unexpected) {
     console.error(
@@ -541,15 +595,22 @@ if (strict) {
     process.exit(1);
   }
   console.log("STAGE0_STRICT_PASSED", expected + " integrity invariants passed.");
-} else if (unexpected || reproduced !== expected) {
+} else if (
+  unexpected ||
+  reproduced !== expectedReproduced ||
+  resolved !== expectedResolved
+) {
   console.error(
     "STAGE0_CHARACTERIZATION_FAILED",
-    reproduced + "/" + expected + " expected risks reproduced; " + unexpected + " unexpected result(s)."
+    reproduced + "/" + expectedReproduced + " expected risks reproduced; " +
+      resolved + "/" + expectedResolved + " planned risks resolved; " +
+      unexpected + " unexpected result(s)."
   );
   process.exit(1);
 } else {
   console.log(
     "STAGE0_CHARACTERIZATION_PASSED",
-    reproduced + "/" + expected + " expected current risks reproduced in isolated memory."
+    reproduced + "/" + expectedReproduced + " remaining risks reproduced and " +
+      resolved + "/" + expectedResolved + " planned risks stayed resolved in isolated memory."
   );
 }

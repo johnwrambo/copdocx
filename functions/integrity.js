@@ -1162,7 +1162,6 @@
         }
       }
       var localSubjects = Object.create(null);
-      var localPeople = Object.create(null);
       list(encounter.subjects).forEach(function (subject, index) {
         var subjectPath = path + ".subjects[" + index + "]";
         if (!isObject(subject)) {
@@ -1185,12 +1184,6 @@
           globalSubjects[subjectId] = subjectPath;
         }
         if (personId) {
-          if (localPeople[personId]) {
-            finding(ctx, "DUPLICATE_PERSON_IN_ENCOUNTER", "high", "relationship", "Person appears more than once in an Encounter",
-              [{ store: "workspace", type: "PERSON", id: personId, path: subjectPath + ".personId" },
-               { store: "workspace", type: "ENCOUNTER", id: encounterId, path: path + ".subjects" }]);
-          }
-          localPeople[personId] = true;
           var person = idx.people[personId];
           if (!person) {
             finding(ctx, "ENCOUNTER_PERSON_DANGLING", "high", "relationship", "Encounter subject references a missing Person",
