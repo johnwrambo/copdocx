@@ -61,12 +61,15 @@ function addCriminalHistoryRow() {
         '<input id="' + uid + '-charge" type="text" data-field="charge"></div>' +
         '<div class="field"><label for="' + uid + '-convictionDate">Conviction date</label>' +
         '<input id="' + uid + '-convictionDate" type="date" data-field="convictionDate"></div>' +
-        '<div class="field"><label for="' + uid + '-county">County</label>' +
-        '<input id="' + uid + '-county" type="text" data-field="county"></div>' +
+        '<div class="field"><label for="' + uid + '-jurisdictionType">Jurisdiction type</label>' +
+        '<select id="' + uid + '-jurisdictionType" data-field="jurisdictionType"><option>County</option><option>City</option></select></div>' +
+        '<div class="field"><label for="' + uid + '-jurisdiction">Jurisdiction</label>' +
+        '<input id="' + uid + '-jurisdiction" type="text" data-field="jurisdiction"></div>' +
         '<div class="field"><label for="' + uid + '-state">State</label>' +
         '<input id="' + uid + '-state" type="text" data-field="state"></div>' +
         '<div class="field"><label for="' + uid + '-court">Court</label>' +
-        '<input id="' + uid + '-court" type="text" data-field="court"></div>';
+        '<input id="' + uid + '-court" type="text" data-field="court"></div>' +
+        '<div class="baseball-card-actions"><button type="button" data-history-action="up">Move up</button><button type="button" data-history-action="down">Move down</button><button type="button" data-history-action="remove">Remove</button></div>';
     criminalHistoryList.appendChild(row);
     return row;
 }
@@ -160,6 +163,9 @@ function baseballForeignWarrantBullet(value, country) {
 window.baseballForeignWarrantBullet = baseballForeignWarrantBullet;
 
 function createBaseballText() {
+    if (window.COPDoc && window.COPDoc.baseball && baseballCardEditor) {
+        return generateStructuredBaseballCard(false);
+    }
     const firstName = titleCase(val(firstNameInput)).trim();
     const lastNameRaw = val(lastNameInput);
     const lastNameTrailingSpace = /\s$/.test(lastNameRaw);
@@ -539,6 +545,9 @@ function bindCardStyleControls() {
             font.appendChild(option);
         });
     }
+    // Structured cards keep every layout setting per card; the old defaults
+    // adapter remains available to legacy generators that have no card editor.
+    if (window.COPDoc && window.COPDoc.baseball && baseballCardEditor) return;
     var saved = loadBaseballCardStyle();
     fillStyleForm(saved);
     applyBaseballCardStyle(saved);
@@ -606,6 +615,12 @@ function getBaseballCardPhotoSource() {
 }
 
 function buildBaseballCardTableMarkup(content, photoSource) {
+    if (window.COPDoc && window.COPDoc.baseball) {
+        var state = getBaseballCardState();
+        state.content = content || state.content;
+        state.photoDataUrl = photoSource || (typeof window.getLiveBaseballCardPhoto === "function" ? window.getLiveBaseballCardPhoto() : "");
+        return window.COPDoc.baseball.renderEmail(state);
+    }
     content = content || {};
     var bullets = Array.isArray(content.bullets) ? content.bullets : [];
     var photo = String(photoSource || getBaseballCardPhotoSource());
@@ -664,7 +679,8 @@ function getRenderedBaseballCardContent() {
     }
     var paragraphs = editor.querySelectorAll("p");
     if (!paragraphs.length) {
-        return null;
+        var pastedText = String(editor.innerText || editor.textContent || "").trim();
+        return pastedText ? { narrative: pastedText, heading: "", bullets: [] } : null;
     }
     return {
         narrative: String(paragraphs[0].textContent || "").trim(),
@@ -691,6 +707,7 @@ function renderBaseballCard(contentOverride) {
         return "";
     }
     editor.innerHTML = buildBaseballCardTableMarkup(content);
+    applyLivePhotoAdjustments();
     return buildBaseballCardPlainText(content);
 }
 
@@ -706,7 +723,14 @@ function refreshBaseballCardPhoto() {
     renderBaseballCard(getRenderedBaseballCardContent());
 }
 
-function buildBaseballCardEmailMarkup(content, photoSource) {
+function buildBaseballCardEmailMarkup(content, photoSource, layout, adjustments) {
+    if (window.COPDoc && window.COPDoc.baseball) {
+        return window.COPDoc.baseball.renderEmail({
+            content: content || {}, photoDataUrl: /^data:image\/svg/i.test(photoSource || "") ? "" : (photoSource || ""),
+            layout: layout || getBaseballCardState().layout,
+            photoAdjustments: adjustments || getBaseballCardState().photoAdjustments
+        });
+    }
     content = content || {};
     var style = getBaseballCardStyle();
     var bullets = Array.isArray(content.bullets) ? content.bullets : [];
@@ -840,7 +864,9 @@ function onGenerateBaseballCard(event) {
         }
     }
     try {
-        var fullText = createBaseballText();
+        var fullText = window.COPDoc && window.COPDoc.baseball && baseballCardEditor
+            ? generateStructuredBaseballCard(true) : createBaseballText();
+        if (baseballCardEditor) return;
         if (!showBaseballCardOnPage(fullText)) {
             window.alert("Baseball card textarea is missing from the page.");
         }
@@ -909,3 +935,260 @@ if (baseballCardEditor) {
         });
     }
 }
+
+// The v1.12 editor uses one serializable card state. Canonical Person facts are
+// source defaults; presentation edits stay here and never write back to Person.
+var baseballStructuredState = null;
+var baseballContentEdited = false;
+var baseballStateFields = {
+    baseballFirstName: "firstName", baseballLastName: "lastName", baseballAge: "age",
+    baseballCountry: "country", baseballAlienNumber: "alienNumber", baseballArrestDate: "arrestDate",
+    baseballDisposition: "disposition", baseballFinalOrderDate: "finalOrderDate",
+    baseballFirstDeportationDate: "firstDeportationDate", baseballLastDeportationDate: "lastDeportationDate"
+};
+var baseballLayoutControls = {
+    cardWidthPx: "bbStyleWidth", photoWidthPercent: "bbStylePhoto", photoHeightPx: "bbStylePhotoHeight",
+    lineWidthPx: "bbStyleLine", lineColor: "bbStyleLineColor", lineStyle: "bbStyleLineStyle",
+    headerHeightPx: "bbStyleHeaderHeight", headerFontSizePx: "bbStyleHeading",
+    contentFontSizePx: "bbStyleBody", contentPaddingPx: "bbStylePadding",
+    fontFamily: "bbStyleFont", lineHeight: "bbStyleLineHeight"
+};
+var baseballPhotoControls = {
+    zoom: "bbPhotoZoom", positionX: "bbPhotoX", positionY: "bbPhotoY", rotation: "bbPhotoRotation",
+    brightness: "bbPhotoBrightness", contrast: "bbPhotoContrast", flipX: "bbPhotoFlip"
+};
+
+function baseballContract() { return window.COPDoc && window.COPDoc.baseball; }
+function baseStructuredState() {
+    var api = baseballContract();
+    if (!api) return null;
+    if (!baseballStructuredState) {
+        var layout;
+        try { layout = JSON.parse(window.localStorage.getItem(BASEBALL_CARD_STYLE_KEY) || "null"); } catch(error) { layout = null; }
+        baseballStructuredState = api.normalizeState({layout: layout || loadBaseballCardStyle()});
+    }
+    return baseballStructuredState;
+}
+function getBaseballCardState() {
+    var api = baseballContract();
+    if (!api) return {};
+    var state = JSON.parse(JSON.stringify(baseStructuredState()));
+    state.fields = state.fields || {};
+    Object.keys(baseballStateFields).forEach(function (key) {
+        var input = document.getElementById(baseballStateFields[key]);
+        if (input) state.fields[key] = String(input.value == null ? "" : input.value);
+    });
+    var gender = document.getElementById("baseballGender");
+    if (gender) state.gender = gender.value;
+    state.criminalHistory = Array.prototype.map.call(criminalHistoryRows(), function (row) {
+        return Object.assign({}, row._baseballSourceRow || {}, {charge: fieldValue(row,"charge") || fieldValue(row,"crime"), convictionDate: fieldValue(row,"convictionDate"),
+            jurisdictionType: fieldValue(row,"jurisdictionType") || "County",
+            jurisdiction: fieldValue(row,"jurisdiction") || fieldValue(row,"county") || fieldValue(row,"city"),
+            state: fieldValue(row,"state"), court: fieldValue(row,"court")});
+    });
+    state.layout = state.layout || {};
+    Object.keys(baseballLayoutControls).forEach(function (key) {
+        var input = document.getElementById(baseballLayoutControls[key]);
+        if (input && input.value !== "") state.layout[key] = input.value;
+    });
+    state.photoAdjustments = state.photoAdjustments || {};
+    Object.keys(baseballPhotoControls).forEach(function (key) {
+        var input = document.getElementById(baseballPhotoControls[key]);
+        if (input) state.photoAdjustments[key] = key === "flipX" ? input.checked : input.value;
+    });
+    var content = getRenderedBaseballCardContent();
+    if (content) state.content = content;
+    state.contentEdited = baseballContentEdited;
+    if (typeof window.getLiveBaseballCardPhoto === "function") state.photoDataUrl = window.getLiveBaseballCardPhoto();
+    state.foreignWarrantsKnown = true;
+    state.hasForeignWarrants = val(foreignWarrantsInput) === "yes";
+    state.foreignWarrantCountry = state.hasForeignWarrants ? val(foreignWarrantCountryInput) : "";
+    return api.normalizeState(state);
+}
+function setStructuredControls(state) {
+    Object.keys(baseballLayoutControls).forEach(function (key) {
+        var el = document.getElementById(baseballLayoutControls[key]);
+        if (el && state.layout[key] != null) el.value = state.layout[key];
+    });
+    Object.keys(baseballPhotoControls).forEach(function (key) {
+        var el = document.getElementById(baseballPhotoControls[key]);
+        if (el && state.photoAdjustments[key] != null) {
+            if (key === "flipX") el.checked = state.photoAdjustments[key]; else el.value = state.photoAdjustments[key];
+        }
+    });
+}
+function hydrateBaseballCardState(raw) {
+    var api = baseballContract();
+    if (!api) return;
+    baseballStructuredState = api.normalizeState(raw);
+    var state = baseballStructuredState;
+    baseballContentEdited = Boolean(state.contentEdited || (state.content && (state.content.narrative || state.content.heading || state.content.bullets.length)));
+    Object.keys(baseballStateFields).forEach(function (key) {
+        var input = document.getElementById(baseballStateFields[key]);
+        if (input) input.value = state.fields[key] || "";
+    });
+    var gender = document.getElementById("baseballGender");
+    if (gender) gender.value = state.gender || "";
+    if (criminalHistoryList) {
+        criminalHistoryList.innerHTML = "";
+        state.criminalHistory.forEach(function (data) {
+            var row = addCriminalHistoryRow();
+            row._baseballSourceRow = JSON.parse(JSON.stringify(data));
+            Object.keys(data).forEach(function (key) { var el = row.querySelector('[data-field="'+key+'"]'); if (el) el.value = data[key]; });
+        });
+    }
+    setStructuredControls(state);
+    if (state.content && (state.content.narrative || state.content.heading || state.content.bullets.length)) renderBaseballCard(state.content);
+    else generateStructuredBaseballCard(false);
+    updateStructuredOutputs(state);
+}
+function generateStructuredBaseballCard(force) {
+    var api = baseballContract();
+    var state = getBaseballCardState();
+    if (baseballContentEdited && !force) {
+        var message = document.getElementById("bbContentStatus");
+        if (message) message.textContent = "Source fields changed. Your edited text is preserved; use Regenerate text to replace it.";
+        return api.plainText(state);
+    }
+    if (force && baseballContentEdited && typeof window.confirm === "function" && !window.confirm("Replace your edited narrative, heading, and bullets with text generated from the fields?")) return api.plainText(state);
+    state.content = api.generateContent(state);
+    // Foreign warrant data is an existing COPDoc extension, kept in the same
+    // saved presentation state even when the imported source has no such field.
+    var warrant = baseballForeignWarrantBullet(val(foreignWarrantsInput), val(foreignWarrantCountryInput));
+    var bullets = state.content.bullets || [];
+    var index = bullets.findIndex(function(item) { return /photo.*arrest/i.test(item); });
+    bullets.splice(index === -1 ? bullets.length : index, 0, warrant);
+    state.content.bullets = bullets;
+    baseballContentEdited = false;
+    state.contentEdited = false;
+    baseballStructuredState = api.normalizeState(state);
+    renderBaseballCard(state.content);
+    var message = document.getElementById("bbContentStatus");
+    if (message) message.textContent = "Text generated from the card fields.";
+    return api.plainText(state);
+}
+function updateStructuredOutputs(state) {
+    state = state || getBaseballCardState();
+    Object.keys(baseballPhotoControls).forEach(function(key) {
+        var out = document.getElementById(baseballPhotoControls[key]+"Value");
+        if (out) out.textContent = key === "zoom" ? state.photoAdjustments[key]+"×" : String(state.photoAdjustments[key]);
+    });
+    applyLivePhotoAdjustments();
+}
+function applyLivePhotoAdjustments() {
+    var api = baseballContract();
+    if (!api || !baseStructuredState()) return;
+    var state = getBaseballCardState();
+    var img = document.getElementById("arrestPhotoPreview");
+    var frame = document.getElementById("bbPhotoFrame");
+    var styles = api.photoStyle(state.photoAdjustments);
+    function stylePhoto(el) {
+        if (!el || !el.style) return;
+        if (typeof styles === "string") el.style.cssText = "width:100%;height:100%;object-fit:cover;"+styles;
+        else Object.keys(styles || {}).forEach(function(key) { el.style[key] = styles[key]; });
+    }
+    stylePhoto(img);
+    if (frame && frame.style) frame.style.aspectRatio = String((state.layout.cardWidthPx * state.layout.photoWidthPercent / 100) / state.layout.photoHeightPx);
+    var photo = baseballCardEditor && baseballCardEditor.querySelector(".photo-cell img");
+    stylePhoto(photo);
+}
+function refreshStructuredCard() {
+    var state = getBaseballCardState();
+    baseballStructuredState = state;
+    renderBaseballCard(state.content);
+    updateStructuredOutputs(state);
+}
+function sortBaseballCriminalHistory(direction) {
+    var api = baseballContract();
+    if (!api) return;
+    var state = getBaseballCardState();
+    var wasEdited = baseballContentEdited;
+    state.criminalHistory = api.sortCriminalHistory(state.criminalHistory, direction === "desc" ? "descending" : "ascending");
+    hydrateBaseballCardState(state);
+    baseballContentEdited = wasEdited;
+    if (!wasEdited) generateStructuredBaseballCard(false);
+    // Ordering is deliberate; retain manual prose until explicit regeneration.
+}
+function bindStructuredBaseballControls() {
+    var api = baseballContract();
+    if (!api || !baseballCardEditor) return;
+    setStructuredControls(baseStructuredState());
+    Object.keys(baseballLayoutControls).concat(Object.keys(baseballPhotoControls)).forEach(function(key) {
+        var id = baseballLayoutControls[key] || baseballPhotoControls[key];
+        var el = document.getElementById(id);
+        if (el) el.addEventListener("input", refreshStructuredCard);
+    });
+    baseballCardEditor.addEventListener("input", function () {
+        baseballContentEdited = true;
+        baseballStructuredState = getBaseballCardState();
+        var message = document.getElementById("bbContentStatus");
+        if (message) message.textContent = "Your edited text will be kept when photos or layout change.";
+    });
+    function on(id, fn) { var el = document.getElementById(id); if (el) el.addEventListener("click",fn); }
+    on("bbRegenerateText",function () { generateStructuredBaseballCard(true); });
+    on("bbHistoryAscending",function () { sortBaseballCriminalHistory("asc"); });
+    on("bbHistoryDescending",function () { sortBaseballCriminalHistory("desc"); });
+    on("bbPhotoReset",function () {
+        var state = getBaseballCardState(); state.photoAdjustments = api.normalizePhotoAdjustments({});
+        setStructuredControls(state); refreshStructuredCard();
+    });
+    on("bbStyleSaveDefault",function () {
+        try { window.localStorage.setItem(BASEBALL_CARD_STYLE_KEY,JSON.stringify(getBaseballCardState().layout)); setStyleStatus("Saved the appearance default. Save card to keep this card's settings.",true); }
+        catch(error) { setStyleStatus("The appearance default could not be saved.",false); }
+    });
+    on("bbStyleRestore",function () { var state = getBaseballCardState(); state.layout=api.normalizeLayout({}); setStructuredControls(state); refreshStructuredCard(); });
+    var preset = document.getElementById("bbStylePreset");
+    if (preset) {
+        Object.keys(api.layoutPresets || {}).forEach(function(key) {
+            var option=document.createElement("option"); option.value=key; option.textContent=key; preset.appendChild(option);
+        });
+        preset.addEventListener("change",function () {
+            if (!api.layoutPresets[preset.value]) return;
+            var state=getBaseballCardState(); state.layout=api.normalizeLayout(api.layoutPresets[preset.value]);
+            setStructuredControls(state); refreshStructuredCard();
+        });
+    }
+    var gender=document.getElementById("baseballGender");
+    if (gender) gender.addEventListener("change",createBaseballText);
+    if (criminalHistoryList) criminalHistoryList.addEventListener("click",function(event) {
+        var button=event.target.closest && event.target.closest("[data-history-action]");
+        if (!button) return;
+        var row=button.closest(".criminal-history-row"), action=button.getAttribute("data-history-action");
+        if (!row) return;
+        if(action==="remove") row.remove();
+        else if(action==="up" && row.previousElementSibling) row.parentNode.insertBefore(row,row.previousElementSibling);
+        else if(action==="down" && row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling,row);
+        createBaseballText();
+    });
+    var frame=document.getElementById("bbPhotoFrame");
+    if(frame) {
+        var drag=null;
+        frame.addEventListener("pointerdown",function(event) {
+            if (!getBaseballCardState().photoDataUrl) return;
+            var state=getBaseballCardState(); drag={x:event.clientX,y:event.clientY,px:state.photoAdjustments.positionX,py:state.photoAdjustments.positionY};
+            frame.setPointerCapture && frame.setPointerCapture(event.pointerId); event.preventDefault();
+        });
+        frame.addEventListener("pointermove",function(event) {
+            if(!drag) return;
+            var bounds=frame.getBoundingClientRect(), state=getBaseballCardState();
+            state.photoAdjustments.positionX=Math.max(0,Math.min(100,drag.px-(event.clientX-drag.x)/Math.max(1,bounds.width)*100));
+            state.photoAdjustments.positionY=Math.max(0,Math.min(100,drag.py-(event.clientY-drag.y)/Math.max(1,bounds.height)*100));
+            setStructuredControls(state); refreshStructuredCard();
+        });
+        ["pointerup","pointercancel","lostpointercapture"].forEach(function(name){frame.addEventListener(name,function(){drag=null;});});
+        frame.addEventListener("keydown",function(event) {
+            var steps={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}, step=steps[event.key];
+            if(!step) return; event.preventDefault();
+            var state=getBaseballCardState(),mult=event.shiftKey?10:1;
+            state.photoAdjustments.positionX=Math.max(0,Math.min(100,state.photoAdjustments.positionX+step[0]*mult));
+            state.photoAdjustments.positionY=Math.max(0,Math.min(100,state.photoAdjustments.positionY+step[1]*mult));
+            setStructuredControls(state); refreshStructuredCard();
+        });
+    }
+}
+window.getBaseballCardState=getBaseballCardState;
+window.hydrateBaseballCardState=hydrateBaseballCardState;
+window.sortBaseballCriminalHistory=sortBaseballCriminalHistory;
+window.generateStructuredBaseballCard=generateStructuredBaseballCard;
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded",bindStructuredBaseballControls);
+else bindStructuredBaseballControls();

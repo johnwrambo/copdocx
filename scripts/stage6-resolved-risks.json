@@ -1,0 +1,8 @@
+{
+  "schema": "copdocx.stage6-resolved-risks.v1",
+  "stage": 6,
+  "scope": "Staged multi-store imports with exact before images and restartable, verified recovery after domain-store failures",
+  "resolvedRiskIds": [
+    "S0-IMPORT-001"
+  ]
+}

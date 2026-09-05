@@ -167,7 +167,14 @@ assert.deepStrictEqual(Object.keys(storageOverlay.storage), ["bookingTransaction
 Object.keys(storageOverlay.storage).forEach((id) => {
   assert.ok(!Object.prototype.hasOwnProperty.call(manifest.storage, id), "overlay must not replace frozen storage " + id);
 });
-const documentedStorage = Object.assign({}, manifest.storage, storageOverlay.storage);
+const importStorageOverlay = readJson(path.join(root, "docs", "stage-6-import-storage.json"));
+assert.strictEqual(importStorageOverlay.schema, "copdocx.storage-contract-overlay.v1");
+assert.strictEqual(importStorageOverlay.stage, 6);
+assert.deepStrictEqual(Object.keys(importStorageOverlay.storage), ["importTransactions"]);
+Object.keys(importStorageOverlay.storage).forEach((id) => {
+  assert.ok(!manifest.storage[id] && !storageOverlay.storage[id], "Stage 6 overlay must be additive: " + id);
+});
+const documentedStorage = Object.assign({}, manifest.storage, storageOverlay.storage, importStorageOverlay.storage);
 const storeIds = Object.keys(documentedStorage);
 assert.strictEqual(storeIds.length, registry.length, "manifest plus additive overlays must cover every registry entry exactly");
 unique(storeIds, "manifest storage IDs");

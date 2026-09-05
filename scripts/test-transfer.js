@@ -5,6 +5,7 @@ var path = require("path");
 var vm = require("vm");
 
 var mem = {};
+var sessionMem = {};
 var context = {
   window: {},
   console: console,
@@ -18,12 +19,21 @@ var context = {
     },
     setItem: function (k, v) {
       mem[k] = String(v);
-    }
+    },
+    removeItem: function (k) { delete mem[k]; }
+  },
+  sessionStorage: {
+    getItem: function (k) { return Object.prototype.hasOwnProperty.call(sessionMem, k) ? sessionMem[k] : null; },
+    setItem: function (k, v) { sessionMem[k] = String(v); },
+    removeItem: function (k) { delete sessionMem[k]; }
   }
 };
 context.globalThis = context;
 context.window = context;
 vm.createContext(context);
+["workspace-config", "baseball-card-contract", "import-schema", "import-workflow"].forEach(function (name) {
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/" + name + ".js"), "utf8"), context);
+});
 ["util", "lead", "person", "encounter", "location", "vehicle", "link", "store"].forEach(function (name) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/model/" + name + ".js"), "utf8"), context);
 });
@@ -119,10 +129,17 @@ try {
 var fromArray = t.parseTransfer(JSON.stringify([{ leadId: "lead_z", meta: { status: "committed" } }]));
 check("legacy leads array", fromArray.leads.length === 1 && fromArray.leads[0].leadId === "lead_z");
 
-var fromBook = t.parseTransfer(JSON.stringify({
+var unversionedBook = JSON.stringify({
   format: "alien-book-in-records",
   records: [{ id: "bk_9", lastName: "X" }]
-}));
+});
+try {
+  t.parseTransfer(unversionedBook);
+  check("unversioned book-in requires explicit legacy selection", false);
+} catch (error) {
+  check("unversioned book-in requires explicit legacy selection", /no schemaVersion/.test(error.message));
+}
+var fromBook = t.parseTransfer(unversionedBook, { allowUnversionedLegacy: true });
 check("legacy book-in backup", fromBook.bookin.length === 1 && fromBook.bookin[0].id === "bk_9");
 
 var demo = t.parseTransfer(JSON.stringify({
@@ -283,7 +300,7 @@ var badLeadIn = t.parseTransfer(
 );
 var badLeadStats = t.applyImport(badLeadIn, ["leads"]);
 check("corrupt store import is not counted", badLeadStats.added === 0, badLeadStats);
-check("corrupt store import reports error", /damaged/.test(badLeadStats.error || ""));
+check("corrupt store import reports error", /damaged|JSON/.test(badLeadStats.error || ""));
 check(
   "corrupt store is not overwritten by import",
   mem["copdocx.store.v1"] === "{not json"
@@ -291,30 +308,10 @@ check(
 mem["copdocx.store.v1"] = leadBackup;
 
 var promotedBookinCalls = 0;
-var sharedObjectValidator = context.COPDoc.model.store.validateObjectWorkspace;
-context.COPDoc.model = {
-  store: {
-    validateObjectWorkspace: sharedObjectValidator,
-    loadFromDisk: function () {},
-    promoteBookInRecords: function (rows) {
-      promotedBookinCalls += 1;
-      return {
-        ok: true,
-        rows: rows.map(function (row) {
-          return Object.assign({}, row, {
-            leadId: row.leadId || "lead_for_" + row.id,
-            personId: row.personId || "person_for_" + row.id,
-            arrestId: row.arrestId || "arrest_for_" + row.id
-          });
-        }),
-        promoted: rows.length,
-        created: rows.filter(function (row) { return !row.leadId; }).length,
-        reused: rows.filter(function (row) { return !!row.leadId; }).length,
-        failed: 0,
-        errors: []
-      };
-    }
-  }
+var originalPromoteBookInRecords = context.COPDoc.model.store.promoteBookInRecords;
+context.COPDoc.model.store.promoteBookInRecords = function (rows, options) {
+  promotedBookinCalls += 1;
+  return originalPromoteBookInRecords(rows, options);
 };
 var bookinSchema3 = t.parseTransfer(
   JSON.stringify({
@@ -339,14 +336,21 @@ var bookinStats = t.applyImport(bookinSchema3, ["bookin"]);
 var linkedBookin = JSON.parse(mem["alien-book-in.saved-records.v1"]).filter(
   function (row) { return row.id === "bk_schema3"; }
 )[0];
+var linkedWorkspace = JSON.parse(mem["copdocx.store.v1"]);
+var linkedPerson = linkedBookin && linkedWorkspace.people[linkedBookin.personId];
+var linkedLead = linkedBookin && linkedWorkspace.leads[linkedBookin.leadId];
+var linkedArrest = linkedPerson && (linkedPerson.arrests || []).filter(function (row) {
+  return row.arrestId === linkedBookin.arrestId && row.bookinRecordId === linkedBookin.id;
+})[0];
 check(
   "book-in import promotes packets to canonical cases",
   promotedBookinCalls === 1 &&
     bookinStats.bookinPromotionAttempted &&
     bookinStats.casesCreated >= 1 &&
-    linkedBookin.leadId === "lead_for_bk_schema3" &&
-    linkedBookin.personId === "person_for_bk_schema3" &&
-    linkedBookin.arrestId === "arrest_for_bk_schema3",
+    !!linkedArrest &&
+    !!linkedLead &&
+    linkedLead.subjectPersonId === linkedPerson.personId &&
+    linkedLead.person.personId === linkedPerson.personId,
   bookinStats
 );
 var repeatBookinStats = t.applyImport(bookinSchema3, ["bookin"]);
@@ -358,8 +362,10 @@ check(
   repeatBookinStats.skipped >= 1 &&
     repeatedBookin.leadId === linkedBookin.leadId &&
     repeatedBookin.personId === linkedBookin.personId &&
-    repeatedBookin.arrestId === linkedBookin.arrestId
+    repeatedBookin.arrestId === linkedBookin.arrestId,
+  repeatBookinStats
 );
+context.COPDoc.model.store.promoteBookInRecords = originalPromoteBookInRecords;
 
 function testImportPopupOpensCompact() {
   var opened = null;
@@ -420,6 +426,9 @@ function testImportPopupOpensCompact() {
   sandbox.globalThis = sandbox;
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  ["workspace-config", "baseball-card-contract", "import-schema", "import-workflow"].forEach(function (name) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/" + name + ".js"), "utf8"), sandbox);
+  });
   vm.runInContext(
     fs.readFileSync(path.join(__dirname, "..", "functions/transfer.js"), "utf8"),
     sandbox
@@ -501,6 +510,9 @@ function testLoadModelScriptReady() {
   sandbox.globalThis = sandbox;
   sandbox.window = sandbox;
   vm.createContext(sandbox);
+  ["workspace-config", "baseball-card-contract", "import-schema", "import-workflow"].forEach(function (name) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/" + name + ".js"), "utf8"), sandbox);
+  });
   vm.runInContext(
     fs.readFileSync(path.join(__dirname, "..", "functions/transfer.js"), "utf8"),
     sandbox

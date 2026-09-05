@@ -6,6 +6,9 @@
     <title>Encounter</title>
     <link rel="stylesheet" href="style/style.css" />
     <script src="functions/workspace-config.js"></script>
+    <script src="functions/baseball-card-contract.js"></script>
+    <script src="functions/import-schema.js"></script>
+    <script src="functions/import-workflow.js"></script>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -281,9 +284,14 @@
             <p id="reviewEvidence" class="section-note">No scene files.</p>
           </fieldset>
           <fieldset class="card-static">
+            <legend>Saved narratives</legend>
+            <p id="reviewNarrativeStatus" class="section-note">Review the saved narrative snapshots before closing this Encounter.</p>
+            <div id="reviewNarratives"></div>
+          </fieldset>
+          <fieldset class="card-static">
             <legend>Confirm</legend>
             <p class="section-note">
-              Review every fact on this encounter — officers, locations, vehicles, subjects, evidence, and narrative — before you confirm. Confirm locks the record and mints the snapshot. Later edits require Unlock and are logged.
+              Review every fact on this encounter — officers, locations, vehicles, subjects, evidence, and narrative — before you confirm. Confirm locks the record and commits the saved narrative snapshots with the Encounter facts. Later edits require Unlock and are logged.
             </p>
             <p class="form-actions">
               <button type="button" class="action-button" id="confirmEncounter">Confirm and close encounter</button>

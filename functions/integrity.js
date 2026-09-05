@@ -18,6 +18,7 @@
     { id: "admin", key: "copdoc.admin.v1", medium: "localStorage" },
     { id: "bookin", key: "alien-book-in.saved-records.v1", medium: "localStorage" },
     { id: "bookingTransactions", key: "copdocx.booking-transactions.v1", medium: "localStorage" },
+    { id: "importTransactions", key: "copdocx.import-transactions.v1", medium: "localStorage" },
     { id: "bookinColumns", key: "alien-book-in.saved-record-columns.v1", medium: "localStorage" },
     { id: "settings", key: "copdocx.settings.v1", medium: "localStorage" },
     { id: "importDoneSignal", key: "copdocx.import.done.v1", medium: "localStorage" },
@@ -293,7 +294,7 @@
     if (Array.isArray(input.stores)) {
       input.stores.forEach(function (entry) {
         if (!entry || !entry.id) return;
-        var isDomainStore = ["workspace", "admin", "bookin", "bookingTransactions"].indexOf(entry.id) >= 0;
+        var isDomainStore = ["workspace", "admin", "bookin", "bookingTransactions", "importTransactions"].indexOf(entry.id) >= 0;
         var parsed = isDomainStore
           ? parseStoreEntry(entry)
           : { status: entry.status || (entry.raw == null ? "missing" : "ok"), value: null, error: entry.error || "" };
@@ -315,7 +316,8 @@
       ["workspace", "copdocx.store.v1"],
       ["admin", "copdoc.admin.v1"],
       ["bookin", "alien-book-in.saved-records.v1"],
-      ["bookingTransactions", "copdocx.booking-transactions.v1"]
+      ["bookingTransactions", "copdocx.booking-transactions.v1"],
+      ["importTransactions", "copdocx.import-transactions.v1"]
     ].forEach(function (spec) {
       if (own(input, spec[0])) byId[spec[0]] = directStore(spec[0], input[spec[0]], spec[1]);
       if (!byId[spec[0]]) byId[spec[0]] = directStore(spec[0], undefined, spec[1]);
@@ -345,6 +347,7 @@
       admin: byId.admin,
       bookin: byId.bookin,
       bookingTransactions: byId.bookingTransactions,
+      importTransactions: byId.importTransactions,
       media: byId.media
     };
   }
@@ -545,9 +548,10 @@
     scanInputStatus(ctx, admin, "Admin");
     scanInputStatus(ctx, bookin, "Book-In");
     scanInputStatus(ctx, ctx.snapshot.bookingTransactions, "Booking recovery");
+    scanInputStatus(ctx, ctx.snapshot.importTransactions, "Import recovery");
     scanInputStatus(ctx, ctx.snapshot.media, "Media");
     ctx.snapshot.stores.forEach(function (row) {
-      if (["workspace", "admin", "bookin", "bookingTransactions"].indexOf(row.id) >= 0) return;
+      if (["workspace", "admin", "bookin", "bookingTransactions", "importTransactions"].indexOf(row.id) >= 0) return;
       if (row.status === "unavailable") scanInputStatus(ctx, row, row.id || row.key || "Registered");
     });
     if (ws.status === "ok") {
@@ -2105,6 +2109,30 @@
     });
   }
 
+  /** Never include imported values, card content, images or raw before images. */
+  function scanImportTransactions(ctx) {
+    var store = ctx.snapshot.importTransactions;
+    if (!store || store.status !== "ok") return;
+    var journal = store.value;
+    function report(rule, severity, title, id) {
+      finding(ctx, rule, severity, "transaction", title,
+        [{ store: "importTransactions", type: "IMPORT_TRANSACTION", id: id || "", path: id ? "transactions." + id : "$" }],
+        [{ store: "importTransactions", path: id ? "transactions." + id : "$", expected: "valid completed import or rollback", actual: rule === "IMPORT_RECOVERY_PENDING" ? "unfinished" : "invalid journal" }]);
+    }
+    if (!isObject(journal) || journal.schema !== "copdocx.import-transactions.v1" || journal.version !== 1 || !isObject(journal.transactions)) {
+      report("IMPORT_JOURNAL_INVALID", "critical", "Import recovery journal has an unsupported shape", "");
+      return;
+    }
+    ctx.scanned.importTransactions = Object.keys(journal.transactions).length;
+    Object.keys(journal.transactions).sort().forEach(function (id) {
+      var row = journal.transactions[id];
+      var invalid = !isObject(row) || row.transactionId !== id || !Number.isInteger(row.revision) || row.revision < 0 || !Array.isArray(row.appliedKeys) || !Array.isArray(row.mediaCreated) || typeof row.mediaPrepared !== "boolean" || !isObject(row.plan) || row.plan.ok !== true || !Array.isArray(row.plan.changes) || ["PENDING", "APPLYING", "ROLLING_BACK", "COMPLETED", "ROLLED_BACK"].indexOf(row.status) < 0;
+      if (!invalid) invalid = row.plan.changes.some(function (change) { return !isObject(change) || typeof change.key !== "string" || !(change.before === null || typeof change.before === "string") || !(change.after === null || typeof change.after === "string"); });
+      if (invalid) report("IMPORT_JOURNAL_INVALID", "critical", "An import recovery entry is invalid", id);
+      else if (["COMPLETED", "ROLLED_BACK"].indexOf(row.status) < 0) report("IMPORT_RECOVERY_PENDING", "high", "An interrupted import requires resume or rollback", id);
+    });
+  }
+
   /** Journal findings deliberately exclude request values and lastError text. */
   function scanBookingTransactions(ctx) {
     var store = ctx.snapshot.bookingTransactions;
@@ -2248,6 +2276,7 @@
       },
       bookin: { records: idx.bookinRows.length },
       bookingTransactions: { transactions: ctx.scanned.bookingTransactions || 0 },
+      importTransactions: { transactions: ctx.scanned.importTransactions || 0 },
       media: { metadata: idx.mediaRows.length, blobKeys: idx.blobKeys.length }
     };
   }
@@ -2287,6 +2316,7 @@
         admin: reportInput(ctx.snapshot.admin, inputCounts.admin),
         bookin: reportInput(ctx.snapshot.bookin, inputCounts.bookin),
         bookingTransactions: reportInput(ctx.snapshot.bookingTransactions, inputCounts.bookingTransactions),
+        importTransactions: reportInput(ctx.snapshot.importTransactions, inputCounts.importTransactions),
         media: reportInput(ctx.snapshot.media, inputCounts.media),
         registered: registered
       },
@@ -2316,6 +2346,7 @@
     scanEncounters(ctx);
     scanBookingsAndArrests(ctx);
     scanBookingTransactions(ctx);
+    scanImportTransactions(ctx);
     scanAssociations(ctx);
     scanInvestigations(ctx);
     scanOperations(ctx);

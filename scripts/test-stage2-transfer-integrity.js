@@ -32,18 +32,14 @@ function workspace(encounters) {
 
 function runtime(initial, promoter) {
   const storage = createMemoryStorage(initial);
-  const context = createTab(storage, {
+  const { context } = loadModelTab(storage, {
     console: { log() {}, info() {}, warn() {}, error() {} },
     document: createMinimalDocument("home")
   });
-  loadScript(context, "functions/transfer.js");
+  ["functions/workspace-config.js", "functions/baseball-card-contract.js", "functions/import-schema.js", "functions/import-workflow.js", "functions/transfer.js"].forEach(source => loadScript(context, source));
   if (promoter) {
-    context.COPDoc.model = {
-      store: {
-        loadFromDisk() {},
-        promoteBookInRecords: promoter
-      }
-    };
+    const original = context.COPDoc.model.store.promoteBookInRecords;
+    context.COPDoc.model.store.promoteBookInRecords = (rows, options) => promoter(rows, options, original);
   }
   return { storage, context, transfer: context.COPDoc.transfer };
 }
@@ -120,7 +116,7 @@ function encounterAndBookInIdsAreCanonicalAndCollisionSafe() {
     }),
     ["encounters", "bookin"]
   );
-  assert.match(duplicateBookIn.error, /duplicate canonical Book-In record ID/i);
+  assert.match(duplicateBookIn.error, /duplicate (?:canonical Book-In )?record ID/i);
   assert.deepStrictEqual(storage.dump(), before, "Book-In collision must fail before any workspace write");
 
   storage.setRaw(STORE_KEY, {
@@ -142,31 +138,21 @@ function encounterAndBookInIdsAreCanonicalAndCollisionSafe() {
 function allTypeImportDefersPromotionAndUsesEncounterRoles() {
   let promotionCall = null;
   let storage;
-  const promoter = (rows, options) => {
+  const promoter = (rows, options, promote) => {
     const saved = storage.json(STORE_KEY);
-    assert.ok(saved.encounters.enc_ordered, "Encounter must be durable before Book-In promotion");
+    assert.ok(!saved.encounters.enc_ordered, "Encounter remains staged until the whole import validates");
+    assert.ok(loaded.context.COPDoc.model.store.getEncounter("enc_ordered"), "Book-In promotion sees the staged Encounter");
     promotionCall = {
       rows: JSON.parse(JSON.stringify(rows)),
       options: Object.assign({}, options)
     };
-    return {
-      ok: true,
-      rows: rows.map((row) =>
-        Object.assign({}, row, {
-          leadId: "lead_exact",
-          personId: "person_exact",
-          arrestId: "arrest_exact"
-        })
-      ),
-      promoted: rows.length,
-      created: rows.length,
-      reused: 0,
-      failed: 0,
-      errors: []
-    };
+    return promote(rows, options);
   };
+  const source = workspace();
+  source.people.person_exact = { personId: "person_exact", name: { firstName: "Ada", lastName: "Exact" } };
+  source.leads.lead_exact = { leadId: "lead_exact", subjectPersonId: "person_exact", person: JSON.parse(JSON.stringify(source.people.person_exact)), meta: { status: "committed" } };
   const loaded = runtime(
-    { [STORE_KEY]: workspace(), [BOOKIN_KEY]: [] },
+    { [STORE_KEY]: source, [BOOKIN_KEY]: [] },
     promoter
   );
   storage = loaded.storage;
@@ -201,6 +187,7 @@ function allTypeImportDefersPromotionAndUsesEncounterRoles() {
             personId: "person_exact",
             leadId: "lead_exact",
             role: "TARGET",
+            outcome: "ARRESTED",
             occupantRole: "DRIVER"
           }
         ])
@@ -299,6 +286,7 @@ function failedImportsDetachNewAndRestoreExisting() {
   );
   const existingJson = JSON.stringify(existing);
   const untouchedJson = JSON.stringify(untouched);
+  const beforeImport = storage.dump();
   const result = transfer.applyImport(
     bundle({
       bookin: [
@@ -330,25 +318,21 @@ function failedImportsDetachNewAndRestoreExisting() {
     ["bookin"]
   );
   assert.deepStrictEqual(calledIds.sort(), ["existing_booking", "new_booking"]);
-  assert.strictEqual(result.casePromotionFailed, 2);
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.added, 0);
+  assert.strictEqual(result.updated, 0);
   assert.match(result.error, /could not be linked/i);
+  assert.deepStrictEqual(storage.dump(), beforeImport, "failed staged promotion cannot partially apply any store");
   const rows = storage.json(BOOKIN_KEY);
   const restored = rows.find((row) => row.id === "existing_booking");
   const stillUntouched = rows.find((row) => row.id === "untouched");
   const detached = rows.find((row) => row.id === "new_booking");
   assert.strictEqual(JSON.stringify(restored), existingJson, "failed update restores exact local row");
   assert.strictEqual(JSON.stringify(stillUntouched), untouchedJson, "unimported local row stays byte-for-byte");
-  assert.strictEqual(detached.encounterProjectionDraft, true);
-  assert.strictEqual(detached.subjectId, "");
-  assert.strictEqual(detached.personId, "");
-  assert.strictEqual(detached.leadId, "");
-  assert.strictEqual(detached.arrestId, "");
-  assert.ok(!Object.prototype.hasOwnProperty.call(detached, "bookingId"));
-  assert.ok(!Object.prototype.hasOwnProperty.call(detached, "bookinRecordId"));
-  assert.ok(!Object.prototype.hasOwnProperty.call(detached, "__copdocImportArrestFieldPresence"));
+  assert.strictEqual(detached, undefined, "a failed import cannot leave a detached draft behind");
 }
 
-function legacyFormStateIsSynthesizedAndLazyPromotionCannotWipe() {
+function legacyFormStateIsSynthesizedWithoutWritingDuringPreview() {
   const original = {
     id: "local_only",
     lastName: "LOCAL",
@@ -358,9 +342,8 @@ function legacyFormStateIsSynthesizedAndLazyPromotionCannotWipe() {
     [STORE_KEY]: workspace(),
     [BOOKIN_KEY]: [original]
   });
-  const before = storage.raw(BOOKIN_KEY);
-  const result = transfer.applyImport(
-    bundle({
+  const before = storage.dump();
+  const imported = bundle({
       bookin: [
         {
           id: " legacy_flat ",
@@ -368,15 +351,21 @@ function legacyFormStateIsSynthesizedAndLazyPromotionCannotWipe() {
           lastName: "VISIBLE"
         }
       ]
-    }),
-    ["bookin"]
-  );
-  assert.ok(result.pendingBookInImport, "eligible import waits for the lazy canonical model");
-  assert.strictEqual(storage.raw(BOOKIN_KEY), before, "deferred promotion never clears or partially writes Book-In storage");
-  const pending = result.pendingBookInImport.rows.find((row) => row.id === "legacy_flat");
+    });
+  const plan = transfer.buildImportPlan(imported, ["bookin"]);
+  assert.strictEqual(plan.ok, true, plan.error);
+  assert.deepStrictEqual(storage.dump(), before, "preview never clears or partially writes any browser storage");
+  const pending = JSON.parse(plan.changes.find(change => change.key === BOOKIN_KEY).after).find(row => row.id === "legacy_flat");
   assert.ok(pending.formState && !Array.isArray(pending.formState));
   assert.strictEqual(pending.formState.firstName.value, "LEGACY");
   assert.strictEqual(pending.formState.lastName.value, "VISIBLE");
+  const result = transfer.applyImport(imported, ["bookin"]);
+  assert.strictEqual(result.ok, true, result.error);
+  const saved = storage.json(BOOKIN_KEY).find(row => row.id === "legacy_flat");
+  assert.ok(saved.personId && saved.leadId && saved.arrestId, "applied legacy packet has stable canonical identity");
+  assert.strictEqual(saved.formState.firstName.value, "LEGACY");
+  assert.strictEqual(saved.formState.lastName.value, "VISIBLE");
+  assert.deepStrictEqual(storage.json(BOOKIN_KEY).find(row => row.id === original.id), original, "unimported local packet remains intact");
 }
 
 function encounterRosterInvariantsArePreflighted() {
@@ -647,7 +636,7 @@ function realBookInPromotionPreservesSelectCompatibility() {
     document: createMinimalDocument("home")
   });
   model.store.loadFromDisk();
-  loadScript(context, "functions/transfer.js");
+  ["functions/workspace-config.js", "functions/baseball-card-contract.js", "functions/import-schema.js", "functions/import-workflow.js", "functions/transfer.js"].forEach(source => loadScript(context, source));
   [
     ["DRIVER", "Driver"],
     ["PASSENGER", "Passenger"],
@@ -713,7 +702,7 @@ function realBookInPromotionPreservesSelectCompatibility() {
 encounterAndBookInIdsAreCanonicalAndCollisionSafe();
 allTypeImportDefersPromotionAndUsesEncounterRoles();
 failedImportsDetachNewAndRestoreExisting();
-legacyFormStateIsSynthesizedAndLazyPromotionCannotWipe();
+legacyFormStateIsSynthesizedWithoutWritingDuringPreview();
 encounterRosterInvariantsArePreflighted();
 encounterRemovalPreservesOwnershipHistory();
 importedQuietDraftCannotCarryCanonicalClaims();

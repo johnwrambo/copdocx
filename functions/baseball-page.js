@@ -6,7 +6,6 @@
   "use strict";
 
   var HANDOFF_KEY = "copdocx.baseball.handoff.v1";
-  var MAX_PHOTO_EDGE = 1200;
   var photoDataUrl = "";
   var loadedPhotoMediaId = "";
   var pendingPhotoName = "";
@@ -16,6 +15,7 @@
   var loadedCardId = "";
   var currentBookInRecordId = "";
   var currentPersonId = "";
+  var loadedCardFingerprint = "";
 
   function byId(id) {
     return document.getElementById(id);
@@ -186,12 +186,10 @@
     var exact = rows.filter(function (row) {
       return (
         currentBookInRecordId &&
-        text(row && row.bookinRecordId) === currentBookInRecordId
+        [row && row.bookinRecordId, row && row.bookingId].map(text).indexOf(currentBookInRecordId) !== -1
       );
     })[0];
-    if (exact) {
-      return exact;
-    }
+    if (currentBookInRecordId) return exact || null;
     return (
       rows.sort(function (left, right) {
         return text(
@@ -215,6 +213,10 @@
         return row && row.voidedAt && recordId &&
           [row.id, row.bookinRecordId, row.bookingId].map(text).indexOf(recordId) !== -1;
       });
+      var packet = packets.filter(function(row) { return row && text(row.id) === recordId; })[0];
+      if (packet && packet.personId && text(packet.personId) !== text(subject && subject.personId)) {
+        return "The booking now belongs to a different Person. Reload the card before saving.";
+      }
     } catch (error) {
       return "Book-In data could not be verified. The baseball card was not saved.";
     }
@@ -306,6 +308,8 @@
     fillIfEmpty("firstDeportationDate", immigration.firstDeportationDate);
     fillIfEmpty("lastDeportationDate", immigration.lastDeportationDate);
     fillIfEmpty("arrestDate", arrestDateOf(arrest));
+    var gender = text(subject.gender || subject.sex).toLowerCase();
+    fillIfEmpty("baseballGender", gender === "f" || gender === "female" ? "Female" : gender === "m" || gender === "male" ? "Male" : "");
 
     var derived =
       m && typeof m.deriveCriminalProfile === "function"
@@ -335,7 +339,8 @@
         fillRow(global.addCriminalHistoryRow(), {
           charge: row.crime || row.charge || "",
           convictionDate: row.convictionDate || "",
-          county: row.county || "",
+          jurisdictionType: row.jurisdictionType || (row.city && !row.county ? "City" : "County"),
+          jurisdiction: row.jurisdiction || row.county || row.city || "",
           state: row.state || "",
           court: row.court || ""
         });
@@ -366,6 +371,7 @@
     fillIfEmpty("finalOrderDate", data.finalOrderDate);
     fillIfEmpty("firstDeportationDate", data.firstDeportationDate);
     fillIfEmpty("lastDeportationDate", data.lastDeportationDate);
+    fillIfEmpty("baseballGender", data.gender);
     if (data.foreignWarrants === "yes" || data.foreignWarrants === "no") {
       setForeignWarrants(
         data.foreignWarrants === "yes",
@@ -380,7 +386,7 @@
 
   function setPhoto(dataUrl, options) {
     options = options || {};
-    photoDataUrl = /^data:image\/(?:png|jpeg|webp);base64,/i.test(text(dataUrl))
+    photoDataUrl = /^data:image\/(?:png|jpe?g|webp|gif|bmp);base64,/i.test(text(dataUrl))
       ? text(dataUrl)
       : "";
     photoDirty = options.stored !== true;
@@ -430,8 +436,8 @@
     if (!api || typeof api.blob !== "function") {
       return Promise.reject(new Error("The media store is not available."));
     }
-    return api.blob(mediaId, "display").catch(function () {
-      return api.blob(mediaId, "original");
+    return api.blob(mediaId, "original").catch(function () {
+      return api.blob(mediaId, "display");
     }).then(blobPartToDataUrl);
   }
 
@@ -440,10 +446,25 @@
       return Promise.resolve(true);
     }
     loadedCardId = text(card.cardId);
+    loadedCardFingerprint = JSON.stringify(card);
     currentBookInRecordId = text(card.bookinRecordId) || currentBookInRecordId;
     loadedPhotoMediaId = text(card.photoMediaId);
     pendingPhotoName = "";
-    setPhoto(card.photoDataUrl, { stored: true });
+    var contract = global.COPDoc && global.COPDoc.baseball;
+    var state = contract && contract.fromCanonical(card);
+    if (state && !card.state && !card.fields && typeof global.getBaseballCardState === "function") {
+      var defaults = global.getBaseballCardState();
+      state.fields = Object.assign({}, defaults.fields, {
+        baseballArrestDate: card.arrestDate || defaults.fields.baseballArrestDate,
+        baseballDisposition: card.disposition || defaults.fields.baseballDisposition
+      });
+      state.gender = defaults.gender;
+      state.criminalHistory = defaults.criminalHistory;
+    }
+    setPhoto(state ? state.photoDataUrl : card.photoDataUrl, { stored: true });
+    if (state && typeof global.hydrateBaseballCardState === "function") {
+      global.hydrateBaseballCardState(state);
+    }
     if (card.foreignWarrantsKnown || card.hasForeignWarrants) {
       setForeignWarrants(
         card.hasForeignWarrants === true,
@@ -451,7 +472,7 @@
       );
     }
     var editor = byId("baseballCardEditor");
-    if (editor && (text(card.html) || text(card.text))) {
+    if (!state && editor && (text(card.html) || text(card.text))) {
       editor.innerHTML = sanitizedCardMarkup(card.html, card.text);
       if (
         !editor.querySelector(".arrest-card") &&
@@ -768,7 +789,7 @@
     return Boolean(
       id &&
       (cards || []).some(function (card) {
-        return text(card && card.photoMediaId) === id;
+        return text(card && card.photoMediaId) === id || text(card && card.finalizedSnapshot && card.finalizedSnapshot.photoMediaId) === id;
       })
     );
   }
@@ -786,7 +807,7 @@
   }
 
   function setSaveBusy(busy) {
-    ["saveBaseballCardButton", "generatebaseballCard"].forEach(function (id) {
+    ["saveBaseballCardButton", "finalizeBaseballCardButton", "generatebaseballCard"].forEach(function (id) {
       var button = byId(id);
       if (button) {
         button.disabled = !!busy;
@@ -794,7 +815,8 @@
     });
   }
 
-  async function persistBaseballCard() {
+  async function persistBaseballCard(options) {
+    options = options && options.finalize === true ? { finalize: true } : {};
     if (savingCard) {
       return false;
     }
@@ -839,17 +861,7 @@
     }
 
     var warrants = foreignWarrantValues();
-    subject.criminal = subject.criminal || {};
-    subject.criminal.foreignWarrantsKnown = true;
-    subject.criminal.hasForeignWarrants = warrants.has;
-    subject.criminal.foreignWarrantCountry = warrants.country;
     subject.immigration = subject.immigration || {};
-    subject.immigration.firstDeportationDate = text(
-      byId("firstDeportationDate") && byId("firstDeportationDate").value
-    );
-    subject.immigration.lastDeportationDate = text(
-      byId("lastDeportationDate") && byId("lastDeportationDate").value
-    );
     if (!Array.isArray(subject.immigration.baseballCards)) {
       subject.immigration.baseballCards = [];
     }
@@ -861,6 +873,26 @@
       recordId,
       arrestDate
     );
+    if (existing && (!loadedCardFingerprint || JSON.stringify(existing) !== loadedCardFingerprint)) {
+      setStatus("This card changed in another window. Reload it before saving.", "error");
+      return false;
+    }
+    if (loadedCardId && !existing) {
+      setStatus("The saved card was removed in another window. Reload before saving.", "error");
+      return false;
+    }
+    var contract = global.COPDoc && global.COPDoc.baseball;
+    var structured = contract && typeof global.getBaseballCardState === "function" ? global.getBaseballCardState() : null;
+    var exactArrest = arrestForContext(subject.arrests || []);
+    if (recordId && !exactArrest) {
+      setStatus("This booking is no longer linked to this Person's active arrest. Reload before saving.", "error");
+      return false;
+    }
+    if (options.finalize && (!structured || !exactArrest || !arrestDate || arrestDateOf(exactArrest) !== arrestDate)) {
+      setStatus("Finalizing requires this booking's active arrest and its exact arrest date.", "error");
+      return false;
+    }
+    var baseFingerprint = existing ? JSON.stringify(existing) : "";
     var previousMediaId = text(existing && existing.photoMediaId) || loadedPhotoMediaId;
     var nextMediaId = previousMediaId;
     var createdMediaId = "";
@@ -894,17 +926,27 @@
         hasForeignWarrants: warrants.has,
         foreignWarrantCountry: warrants.country
       };
+      if (structured) {
+        structured.savedAt = cardInput.generatedAt;
+        structured.photoMediaId = nextMediaId;
+        structured.photoDataUrl = nextMediaId ? "" : photoDataUrl;
+        cardInput = Object.assign({}, cardInput, contract.toCanonical(structured, Object.assign({existing: existing || {}}, cardInput)));
+        if (existing && existing.finalizedSnapshot) cardInput.finalizedSnapshot = existing.finalizedSnapshot;
+        if (existing && existing.arrestOfDay) cardInput.arrestOfDay = existing.arrestOfDay;
+      }
       if (existing && existing.cardId) {
         cardInput.cardId = existing.cardId;
       }
       var card = m.createBaseballCard(cardInput);
-      if (existing) {
-        var index = subject.immigration.baseballCards.indexOf(existing);
-        subject.immigration.baseballCards[index] = card;
-      } else {
-        subject.immigration.baseballCards.push(card);
+      if (options.finalize) {
+        card.finalizedSnapshot = contract.finalize(structured, {
+          cardId: card.cardId, personId: subject.personId, leadId: leadId,
+          bookinRecordId: recordId, arrestId: exactArrest.arrestId,
+          subjectId: exactArrest.subjectId || "", encounterId: exactArrest.encounterId || "",
+          photoMediaId: nextMediaId, arrestDateKey: arrestDate, generatedAt: cardInput.generatedAt
+        });
+        card.arrestOfDay = {date: arrestDate, markedAt: cardInput.generatedAt};
       }
-      snap.person = subject;
       m.store.loadFromDisk();
       var latest = m.store.getLead(leadId);
       var latestSubject = latest && (m.subjectOf ? m.subjectOf(latest) : latest.person);
@@ -912,24 +954,41 @@
       if (!latest || !latestSubject || (m.store.diskError && m.store.diskError()) || lateLifecycleError) {
         throw new Error(lateLifecycleError || "The case changed or became unavailable while saving. Reload it before saving the card.");
       }
-      var saved = m.store.saveLead(snap, { mode: "commit" });
+      if (text(latestSubject.personId) !== text(subject.personId)) throw new Error("The case subject changed while saving. Reload the card.");
+      latestSubject.immigration = latestSubject.immigration || {};
+      var latestCards = latestSubject.immigration.baseballCards || [];
+      var latestExisting = findExistingCard(latestCards, recordId, arrestDate);
+      if ((latestExisting ? JSON.stringify(latestExisting) : "") !== baseFingerprint) {
+        throw new Error("This card changed while its photo was saving. Reload it before saving.");
+      }
+      if (options.finalize) {
+        var currentArrest = arrestForContext(latestSubject.arrests || []);
+        if (!currentArrest || JSON.stringify(currentArrest) !== JSON.stringify(exactArrest)) throw new Error("The arrest changed while finalizing. Reload the card.");
+      }
+      latestSubject.immigration.baseballCards = latestCards.filter(function (item) { return text(item.cardId) !== card.cardId; }).concat([card]);
+      latest.person = latestSubject;
+      var saved = m.store.saveLead(latest, { mode: "commit" });
       if (!saved || !saved.ok) {
         throw new Error((saved && saved.error) || "Could not save the baseball card.");
       }
 
       loadedCardId = card.cardId;
+      var savedLead = m.store.getLead(leadId);
+      var savedSubject = savedLead && (m.subjectOf ? m.subjectOf(savedLead) : savedLead.person);
+      var savedCard = savedSubject && (savedSubject.immigration.baseballCards || []).filter(function(item){return item.cardId===card.cardId;})[0];
+      loadedCardFingerprint = JSON.stringify(savedCard || card);
       loadedPhotoMediaId = nextMediaId;
       photoDirty = false;
       pendingPhotoName = "";
       if (
         previousMediaId &&
         previousMediaId !== nextMediaId &&
-        !mediaReferencedByCards(subject.immigration.baseballCards, previousMediaId)
+        !mediaReferencedByCards(latestSubject.immigration.baseballCards, previousMediaId)
       ) {
         await removeMediaQuietly(previousMediaId);
       }
       setStatus(
-        existing
+        options.finalize ? "Finalized as arrest of the day. Reports use this snapshot until you finalize another card for this date." : existing
           ? "Updated the saved baseball card for this arrest."
           : "Saved the baseball card on this arrest's canonical case.",
         "success"
@@ -949,8 +1008,12 @@
 
   function imageDataFromFile(file) {
     return new Promise(function (resolve, reject) {
-      if (!file || !/^image\//i.test(file.type || "")) {
-        reject(new Error("Choose an image file."));
+      if (!file || !/^image\/(?:png|jpe?g|webp|gif|bmp)$/i.test(file.type || "")) {
+        reject(new Error("Choose a PNG, JPEG, WebP, GIF, or BMP image."));
+        return;
+      }
+      if (file.size > 24 * 1024 * 1024) {
+        reject(new Error("Choose an image smaller than 24 MB."));
         return;
       }
       var reader = new FileReader();
@@ -963,19 +1026,7 @@
           reject(new Error("The selected file is not a readable image."));
         };
         image.onload = function () {
-          var width = image.naturalWidth || image.width;
-          var height = image.naturalHeight || image.height;
-          var scale = Math.min(1, MAX_PHOTO_EDGE / Math.max(width, height));
-          var canvas = document.createElement("canvas");
-          canvas.width = Math.max(1, Math.round(width * scale));
-          canvas.height = Math.max(1, Math.round(height * scale));
-          var context = canvas.getContext("2d");
-          if (!context) {
-            reject(new Error("This browser cannot prepare the photo."));
-            return;
-          }
-          context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/jpeg", 0.84));
+          resolve(String(reader.result || ""));
         };
         image.src = String(reader.result || "");
       };
@@ -992,8 +1043,7 @@
     setStatus("Preparing arrest photo…");
     imageDataFromFile(file)
       .then(function (dataUrl) {
-        pendingPhotoName =
-          (text(file.name).replace(/\.[^.]+$/, "") || "arrest-photo") + ".jpg";
+        pendingPhotoName = text(file.name) || "arrest-photo";
         setPhoto(dataUrl);
         setStatus("Arrest photo is ready. Save the card to keep it.", "success");
       })
@@ -1006,6 +1056,10 @@
   }
 
   function getRenderedCardContent() {
+    if (typeof global.getRenderedBaseballCardContent === "function") {
+      var structured = global.getRenderedBaseballCardContent();
+      if (structured) return structured;
+    }
     var editor = byId("baseballCardEditor");
     var narrative = "";
     var heading = "";
@@ -1082,6 +1136,15 @@
     return safeCardHtml(editorTextForSave());
   }
 
+  async function preparedEmailCardHtml() {
+    var api = global.COPDoc && global.COPDoc.baseball;
+    if (!api || typeof global.getBaseballCardState !== "function") return emailCardHtml();
+    var state = global.getBaseballCardState();
+    state.content = getRenderedCardContent();
+    var photo = await api.renderPhoto(state, photoDataUrl);
+    return api.renderEmail(state, photo);
+  }
+
   function emailPlainText() {
     var content = getRenderedCardContent();
     if (typeof global.buildBaseballCardPlainText === "function") {
@@ -1156,7 +1219,9 @@
     if (!validateCard()) {
       return;
     }
-    var html = emailCardHtml();
+    var html;
+    try { html = await preparedEmailCardHtml(); }
+    catch (error) { setStatus(error.message || "The adjusted photo could not be copied.", "error"); return; }
     var plainText = emailPlainText();
     if (!plainText || html.indexOf("<table") === -1) {
       setStatus("Generate or enter the baseball card text before copying.", "error");
@@ -1184,7 +1249,7 @@
     } catch (error) {
       if (global.console && typeof global.console.warn === "function") {
         global.console.warn(
-          "Rich Baseball Card copying failed with the arrest photo; retrying a lighter card.",
+          "This browser blocked formatted copying with the photo; retrying without the photo.",
           error
         );
       }
@@ -1196,7 +1261,7 @@
         );
         if (copyHtmlWithSelection(lightHtml) || (await writeHtmlClipboard(lightHtml, plainText))) {
           setStatus(
-            "Baseball Card copied with formatting. The arrest photo was too large for this browser’s clipboard.",
+            "Baseball Card copied with formatting. This browser blocked copying its arrest photo; Download HTML keeps the photo.",
             "warning"
           );
           return;
@@ -1207,17 +1272,23 @@
         }
       }
     }
-    setStatus(
-      "Formatted copy was blocked. Use Download HTML and attach that file to the email.",
-      "error"
-    );
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(plainText);
+        setStatus("Copied plain text. This browser blocked the formatted card and photo; use Download HTML to keep them.", "warning");
+        return;
+      }
+    } catch (plainError) {}
+    setStatus("Copy was blocked. Use Download HTML and attach that file to the email.", "error");
   }
 
-  function downloadBaseballCardHtml() {
+  async function downloadBaseballCardHtml() {
     if (!validateCard()) {
       return;
     }
-    var html = emailCardHtml();
+    var html;
+    try { html = await preparedEmailCardHtml(); }
+    catch (error) { setStatus(error.message || "The adjusted photo could not be exported.", "error"); return; }
     var plainText = emailPlainText();
     if (!plainText) {
       setStatus("Generate or enter the baseball card text before exporting.", "error");
@@ -1273,6 +1344,10 @@
     if (save) {
       save.addEventListener("click", persistBaseballCard);
     }
+    var finalize = byId("finalizeBaseballCardButton");
+    if (finalize) finalize.addEventListener("click", function () {
+      persistBaseballCard({ finalize: true });
+    });
     var copy = byId("copyBaseballCardButton");
     if (copy) {
       copy.addEventListener("click", copyBaseballCard);
@@ -1333,6 +1408,7 @@
   }
 
   global.persistBaseballCard = persistBaseballCard;
+  global.hydrateSavedBaseballCard = hydrateSavedCard;
   global.copyBaseballCard = copyBaseballCard;
   global.downloadBaseballCardHtml = downloadBaseballCardHtml;
   global.getLiveBaseballCardPhoto = function () {

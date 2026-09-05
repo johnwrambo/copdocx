@@ -229,6 +229,13 @@
     }
   }
 
+  function openRequestedEncounterTab() {
+    var tab = queryParam("tab");
+    if (["stop", "vehicles", "subjects", "evidence", "narrative", "review"].indexOf(tab) !== -1) {
+      showEncounterTab("tab-" + tab);
+    }
+  }
+
   function fillEventTypeSelect(selected) {
     var sel = byId("eventType");
     if (!sel) {
@@ -593,6 +600,51 @@
     }
   }
 
+  function paintReviewNarratives(record) {
+    var host = byId("reviewNarratives");
+    var note = byId("reviewNarrativeStatus");
+    if (!host) {
+      return;
+    }
+    var closed = isComplete(record);
+    var hasCompletedNarratives = !!(record.completed && Array.isArray(record.completed.narratives));
+    var rows = closed && hasCompletedNarratives
+      ? record.completed.narratives
+      : (Array.isArray(record.narratives) ? record.narratives : []);
+    host.replaceChildren();
+    if (note) {
+      note.textContent = closed && hasCompletedNarratives
+        ? "Narrative snapshots committed when this Encounter was reviewed and closed."
+        : closed
+          ? "Saved narratives. This older completion snapshot did not capture narrative copies."
+          : "Review the saved narrative snapshots below. Confirm and close commits these exact copies to the Encounter.";
+    }
+    rows.forEach(function (narrative) {
+      if (!narrative || typeof narrative !== "object") {
+        return;
+      }
+      var details = document.createElement("details");
+      var summary = document.createElement("summary");
+      var title = narrative.title || narrative.narrativeId || "Saved narrative";
+      summary.textContent = title + (narrative.archivedAt ? " (archived)" : "") +
+        (narrative.updatedAt ? " · saved " + String(narrative.updatedAt).slice(0, 16).replace("T", " ") : "");
+      var output = narrative.output || {};
+      var text = output.finalPlainText != null ? output.finalPlainText : output.plainText;
+      var prose = document.createElement("p");
+      prose.style.whiteSpace = "pre-wrap";
+      prose.textContent = text == null ? "No saved narrative text." : String(text);
+      details.appendChild(summary);
+      details.appendChild(prose);
+      host.appendChild(details);
+    });
+    if (!host.childNodes.length) {
+      var empty = document.createElement("p");
+      empty.className = "section-note";
+      empty.textContent = "No narrative snapshot saved yet. Return to Narrative and save before closing.";
+      host.appendChild(empty);
+    }
+  }
+
   function paintReview() {
     var record = collectEncounter();
     var stored =
@@ -600,6 +652,7 @@
         ? model().store.getEncounter(record.encounterId)
         : null;
     if (stored) {
+      record.narratives = stored.narratives || [];
       record.completed = stored.completed || record.completed;
       record.completedHistory = stored.completedHistory || record.completedHistory;
       record.unlock = stored.unlock || record.unlock;
@@ -675,6 +728,7 @@
     if (evEl) {
       evEl.textContent = "Scene files list on the Evidence tab.";
     }
+    paintReviewNarratives(record);
     var confirmBtn = byId("confirmEncounter");
     var unlockBlock = byId("reviewUnlock");
     var locked = isComplete(record);
@@ -3324,7 +3378,7 @@
       !window.confirm(
         "Review all facts before confirming.\n\n" +
           "Officers, locations, vehicles, subjects, evidence, and narrative should be complete and correct.\n\n" +
-          "Confirm locks this encounter and saves the snapshot used for the map, stats, and the daily report.\n\n" +
+          "Confirm locks this encounter and commits the saved narrative snapshots with the facts used for the map, stats, and the daily report.\n\n" +
           "Later changes require Unlock and are logged.\n\n" +
           "Confirm and close this encounter?"
       )
@@ -3731,6 +3785,7 @@
     fillOperationSelect();
     bindEncounterWorkspace();
     ensureNewEncounter();
+    openRequestedEncounterTab();
     bindTeamRemint();
     if (m.autosave && typeof m.autosave.bind === "function") {
       m.autosave.bind({

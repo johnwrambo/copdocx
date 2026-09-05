@@ -40,6 +40,8 @@
     return { raw: raw, value: value };
   }
   function write(k, previous, value) {
+    var writable = root.importWorkflow && root.importWorkflow.assertWritable();
+    if (writable && !writable.ok) fail(writable.error);
     if (global.localStorage.getItem(k) !== previous) fail("Booking data changed in another window. Resume after reviewing the change.");
     var next = JSON.stringify(value);
     global.localStorage.setItem(k, next);

@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
-const gates = ["run-stage2.js", "test-narrative-build9.js"].concat(
+const gates = ["run-stage2.js", "test-narrative-build9.js", "test-encounter-narrative-snapshot.js"].concat(
   fs.readdirSync(__dirname).filter(name => /^test-stage3-.*\.js$/.test(name)).sort()
 );
 for (const gate of gates) {

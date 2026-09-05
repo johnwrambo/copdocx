@@ -1,0 +1,395 @@
+{
+  "format": "alien-book-in-records",
+  "schemaVersion": 5,
+  "appVersion": "1.12.0",
+  "exportedAt": "2026-09-05T14:00:00.000Z",
+  "recordCount": 1,
+  "exportExtension": {
+    "origin": "synthetic fixture"
+  },
+  "records": [
+    {
+      "id": "fixture-bookin-112",
+      "revision": 3,
+      "createdAt": "2026-09-01T10:00:00.000Z",
+      "updatedAt": "2026-09-05T13:00:00.000Z",
+      "createdWithVersion": "1.12.0",
+      "updatedWithVersion": "1.12.0",
+      "firstName": "Synthetic",
+      "lastName": "TEST-Example",
+      "aNumber": "000000112",
+      "fbiNumber": "FBI112",
+      "iceEvent": "DALLAS112",
+      "encounterNumber": "SYNTHETIC-LABEL-ONLY",
+      "subjectRole": "Target",
+      "vehiclePosition": "Driver",
+      "dateTime": "2026-09-05T12:00",
+      "arrestTime": "11:00",
+      "dateOfBirth": "1986-01-02",
+      "countryOfCitizenship": "Ecuador",
+      "caseType": "NTA",
+      "team": "DAL-3",
+      "sourceExtension": {
+        "preserveThis": "unknown extension"
+      },
+      "formState": {
+        "first_name": {
+          "type": "text",
+          "value": "Synthetic",
+          "checked": false
+        },
+        "last_name": {
+          "type": "text",
+          "value": "TEST-Example",
+          "checked": false
+        },
+        "a_number": {
+          "type": "text",
+          "value": "000000112",
+          "checked": false
+        },
+        "ice_event": {
+          "type": "text",
+          "value": "DALLAS112",
+          "checked": false
+        },
+        "fbi_number": {
+          "type": "text",
+          "value": "FBI112",
+          "checked": false
+        },
+        "encounter_number": {
+          "type": "text",
+          "value": "SYNTHETIC-LABEL-ONLY",
+          "checked": false
+        },
+        "date_time": {
+          "type": "text",
+          "value": "2026-09-05T12:00",
+          "checked": false
+        },
+        "arrest_time": {
+          "type": "text",
+          "value": "11:00",
+          "checked": false
+        },
+        "date_of_birth": {
+          "type": "text",
+          "value": "1986-01-02",
+          "checked": false
+        },
+        "country_of_citizenship": {
+          "type": "text",
+          "value": "Ecuador",
+          "checked": false
+        },
+        "case_type": {
+          "type": "text",
+          "value": "NTA",
+          "checked": false
+        },
+        "vehicle_position": {
+          "type": "text",
+          "value": "Driver",
+          "checked": false
+        },
+        "team": {
+          "type": "text",
+          "value": "DAL-3",
+          "checked": false
+        },
+        "cash": {
+          "type": "text",
+          "value": "21.66",
+          "checked": false
+        },
+        "children": {
+          "type": "text",
+          "value": "None",
+          "checked": false
+        },
+        "future_field": {
+          "type": "text",
+          "value": "preserve custom field",
+          "checked": false
+        },
+        "property_tag": {
+          "type": "text",
+          "value": "I77-SYNTHETIC",
+          "checked": false
+        },
+        "subject_role_target": {
+          "type": "radio",
+          "value": "Target",
+          "checked": true
+        },
+        "subject_role_collateral": {
+          "type": "radio",
+          "value": "Collateral",
+          "checked": false
+        },
+        "no_medical_issues": {
+          "type": "checkbox",
+          "value": "No",
+          "checked": false
+        },
+        "medical_issues": {
+          "type": "text",
+          "value": "Synthetic medical answer",
+          "checked": false
+        },
+        "medicine": {
+          "type": "textarea",
+          "value": "Synthetic medicine",
+          "checked": false
+        },
+        "q1_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": true
+        },
+        "q1_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": false
+        },
+        "q2_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q2_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q3_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q3_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q3_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q4_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q4_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q4_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q5_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q5_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q5_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q6_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q6_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q6_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q7_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q7_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q7_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q8_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q8_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q8_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q9_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q9_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q9_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q10_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q10_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q10_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q11_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q11_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q11_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q12_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q12_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q12_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        },
+        "q13_yes": {
+          "type": "radio",
+          "value": "Yes",
+          "checked": false
+        },
+        "q13_no": {
+          "type": "radio",
+          "value": "No",
+          "checked": true
+        },
+        "q13_details": {
+          "type": "textarea",
+          "value": "",
+          "checked": false
+        }
+      },
+      "baseballCard": {
+        "version": 2,
+        "fields": {
+          "baseballFirstName": "Synthetic",
+          "baseballLastName": "TEST-Example",
+          "baseballAge": "40",
+          "baseballCountry": "Ecuador",
+          "baseballArrestDate": "2026-09-05"
+        },
+        "gender": "Male",
+        "criminalHistory": [
+          {
+            "charge": "Synthetic charge later",
+            "convictionDate": "2024-02-02",
+            "jurisdictionType": "City",
+            "jurisdiction": "Dallas",
+            "state": "TX",
+            "court": "Synthetic court",
+            "sourceTag": "preserve history extension"
+          },
+          {
+            "charge": "Synthetic charge earlier",
+            "convictionDate": "2020-01-01",
+            "jurisdictionType": "County",
+            "jurisdiction": "Tarrant",
+            "state": "TX",
+            "court": "Synthetic court"
+          }
+        ],
+        "content": {
+          "narrative": "Manually edited synthetic narrative.",
+          "heading": "Manual heading",
+          "bullets": [
+            "Manually edited bullet."
+          ]
+        },
+        "photoDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l1sAAAAASUVORK5CYII=",
+        "photoAdjustments": {
+          "zoom": 1.6,
+          "positionX": 31,
+          "positionY": 62,
+          "rotation": 90,
+          "flipX": true,
+          "brightness": 115,
+          "contrast": 90
+        },
+        "layout": {
+          "cardWidthPx": 1200,
+          "photoWidthPercent": 38,
+          "photoHeightPx": 520,
+          "lineWidthPx": 2.5,
+          "lineColor": "#8a8a8a",
+          "lineStyle": "double",
+          "headerHeightPx": 48,
+          "headerFontSizePx": 24,
+          "contentFontSizePx": 18,
+          "contentPaddingPx": 20,
+          "customLayoutExtension": "retain"
+        },
+        "savedAt": "2026-09-05T13:00:00.000Z"
+      }
+    }
+  ]
+}

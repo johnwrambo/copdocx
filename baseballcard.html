@@ -6,7 +6,14 @@
     <title>Baseball Card</title>
     <link rel="stylesheet" href="style/style.css" />
     <script src="functions/workspace-config.js"></script>
+    <script src="functions/baseball-card-contract.js"></script>
+    <script src="functions/import-schema.js"></script>
+    <script src="functions/import-workflow.js"></script>
     <style>
+      .baseball-photo-frame { overflow:hidden; width:100%; aspect-ratio:0.626; background:#18232b; border:1px solid var(--ns-line-strong); touch-action:none; cursor:grab; }
+      .baseball-photo-frame:focus { outline:2px solid var(--ns-teal); outline-offset:3px; }
+      .baseball-photo-frame .baseball-photo-preview { width:100%; height:100%; max-height:none; object-fit:cover; border:0; border-radius:0; }
+      .baseball-card-editor .photo-cell { overflow:hidden; }
       .baseball-card-editor {
         --bb-card-width: 1050px;
         --bb-photo-percent: 34%;
@@ -56,7 +63,6 @@
         display: block;
         width: 100%;
         height: 100%;
-        min-height: var(--bb-photo-min-height);
         object-fit: cover;
         object-position: center top;
       }
@@ -257,6 +263,7 @@
             <label for="arrestDate">Arrest date</label>
             <input type="date" id="arrestDate" />
           </div>
+          <div class="field"><label for="baseballGender">Gender wording</label><select id="baseballGender"><option value="">The subject</option><option value="Male">Male / he</option><option value="Female">Female / she</option></select></div>
           <div class="field checkbox-field">
             <input type="checkbox" id="isCriminal" name="isCriminal" disabled />
             <label for="isCriminal">Criminal</label>
@@ -294,6 +301,8 @@
         <button type="button" id="addCriminalHistory" class="action-button-secondary">
           Add charge
         </button>
+        <button type="button" id="bbHistoryAscending" class="action-button-secondary">Oldest first</button>
+        <button type="button" id="bbHistoryDescending" class="action-button-secondary">Newest first</button>
       </fieldset>
 
       <fieldset class="card-static">
@@ -323,7 +332,7 @@
               <label for="arrestPhoto">Photo from arrest in the field</label>
               <input type="file" id="arrestPhoto" accept="image/*" />
               <p class="section-note">
-                COPDoc saves a resized copy in the subject's media library for the unified arrest report.
+                The source photo and your adjustments are saved separately so you can edit the crop again.
               </p>
               <button
                 type="button"
@@ -335,26 +344,35 @@
               </button>
             </div>
           </div>
-          <img
+          <div><div id="bbPhotoFrame" class="baseball-photo-frame" tabindex="0" role="group" aria-label="Photo crop. Drag to reposition, or use arrow keys. Shift moves faster."><img
             id="arrestPhotoPreview"
             class="baseball-photo-preview"
             alt="Photo from arrest in the field"
             hidden
-          />
+          /></div><p class="section-note">Drag to reposition. Arrow keys move focus; Shift moves faster.</p></div>
+        </div>
+        <div class="baseball-style-grid">
+          <div class="field"><label for="bbPhotoZoom">Zoom <output id="bbPhotoZoomValue"></output></label><input id="bbPhotoZoom" type="range" min="1" max="3" step="0.01" value="1"></div>
+          <div class="field"><label for="bbPhotoX">Horizontal focus <output id="bbPhotoXValue"></output></label><input id="bbPhotoX" type="range" min="0" max="100" value="50"></div>
+          <div class="field"><label for="bbPhotoY">Vertical focus <output id="bbPhotoYValue"></output></label><input id="bbPhotoY" type="range" min="0" max="100" value="50"></div>
+          <div class="field"><label for="bbPhotoRotation">Rotation <output id="bbPhotoRotationValue"></output></label><input id="bbPhotoRotation" type="range" min="-180" max="180" value="0"></div>
+          <div class="field"><label for="bbPhotoBrightness">Brightness <output id="bbPhotoBrightnessValue"></output></label><input id="bbPhotoBrightness" type="range" min="50" max="150" value="100"></div>
+          <div class="field"><label for="bbPhotoContrast">Contrast <output id="bbPhotoContrastValue"></output></label><input id="bbPhotoContrast" type="range" min="50" max="150" value="100"></div>
+          <label><input type="checkbox" id="bbPhotoFlip"> Flip horizontally</label>
+          <button id="bbPhotoReset" type="button" class="action-button-secondary">Reset photo adjustments</button>
         </div>
       </fieldset>
-
       <fieldset class="card-static">
         <legend>Card appearance</legend>
-        <p class="section-note">Live preview. Save as default to keep these values.</p>
+        <p class="section-note">Settings belong to this card. Save as default only changes the starting appearance of new cards.</p>
         <div class="baseball-style-grid">
           <div class="field">
             <label for="bbStyleWidth">Box width</label>
-            <input id="bbStyleWidth" type="number" min="480" max="1400" step="10" />
+            <input id="bbStyleWidth" type="number" min="600" max="1600" step="10" />
           </div>
           <div class="field">
             <label for="bbStyleLine">Line width</label>
-            <input id="bbStyleLine" type="number" min="1" max="8" step="1" />
+            <input id="bbStyleLine" type="number" min="0" max="8" step="0.25" />
           </div>
           <div class="field">
             <label for="bbStyleLineColor">Line color</label>
@@ -374,12 +392,19 @@
           </div>
           <div class="field">
             <label for="bbStylePhoto">Photo column %</label>
-            <input id="bbStylePhoto" type="number" min="20" max="50" step="1" />
+            <input id="bbStylePhoto" type="number" min="20" max="60" step="1" />
           </div>
           <div class="field">
-            <label for="bbStylePhotoHeight">Photo min height</label>
-            <input id="bbStylePhotoHeight" type="number" min="240" max="900" step="10" />
+            <label for="bbStylePhotoHeight">Photo height</label>
+            <input id="bbStylePhotoHeight" type="number" min="250" max="1000" step="10" />
           </div>
+        </div>
+        <div class="baseball-style-grid">
+          <div class="field"><label for="bbStylePreset">Preset</label><select id="bbStylePreset"><option value="">Custom</option></select></div>
+          <div class="field"><label for="bbStyleLineStyle">Line style</label><select id="bbStyleLineStyle"><option>solid</option><option>dashed</option><option>double</option></select></div>
+          <div class="field"><label for="bbStyleHeaderHeight">Header height</label><input id="bbStyleHeaderHeight" type="number" min="30" max="120" value="44"></div>
+          <div class="field"><label for="bbStylePadding">Content padding</label><input id="bbStylePadding" type="number" min="0" max="48" value="20"></div>
+          <div class="field"><label for="bbStyleLineHeight">Line height</label><input id="bbStyleLineHeight" type="number" min="1.2" max="1.8" step="0.05" value="1.45"></div>
         </div>
         <div class="baseball-style-actions">
           <button type="button" id="bbStyleSaveDefault" class="action-button">
@@ -400,10 +425,13 @@
           class="baseball-card-editor"
           contenteditable="true"
         ></div>
+        <p id="bbContentStatus" class="section-note" aria-live="polite"></p>
         <div class="baseball-card-actions">
+          <button type="button" id="bbRegenerateText" class="action-button-secondary">Regenerate text</button>
           <button type="button" id="saveBaseballCardButton" class="action-button">
             Save card
           </button>
+          <button type="button" id="finalizeBaseballCardButton" class="action-button">Finalize as arrest of the day</button>
           <button type="button" id="copyBaseballCardButton" class="action-button-secondary">
             Copy for email
           </button>

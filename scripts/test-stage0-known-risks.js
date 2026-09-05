@@ -16,12 +16,13 @@ const WORKSPACE_KEY = "copdocx.store.v1";
 const BOOKIN_KEY = "alien-book-in.saved-records.v1";
 const ADMIN_KEY = "copdoc.admin.v1";
 const BOOKING_JOURNAL_KEY = "copdocx.booking-transactions.v1";
+const IMPORT_JOURNAL_KEY = "copdocx.import-transactions.v1";
 const strict = process.argv.includes("--strict");
 const baseline = JSON.parse(
   fs.readFileSync(path.join(__dirname, "stage0-known-risks.json"), "utf8")
 );
 const resolvedRiskIds = new Set(
-  ["stage2-resolved-risks.json", "stage4-resolved-risks.json", "stage5-resolved-risks.json"].flatMap(filename => {
+  ["stage2-resolved-risks.json", "stage4-resolved-risks.json", "stage5-resolved-risks.json", "stage6-resolved-risks.json"].flatMap(filename => {
     const resolutionFile = path.join(__dirname, filename);
     return fs.existsSync(resolutionFile)
       ? JSON.parse(fs.readFileSync(resolutionFile, "utf8")).resolvedRiskIds || []
@@ -330,13 +331,17 @@ function emptyWorkspace() {
   };
 }
 
-function probePartialImport() {
+async function probePartialImport() {
   const storage = createMemoryStorage({
     [WORKSPACE_KEY]: emptyWorkspace(),
     [ADMIN_KEY]: { officers: [], vehicles: [], shifts: [] }
   });
-  const { context } = loadModelTab(storage, { console: quietConsole() });
-  loadScript(context, "functions/transfer.js");
+  function runtime() {
+    const { context } = loadModelTab(storage, { console: quietConsole() });
+    ["functions/workspace-config.js", "functions/baseball-card-contract.js", "functions/import-schema.js", "functions/import-workflow.js", "functions/transfer.js"].forEach(source => loadScript(context, source));
+    return context;
+  }
+  const context = runtime();
   const parsed = context.COPDoc.transfer.parseTransfer(
     JSON.stringify({
       format: "copdocx.transfer.v1",
@@ -367,8 +372,9 @@ function probePartialImport() {
       ]
     })
   );
+  const beforeWorkspace = storage.raw(WORKSPACE_KEY), beforeAdmin = storage.raw(ADMIN_KEY);
   storage.resetWriteHistory();
-  storage.failOnWrite(2);
+  storage.failNext(ADMIN_KEY);
   const result = context.COPDoc.transfer.applyImport(parsed, ["leads", "officers"]);
   const workspace = storage.json(WORKSPACE_KEY, emptyWorkspace());
   const admin = storage.json(ADMIN_KEY, { officers: [] });
@@ -376,14 +382,44 @@ function probePartialImport() {
   const officerPersisted = (admin.officers || []).some(
     (row) => row && row.officerId === "ofc_partial_import"
   );
+  const writes = storage.history(), domainWrites = writes.filter(row => row.key === WORKSPACE_KEY || row.key === ADMIN_KEY);
+  if (!leadPersisted || officerPersisted || domainWrites.length !== 2 || domainWrites[1].key !== ADMIN_KEY || !domainWrites[1].failed) {
+    throw new Error("The import probe did not stop on its actual second domain-store write.");
+  }
+  const journal = storage.json(IMPORT_JOURNAL_KEY, { transactions: {} });
+  const pending = journal.transactions[result.transactionId];
+  const journalBeforeWrites = writes[0] && writes[0].key === IMPORT_JOURNAL_KEY;
+  const exactBeforeImages = !!pending && pending.plan.changes.some(row => row.key === WORKSPACE_KEY && row.before === beforeWorkspace) &&
+    pending.plan.changes.some(row => row.key === ADMIN_KEY && row.before === beforeAdmin);
+  const resumed = runtime();
+  const recovery = await resumed.COPDoc.importWorkflow.resume(result.transactionId);
+  const afterRecovery = storage.dump();
+  const repeat = await resumed.COPDoc.importWorkflow.resume(result.transactionId);
+  const finalWorkspace = storage.json(WORKSPACE_KEY, emptyWorkspace());
+  const finalAdmin = storage.json(ADMIN_KEY, { officers: [] });
+  const finalJournal = storage.json(IMPORT_JOURNAL_KEY, { transactions: {} });
+  const exactlyOnce = Object.keys(finalWorkspace.leads).filter(id => id === "lead_partial_import").length === 1 &&
+    Object.keys(finalWorkspace.people).filter(id => id === "p_partial_import").length === 1 &&
+    finalAdmin.officers.filter(row => row.officerId === "ofc_partial_import").length === 1;
+  const completed = finalJournal.transactions[result.transactionId] && finalJournal.transactions[result.transactionId].status === "COMPLETED";
+  const repeatReadOnly = JSON.stringify(afterRecovery) === JSON.stringify(storage.dump());
+  const recoverySafe = result.ok === false && journalBeforeWrites && exactBeforeImages && recovery.ok && repeat.ok && exactlyOnce && completed && repeatReadOnly;
   return {
-    reproduced: !!result.error && leadPersisted && !officerPersisted,
+    reproduced: !recoverySafe,
     observed: {
       error: result.error,
       reportedAdded: result.added,
       leadPersisted,
       officerPersisted,
-      writeCount: storage.writeCount()
+      failedDomainWrite: domainWrites[1].key,
+      journalBeforeWrites,
+      exactBeforeImages,
+      resumeOk: recovery.ok,
+      repeatOk: repeat.ok,
+      exactlyOnce,
+      completed,
+      repeatReadOnly,
+      resumeError: recovery.error || ""
     }
   };
 }

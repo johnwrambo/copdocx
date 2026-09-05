@@ -81,13 +81,17 @@
     );
   }
 
+  // Import planning supplies an isolated facade. Export keeps reading real storage.
+  var importStorage = null;
+  function storageApi() { return importStorage || (typeof localStorage !== "undefined" ? localStorage : null); }
+
   function readStored(key) {
-    if (typeof localStorage === "undefined") {
+    if (!storageApi()) {
       return { ok: true, missing: true, value: null, error: "" };
     }
     var raw = "";
     try {
-      raw = localStorage.getItem(key) || "";
+      raw = storageApi().getItem(key) || "";
     } catch (error) {
       return {
         ok: false,
@@ -121,11 +125,11 @@
   }
 
   function writeJson(key, value) {
-    if (typeof localStorage === "undefined") {
+    if (!storageApi()) {
       return false;
     }
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      storageApi().setItem(key, JSON.stringify(value));
       return true;
     } catch (error) {
       return false;
@@ -401,7 +405,7 @@
       }
       if (parsed.map.basemap && typeof localStorage !== "undefined") {
         try {
-          localStorage.setItem(MAP_BASEMAP_KEY, String(parsed.map.basemap));
+          storageApi().setItem(MAP_BASEMAP_KEY, String(parsed.map.basemap));
         } catch (error) {}
       }
     }
@@ -474,6 +478,10 @@
   }
 
   function collectExport(types, from, to) {
+    [LEAD_KEY, ADMIN_KEY, BOOKIN_KEY].forEach(function (key) {
+      var checked = readStored(key);
+      if (!checked.ok) throw new Error("Export stopped: " + checked.error);
+    });
     var out = {
       format: FORMAT,
       appVersion: appVersion(),
@@ -525,11 +533,124 @@
         }
       });
     }
+    out.bookin = refreshBookInCardsForExport(out.bookin);
+    if (out.bookin.length) out.canonicalContext = collectBookInContext(out.bookin);
     var support = collectSupportState();
     out.settings = support.settings;
     out.map = support.map;
     out.templates = support.templates;
     return out;
+  }
+
+  function refreshBookInCardsForExport(packets) {
+    var workspace = readLeadStore();
+    var baseball = global.COPDoc && COPDoc.baseball;
+    return (packets || []).map(function (packet) {
+      var copy = JSON.parse(JSON.stringify(packet));
+      if (!packet.personId || packet.voidedAt) return copy;
+      var person = workspace.people && workspace.people[packet.personId];
+      var cards = person && person.immigration && person.immigration.baseballCards || [];
+      var matches = cards.filter(function (card) {
+        return card && card.bookinRecordId === packet.id && (!packet.baseballCardId || (card.cardId || card.id) === packet.baseballCardId);
+      });
+      if (matches.length !== 1) return copy;
+      if (!baseball || typeof baseball.fromCanonical !== "function") throw new Error("Load the baseball card module before exporting current saved cards.");
+      copy.baseballCard = baseball.fromCanonical(matches[0]);
+      copy.baseballCardId = matches[0].cardId || matches[0].id;
+      if (matches[0].finalizedSnapshot) copy.baseballCardFinalizedSnapshot = JSON.parse(JSON.stringify(matches[0].finalizedSnapshot));
+      if (owns(matches[0], "arrestOfDay")) copy.baseballCardArrestOfDay = matches[0].arrestOfDay;
+      return copy;
+    });
+  }
+
+  function collectBookInContext(packets) {
+    var workspace = readLeadStore(), admin = readAdmin();
+    var context = { schema: "copdocx.bookin-context.v1", leads: {}, encounters: {}, investigations: {}, operations: {},
+      officers: {}, bookin: {}, people: {}, vehicles: {}, locations: {}, businesses: {}, entities: {}, associations: {} };
+    var allPackets = Object.create(null);
+    readBookin().forEach(function (packet) { allPackets[packet.id] = packet; });
+    var references = { personId: "people", subjectPersonId: "people", leadId: "leads", encounterId: "encounters", operationId: "operations",
+      investigationId: "investigations", parentInvestigationId: "investigations", officerId: "officers", arrestingOfficerId: "officers",
+      vehicleId: "vehicles", locationId: "locations", businessId: "businesses", entityId: "entities", associationId: "associations", bookingId: "bookin", bookinRecordId: "bookin" };
+    var typeMaps = { PERSON: "people", LEAD: "leads", ENCOUNTER: "encounters", OPERATION: "operations", INVESTIGATION: "investigations",
+      OFFICER: "officers", VEHICLE: "vehicles", LOCATION: "locations", BUSINESS: "businesses", ENTITY: "entities", ASSOCIATION: "associations" };
+    function take(map, id) {
+      id = canonicalText(id);
+      if (!id || context[map][id]) return;
+      var row = map === "bookin" ? allPackets[id] : map === "officers" ? (admin.officers || []).filter(function (officer) { return recordId("officers", officer) === id; })[0] : workspace[map] && workspace[map][id];
+      if (!row) return;
+      context[map][id] = JSON.parse(JSON.stringify(row));
+      walk(row);
+    }
+    function walk(value) {
+      if (!value || typeof value !== "object") return;
+      if (!Array.isArray(value)) {
+        var map = typeMaps[String(value.type || value.entityType || "").toUpperCase()];
+        if (map && value.id) take(map, value.id);
+      }
+      Object.keys(value).forEach(function (key) {
+        if (references[key] && typeof value[key] === "string") take(references[key], value[key]);
+        else if (key !== "importSource" && key !== "formState" && key !== "baseballCard") walk(value[key]);
+      });
+    }
+    (packets || []).forEach(walk);
+    // Selected packets carry current presentation; context packets supply only
+    // dependencies reached through another subject's canonical history.
+    (packets || []).forEach(function (packet) { delete context.bookin[packet.id]; });
+    return context;
+  }
+
+  function mediaOwnersInExport(bundle) {
+    var owners = Object.create(null);
+    var idTypes = { personId: "PERSON", leadId: "LEAD", encounterId: "ENCOUNTER", investigationId: "INVESTIGATION",
+      operationId: "OPERATION", officerId: "OFFICER", vehicleId: "VEHICLE", locationId: "LOCATION", businessId: "BUSINESS", entityId: "ENTITY" };
+    function walk(value) {
+      if (!value || typeof value !== "object") return;
+      Object.keys(value).forEach(function (key) {
+        if (idTypes[key] && typeof value[key] === "string" && value[key]) owners[idTypes[key] + ":" + value[key]] = true;
+        else if (key !== "importSource" && key !== "media" && key !== "formState") walk(value[key]);
+      });
+    }
+    walk(bundle);
+    return owners;
+  }
+
+  function attachCanonicalContext(parsed, raw) {
+    if (!raw) return parsed;
+    if (!plainRecord(raw) || raw.schema !== "copdocx.bookin-context.v1") throw new Error("Unsupported Book-In canonical context schema.");
+    parsed.requiredTypes = [];
+    ["leads", "encounters", "investigations", "operations", "officers", "bookin"].forEach(function (type) {
+      if (raw[type] !== undefined && !plainRecord(raw[type]) && !Array.isArray(raw[type])) throw new Error("Invalid canonical context " + type + ".");
+      var dependencies = asRecordList(raw[type]);
+      if (!dependencies.length) return;
+      var byId = Object.create(null);
+      (parsed[type] || []).forEach(function (row) { byId[recordId(type, row)] = row; });
+      dependencies.forEach(function (row) {
+        var id = recordId(type, row);
+        if (!id) throw new Error("Canonical context " + type + " has a missing identifier.");
+        if (byId[id] && !jsonEqual(byId[id], row)) {
+          if (type === "bookin") return; // selected packet includes latest card presentation
+          throw new Error("Canonical context conflicts with selected " + type + " " + id + ".");
+        }
+        byId[id] = row;
+      });
+      parsed[type] = Object.keys(byId).map(function (id) { return byId[id]; });
+      if (type !== "bookin") parsed.requiredTypes.push(type);
+    });
+    parsed.investigationObjects = parsed.investigationObjects || {};
+    ["people", "vehicles", "locations", "businesses", "entities", "associations"].forEach(function (type) {
+      if (raw[type] !== undefined && !plainRecord(raw[type])) throw new Error("Invalid canonical context " + type + ".");
+      var map = raw[type] || {};
+      if (!Object.keys(map).length) return;
+      var existing = parsed.investigationObjects[type] || {};
+      Object.keys(map).forEach(function (id) {
+        if (existing[id] && !jsonEqual(existing[id], map[id])) throw new Error("Canonical context has contradictory " + type + " " + id + ".");
+        existing[id] = map[id];
+      });
+      parsed.investigationObjects[type] = existing;
+      if (parsed.requiredTypes.indexOf("investigations") === -1) parsed.requiredTypes.push("investigations");
+    });
+    return parsed;
   }
 
   function exportCount(bundle) {
@@ -757,13 +878,17 @@
     URL.revokeObjectURL(url);
   }
 
-  function parseTransfer(text) {
+  function parseTransfer(text, options) {
     var data;
     try {
-      data = JSON.parse(text);
+      if (typeof text === "string" && text.length > MAX_BYTES) throw new Error("Import exceeds the 32 MiB limit.");
+      data = typeof text === "string" ? JSON.parse(text) : JSON.parse(JSON.stringify(text));
     } catch (error) {
       throw new Error("That file is not valid JSON.");
     }
+    var sharedDecoder = global.COPDoc && COPDoc.importSchema;
+    if (!sharedDecoder || typeof sharedDecoder.validateStructure !== "function") throw new Error("The shared import schema validator is unavailable.");
+    sharedDecoder.validateStructure(data);
     var empty = {
       format: FORMAT,
       appVersion: "",
@@ -786,11 +911,19 @@
       throw new Error("That file has no records.");
     }
     if (data.format === "alien-book-in-records") {
-      empty.bookin = Array.isArray(data.records) ? data.records : [];
+      var decoder = global.COPDoc && global.COPDoc.importSchema;
+      if (!decoder || typeof decoder.decode !== "function") throw new Error("The shared Book-In import decoder is unavailable.");
+      var decoded = decoder.decode(data, options);
+      if (!decoded.ok) throw new Error(decoded.error);
+      empty.bookin = decoded.records;
       empty.format = data.format;
+      empty.schemaVersion = decoded.schemaVersion;
       empty.appVersion = data.appVersion || "";
       empty.exportedAt = data.exportedAt || "";
-      return empty;
+      empty.source = decoded.source;
+      empty.findings = decoded.findings;
+      empty.media = decoded.media;
+      return attachCanonicalContext(empty, decoded.canonicalContext);
     }
     if (
       data.format === "copdocx-demo-import" ||
@@ -818,6 +951,7 @@
       throw new Error("Unknown export format: " + data.format);
     }
     TYPE_META.forEach(function (meta) {
+      if (owns(data, meta.key) && data[meta.key] !== null && !Array.isArray(data[meta.key]) && !plainRecord(data[meta.key])) throw new Error("The " + meta.label + " import must contain a records list or ID dictionary.");
       empty[meta.key] = asRecordList(data[meta.key]);
     });
     empty.format = data.format || FORMAT;
@@ -831,7 +965,7 @@
       data.investigationObjects && typeof data.investigationObjects === "object"
         ? data.investigationObjects
         : null;
-    return empty;
+    return attachCanonicalContext(empty, data.canonicalContext);
   }
 
   function owns(value, key) {
@@ -1227,6 +1361,15 @@
             delete incomingComparable[key];
           }
         );
+        // Promotion supplies blank canonical role fields to legacy packets.
+        // Their absence in the unchanged source is not a new booking edit.
+        ["subjectRole", "encounterRole", "vehiclePosition"].forEach(function (key) {
+          if (!owns(incomingRow, key) && !canonicalText(localComparable[key])) delete localComparable[key];
+        });
+        // Export time belongs to the import receipt; a fresh envelope containing
+        // identical record facts must not rewrite the canonical Arrest/Case.
+        delete localComparable.importSource;
+        delete incomingComparable.importSource;
         if (jsonEqual(localComparable, incomingComparable)) {
           skipped += 1;
           return;
@@ -1842,6 +1985,7 @@
     maps.forEach(function (key) { candidate[key] = candidate[key] || {}; });
     var error = "";
     var hasObjects = false;
+    var importedVoids = [];
     (types || []).some(function (type) {
       var incomingRows = cleanList(type, prepared.rowsByType[type] || []).rows;
       if (["leads", "encounters", "investigations", "operations"].indexOf(type) !== -1) {
@@ -1878,8 +2022,17 @@
       return incomingRows.some(function (row) {
         var prior = localRows.filter(function (item) { return recordId(type, item) === recordId(type, row); })[0];
         if (type === "bookin" && row.voidedAt && (!prior || !prior.voidedAt)) {
-          error = "Book-In " + recordId(type, row) + " has imported void history without an existing coordinated void. Restore it through a verified recovery workflow.";
-          return true;
+          var bookingId = recordId(type, row);
+          var activeOwner = Object.keys(current.people || {}).some(function (personId) {
+            return ((current.people[personId] || {}).arrests || []).some(function (arrest) {
+              return arrest && !arrest.voidedAt && (arrest.arrestId === row.arrestId || arrest.bookingId === bookingId || arrest.bookinRecordId === bookingId);
+            });
+          });
+          if (prior || activeOwner) {
+            error = "Book-In " + bookingId + " cannot apply imported void history to an existing active booking. Use its coordinated void workflow.";
+            return true;
+          }
+          importedVoids.push(row);
         }
         if (type === "officers" && prior && Array.isArray(prior.fieldArrests) && owns(row, "fieldArrests") && !jsonEqual(prior.fieldArrests, row.fieldArrests)) {
           error = "Officer " + recordId(type, row) + " has canonical Arrest history; import cannot replace its booked or voided facts.";
@@ -1906,6 +2059,16 @@
     }
     if (error) return { ok: false, error: error };
     var store = global.COPDoc && COPDoc.model && COPDoc.model.store;
+    if (importedVoids.length) {
+      if (!store || typeof store.validateImportedVoidedBooking !== "function") return { ok: false, error: "Imported void history requires its existing coordinated void or a complete validated canonical context." };
+      var voidError = "";
+      importedVoids.some(function (packet) {
+        var checked = store.validateImportedVoidedBooking(packet, candidate, current);
+        if (!checked || !checked.ok) voidError = "Book-In " + packet.id + " has imported void history without an existing coordinated void or a complete canonical restore: " + (checked && checked.error || "validation failed");
+        return Boolean(voidError);
+      });
+      if (voidError) return { ok: false, error: voidError };
+    }
     if (hasObjects) {
       if (!store || typeof store.validateObjectWorkspace !== "function") {
         return { ok: false, error: "The shared object identity validator is unavailable. Open Import and retry after the model loads." };
@@ -2350,9 +2513,6 @@
     if (scriptEl.dataset && scriptEl.dataset.loaded === "pending") {
       return false;
     }
-    if (canonicalBookInStore()) {
-      return true;
-    }
     return typeof document !== "undefined" && document.readyState !== "loading";
   }
 
@@ -2407,25 +2567,20 @@
     if (!Array.isArray(global.IMMIGRATION_DISPOSITIONS)) {
       catalogs.push("data/immigration.js");
     }
+    if (!global.COPDoc || !COPDoc.models || !Array.isArray(COPDoc.models.ASSOCIATION_MATRIX)) catalogs.push("data/association-matrix.js");
     var catalogIndex;
     for (catalogIndex = 0; catalogIndex < catalogs.length; catalogIndex += 1) {
       await loadModelScript(catalogs[catalogIndex]);
     }
-    if (canonicalBookInStore()) {
-      return canonicalBookInStore();
-    }
     var sources = [
-      "functions/model/util.js",
-      "functions/model/person.js",
-      "functions/model/lead.js",
-      "functions/model/store.js"
+      ["util", "newId"], ["person", "createPerson"], ["lead", "createLead"],
+      ["vehicle", "createVehicle"], ["location", "createLocation"], ["link", "createAssociation"],
+      ["encounter", "createEncounterRecord"], ["business", "createBusiness"], ["entity", "createCustomEntity"],
+      ["investigation", "createInvestigation"], ["operation", "createOperation"], ["store", "store"]
     ];
-    var index;
-    for (index = 0; index < sources.length; index += 1) {
-      if (canonicalBookInStore()) {
-        break;
-      }
-      await loadModelScript(sources[index]);
+    for (var index = 0; index < sources.length; index += 1) {
+      var model = global.COPDoc && COPDoc.model;
+      if (!model || !model[sources[index][1]]) await loadModelScript("functions/model/" + sources[index][0] + ".js");
     }
     return canonicalBookInStore();
   }
@@ -2445,7 +2600,7 @@
     }
   }
 
-  function applyImport(parsed, types) {
+  function applyStagedImport(parsed, types) {
     var result = {
       added: 0,
       updated: 0,
@@ -2564,25 +2719,33 @@
             updated += 1;
           });
           var maps = parsed.investigationObjects || {};
-          function mergeMap(dest, incoming) {
+          function mergeMap(dest, incoming, objectType) {
             Object.keys(incoming || {}).forEach(function (id) {
               if (!incoming[id]) {
                 return;
               }
               if (!dest[id]) {
-                dest[id] = incoming[id];
+                if (objectType && canonicalBookInStore() && canonicalBookInStore().stageImportedObjectRecord) {
+                  var created = canonicalBookInStore().stageImportedObjectRecord(objectType, incoming[id], null);
+                  if (!created.ok) throw new Error(created.error);
+                  dest[id] = created.record;
+                } else dest[id] = incoming[id];
                 return;
               }
               if (incomingIsNewer(dest[id], incoming[id])) {
-                dest[id] = incoming[id];
+                if (objectType && canonicalBookInStore() && canonicalBookInStore().stageImportedObjectRecord) {
+                  var updated = canonicalBookInStore().stageImportedObjectRecord(objectType, incoming[id], dest[id]);
+                  if (!updated.ok) throw new Error(updated.error);
+                  dest[id] = updated.record;
+                } else dest[id] = incoming[id];
               }
             });
           }
-          mergeMap(store.people, maps.people);
-          mergeMap(store.vehicles, maps.vehicles);
-          mergeMap(store.locations, maps.locations);
-          mergeMap(store.businesses, maps.businesses);
-          mergeMap(store.entities, maps.entities);
+          mergeMap(store.people, maps.people, "PERSON");
+          mergeMap(store.vehicles, maps.vehicles, "VEHICLE");
+          mergeMap(store.locations, maps.locations, "LOCATION");
+          mergeMap(store.businesses, maps.businesses, "BUSINESS");
+          mergeMap(store.entities, maps.entities, "ENTITY");
           mergeMap(store.associations, maps.associations);
         } else {
           cleaned.rows.forEach(function (snap) {
@@ -2655,16 +2818,254 @@
       result.updated += merged.updated;
       result.skipped += merged.skipped;
     });
+    if (result.error) return result;
     if (pendingBookIn) {
       var promotion = promoteStoredBookInCases(pendingBookIn);
+      result.acceptedBookInIds = pendingBookIn.acceptedIds || [];
       if (promotion) {
         addPromotionStats(result, promotion);
       } else {
         result.pendingBookInImport = pendingBookIn;
       }
     }
+    if (result.error || result.casePromotionFailed || result.pendingBookInImport) {
+      result.error = result.error || "All Book-In records must pass canonical validation before import can be applied.";
+      return result;
+    }
     applySupportState(parsed);
     return result;
+  }
+
+  function captureImportStorage() {
+    var snapshot = { localStorage: {}, sessionStorage: {} };
+    var defaults = [LEAD_KEY, ADMIN_KEY, BOOKIN_KEY, SETTINGS_KEY, MAP_MARKUP_KEY, MAP_VIEWS_KEY,
+      MAP_LAYERS_KEY, MAP_ICONS_KEY, MAP_BASEMAP_KEY, TEMPLATE_KEY, TEMPLATE_LEGACY_KEY,
+      "copdocx.booking-transactions.v1", "copdocx.import-transactions.v1"];
+    ["localStorage", "sessionStorage"].forEach(function (medium) {
+      var api = global[medium];
+      var keys = medium === "localStorage" ? defaults.slice() : [];
+      (config && config.storageEntries || []).forEach(function (entry) {
+        if (entry.medium === medium && keys.indexOf(entry.key) === -1) keys.push(entry.key);
+      });
+      if (api && typeof api.key === "function") {
+        for (var i = 0; i < api.length; i += 1) {
+          var key = api.key(i);
+          if (keys.indexOf(key) === -1) keys.push(key);
+        }
+      }
+      keys.forEach(function (key) { snapshot[medium][key] = api ? api.getItem(key) : null; });
+    });
+    return snapshot;
+  }
+
+  function facadeFor(raw) {
+    return {
+      getItem: function (key) { return owns(raw, key) ? raw[key] : null; },
+      setItem: function (key, value) { raw[key] = String(value); },
+      removeItem: function (key) { raw[key] = null; }
+    };
+  }
+
+  // An identifier, not an integrity hash. The workflow verifies existing bytes
+  // before reusing it, and refuses any collision.
+  function importedPhotoId(packet, dataUrl) {
+    var input = packet.id + "\n" + dataUrl;
+    var a = 2166136261, b = 5381;
+    for (var i = 0; i < input.length; i += 1) {
+      a = Math.imul(a ^ input.charCodeAt(i), 16777619);
+      b = Math.imul(b, 33) ^ input.charCodeAt(i);
+    }
+    return "media_import_" + (a >>> 0).toString(16) + "_" + (b >>> 0).toString(16) + "_" + dataUrl.length;
+  }
+
+  function previewRows(parsed, types, before, after) {
+    var rows = [];
+    function rowsAt(raw, type) {
+      var key = type === "bookin" ? BOOKIN_KEY : ["officers", "vehicles", "shifts"].indexOf(type) !== -1 ? ADMIN_KEY : LEAD_KEY;
+      var data = raw[key] ? JSON.parse(raw[key]) : null;
+      var value = type === "bookin" ? data || [] : data && data[type] || [];
+      return asRecordList(value);
+    }
+    types.forEach(function (type) {
+      var prior = Object.create(null), next = Object.create(null);
+      rowsAt(before, type).forEach(function (row) { prior[recordId(type, row)] = row; });
+      rowsAt(after, type).forEach(function (row) { next[recordId(type, row)] = row; });
+      (parsed[type] || []).forEach(function (row) {
+        var id = recordId(type, row);
+        rows.push({ type: type, recordId: id, action: !next[id] || jsonEqual(prior[id], next[id]) ? "skip" : prior[id] ? "update" : "create" });
+      });
+    });
+    return rows;
+  }
+
+  function buildImportPlan(parsed, types, options) {
+    options = options || {};
+    var plan = { ok: false, format: "copdocx.import-plan.v1", changes: [], guards: [], reads: [], mediaPlans: [], rows: [], findings: [], stats: {}, error: "" };
+    try {
+      parsed = JSON.parse(JSON.stringify(parsed));
+      types = (types || TYPE_META.map(function (meta) { return meta.key; }).filter(function (key) { return (parsed[key] || []).length; })).slice();
+      if (types.indexOf("bookin") !== -1) (parsed.requiredTypes || []).forEach(function (type) { if (types.indexOf(type) === -1) types.push(type); });
+      if (!types.length || types.some(function (type) { return !TYPE_META.some(function (meta) { return meta.key === type; }); })) throw new Error("Choose supported record types to import.");
+      types.forEach(function (type) {
+        if (!Array.isArray(parsed[type])) throw new Error("The " + type + " import must contain a records list.");
+        parsed[type].forEach(function (row) {
+          if (!plainRecord(row) || !recordId(type, row)) throw new Error("Every imported " + type + " record must have its own valid ID.");
+        });
+      });
+      plan.rows = types.reduce(function (rows, type) {
+        return rows.concat(parsed[type].map(function (row) { return { type: type, recordId: recordId(type, row), action: "review" }; }));
+      }, []);
+      plan.source = parsed.source || { format: parsed.format, appVersion: parsed.appVersion || "", exportedAt: parsed.exportedAt || "" };
+      plan.requiredTypes = (parsed.requiredTypes || []).slice();
+      plan.findings = (parsed.findings || []).slice();
+      if (types.indexOf("bookin") !== -1) {
+        var decoder = global.COPDoc && COPDoc.importSchema;
+        if (!decoder || typeof decoder.decode !== "function") throw new Error("The shared Book-In import decoder is unavailable.");
+        var decoded = decoder.decode({ format: "alien-book-in-records", schemaVersion: parsed.schemaVersion || 5,
+          appVersion: parsed.appVersion || "", exportedAt: parsed.exportedAt || "", records: parsed.bookin });
+        if (!decoded.ok) throw new Error(decoded.error);
+        // COPDoc round trips retain the actual original import source.
+        parsed.bookin = decoded.records.map(function (row, index) {
+          if (parsed.bookin[index].importSource) row.importSource = parsed.bookin[index].importSource;
+          return row;
+        });
+        plan.findings = decoded.findings;
+        parsed.bookin.forEach(function (row) {
+          var decision = options.recordDecisions && options.recordDecisions[row.id];
+          var needsReview = plan.findings.some(function (finding) { return finding.code === "CUSTODY_REVIEW" && finding.recordId === row.id; });
+          if (decision && decision.keepDraft) {
+            if (row.personId || row.leadId || row.arrestId || row.subjectId || row.encounterId) throw new Error("A linked Book-In cannot be converted into an unlinked draft during import.");
+            row.encounterProjectionDraft = true;
+          } else if (needsReview && !(decision && decision.outcome === "ARRESTED") && !row.encounterProjectionDraft) {
+            throw new Error("Book-In " + row.id + " requires a custody decision. Keep as draft or explicitly confirm ARRESTED before applying.");
+          }
+          if (needsReview && decision) row.importDecision = { outcome: decision.keepDraft ? "DRAFT" : "ARRESTED" };
+        });
+        if (plan.findings.some(function (finding) { return finding.code === "CARD_RENDERER_REQUIRED"; })) throw new Error("Load the baseball card compatibility module before importing saved cards.");
+      }
+      var store = canonicalBookInStore();
+      if (!store || typeof store.withImportWorkspace !== "function") throw new Error("The shared import staging model is unavailable.");
+      var beforeSnapshot = captureImportStorage();
+      var rawWorkspace = beforeSnapshot.localStorage[LEAD_KEY];
+      var workspace = rawWorkspace ? JSON.parse(rawWorkspace) : emptyLeadStore();
+      var previousFacade = importStorage;
+      var staged;
+      try {
+        staged = store.withImportWorkspace(workspace, beforeSnapshot, function (stagedStore, snapshot) {
+          importStorage = facadeFor(snapshot.localStorage);
+          var result = applyStagedImport(parsed, types);
+          if (result.error) return result;
+          var packets = readJson(BOOKIN_KEY, []);
+          if (types.indexOf("bookin") !== -1) {
+            var incomingIds = (parsed.bookin || []).map(function (row) { return row.id; });
+            packets = packets.map(function (packet) {
+              if (incomingIds.indexOf(packet.id) === -1 || (result.acceptedBookInIds || []).indexOf(packet.id) === -1 || packet.voidedAt || isQuietImportedBookIn(packet)) return packet;
+              if (typeof stagedStore.stageImportedBookingProjections !== "function") throw new Error("The shared booking projection adapter is unavailable.");
+              var projected = stagedStore.stageImportedBookingProjections(packet);
+              if (!projected || !projected.ok) throw new Error(projected && projected.error || "Imported booking projections could not be prepared.");
+              return projected.record || packet;
+            });
+            if (options.mode === "replace") {
+              packets = packets.filter(function (packet) {
+                if (incomingIds.indexOf(packet.id) !== -1) return true;
+                if (packet.arrestId || packet.subjectId || packet.encounterId || packet.personId || packet.leadId || packet.voidedAt || packet.encounterProjectionFiledAt) throw new Error("Replace cannot omit linked or historical Book-In " + packet.id + ". Use merge or retain that record in the file.");
+                if (typeof stagedStore.dependenciesFor !== "function") throw new Error("Draft replacement requires the dependency scanner.");
+                var scan = stagedStore.dependenciesFor("BOOKING", packet.id);
+                if (!scan.ok || (scan.dependencies || []).some(function (dep) { return !(dep.store === "bookin" && dep.recordId === packet.id); })) throw new Error("Replace cannot remove a referenced Book-In draft " + packet.id + ".");
+                return false;
+              });
+            }
+            packets.forEach(function (packet) {
+              if (incomingIds.indexOf(packet.id) === -1 || !packet.baseballCard || !packet.personId || packet.voidedAt) return;
+              if ((result.acceptedBookInIds || []).indexOf(packet.id) === -1 && packet.baseballCardId) return;
+              if (typeof stagedStore.projectImportedBaseballCard !== "function") throw new Error("The saved-card import adapter is unavailable.");
+              var photoMediaId = canonicalText(packet.baseballCard.photoMediaId);
+              if (packet.baseballCard.photoDataUrl) {
+                photoMediaId = photoMediaId || importedPhotoId(packet, packet.baseballCard.photoDataUrl);
+                var supplied = (parsed.media || []).filter(function (bundle) { return bundle && bundle.meta && bundle.meta.mediaId === photoMediaId; });
+                if (supplied.length) {
+                  var original = supplied[0].blobs && supplied[0].blobs.filter(function (blob) { return (blob.role || "original") === "original"; })[0];
+                  if (supplied.length !== 1 || !supplied[0].meta.owner || supplied[0].meta.owner.type !== "PERSON" || supplied[0].meta.owner.id !== packet.personId || !original ||
+                    "data:" + (original.mime || supplied[0].meta.mime) + ";base64," + String(original.base64 || "").replace(/[\r\n]/g, "") !== packet.baseballCard.photoDataUrl) throw new Error("The saved card photo disagrees with its Media bundle.");
+                } else {
+                  plan.mediaPlans.push({ mediaId: photoMediaId, ownerType: "PERSON", ownerId: packet.personId, kind: "photo", dataUrl: packet.baseballCard.photoDataUrl, mimeType: packet.baseballCard.photoDataUrl.slice(5).split(";")[0], filename: "imported-baseball-card" });
+                }
+              } else if (photoMediaId && !(parsed.media || []).some(function (bundle) {
+                return bundle && bundle.meta && bundle.meta.mediaId === photoMediaId && bundle.meta.owner && bundle.meta.owner.type === "PERSON" && bundle.meta.owner.id === packet.personId;
+              })) {
+                throw new Error("Saved card " + packet.id + " references a photo absent from this export. Include its Media bundle before importing.");
+              }
+              var projected = stagedStore.projectImportedBaseballCard({ personId: packet.personId, bookingId: packet.id,
+                cardId: packet.baseballCardId, photoMediaId: photoMediaId, baseballCard: packet.baseballCard, source: packet.importSource || plan.source,
+                finalizedSnapshot: packet.baseballCardFinalizedSnapshot, arrestOfDay: packet.baseballCardArrestOfDay });
+              if (!projected || !projected.ok) throw new Error(projected && projected.error || "Saved baseball card could not be imported.");
+              packet.baseballCardId = projected.cardId;
+            });
+            if (!writeJson(BOOKIN_KEY, packets)) throw new Error("Could not stage Book-In card references.");
+          }
+          return result;
+        });
+      } finally { importStorage = previousFacade; }
+      if (!staged || !staged.ok) throw new Error(staged && staged.error || "Import staging failed.");
+      var result = staged.result || {};
+      if (result.error || result.casePromotionFailed) throw new Error(result.error || "The import contains unresolved records.");
+      var afterSnapshot = staged.storageSnapshot;
+      if (!afterSnapshot || !afterSnapshot.localStorage) throw new Error("Import staging did not return its storage snapshot.");
+      var before = beforeSnapshot.localStorage, after = afterSnapshot.localStorage;
+      Object.keys(Object.assign({}, before, after)).forEach(function (key) {
+        var prior = owns(before, key) ? before[key] : null, next = owns(after, key) ? after[key] : null;
+        plan.reads.push({ key: key, before: prior });
+        if (prior !== next) plan.changes.push({ key: key, before: prior, after: next });
+      });
+      ["localStorage", "sessionStorage"].forEach(function (medium) {
+        Object.keys(beforeSnapshot[medium]).forEach(function (key) {
+          if (/^copdocx\.import(?:-transactions|\.done)/.test(key)) return;
+          if (config && config.storageEntries && !config.storageEntries.some(function (entry) { return entry.key === key && entry.medium === medium; })) return;
+          plan.guards.push({ medium: medium, key: key, before: beforeSnapshot[medium][key] });
+        });
+      });
+      if (typeof store.validateImportWorkspace === "function") {
+        var validation = store.validateImportWorkspace(staged.workspace, workspace, afterSnapshot);
+        if (!validation || !validation.ok) throw new Error(validation && validation.error || "Import relationship validation failed.");
+      }
+      (parsed.media || []).forEach(function (row) { plan.mediaPlans.push(JSON.parse(JSON.stringify(row))); });
+      var stagedAdmin = after[ADMIN_KEY] ? JSON.parse(after[ADMIN_KEY]) : {};
+      plan.mediaPlans.forEach(function (media) {
+        var owner = media.meta && media.meta.owner || { type: media.ownerType, id: media.ownerId };
+        var map = { PERSON: "people", LEAD: "leads", ENCOUNTER: "encounters", INVESTIGATION: "investigations", OPERATION: "operations", VEHICLE: "vehicles", LOCATION: "locations", BUSINESS: "businesses", ENTITY: "entities" }[owner.type];
+        var exists = map && staged.workspace[map] && staged.workspace[map][owner.id];
+        if (owner.type === "OFFICER") exists = (stagedAdmin.officers || []).some(function (row) { return recordId("officers", row) === owner.id; });
+        if (owner.type === "VEHICLE" && !exists) exists = (stagedAdmin.vehicles || []).some(function (row) { return recordId("vehicles", row) === owner.id; });
+        if (!exists) throw new Error("Imported Media references a missing " + String(owner.type || "object") + " owner " + String(owner.id || "") + ".");
+      });
+      plan.rows = previewRows(parsed, types, before, after);
+      var oldWorkspace = before[LEAD_KEY] ? JSON.parse(before[LEAD_KEY]) : {}, newWorkspace = after[LEAD_KEY] ? JSON.parse(after[LEAD_KEY]) : {};
+      ["people", "vehicles", "locations", "businesses", "entities", "associations"].forEach(function (type) {
+        var oldMap = oldWorkspace[type] || {}, newMap = newWorkspace[type] || {};
+        Object.keys(newMap).forEach(function (id) {
+          if (!jsonEqual(oldMap[id], newMap[id])) plan.rows.push({ type: type, recordId: id, action: oldMap[id] ? "update" : "create", dependency: true });
+        });
+      });
+      plan.stats = result;
+      plan.ok = true;
+      return plan;
+    } catch (error) {
+      plan.error = error.message || String(error);
+      plan.findings.push({ code: "IMPORT_CONFLICT", severity: "error", message: plan.error });
+      plan.changes = [];
+      plan.mediaPlans = [];
+      plan.stats = { added: 0, updated: 0, skipped: 0, error: plan.error };
+      return plan;
+    }
+  }
+
+  function applyImport(parsed, types, options) {
+    var plan = buildImportPlan(parsed, types, options);
+    if (!plan.ok) return Object.assign({ ok: false }, plan.stats, { error: plan.error, plan: plan });
+    var workflow = global.COPDoc && COPDoc.importWorkflow;
+    if (!workflow || typeof workflow.commitSync !== "function") return { ok: false, added: 0, updated: 0, skipped: 0, error: "The recoverable import workflow is unavailable." };
+    var result = workflow.commitSync(plan);
+    return Object.assign({}, result && result.ok ? plan.stats : { added: 0, updated: 0, skipped: 0 }, result || { ok: false, error: "Import could not be committed." });
   }
 
   function defaultTypes() {
@@ -3126,7 +3527,7 @@
     byId("fileExportDialog").hidden = false;
   }
 
-  function runExport() {
+  async function runExport() {
     var types = checkedTypes("fileExportType");
     if (!types.length) {
       setStatus("Pick at least one record type.");
@@ -3136,6 +3537,17 @@
     var format = formatEl ? formatEl.value : "json";
     var from = (byId("fileExportFrom") && byId("fileExportFrom").value) || "";
     var to = (byId("fileExportTo") && byId("fileExportTo").value) || "";
+    var go = byId("fileExportGo");
+    if (go) go.disabled = true;
+    try {
+      await ensureCanonicalBookInStore();
+      if (!global.COPDoc.baseball || typeof COPDoc.baseball.fromCanonical !== "function") await loadModelScript("functions/baseball-card-contract.js");
+      var exportBefore = captureImportStorage();
+      function assertExportUnchanged() {
+        [LEAD_KEY, ADMIN_KEY, BOOKIN_KEY].forEach(function (key) {
+          if (localStorage.getItem(key) !== exportBefore.localStorage[key]) throw new Error("Workspace changed while collecting export data. Export again to capture one consistent version.");
+        });
+      }
     var bundle = collectExport(types, from, to);
     if (!exportCount(bundle)) {
       setStatus("No matching records for that type and date range.");
@@ -3166,30 +3578,32 @@
       hideDialogs();
       setStatus("Export downloaded." + (mediaNote || ""), true);
     }
-    if (
-      (format === "json" || format === "both") &&
-      global.COPDoc &&
-      COPDoc.media &&
-      typeof COPDoc.media.exportBundle === "function"
-    ) {
+    if (format === "json" || format === "both") {
+      if (!global.COPDoc.media || typeof COPDoc.media.exportBundle !== "function") await loadModelScript("functions/model/media.js");
+      if (!global.COPDoc.media || typeof COPDoc.media.exportBundle !== "function") throw new Error("Photo and file storage could not be loaded. Export was not completed.");
       setStatus("Collecting photos and files…");
-      COPDoc.media.exportBundle().then(
-        function (rows) {
-          bundle.media = rows || [];
-          finish(
-            bundle.media.length
-              ? " " + bundle.media.length + " media file(s)."
-              : ""
-          );
-        },
-        function () {
-          bundle.media = [];
-          finish("");
-        }
-      );
-      return;
-    }
-    finish("");
+      bundle.media = await COPDoc.media.exportBundle();
+      if (!Array.isArray(bundle.media)) throw new Error("Photo and file export could not be verified.");
+      var exportedOwners = mediaOwnersInExport(bundle);
+      bundle.media = bundle.media.filter(function (row) { return row && row.meta && row.meta.owner && exportedOwners[row.meta.owner.type + ":" + row.meta.owner.id]; });
+      var ids = Object.create(null);
+      bundle.media.forEach(function (row) {
+        if (row && row.meta && Array.isArray(row.blobs) && row.blobs.some(function (blob) { return blob && (blob.role || "original") === "original" && typeof blob.base64 === "string" && blob.base64.length; })) ids[row.meta.mediaId] = true;
+      });
+      function verifyReferences(value) {
+        if (!value || typeof value !== "object") return;
+        Object.keys(value).forEach(function (key) {
+          if ((key === "photoMediaId" || key === "renderedPhotoMediaId") && value[key] && !ids[value[key]]) throw new Error("A saved card references missing Media " + value[key] + ". Export was not completed.");
+          if (key !== "media" && key !== "importSource") verifyReferences(value[key]);
+        });
+      }
+      verifyReferences(bundle);
+      assertExportUnchanged();
+      finish(bundle.media.length ? " " + bundle.media.length + " media file(s)." : "");
+    } else { assertExportUnchanged(); finish(""); }
+    } catch (error) {
+      setStatus(error && error.message || "Export could not be completed.");
+    } finally { if (go) go.disabled = false; }
   }
 
   function openFileImport() {
@@ -3266,6 +3680,18 @@
       label.appendChild(document.createTextNode(" " + row.label));
       typesHost.appendChild(label);
     });
+    (pendingParsed.findings || []).filter(function (finding) { return finding.code === "CUSTODY_REVIEW"; }).forEach(function (finding) {
+      var li = document.createElement("li");
+      var label = document.createElement("label");
+      label.appendChild(document.createTextNode(finding.recordId + ": " + finding.message + " "));
+      var select = document.createElement("select");
+      select.setAttribute("data-import-record-decision", finding.recordId);
+      [["", "Choose outcome"], ["DRAFT", "Keep as unfiled draft"], ["ARRESTED", "Confirm arrested booking"]].forEach(function (pair) {
+        var option = document.createElement("option");
+        option.value = pair[0]; option.textContent = pair[1]; select.appendChild(option);
+      });
+      label.appendChild(select); li.appendChild(label); list.appendChild(li);
+    });
     if (!list.childNodes.length) {
       setStatus("That file has no importable records.");
       pendingParsed = null;
@@ -3338,166 +3764,40 @@
     if (go) {
       go.disabled = true;
     }
-    setStatus("Importing…");
-    var parsed = pendingParsed;
-    var result;
+    setStatus("Preparing import preview…");
     try {
       await ensureCanonicalBookInStore();
-      result = applyImport(parsed, types);
-    } catch (error) {
-      if (go) {
-        go.disabled = false;
+      var decisions = {};
+      Array.from(document.querySelectorAll("[data-import-record-decision]")).forEach(function (select) {
+        if (select.value === "DRAFT") decisions[select.getAttribute("data-import-record-decision")] = { keepDraft: true };
+        if (select.value === "ARRESTED") decisions[select.getAttribute("data-import-record-decision")] = { outcome: "ARRESTED" };
+      });
+      var workflow = global.COPDoc && COPDoc.importWorkflow;
+      if (!workflow || typeof workflow.apply !== "function" || typeof workflow.preview !== "function") throw new Error("The recoverable import workflow is unavailable.");
+      var plan = buildImportPlan(pendingParsed, types, { recordDecisions: decisions });
+      if (!plan.ok && plan.findings.some(function (finding) { return finding.code === "CUSTODY_REVIEW"; }) && typeof workflow.reviewCustody === "function") {
+        decisions = await workflow.reviewCustody(plan.findings, decisions);
+        if (!decisions) { setStatus("Import review closed. No records were changed."); return; }
+        plan = buildImportPlan(pendingParsed, types, { recordDecisions: decisions });
       }
-      setStatus(
-        (error && error.message) || "Import failed."
-      );
-      return;
-    }
-    var openerResult = null;
-    try {
-      if (
-        isImportPage() &&
-        global.opener &&
-        !global.opener.closed &&
-        global.opener.COPDoc &&
-        global.opener.COPDoc.transfer &&
-        typeof global.opener.COPDoc.transfer.applyImport === "function"
-      ) {
-        openerResult = global.opener.COPDoc.transfer.applyImport(parsed, types);
-      }
-    } catch (errOpener) {}
-    if (
-      result.pendingBookInImport &&
-      openerResult &&
-      !openerResult.pendingBookInImport
-    ) {
-      result.bookinPromotionAttempted = openerResult.bookinPromotionAttempted;
-      result.casesCreated = openerResult.casesCreated || 0;
-      result.casesReused = openerResult.casesReused || 0;
-      result.casePromotionFailed = openerResult.casePromotionFailed || 0;
-      result.error = result.error || openerResult.error || "";
-      delete result.pendingBookInImport;
-    }
-    if (
-      types.indexOf("bookin") !== -1 &&
-      result.pendingBookInImport
-    ) {
-      try {
-        await withTimeout(
-          ensureCanonicalBookInStore(),
-          8000,
-          "Timed out loading the case model."
-        );
-        var pendingPromotion = promoteStoredBookInCases(
-          result.pendingBookInImport
-        );
-        addPromotionStats(result, pendingPromotion);
-        if (!pendingPromotion) {
-          result.casePromotionFailed = (
-            result.pendingBookInImport.acceptedIds || []
-          ).length;
-          result.error =
-            result.error ||
-            "Book-In records were imported, but the canonical case model could not be loaded.";
-        } else {
-          delete result.pendingBookInImport;
-        }
-      } catch (error) {
-        result.casePromotionFailed = (
-          result.pendingBookInImport.acceptedIds || []
-        ).length;
-        result.error =
-          result.error ||
-          "Book-In records were imported, but cases could not be created: " +
-            (error && error.message ? error.message : String(error));
-      }
-    }
-    hideDialogs();
-    pendingParsed = null;
-    function finish(mediaNote) {
-      var wrote = result.added > 0 || result.updated > 0 || Boolean(mediaNote);
-      var caseNote = result.bookinPromotionAttempted
-        ? " Cases: " +
-          result.casesCreated +
-          " created, " +
-          result.casesReused +
-          " updated" +
-          (result.casePromotionFailed
-            ? ", " + result.casePromotionFailed + " need identity data"
-            : "") +
-          "."
-        : "";
-      if (result.error) {
-        setStatus(
-          result.error +
-            (wrote
-              ? " Some records were written (" +
-                result.added +
-                " new, " +
-                result.updated +
-                " updated)." +
-                caseNote
-              : "")
-        );
-        if (go) {
-          go.disabled = false;
-        }
-      } else {
-        setStatus(
-          "Imported " +
-            result.added +
-            " new, updated " +
-            result.updated +
-            ", skipped " +
-            result.skipped +
-            "." +
-            caseNote +
-            (mediaNote || ""),
-          true
-        );
-      }
-      if (isImportPage()) {
-        if (wrote || parsed.settings || parsed.map || parsed.templates) {
-          notifyOpenerImported();
-          window.setTimeout(
-            function () {
-              try {
-                global.close();
-              } catch (err) {}
-            },
-            result.error ? 1600 : 600
-          );
-        }
+      if (!plan.ok) throw new Error(plan.error);
+      if (!await workflow.preview(plan)) {
+        setStatus("Import preview closed. No records were changed.");
         return;
       }
-      if (wrote || parsed.settings || parsed.map || parsed.templates) {
-        window.setTimeout(function () {
-          window.location.reload();
-        }, 400);
-      }
+      var result = await workflow.apply(plan);
+      if (!result || !result.ok) throw new Error(result && result.error || "Import could not be completed. Use import recovery before retrying.");
+      hideDialogs();
+      pendingParsed = null;
+      setStatus("Imported " + (plan.stats.added || 0) + " new, updated " + (plan.stats.updated || 0) +
+        ", skipped " + (plan.stats.skipped || 0) + ".", true);
+      if (isImportPage()) notifyOpenerImported();
+      else if (global.COPDoc && COPDoc.model && COPDoc.model.store) COPDoc.model.store.loadFromDisk();
+    } catch (error) {
+      setStatus(error && error.message || "Import failed.");
+    } finally {
+      if (go) go.disabled = false;
     }
-    if (
-      parsed.media &&
-      parsed.media.length &&
-      global.COPDoc &&
-      COPDoc.media &&
-      typeof COPDoc.media.importBundle === "function"
-    ) {
-      COPDoc.media.importBundle(parsed.media).then(
-        function (mediaResult) {
-          finish(
-            mediaResult && mediaResult.added
-              ? " Media: " + mediaResult.added + " file(s)."
-              : ""
-          );
-        },
-        function () {
-          finish("");
-        }
-      );
-      return;
-    }
-    finish("");
   }
 
   var api = {
@@ -3505,9 +3805,12 @@
     listType: listType,
     filterRecords: filterRecords,
     collectExport: collectExport,
+    collectBookInContext: collectBookInContext,
     parseTransfer: parseTransfer,
     cleanList: cleanList,
     applyImport: applyImport,
+    buildImportPlan: buildImportPlan,
+    ensureCanonicalBookInStore: ensureCanonicalBookInStore,
     summarizeAgainstDisk: summarizeAgainstDisk,
     recordId: recordId,
     recordDay: recordDay,

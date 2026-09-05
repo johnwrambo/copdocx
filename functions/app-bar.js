@@ -663,20 +663,25 @@
     if (page === "narrative") {
       var narrativeEncounterId = queryParam("encounterId");
       var narrativeEmbedded = queryParam("embed") === "1";
-      var narrativeActions = [
-        {
-          label: narrativeEncounterId ? "Save I-213" : "Update draft",
+      var narrativeActions = [];
+      if (narrativeEncounterId && !narrativeEmbedded) {
+        narrativeActions.push({
+          id: "narrativeBackToEvidenceButton",
+          label: "Back to Evidence",
+          href: recordIdHref("encounter-form.html", narrativeEncounterId) + "&tab=evidence"
+        });
+      }
+      narrativeActions.push({
+          label: narrativeEncounterId ? "Save" : "Update draft",
           primary: true,
           chromeAction: "save"
-        }
-      ];
+        });
       if (narrativeEncounterId && !narrativeEmbedded) {
-        narrativeActions.push(
-          backAction(
-            "Back to encounter",
-            recordIdHref("encounter-form.html", narrativeEncounterId)
-          )
-        );
+        narrativeActions.push({
+          id: "narrativeContinueToReviewButton",
+          label: "Continue to Review",
+          href: recordIdHref("encounter-form.html", narrativeEncounterId) + "&tab=review"
+        });
       }
       narrativeActions.push({ id: "copyNarrativeButton", label: "Copy" });
       return {

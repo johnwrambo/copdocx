@@ -1540,7 +1540,7 @@
     return output;
   }
 
-  function switchFocus(participantId) {
+  function switchFocus(participantId, focusOptions) {
     if (participantId === activeParticipantId) return;
     var participant = fixture.participants.find(function (row) {
       return row.encounterParticipantId === participantId;
@@ -1551,6 +1551,7 @@
       : null;
     if (
       activeParticipantId &&
+      !(focusOptions && focusOptions.alreadyCaptured) &&
       !isReadOnlyNarrative(currentRecord) &&
       captureCurrent({ silent: true, createMissing: false }) === false
     ) {
@@ -1686,8 +1687,35 @@
   }
 
   function saveNarrative() {
-    captureCurrent({ createMissing: true });
+    if (session !== bootGeneration || !activeParticipantId) return false;
+    var originalFocus = activeParticipantId;
+    var pending = Array.from(unsavedDraftStateByParticipant.keys()).filter(function (id) {
+      return id !== originalFocus;
+    });
+    var activeReadOnly = isReadOnlyNarrative(primaryFor(originalFocus));
+    if (activeReadOnly && !pending.length) return false;
+    if (!activeReadOnly && captureCurrent({ createMissing: true }) === false) return false;
+    for (var i = 0; i < pending.length; i += 1) {
+      switchFocus(pending[i], { alreadyCaptured: true });
+      if (activeParticipantId !== pending[i] || captureCurrent({ createMissing: true }) === false) return false;
+    }
+    if (activeParticipantId !== originalFocus) switchFocus(originalFocus, { alreadyCaptured: true });
+    if (liveEncounter) showStatus("Narrative snapshot saved for review. It will be committed when the Encounter is reviewed and closed.");
+    return true;
   }
+
+  function navigateEncounterStep(step, event) {
+    if (event && event.preventDefault) event.preventDefault();
+    if (session !== bootGeneration || !liveEncounterId) return;
+    refreshSourceStatus();
+    var readOnly = isReadOnlyNarrative(primaryFor(activeParticipantId));
+    if ((!readOnly || unsavedDraftStateByParticipant.size) && !saveNarrative()) return;
+    global.location.href = "encounter-form.html?id=" + encodeURIComponent(liveEncounterId) + "&tab=" + step;
+  }
+  [["narrativeBackToEvidenceButton", "evidence"], ["narrativeContinueToReviewButton", "review"]].forEach(function (entry) {
+    var action = byId(entry[0]);
+    if (action) action.addEventListener("click", function (event) { navigateEncounterStep(entry[1], event); });
+  });
   narratives.flushWorkspace = function () {
     if (session !== bootGeneration) {
       return;

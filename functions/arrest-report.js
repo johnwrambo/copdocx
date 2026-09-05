@@ -317,6 +317,7 @@
     var records = bookInMap(bookinRecords);
     var rows = [];
     var seen = {};
+    var dailyCandidates = [];
     if (!store || typeof store.listLeads !== "function") {
       return rows;
     }
@@ -333,6 +334,9 @@
         return;
       }
       var person = model.subjectOf ? model.subjectOf(snap) : snap.person;
+      if (person && typeof store.getPerson === "function") {
+        person = store.getPerson(person.personId) || person;
+      }
       if (!person) {
         return;
       }
@@ -341,9 +345,6 @@
       var cards = Array.isArray(immigration.baseballCards)
         ? immigration.baseballCards
         : [];
-      if (options.leadId && text(snap.leadId) !== text(options.leadId)) {
-        return;
-      }
       (person.arrests || []).forEach(function (arrest) {
         if (!arrest || arrest.voidedAt || bookingClaims(arrest, false).some(function (id) {
           return voidedBookings[id];
@@ -351,19 +352,7 @@
           return;
         }
         var recordId = unambiguousBookingId(arrest, false);
-        if (selectedOnly && !selected[recordId]) {
-          return;
-        }
         var dateKey = text(arrest.arrestDate) || text(arrest.arrestDateTime).slice(0, 10);
-        if (options.from && dateKey && dateKey < options.from) {
-          return;
-        }
-        if (options.to && dateKey && dateKey > options.to) {
-          return;
-        }
-        if ((options.from || options.to) && !dateKey) {
-          return;
-        }
         var arrestEncounterId = text(arrest.encounterId);
         var sourceRecord = bookInForArrest(
           bookinRecords,
@@ -389,12 +378,6 @@
             sourceInput.encounterNumber ||
             encounterId
         );
-        if (options.encounterId) {
-          var wantEncounter = text(options.encounterId);
-          if (encounterId !== wantEncounter && encounterNumber !== wantEncounter) {
-            return;
-          }
-        }
         var key = text(person.personId) + "|" + text(arrest.arrestId || recordId || dateKey);
         if (seen[key]) {
           return;
@@ -414,6 +397,7 @@
           iceEvent: text(arrest.iceEventNumber || sourceInput.iceEventNumber),
           encounterId: encounterId,
           encounterNumber: encounterNumber,
+          encounterLinkValid: validEncounterLink(store, encounterId, arrest, person.personId),
           disposition: catalogLabel(
             global.IMMIGRATION_DISPOSITIONS,
             immigration.disposition
@@ -426,38 +410,127 @@
           ),
           officer: text(arrest.arrestingOfficer || sourceInput.arrestingOfficer),
           team: text(arrest.team || sourceInput.team),
+          updatedAt: text(sourceRecord.updatedAt || arrest.updatedAt || (snap.meta && snap.meta.updatedAt)),
+          reportCard: null,
+          reportCardResolved: true,
           card: cardForArrest(cards, arrest, {
             personId: text(person.personId),
             encounterId: encounterId
           })
         };
-        if (options.q) {
-          var hay = [
-            row.name,
-            row.aNumber,
-            row.fbiNumber,
-            row.iceEvent,
-            row.encounterNumber,
-            row.country,
-            row.disposition
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (hay.indexOf(String(options.q).toLowerCase()) === -1) {
-            return;
-          }
-        }
+        cards.forEach(function (card) {
+          var candidate = finalizedCandidate(card, row);
+          if (candidate) { dailyCandidates.push(candidate); }
+        });
         rows.push(row);
       });
     });
-    return rows.sort(function (left, right) {
-      return text(right.arrestDateTime).localeCompare(text(left.arrestDateTime));
+    var winners = chooseDailyCards(dailyCandidates);
+    rows.forEach(function (row) {
+      var winner = winners[row.arrestDate];
+      if (winner && winner.rowKey === rowIdentity(row)) {
+        row.reportCard = winner.snapshot;
+        row.reportCardName = winner.displayName;
+      }
     });
+    rows = rows.filter(function (row) {
+      if (options.leadId && row.leadId !== text(options.leadId)) { return false; }
+      if (selectedOnly && !selected[row.bookinRecordId]) { return false; }
+      if ((options.from || options.to) && !row.arrestDate) { return false; }
+      if (options.from && row.arrestDate < options.from) { return false; }
+      if (options.to && row.arrestDate > options.to) { return false; }
+      if (options.encounterId && row.encounterId !== text(options.encounterId) &&
+          row.encounterNumber !== text(options.encounterId)) { return false; }
+      if (options.q) {
+        var hay = [row.name, row.aNumber, row.fbiNumber, row.iceEvent,
+          row.encounterNumber, row.country, row.disposition].join(" ").toLowerCase();
+        if (hay.indexOf(String(options.q).toLowerCase()) === -1) { return false; }
+      }
+      return true;
+    });
+    return sortRows(rows, "arrestDateTime", "desc");
+  }
+
+  function validEncounterLink(store, encounterId, arrest, personId) {
+    if (!encounterId || typeof store.getEncounter !== "function") { return false; }
+    var encounter = store.getEncounter(encounterId);
+    if (!encounter || !Array.isArray(encounter.subjects)) { return false; }
+    var matches = encounter.subjects.filter(function (subject) {
+      if (!subject || text(subject.personId) !== text(personId)) { return false; }
+      if (text(arrest.subjectId) && text(subject.subjectId) !== text(arrest.subjectId)) { return false; }
+      if (!bookingCompatible(arrest, subject, false)) { return false; }
+      return text(arrest.subjectId) ? true : Boolean(unambiguousBookingId(arrest, false) &&
+        unambiguousBookingId(subject, false) === unambiguousBookingId(arrest, false));
+    });
+    return matches.length === 1;
+  }
+
+  function rowIdentity(row) {
+    return text(row && row.personId) + "|" + text(row && (row.arrestId || row.bookinRecordId || row.subjectId));
+  }
+
+  function finalizedCandidate(card, row) {
+    var snapshot = card && card.finalizedSnapshot;
+    var marker = card && card.arrestOfDay;
+    if (!snapshot || snapshot.status !== "FINALIZED" || !marker ||
+        text(marker.date) !== row.arrestDate || text(snapshot.arrestDateKey) !== row.arrestDate ||
+        !text(marker.markedAt) || !text(snapshot.generatedAt) || card.voidedAt || snapshot.voidedAt) {
+      return null;
+    }
+    var matched = false;
+    var fields = ["personId", "encounterId", "subjectId", "arrestId"];
+    for (var i = 0; i < fields.length; i += 1) {
+      var field = fields[i];
+      var claim = text(snapshot[field]);
+      if (claim && claim !== text(row[field])) { return null; }
+      if (claim && (field === "subjectId" || field === "arrestId")) { matched = true; }
+      if (text(card[field]) && text(card[field]) !== text(row[field])) { return null; }
+    }
+    var ids = uniqueText([snapshot.recordId].concat(bookingClaims(snapshot, false)));
+    if (ids.length > 1 || (ids.length && ids[0] !== text(row.bookinRecordId))) { return null; }
+    if (!bookingCompatible(row, card, false)) { return null; }
+    if (ids.length) { matched = true; }
+    // A date/name match alone does not identify an arrest.
+    if (!matched) { return null; }
+    return {
+      rowKey: rowIdentity(row), date: row.arrestDate, snapshot: snapshot,
+      markedAt: text(marker.markedAt), cardId: text(snapshot.cardId || card.cardId),
+      displayName: text(snapshot.displayName) || text(row.name)
+    };
+  }
+
+  function chooseDailyCards(candidates) {
+    var winners = Object.create(null);
+    (candidates || []).forEach(function (candidate) {
+      var previous = winners[candidate.date];
+      var order = [candidate.markedAt, text(candidate.snapshot.generatedAt), candidate.cardId, candidate.rowKey].join("|");
+      var old = previous && [previous.markedAt, text(previous.snapshot.generatedAt), previous.cardId, previous.rowKey].join("|");
+      if (!previous || order > old) { winners[candidate.date] = candidate; }
+    });
+    return winners;
+  }
+
+  var naturalCollator = typeof Intl !== "undefined" && Intl.Collator
+    ? new Intl.Collator("en-US", { numeric: true, sensitivity: "base" }) : null;
+  function naturalCompare(a, b) {
+    return naturalCollator ? naturalCollator.compare(a, b) : a.localeCompare(b);
+  }
+  function sortRows(rows, key, direction) {
+    return (rows || []).map(function (row, index) { return { row: row, index: index }; })
+      .sort(function (a, b) {
+        var av = text(a.row[key]); var bv = text(b.row[key]);
+        if (!av && bv) { return 1; }
+        if (av && !bv) { return -1; }
+        var cmp = av && bv ? naturalCompare(av, bv) : 0;
+        if (cmp) { return direction === "desc" ? -cmp : cmp; }
+        return naturalCompare(text(a.row.name), text(b.row.name)) ||
+          naturalCompare(rowIdentity(a.row), rowIdentity(b.row)) || a.index - b.index;
+      }).map(function (entry) { return entry.row; });
   }
 
   function safePhotoDataUrl(value) {
     var candidate = text(value);
-    return /^data:image\/(?:png|jpeg|webp);base64,/i.test(candidate)
+    return /^data:image\/(?:png|jpe?g|webp|gif);base64,/i.test(candidate)
       ? candidate
       : "";
   }
@@ -493,46 +566,54 @@
 
   function hydratePhotos(rows, media) {
     var cache = {};
-    return Promise.all(
-      (rows || []).map(function (row) {
-        var copy = Object.assign({}, row);
-        var card = row && row.card;
-        var legacy = safePhotoDataUrl(card && card.photoDataUrl);
-        var mediaId = text(card && card.photoMediaId);
-        copy.photoDataUrl = legacy;
-        if (!mediaId || !media || typeof media.blob !== "function") {
-          return copy;
+    return Promise.all((rows || []).map(function (row) {
+      var copy = Object.assign({}, row);
+      var card = row && (row.reportCard || row.card);
+      var legacy = safePhotoDataUrl(card && card.photoDataUrl);
+      var mediaId = text(card && card.photoMediaId);
+      function finish(dataUrl) {
+        copy.photoDataUrl = dataUrl || legacy;
+        if (row && row.reportCard && copy.photoDataUrl) {
+          var api = root.baseball;
+          if (!api || typeof api.renderPhoto !== "function") {
+            throw new Error("The finalized card photo renderer is unavailable.");
+          }
+          var state = api.fromCanonical(row.reportCard);
+          return Promise.resolve(api.renderPhoto(state, copy.photoDataUrl)).then(function (baked) {
+            if (!safePhotoDataUrl(baked)) { throw new Error("The finalized card photo could not be prepared."); }
+            copy.photoDataUrl = baked;
+            copy.reportPhotoBaked = true;
+            return copy;
+          });
         }
-        if (!cache[mediaId]) {
-          cache[mediaId] = media.blob(mediaId, "display")
-            .catch(function () {
-              return media.blob(mediaId, "original");
-            })
-            .then(blobPartToDataUrl)
-            .catch(function () {
-              return "";
-            });
+        if (row && row.reportCard && !copy.photoDataUrl) {
+          throw new Error("A finalized card photo is unavailable. Restore the photo before generating this report.");
         }
-        return cache[mediaId].then(function (dataUrl) {
-          copy.photoDataUrl = dataUrl || legacy;
-          return copy;
-        });
-      })
-    );
+        return copy;
+      }
+      if (!mediaId || !media || typeof media.blob !== "function") { return Promise.resolve().then(function () { return finish(legacy); }); }
+      if (!cache[mediaId]) {
+        cache[mediaId] = Promise.resolve().then(function () { return media.blob(mediaId, "original"); })
+          .catch(function () { return media.blob(mediaId, "display"); })
+          .then(blobPartToDataUrl).catch(function () { return ""; });
+      }
+      return cache[mediaId].then(finish);
+    }));
   }
 
   var DEFAULT_UNIT = "DAL-3";
   var INTERNAL_HEADING = "INTERNAL Background Required for Privacy Review:";
   var DEFAULT_COLUMNS = [
-    { id: "name", label: "Subject" },
+    { id: "name", label: "Subject", reportLabel: "Name" },
     { id: "age", label: "Age" },
     { id: "country", label: "Country" },
     { id: "aNumber", label: "A-Number" },
     { id: "fbiNumber", label: "FBI Number" },
     { id: "iceEvent", label: "ICE Event" },
-    { id: "encounterNumber", label: "Encounter" },
+    { id: "encounterNumber", label: "Encounter", reportLabel: "Encounter Number" },
     { id: "disposition", label: "Disposition" },
-    { id: "arrestDateTime", label: "Arrest Date/Time" }
+    { id: "arrestDateTime", label: "Arrest Date/Time" },
+    { id: "updatedAt", label: "Last Saved" }
   ];
 
   function countWord(count, one, many) {
@@ -568,7 +649,7 @@
   function uniqueEncounterCount(rows) {
     var seen = {};
     (rows || []).forEach(function (row) {
-      var id = text(row && (row.encounterNumber || row.encounterId)).toUpperCase();
+      var id = row && row.encounterLinkValid === true ? text(row.encounterId) : "";
       if (id) {
         seen[id] = true;
       }
@@ -623,8 +704,8 @@
 
   function resolveColumns(options) {
     var requested = options && options.columns;
-    if (!Array.isArray(requested) || !requested.length) {
-      return DEFAULT_COLUMNS.slice();
+    if (!Array.isArray(requested)) {
+      return DEFAULT_COLUMNS.map(function (column) { return { id: column.id, label: column.reportLabel || column.label }; });
     }
     return requested
       .map(function (column) {
@@ -635,13 +716,14 @@
           var found = DEFAULT_COLUMNS.filter(function (row) {
             return row.id === column;
           })[0];
-          return found || { id: column, label: column };
+          return found ? { id: found.id, label: found.reportLabel || found.label } : null;
         }
         var id = text(column.id);
         if (!id) {
           return null;
         }
-        return { id: id, label: text(column.label) || id };
+        var known = DEFAULT_COLUMNS.some(function (entry) { return entry.id === id; });
+        return known ? { id: id, label: text(column.reportLabel || column.label) || id } : null;
       })
       .filter(Boolean);
   }
@@ -649,6 +731,15 @@
   function columnValue(row, id) {
     if (id === "name" || id === "subject") {
       return text(row && row.name);
+    }
+    if (id === "arrestDateTime" || id === "updatedAt") {
+      var raw = text(row && row[id]);
+      if (!raw) { return id === "updatedAt" ? "Unknown" : ""; }
+      var date = new Date(raw.replace(/^(\d{4}-\d{2}-\d{2}) /, "$1T"));
+      if (Number.isNaN(date.getTime())) { return id === "updatedAt" ? "Unknown" : raw; }
+      return new Intl.DateTimeFormat("en-US", {
+        year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
+      }).format(date);
     }
     return text(row && row[id]);
   }
@@ -725,6 +816,10 @@
   function parseCardContent(card) {
     if (!card) {
       return null;
+    }
+    if (card.content && typeof card.content === "object") {
+      return { narrative: String(card.content.narrative || ""), heading: String(card.content.heading || ""),
+        bullets: Array.isArray(card.content.bullets) ? card.content.bullets.map(String) : [] };
     }
     var fromHtml = parseCardHtml(card.html);
     if (fromHtml && (fromHtml.narrative || fromHtml.bullets.length)) {
@@ -803,35 +898,69 @@
   }
 
   function cardHtml(row) {
-    var card = row && row.card;
-    if (!card) {
-      return "";
-    }
+    var card = row && row.reportCard;
+    if (!card) { return ""; }
     var content = parseCardContent(card);
     var photo = safePhotoDataUrl(row.photoDataUrl || card.photoDataUrl);
-    var markup =
-      typeof global.buildBaseballCardEmailMarkup === "function"
-        ? global.buildBaseballCardEmailMarkup(content, photo)
-        : fallbackCardEmailMarkup(content, photo);
+    var api = root.baseball;
+    var markup;
+    if (!photo) { throw new Error("The finalized card photo is unavailable. Prepare the photo before generating this report."); }
+    if (api && typeof api.renderEmail === "function") {
+      if (photo && !row.reportPhotoBaked) {
+        throw new Error("Prepare the finalized card photo before building this report.");
+      }
+      markup = api.renderEmail(api.fromCanonical(card), photo);
+    } else if (photo || card.layout || card.photoAdjustments) {
+      throw new Error("The finalized card renderer is unavailable.");
+    } else {
+      markup = fallbackCardEmailMarkup(content, photo);
+    }
     return '<div style="margin:20px 0 0;">' + markup + "</div>";
+  }
+
+  function reportCards(rows) {
+    var candidates = [];
+    (rows || []).forEach(function (row) {
+      if (row.reportCardResolved) {
+        if (row.reportCard) { candidates.push(Object.assign({}, row)); }
+      } else {
+        var candidate = finalizedCandidate(row.card, row);
+        if (candidate) {
+          candidates.push(Object.assign({}, row, {
+            reportCard: candidate.snapshot, reportCardName: candidate.displayName,
+            reportMarkedAt: candidate.markedAt
+          }));
+        }
+      }
+    });
+    var byDate = Object.create(null);
+    candidates.forEach(function (row) {
+      var old = byDate[row.arrestDate];
+      if (!old || [row.reportMarkedAt || "", row.reportCard.generatedAt, row.reportCard.cardId].join("|") >
+          [old.reportMarkedAt || "", old.reportCard.generatedAt, old.reportCard.cardId].join("|")) {
+        byDate[row.arrestDate] = row;
+      }
+    });
+    return Object.keys(byDate).sort().map(function (date) { return byDate[date]; });
   }
 
   function build(rows, options) {
     options = options || {};
     rows = Array.isArray(rows) ? rows : [];
-    var cardCount = 0;
-    rows.forEach(function (row) {
-      if (row && row.card) {
-        cardCount += 1;
-      }
-    });
+    rows = rows.filter(function (row) { return row && !row.voidedAt; });
+    var eligibleCards = reportCards(rows);
+    var cardCount = eligibleCards.length;
+    var missingEncounterCount = rows.filter(function (row) { return row.encounterLinkValid !== true; }).length;
     var encounterCount = uniqueEncounterCount(rows);
     var unit = text(options.unit) || DEFAULT_UNIT;
     var mode = text(options.mode) || "selected";
     var title =
       text(options.title) ||
       reportTitle(unit, mode, rows.length, encounterCount);
-    var summary = text(options.summary) || reportSummary(mode, rows);
+    var dailyCard = eligibleCards.length === 1 ? eligibleCards[0] : null;
+    var dailySummary = dailyCard ? "The arrest of the day is " + text(dailyCard.reportCardName || dailyCard.name) + "." :
+      "The arrest of the day has not been selected.";
+    var summary = text(options.summary) || (mode === "today" ? dailySummary : reportSummary(mode, rows));
     var columns = resolveColumns(options);
     var header = columns
       .map(function (column) {
@@ -859,7 +988,7 @@
         );
       })
       .join("");
-    var cards = rows.map(cardHtml).filter(Boolean).join("");
+    var cards = eligibleCards.map(cardHtml).filter(Boolean).join("");
     var html =
       '<div style="font-family:Arial,sans-serif;color:#111827;">' +
       '<h2 style="margin:0 0 6px;font-size:20px;">' +
@@ -892,11 +1021,11 @@
           .join("\t")
       );
     });
-    rows.forEach(function (row) {
-      if (!row || !row.card) {
+    eligibleCards.forEach(function (row) {
+      if (!row || !row.reportCard) {
         return;
       }
-      var cardText = cardPlainText(parseCardContent(row.card), row.card.text);
+      var cardText = cardPlainText(parseCardContent(row.reportCard), row.reportCard.text);
       if (cardText) {
         plain.push("", cardText);
       }
@@ -909,6 +1038,11 @@
       arrestCount: rows.length,
       cardCount: cardCount,
       missingCardCount: rows.length - cardCount,
+      encounterCount: encounterCount,
+      missingEncounterCount: missingEncounterCount,
+      visibleColumns: columns.map(function (column) { return column.id; }),
+      warnings: missingEncounterCount ? [missingEncounterCount + " arrest" + (missingEncounterCount === 1 ? " is" : "s are") +
+        " missing a valid Encounter link and excluded from the encounter count."] : [],
       mode: mode
     };
   }
@@ -921,6 +1055,10 @@
     parseCardContent: parseCardContent,
     escapeHtml: escapeHtml,
     sanitizedCardMarkup: sanitizedCardMarkup,
-    columns: DEFAULT_COLUMNS
+    columns: DEFAULT_COLUMNS,
+    sortRows: sortRows,
+    uniqueEncounterCount: uniqueEncounterCount,
+    columnValue: columnValue,
+    reportCards: reportCards
   };
 })(typeof window !== "undefined" ? window : globalThis);

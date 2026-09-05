@@ -157,9 +157,9 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
     const BOOKIN_FORMAT = Object.freeze({
       name: "Alien Book-In Documents",
-      backupVersion: "1.10.0",
-      releaseDate: "2026-09-02",
-      recordsSchemaVersion: 3,
+      backupVersion: "1.12.0",
+      releaseDate: "2026-09-04",
+      recordsSchemaVersion: 5,
       minimumRecordsSchemaVersion: 1,
       recordsBackupFormat: "alien-book-in-records"
     });
@@ -174,7 +174,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       );
     }
 
-    const MAX_RECORDS_BACKUP_BYTES = 10 * 1024 * 1024;
+    const MAX_RECORDS_BACKUP_BYTES = 32 * 1024 * 1024;
     const MAX_IMPORTED_RECORDS = 5000;
     const MAX_IMPORTED_FIELD_VALUE_LENGTH = 100000;
 
@@ -1520,6 +1520,9 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
     function writeSavedRecords(records) {
       try {
+        const workflow = window.COPDoc && COPDoc.importWorkflow;
+        const writable = workflow && workflow.assertWritable();
+        if (writable && !writable.ok) throw new Error(writable.error);
         localStorage.setItem(
           SAVED_RECORDS_STORAGE_KEY,
           JSON.stringify(records)
@@ -1959,73 +1962,11 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function parseRecordsBackup(text) {
-      let payload;
-
-      try {
-        payload = JSON.parse(text);
-      } catch (error) {
-        throw new Error("The selected file is not valid JSON.");
-      }
-
-      if (!isPlainRecordObject(payload)) {
-        throw new Error("The selected file is not a records backup.");
-      }
-
-      if (payload.format !== BOOKIN_FORMAT.recordsBackupFormat) {
-        throw new Error("The selected file is not an Alien Book-In records backup.");
-      }
-
-      const schemaVersion = Number(payload.schemaVersion);
-      if (
-        !Number.isInteger(schemaVersion) ||
-        schemaVersion < BOOKIN_FORMAT.minimumRecordsSchemaVersion ||
-        schemaVersion > BOOKIN_FORMAT.recordsSchemaVersion
-      ) {
-        const direction =
-          schemaVersion > BOOKIN_FORMAT.recordsSchemaVersion
-            ? "newer"
-            : "unsupported";
-
-        throw new Error(
-          `This backup uses a ${direction} records format (schema ${payload.schemaVersion ?? "unknown"}).`
-        );
-      }
-
-      if (!Array.isArray(payload.records)) {
-        throw new Error("The records backup does not contain a records list.");
-      }
-
-      if (payload.records.length > MAX_IMPORTED_RECORDS) {
-        throw new Error(
-          `The backup contains more than ${MAX_IMPORTED_RECORDS.toLocaleString()} records.`
-        );
-      }
-
-      const knownFieldIds = getKnownRecordFieldIds();
-      const normalized = payload.records.map(
-        (record, index) =>
-          normalizeImportedRecord(
-            record,
-            index,
-            knownFieldIds
-          )
-      );
-      const recordIds = new Set();
-
-      normalized.forEach((record, index) => {
-        if (recordIds.has(record.id)) {
-          throw new Error(
-            `Imported records ${index + 1} and an earlier record use the same record ID.`
-          );
-        }
-
-        recordIds.add(record.id);
-      });
-
-      return {
-        appVersion: String(payload.appVersion ?? "unknown"),
-        records: normalized
-      };
+      const decoder = window.COPDoc && COPDoc.importSchema;
+      if (!decoder) throw new Error("The shared Book-In import decoder is unavailable.");
+      const decoded = decoder.decode(text);
+      if (!decoded.ok) throw new Error(decoded.error);
+      return JSON.parse(text);
     }
 
     function buildRecordsBackupFilename() {
@@ -2053,9 +1994,39 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       }, 1500);
     }
 
-    function exportSavedRecords() {
+    async function exportSavedRecords() {
       try {
-        const records = readSavedRecords();
+        const writable = window.COPDoc && COPDoc.importWorkflow && COPDoc.importWorkflow.assertWritable();
+        if (writable && !writable.ok) throw new Error(writable.error);
+        const exportSourceKeys = [SAVED_RECORDS_STORAGE_KEY, "copdocx.store.v1", "copdoc.admin.v1"];
+        const exportSourceBytes = exportSourceKeys.map(key => localStorage.getItem(key));
+        const records = JSON.parse(JSON.stringify(readSavedRecordsForWrite()));
+        const root = window.COPDoc || {};
+        const store = root.model && root.model.store;
+        if (store && store.loadFromDisk) store.loadFromDisk();
+        for (const packet of records) {
+          const person = packet.personId && store && store.getPerson(packet.personId);
+          const cards = person && person.immigration && person.immigration.baseballCards || [];
+          const matches = cards.filter(card => card.bookinRecordId === packet.id && (!packet.baseballCardId || card.cardId === packet.baseballCardId));
+          if (matches.length > 1) throw new Error("Multiple cards claim Book-In " + packet.id + ". Review its card identity before export.");
+          if (matches.length && root.baseball) {
+            const card = matches[0];
+            packet.baseballCard = root.baseball.fromCanonical(card);
+            packet.baseballCardId = card.cardId;
+            if (card.finalizedSnapshot) packet.baseballCardFinalizedSnapshot = JSON.parse(JSON.stringify(card.finalizedSnapshot));
+            if (card.arrestOfDay) packet.baseballCardArrestOfDay = JSON.parse(JSON.stringify(card.arrestOfDay));
+            const mediaId = packet.baseballCard.photoMediaId || card.photoMediaId;
+            if (mediaId) {
+              if (!root.media) throw new Error("Photo storage is unavailable. Export cancelled.");
+              const part = await root.media.blob(mediaId, "original");
+              const value = part.blob;
+              const bytes = value && typeof value.arrayBuffer === "function" ? new Uint8Array(await value.arrayBuffer()) : ArrayBuffer.isView(value) ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : new Uint8Array(value);
+              let binary = "";
+              for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
+              packet.baseballCard.photoDataUrl = "data:" + part.mime + ";base64," + btoa(binary);
+            }
+          }
+        }
         const payload = {
           format: BOOKIN_FORMAT.recordsBackupFormat,
           schemaVersion: BOOKIN_FORMAT.recordsSchemaVersion,
@@ -2065,13 +2036,30 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           recordCount: records.length,
           records
         };
+        if (root.transfer && root.transfer.collectBookInContext) payload.canonicalContext = root.transfer.collectBookInContext(records);
+        const photoIds = new Set();
+        function collectMediaReferences(value) {
+          if (!value || typeof value !== "object") return;
+          Object.keys(value).forEach(key => {
+            if (["importSource", "importDataBaseline"].includes(key)) return;
+            if (/(?:mediaId|photoId|sourceMediaId|derivedFromMediaId|originalMediaId)$/i.test(key) && typeof value[key] === "string" && value[key]) photoIds.add(value[key]);
+            collectMediaReferences(value[key]);
+          });
+        }
+        collectMediaReferences(payload);
+        if (photoIds.size) {
+          if (!root.media || !root.media.exportBundle) throw new Error("Required photo storage is unavailable. Export cancelled.");
+          const media = await root.media.exportBundle();
+          payload.media = media.filter(item => item && item.meta && photoIds.has(item.meta.mediaId));
+          for (const id of photoIds) {
+            const item = payload.media.find(entry => entry.meta.mediaId === id);
+            if (!item || !(item.meta.roles || ["original"]).every(role => (item.blobs || []).some(part => part.role === role && typeof part.base64 === "string" && part.base64.length))) throw new Error("A required photo or file could not be exported: " + id);
+          }
+        }
         const filename = buildRecordsBackupFilename();
-
+        if (exportSourceKeys.some((key, index) => localStorage.getItem(key) !== exportSourceBytes[index])) throw new Error("Saved data changed while preparing this export. Export again to capture one consistent revision.");
         downloadJson(payload, filename);
-        setStatus(
-          `Exported ${records.length} saved record${records.length === 1 ? "" : "s"}:\n${filename}`,
-          "success"
-        );
+        setStatus(`Exported ${records.length} saved record${records.length === 1 ? "" : "s"}:\n${filename}`, "success");
       } catch (error) {
         console.error(error);
         setStatus(`Error: ${error.message}`, "error");
@@ -2520,91 +2508,34 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       }
       const fileInput = event.currentTarget;
       const file = fileInput.files?.[0];
-
-      if (!file) {
-        return;
-      }
-
+      if (!file) return;
+      const previousSuppression = suppressAutoSave;
+      suppressAutoSave = true;
       try {
-        if (file.size > MAX_RECORDS_BACKUP_BYTES) {
-          throw new Error(
-            "The selected backup is larger than 10 MB."
-          );
-        }
-
+        if (file.size > MAX_RECORDS_BACKUP_BYTES) throw new Error("The selected backup exceeds the 32 MiB import limit.");
+        const api = window.COPDoc && COPDoc.transfer;
+        const workflow = window.COPDoc && COPDoc.importWorkflow;
+        if (!api || !api.buildImportPlan || !workflow) throw new Error("The shared import workflow is unavailable.");
         const backup = parseRecordsBackup(await file.text());
-        const existingRecords = readSavedRecords();
-
-        if (pendingRecordsImportMode === "replace") {
-          const unsafeOmissions = omittedCanonicalRecordsForReplace(
-            existingRecords,
-            backup.records
-          );
-          if (unsafeOmissions.length) {
-            setStatus(
-              `Restore blocked: the backup omits ${unsafeOmissions.length} locally filed or Encounter-linked Book-In record${unsafeOmissions.length === 1 ? "" : "s"}. Use merge, or unlink and reconcile those records first.`,
-              "error"
-            );
-            return;
-          }
-          const replacementRecords = prepareCanonicalReplaceRecords(
-            existingRecords,
-            backup.records
-          );
-          const confirmed = window.confirm(
-            `Restore ${backup.records.length} saved record${backup.records.length === 1 ? "" : "s"} from this backup?\n\nThis will replace all ${existingRecords.length} record${existingRecords.length === 1 ? "" : "s"} currently saved in this browser.`
-          );
-
-          if (!confirmed) {
-            setStatus("Backup restore cancelled.", "warning");
-            return;
-          }
-
-          const promotion = promoteImportRecords(replacementRecords);
-          if (promotion.failed) {
-            setStatus(
-              `Restore blocked: ${promotion.failed} imported Book-In record${promotion.failed === 1 ? "" : "s"} could not be reconciled with canonical identity. Existing records were kept.`,
-              "error"
-            );
-            return;
-          }
-          writeSavedRecords(promotion.rows || replacementRecords);
-          activeRecordId = null;
-          activeRecordBaseUpdatedAt = null;
-          renderSavedRecords();
-          setStatus(
-            `Backup restored: ${backup.records.length} saved record${backup.records.length === 1 ? "" : "s"} from app version ${backup.appVersion}.${promotionStatusText(promotion)}`,
-            promotion.failed ? "warning" : "success"
-          );
-          return;
+        const parsed = api.parseTransfer(backup);
+        const options = { mode: pendingRecordsImportMode };
+        let plan = api.buildImportPlan(parsed, ["bookin"], options);
+        if (!plan.ok && (plan.findings || []).some(finding => finding.code === "CUSTODY_REVIEW")) {
+          options.recordDecisions = await workflow.reviewCustody(plan.findings);
+          if (!options.recordDecisions) { setStatus("Import cancelled.", "warning"); return; }
+          plan = api.buildImportPlan(parsed, ["bookin"], options);
         }
-
-        const result = mergeImportedRecords(
-          existingRecords,
-          backup.records
-        );
-
-        const promotion = promoteImportRecords(
-          result.records,
-          result.promotionRecordIds
-        );
-        writeSavedRecords(promotion.rows || result.records);
+        if (!plan.ok) throw new Error(plan.error);
+        if (!await workflow.preview(plan)) { setStatus("Import cancelled.", "warning"); return; }
+        const result = await workflow.apply(plan);
+        if (!result.ok) throw new Error(result.error);
         renderSavedRecords();
-
-        const conflictMessage = result.conflictCount
-          ? ` ${result.conflictCount} conflicting record${result.conflictCount === 1 ? " was" : "s were"} preserved as separate copies.`
-          : "";
-
-        setStatus(
-          `Import complete: ${result.importedCount} record${result.importedCount === 1 ? "" : "s"} added; ${result.duplicateCount} exact duplicate${result.duplicateCount === 1 ? "" : "s"} skipped.${conflictMessage}${promotionStatusText(promotion)}`,
-          promotion.failed ? "warning" : "success"
-        );
+        const stats = result.stats || plan.stats || {};
+        setStatus(`Import complete: ${stats.added || 0} added; ${stats.updated || 0} updated; ${stats.skipped || 0} skipped. Recovery checkpoint ${result.transactionId}.${activeRecordId ? " Your open form was kept. Reopen its saved row to load imported changes." : ""}`, "success");
       } catch (error) {
         console.error(error);
         setStatus(`Error: ${error.message}`, "error");
-      } finally {
-        fileInput.value = "";
-      }
+      } finally { suppressAutoSave = previousSuppression; fileInput.value = ""; }
     }
 
     function getRecordSubjectLabel(record) {
@@ -4023,7 +3954,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
             (linkedSubject && linkedSubject.personId) ||
             (existing && existing.personId) ||
             "",
-          formState: captureFormState()
+          formState: { ...((existing && existing.formState) || {}), ...captureFormState() }
         };
 
         const subjectLink = validateEncounterSubjectLink(

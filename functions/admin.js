@@ -1328,7 +1328,7 @@
     }
     if (!todayRoster) {
       todayRoster = COPDoc.arrestRoster.mount(host, {
-        todayOnly: true,
+        defaultToday: true,
         showGenerate: true
       });
     } else if (todayRoster.refresh) {

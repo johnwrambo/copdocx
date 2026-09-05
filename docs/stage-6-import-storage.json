@@ -1,0 +1,22 @@
+{
+  "schema": "copdocx.storage-contract-overlay.v1",
+  "stage": 6,
+  "storage": {
+    "importTransactions": {
+      "key": "copdocx.import-transactions.v1",
+      "medium": "localStorage",
+      "owner": "import-workflow",
+      "portable": false,
+      "schema": "copdocx.import-transactions.v1",
+      "version": 1,
+      "authority": "Exact import before/after storage bytes, Media insertion ownership, restartable checkpoints and completion/rollback receipts. Canonical domain stores remain authoritative for operational records.",
+      "readers": ["functions/import-workflow.js", "functions/integrity.js", "functions/model/store.js", "functions/model/media.js", "functions/safety-backup.js"],
+      "writers": ["functions/import-workflow.js"],
+      "migration": "An absent journal means no prior import. Existing version-1 journals require exact valid plans and typed checkpoints. Unreadable, malformed or unsupported journals block writes and are never replaced with an empty journal.",
+      "backup": "Included as exact registered bytes in full recovery archives. Completed entries retain before images; they are not live object relationships. Normal transfer excludes journals.",
+      "statuses": ["PENDING", "APPLYING", "ROLLING_BACK", "COMPLETED", "ROLLED_BACK"],
+      "limitations": "Recovery protocol across browser stores, not an IndexedDB/LocalStorage atomic transaction. Resume and rollback refuse conflicting later writes. Completed imports cannot be automatically rolled back over later edits. Journal quota failure before the first domain write leaves live data unchanged.",
+      "evidence": "VERIFIED"
+    }
+  }
+}

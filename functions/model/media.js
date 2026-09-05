@@ -838,12 +838,19 @@
     return error;
   }
 
-  function assertMediaUnreferenced(row) {
+  function assertMediaUnreferenced(row, importTransactionId) {
     var store = model.store;
     if (store && typeof store.dependenciesFor === "function") {
       var checked = store.dependenciesFor("MEDIA", row.mediaId);
       if (!checked.ok) { throw removalError(checked.dependencies, checked.error); }
-      if (checked.dependencies.length) { throw removalError(checked.dependencies); }
+      var dependencies = checked.dependencies;
+      if (importTransactionId) {
+        var prefix = "importTransactions.transactions." + importTransactionId + ".";
+        dependencies = dependencies.filter(function (dependency) {
+          return !(dependency.store === "copdocx.import-transactions.v1" && dependency.path.indexOf(prefix) === 0);
+        });
+      }
+      if (dependencies.length) { throw removalError(dependencies); }
     }
     return listAll().then(function (rows) {
       var dependencies = [];
@@ -892,9 +899,17 @@
     }
   }
 
-  function remove(mediaId) {
+  function remove(mediaId, importTransactionId) {
+    if (importTransactionId) {
+      try {
+        var journal = JSON.parse(global.localStorage.getItem("copdocx.import-transactions.v1") || "null");
+        var command = journal && journal.transactions && journal.transactions[importTransactionId];
+        var owned = command && (command.media || []).find(function (entry) { return entry.bundle && entry.bundle.meta.mediaId === mediaId && entry.existed === false; });
+        if (!command || command.status !== "ROLLING_BACK" || !owned || command.mediaCreated.indexOf(mediaId) < 0) throw new Error("Import does not own this Media rollback.");
+      } catch (error) { return Promise.reject(MediaError("IMPORT_ROLLBACK_INVALID", error.message)); }
+    }
     return getMeta(mediaId).then(function (row) {
-      return assertMediaUnreferenced(row);
+      return assertMediaUnreferenced(row, importTransactionId);
     }).then(function (row) {
       if (useMemory) {
         delete memory.meta[row.mediaId];
@@ -1101,6 +1116,29 @@
     return next();
   }
 
+  // Recovery imports preserve referenced IDs. Unlike the interactive save API,
+  // they must neither deduplicate to a different ID nor overwrite an existing ID.
+  function importExactBundle(item) {
+    return Promise.resolve().then(function () {
+      if (!item || !item.meta || !item.meta.mediaId || !Array.isArray(item.blobs) || !item.blobs.length) throw MediaError("IMPORT_INVALID", "Media import is incomplete.");
+      var row = Object.assign({}, item.meta, createMedia(item.meta));
+      if (item.meta.meta) row.meta = clone(item.meta.meta);
+      var parts = item.blobs.map(function (part) { return blobRecord(row.mediaId, part.role, part.mime, part.bytes, new Blob([base64ToBytes(part.base64)], { type: part.mime })); });
+      if (useMemory) {
+        if (memory.meta[row.mediaId]) throw MediaError("IMPORT_EXISTS", "Media ID already exists.");
+        memory.meta[row.mediaId] = clone(row);
+        parts.forEach(function (part) { memory.blobs[row.mediaId + ":" + part.role] = part; });
+        return { mediaId: row.mediaId, added: true };
+      }
+      return openDb().then(function (db) {
+        var tx = db.transaction(["meta", "blobs"], "readwrite");
+        tx.objectStore("meta").add(row);
+        parts.forEach(function (part) { tx.objectStore("blobs").add(part); });
+        return txDone(tx).then(function () { return { mediaId: row.mediaId, added: true }; });
+      });
+    });
+  }
+
   model.createMedia = createMedia;
   model.normalizeTakenAt = normalizeTakenAt;
   model.formatTakenAt = formatTakenAt;
@@ -1189,11 +1227,13 @@
     listAll: listAll,
     get: getMeta,
     blob: getBlob,
-    remove: remove,
+    remove: function (mediaId) { return remove(mediaId); },
+    removeImportCreated: function (mediaId, transactionId) { return remove(mediaId, transactionId); },
     removeByOwner: removeByOwner,
     setPrimary: setPrimary,
     exportBundle: exportBundle,
     importBundle: importBundle,
+    importExactBundle: importExactBundle,
     ownerKey: ownerKeyOf,
     ownerFromPage: ownerFromPage,
     returnHref: returnHref,

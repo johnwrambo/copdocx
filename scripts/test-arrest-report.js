@@ -51,6 +51,13 @@ var lead = {
           generatedAt: "2026-09-03T13:00:00.000Z",
           bookinRecordId: "book_1",
           arrestDate: "2026-09-03",
+          arrestOfDay: { date: "2026-09-03", markedAt: "2026-09-03T13:00:00.000Z" },
+          finalizedSnapshot: {
+            status: "FINALIZED", generatedAt: "2026-09-03T13:00:00.000Z", cardId: "bbc_report",
+            bookinRecordId: "book_1", personId: "person_report", arrestDateKey: "2026-09-03",
+            content: { narrative: "Saved card text", heading: "Background", bullets: ["No foreign warrants.", "photo from arrest in the field."] },
+            photoMediaId: "med_report"
+          },
           text: "Saved card text\n• No foreign warrants.\n• photo from arrest in the field.",
           photoMediaId: "med_report"
         }
@@ -65,6 +72,8 @@ var lead = {
         arrestDateTime: "2026-09-03T09:15",
         iceEventNumber: "DAL-100",
         encounterNumber: "ENC-1",
+        encounterId: "enc_1",
+        subjectId: "subject_1",
         arrestingOfficer: "M. Reyes",
         team: "DAL - 3 / Street"
       },
@@ -74,7 +83,9 @@ var lead = {
         arrestDate: "2026-09-02",
         arrestDateTime: "2026-09-02T18:00",
         iceEventNumber: "DAL-099",
-        encounterNumber: "ENC-2"
+        encounterNumber: "ENC-2",
+        encounterId: "enc_2",
+        subjectId: "subject_2"
       },
       {
         arrestId: "arr_historical",
@@ -91,6 +102,10 @@ var store = {
   },
   getLead: function (id) {
     return id === lead.leadId ? lead : null;
+  },
+  getEncounter: function (id) {
+    var suffix = id === "enc_1" ? "1" : id === "enc_2" ? "2" : "";
+    return suffix ? { encounterId: id, subjects: [{ subjectId: "subject_" + suffix, personId: "person_report", bookingId: "book_" + suffix }] } : null;
   },
   bookInPromotionInput: function (record) {
     return record && record.sourceInput ? record.sourceInput : {};
@@ -208,6 +223,13 @@ check(
   })
 );
 var requestedRole = "";
+context.COPDoc.baseball = {
+  fromCanonical: function (card) { return card; },
+  renderPhoto: function (state, source) { return Promise.resolve(source); },
+  renderEmail: function (state, source) {
+    return '<table class="arrest-card" aria-label="ICE Dallas arrest information card"><tr><td><img src="' + source + '"></td><td>' + state.content.narrative + '</td></tr></table>';
+  }
+};
 api.hydratePhotos(rows, {
   blob: function (mediaId, role) {
     requestedRole = role;
@@ -220,7 +242,7 @@ api.hydratePhotos(rows, {
 }).then(function (hydratedRows) {
   check(
     "report resolves card photo from Media",
-    requestedRole === "display" &&
+    requestedRole === "original" &&
       hydratedRows[0].photoDataUrl === "data:image/jpeg;base64,AA==" &&
       !rows[0].card.photoDataUrl
   );

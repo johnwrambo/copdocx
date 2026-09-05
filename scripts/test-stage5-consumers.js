@@ -16,7 +16,7 @@ function bundle(values) {
 function runtime(initial) {
   const storage = createMemoryStorage(initial);
   const loaded = loadModelTab(storage, { console: quietConsole(), document: createMinimalDocument("home") });
-  ["functions/arrest-report.js", "functions/oracle.js", "functions/encounter-narrative.js", "functions/transfer.js"].forEach(source => loadScript(loaded.context, source));
+  ["functions/workspace-config.js", "functions/baseball-card-contract.js", "functions/import-schema.js", "functions/import-workflow.js", "functions/arrest-report.js", "functions/oracle.js", "functions/encounter-narrative.js", "functions/transfer.js"].forEach(source => loadScript(loaded.context, source));
   return { storage, ...loaded };
 }
 
@@ -97,9 +97,10 @@ function objectImportsShareIdentityAndAuthority() {
   assert.ok(result.error, "contradictory dictionary/object aliases cannot silently normalize");
   const noModelStorage = createMemoryStorage({ [WORKSPACE]: workspace() });
   const noModel = createTab(noModelStorage, { document: createMinimalDocument("home"), console: quietConsole() });
-  loadScript(noModel, "functions/transfer.js");
+  ["functions/workspace-config.js", "functions/baseball-card-contract.js", "functions/import-schema.js", "functions/import-workflow.js", "functions/transfer.js"].forEach(source => loadScript(noModel, source));
   result = noModel.COPDoc.transfer.applyImport(bundle({ leads: [{ leadId: "l_direct", person, meta: clone(committed) }] }), ["leads"]);
-  assert.match(result.error, /identity validator is unavailable/i, "direct API must fail closed when shared validator is absent");
+  assert.match(result.error, /shared import staging model is unavailable/i, "direct API must fail closed when shared validator is absent");
+  assert.deepStrictEqual(noModelStorage.dump(), { [WORKSPACE]: JSON.stringify(workspace()) }, "missing shared staging model cannot write any store");
 }
 
 function adminImportsPreserveHistoricalFacts() {

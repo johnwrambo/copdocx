@@ -262,6 +262,13 @@
 
   function createBaseballCard(extra) {
     extra = extra || {};
+    // A saved presentation can contain source fields absent from the Person model.
+    // Keep the complete state; generating a card must never edit Person identity.
+    var preserved = model.clone ? model.clone(extra) : JSON.parse(JSON.stringify(extra));
+    var structured = preserved.state || (preserved.fields ? preserved : null);
+    if (structured && root.baseball && root.baseball.toCanonical) {
+      preserved = root.baseball.toCanonical(structured, model.assign({ existing: preserved }, preserved));
+    }
     return model.assign(
       {
         cardId: model.newId("bbc"),
@@ -276,7 +283,7 @@
         hasForeignWarrants: false,
         foreignWarrantCountry: ""
       },
-      extra
+      preserved
     );
   }
 

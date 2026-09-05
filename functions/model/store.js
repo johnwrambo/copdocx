@@ -38,6 +38,75 @@
   var state = emptyState();
   var diskError = "";
   var workspaceMutationDepth = 0;
+  var importWorkspaceContext = null;
+
+  // Import planning executes the real domain commands against detached data.
+  // Storage is an explicit raw-value snapshot, never a replacement for the
+  // browser's Storage object; absent snapshot keys cannot leak live records.
+  function storageRaw(medium, key) {
+    if (importWorkspaceContext) {
+      var values = importWorkspaceContext.storageSnapshot[medium] || {};
+      return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null;
+    }
+    var storage = medium === "sessionStorage" ? global.sessionStorage : global.localStorage;
+    return storage ? storage.getItem(key) : null;
+  }
+
+  function importStorageSnapshot(snapshot) {
+    snapshot = snapshot || {};
+    var grouped = Object.prototype.hasOwnProperty.call(snapshot, "localStorage") ||
+      Object.prototype.hasOwnProperty.call(snapshot, "sessionStorage");
+    var out = { localStorage: {}, sessionStorage: {} };
+    ["localStorage", "sessionStorage"].forEach(function (medium) {
+      var values = grouped ? snapshot[medium] || {} : medium === "localStorage" ? snapshot : {};
+      if (!values || typeof values !== "object" || Array.isArray(values)) { throw new Error("Import storage snapshots must contain raw-value dictionaries."); }
+      Object.keys(values).forEach(function (key) {
+        if (values[key] !== null && typeof values[key] !== "string") { throw new Error("Import snapshot values must be exact strings or null: " + key); }
+        Object.defineProperty(out[medium], key, { value: values[key], enumerable: true, writable: true, configurable: true });
+      });
+    });
+    return out;
+  }
+
+  function withImportWorkspace(workspace, storageSnapshot, action) {
+    if (importWorkspaceContext || workspaceMutationDepth) {
+      return { ok: false, code: "IMPORT_STAGE_REENTRANT", error: "An import stage cannot nest inside another workspace operation." };
+    }
+    if (typeof action !== "function" || action.constructor && action.constructor.name === "AsyncFunction") {
+      return { ok: false, code: "IMPORT_STAGE_SYNC_REQUIRED", error: "Import staging requires a synchronous action." };
+    }
+    var originalState = state;
+    var originalError = diskError;
+    var originalDepth = workspaceMutationDepth;
+    var output;
+    try {
+      var checked = importWorkspaceShape(workspace);
+      if (!checked.ok) { return checked; }
+      var stagedStorage = importStorageSnapshot(storageSnapshot);
+      state = clone(workspace);
+      Object.keys(emptyState()).forEach(function (key) {
+        if (state[key] === undefined) { state[key] = clone(emptyState()[key]); }
+      });
+      stagedStorage.localStorage[STORAGE_KEY] = JSON.stringify(state);
+      importWorkspaceContext = { storageSnapshot: stagedStorage, workspaceRaw: stagedStorage.localStorage[STORAGE_KEY] };
+      diskError = "";
+      workspaceMutationDepth = 1;
+      var result = action(model.store, stagedStorage);
+      if (result && typeof result.then === "function") { throw new Error("Import staging cannot continue after an asynchronous action."); }
+      var fresh = adoptDisk();
+      if (!fresh.ok) { throw new Error(fresh.error); }
+      output = { ok: !(result && result.ok === false), workspace: clone(state), storageSnapshot: clone(stagedStorage), result: result === undefined ? null : clone(result), error: result && result.ok === false ? result.error || "Import staging failed." : "" };
+      if (result && result.code) { output.code = result.code; }
+    } catch (error) {
+      output = { ok: false, code: "IMPORT_STAGE_FAILED", error: error && error.message || "Import staging failed." };
+    } finally {
+      state = originalState;
+      diskError = originalError;
+      workspaceMutationDepth = originalDepth;
+      importWorkspaceContext = null;
+    }
+    return output;
+  }
 
   // Synchronous compound creates stage only workspace state. Child saves/read
   // refreshes remain in the staged graph; the outer call has one durable write.
@@ -1219,12 +1288,12 @@
   }
 
   function readDisk() {
-    if (typeof localStorage === "undefined") {
+    if (!importWorkspaceContext && typeof localStorage === "undefined") {
       return { ok: true, missing: true, data: null, error: "" };
     }
     var raw = "";
     try {
-      raw = localStorage.getItem(STORAGE_KEY) || "";
+      raw = storageRaw("localStorage", STORAGE_KEY) || "";
     } catch (err) {
       return {
         ok: false,
@@ -1253,7 +1322,17 @@
     if (diskError) {
       return false;
     }
+    if (importWorkspaceContext) {
+      var raw = JSON.stringify(state);
+      importWorkspaceContext.storageSnapshot.localStorage[STORAGE_KEY] = raw;
+      importWorkspaceContext.workspaceRaw = raw;
+      return true;
+    }
     if (workspaceMutationDepth) { return true; }
+    if (root.importWorkflow && typeof root.importWorkflow.assertWritable === "function") {
+      var importGuard = root.importWorkflow.assertWritable();
+      if (!importGuard || !importGuard.ok) { return false; }
+    }
     if (typeof localStorage === "undefined") {
       return true;
     }
@@ -1266,6 +1345,26 @@
   }
 
   function adoptDisk() {
+    if (importWorkspaceContext) {
+      var stagedRaw = storageRaw("localStorage", STORAGE_KEY);
+      if (stagedRaw !== importWorkspaceContext.workspaceRaw) {
+        try {
+          var staged = JSON.parse(stagedRaw);
+          var valid = importWorkspaceShape(staged);
+          if (!valid.ok) { diskError = valid.error; return valid; }
+          state = staged;
+          Object.keys(emptyState()).forEach(function (key) {
+            if (state[key] === undefined) { state[key] = clone(emptyState()[key]); }
+          });
+          importWorkspaceContext.workspaceRaw = stagedRaw;
+        } catch (error) {
+          diskError = "Staged workspace storage is malformed.";
+          return { ok: false, code: "IMPORT_WORKSPACE_INVALID", error: diskError };
+        }
+      }
+      diskError = "";
+      return { ok: true, error: "" };
+    }
     if (workspaceMutationDepth) { return { ok: true, error: "" }; }
     var disk = readDisk();
     if (!disk.ok) {
@@ -1600,6 +1699,13 @@
       return { officerId: "", officerAlias: "" };
     }
     var api = root.officers;
+    if (importWorkspaceContext) {
+      var adminKey = root.config && root.config.storageKey("admin") || "copdoc.admin.v1";
+      var stagedRaw = storageRaw("localStorage", adminKey);
+      var stagedAdmin = stagedRaw ? JSON.parse(stagedRaw) : { officers: [] };
+      var officer = (Array.isArray(stagedAdmin.officers) ? stagedAdmin.officers : []).filter(function (row) { return row && (row.id === id || row.officerId === id); })[0];
+      return { officerId: id, officerAlias: api && typeof api.alias === "function" ? api.alias(officer) : "" };
+    }
     var code =
       api && typeof api.aliasForId === "function" ? api.aliasForId(id) : "";
     return { officerId: id, officerAlias: code || "" };
@@ -3119,6 +3225,13 @@
    */
   function promoteBookInToLead(input) {
     input = clone(input || {});
+    if (importWorkspaceContext) {
+      var importOutcome = storeSubjectText(input.importOutcome).toUpperCase();
+      var disposition = storeSubjectText(input.disposition || input.caseType).toUpperCase();
+      if (importOutcome && importOutcome !== "ARRESTED" || /^(NIC|NOT[ _-]?IN[ _-]?CUSTODY)$/.test(disposition) && importOutcome !== "ARRESTED") {
+        return { ok: false, code: "IMPORT_CUSTODY_REVIEW", error: "Confirm the source record's custody outcome before creating an Arrest, or import it as an unfiled draft." };
+      }
+    }
     if (input.voidedAt) { return { ok: false, code: "BOOKING_VOIDED", error: "This booking was voided. Create a new booking with a new ID." }; }
     var directBookingClaims = [
       storeSubjectText(input.id),
@@ -3547,9 +3660,9 @@
     function owns(row) { return claims(row).indexOf(bookingId) !== -1; }
     if (!bookingId) { return fail("A booking identifier is required for recovery."); }
     var data;
-    if (typeof localStorage === "undefined") { return result; }
+    if (!importWorkspaceContext && typeof localStorage === "undefined") { return result; }
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
+      var raw = storageRaw("localStorage", STORAGE_KEY);
       if (raw === null) { return result; }
       data = JSON.parse(raw);
     } catch (readError) {
@@ -3709,6 +3822,9 @@
       };
     }
     var input = bookInPromotionInput(record);
+    if (importWorkspaceContext) {
+      input.importOutcome = record.importDecision && record.importDecision.outcome || record.outcome || record.encounterOutcome || "";
+    }
     var supplied = options.formData || options;
     Object.keys(supplied || {}).forEach(function (key) {
       if (key !== "formData" && supplied[key] !== undefined) {
@@ -3979,11 +4095,11 @@
   }
 
   function loadBookInPackets() {
-    if (typeof localStorage === "undefined") {
+    if (!importWorkspaceContext && typeof localStorage === "undefined") {
       return [];
     }
     try {
-      var raw = localStorage.getItem(bookInStorageKey()) || "";
+      var raw = storageRaw("localStorage", bookInStorageKey()) || "";
       if (!raw) {
         return [];
       }
@@ -4025,6 +4141,8 @@
           loadFromDisk: function () {},
           listLeads: listLeads,
           getLead: getLead,
+          getEncounter: getEncounter,
+          getPerson: getPerson,
           bookInPromotionInput: bookInPromotionInput
         },
         packets,
@@ -4327,6 +4445,10 @@
         };
       }),
       outcomeCounts: outcomeCountsFromSubjects(encounter.subjects),
+      // Capture the saved prose and its exact engine/source state at close.
+      // Draft saves must not change the last completed narrative, and an
+      // unlock/re-confirm must retain the previous prose in completedHistory.
+      narratives: clone(Array.isArray(encounter.narratives) ? encounter.narratives : []),
       supervisorSummary: clone(encounter.supervisorSummary || {
         text: "",
         derivedAt: "",
@@ -6593,6 +6715,481 @@
       });
     });
     return failure || { ok: true, error: "" };
+  }
+
+  function importWorkspaceShape(workspace) {
+    if (!stage5Object(workspace)) { return objectFailure("IMPORT_WORKSPACE_INVALID", "Import workspace must be an object."); }
+    if (workspace.schema && workspace.schema !== (model.STORE_SCHEMA || "copdocx.store.v1")) {
+      return objectFailure("IMPORT_WORKSPACE_SCHEMA", "This workspace schema is not supported.");
+    }
+    var failure = null;
+    Object.keys(stage5Collections).some(function (type) {
+      var name = stage5Collections[type];
+      if (workspace[name] !== undefined && !stage5Object(workspace[name])) {
+        failure = objectFailure("IMPORT_WORKSPACE_INVALID", name + " must be an object dictionary.");
+      }
+      return !!failure;
+    });
+    function inspect(value, depth) {
+      if (!value || typeof value !== "object" || failure) { return; }
+      if (depth > 80) { failure = objectFailure("IMPORT_WORKSPACE_INVALID", "Import workspace is too deeply nested."); return; }
+      Object.keys(value).some(function (key) {
+        if (key === "__proto__" || key === "prototype" || key === "constructor") {
+          failure = objectFailure("IMPORT_WORKSPACE_INVALID", "Import workspace contains an unsafe object key."); return true;
+        }
+        inspect(value[key], depth + 1);
+        return !!failure;
+      });
+    }
+    inspect(workspace, 0);
+    return failure || { ok: true, error: "" };
+  }
+
+  function importSame(a, b) {
+    function stable(value) {
+      if (Array.isArray(value)) { return value.map(stable); }
+      if (!value || typeof value !== "object") { return value; }
+      var out = {};
+      Object.keys(value).sort().forEach(function (key) { out[key] = stable(value[key]); });
+      return out;
+    }
+    return JSON.stringify(stable(a)) === JSON.stringify(stable(b));
+  }
+
+  // Validate the whole proposed graph after all adapters and domain commands,
+  // without loading or changing browser storage. Legacy errors already present
+  // in unchanged records remain inspectable; an import cannot introduce them.
+  function validateImportWorkspace(candidate, current, storageSnapshot) {
+    current = current || emptyState();
+    var shape = importWorkspaceShape(candidate);
+    if (!shape.ok) { return shape; }
+    var identity = validateObjectWorkspace(candidate, current);
+    if (!identity.ok) { return identity; }
+    var previousState = state;
+    var failure = null;
+    var packetRows = null;
+    function fail(code, path, message) {
+      if (!failure) { failure = objectFailure(code, message); failure.path = path; }
+    }
+    function preserveHistory(prior, row, path) {
+      if (!prior || failure) { return; }
+      var protectedRecord = prior.voidedAt || prior.retractedAt || prior.endedAt;
+      if (protectedRecord && !importSame(prior, row)) { fail("IMPORT_LIFECYCLE_CONFLICT", path, "Import cannot alter voided or retracted history."); return; }
+      if (!row) {
+        if (prior.junked || prior.archivedAt || prior.bookingVoid || prior.meta && prior.meta.archivedAt) { fail("IMPORT_LIFECYCLE_CONFLICT", path, "Import cannot discard lifecycle history."); }
+        return;
+      }
+      if (prior.junked && !row.junked || prior.archivedAt && row.archivedAt !== prior.archivedAt ||
+          prior.meta && prior.meta.archivedAt && (!row.meta || row.meta.archivedAt !== prior.meta.archivedAt || row.meta.archiveReason !== prior.meta.archiveReason) ||
+          prior.bookingVoid && !importSame(prior.bookingVoid, row.bookingVoid)) {
+        fail("IMPORT_LIFECYCLE_CONFLICT", path, "Import cannot reactivate archived records or remove booking void history."); return;
+      }
+      if (prior.person) { preserveHistory(prior.person, row.person, path + ".person"); }
+      [["arrests", "arrestId"], ["subjects", "subjectId"], ["people", "personId"]].forEach(function (pair) {
+        (Array.isArray(prior[pair[0]]) ? prior[pair[0]] : []).forEach(function (old) {
+          var next = (Array.isArray(row[pair[0]]) ? row[pair[0]] : []).filter(function (item) { return item && old && item[pair[1]] === old[pair[1]]; })[0];
+          preserveHistory(old, next, path + "." + pair[0] + "." + (old && old[pair[1]] || ""));
+        });
+      });
+      ["subjectIdentityHistory", "bookingIdentityHistory", "completedHistory"].forEach(function (key) {
+        (Array.isArray(prior[key]) ? prior[key] : []).forEach(function (old) {
+          if (!(Array.isArray(row[key]) ? row[key] : []).some(function (next) { return importSame(old, next); })) {
+            fail("IMPORT_HISTORY_LOSS", path + "." + key, "Import cannot remove historical ownership or completion snapshots.");
+          }
+        });
+      });
+    }
+    try {
+      state = clone(candidate);
+      Object.keys(emptyState()).forEach(function (key) { if (state[key] === undefined) { state[key] = clone(emptyState()[key]); } });
+      if (storageSnapshot) {
+        var raw = importStorageSnapshot(storageSnapshot).localStorage[bookInStorageKey()];
+        if (raw != null) {
+          packetRows = JSON.parse(raw);
+          if (!Array.isArray(packetRows)) { fail("IMPORT_BOOKIN_INVALID", "bookin", "Book-In storage must be an array."); }
+        }
+      }
+      Object.keys(stage5Collections).forEach(function (type) {
+        var map = stage5Collections[type];
+        var oldRows = current[map] || {};
+        Object.keys(oldRows).forEach(function (id) {
+          if (!state[map][id]) { fail("IMPORT_OBJECT_REMOVAL", map + "." + id, "Import cannot delete existing canonical objects; use their reviewed lifecycle action."); return; }
+          if (type === "ENCOUNTER" && oldRows[id].meta && oldRows[id].meta.markedComplete && !importSame(oldRows[id], state[map][id])) {
+            fail("ENCOUNTER_LOCKED", map + "." + id, "Import cannot replace a completed Encounter. Unlock it explicitly before editing.");
+          }
+          preserveHistory(oldRows[id], state[map][id], map + "." + id);
+        });
+        Object.keys(state[map]).forEach(function (id) {
+          var row = state[map][id];
+          var idField = { LEAD: "leadId", ENCOUNTER: "encounterId", INVESTIGATION: "investigationId", OPERATION: "operationId", ASSOCIATION: "associationId" }[type];
+          if (!stage5Object(row) || idField && storeSubjectText(row[idField]) !== id) { fail("IMPORT_OBJECT_ID", map + "." + id, "A registry key disagrees with its record identifier."); }
+          var expectedSchema = { LEAD: model.SCHEMA || "copdocx.lead.v1", ENCOUNTER: "copdocx.encounter.v1", INVESTIGATION: model.INVESTIGATION_SCHEMA || "copdocx.investigation.v1", OPERATION: model.OPERATION_SCHEMA || "copdocx.operation.v1", ASSOCIATION: "copdocx.association.v1" }[type];
+          if (expectedSchema && row && row.schema && row.schema !== expectedSchema && !importSame(oldRows[id], row)) { fail("IMPORT_OBJECT_SCHEMA", map + "." + id, "An imported record uses an unsupported schema version."); }
+        });
+      });
+      Object.keys(state.leads).forEach(function (id) {
+        var row = state.leads[id];
+        var prior = current.leads && current.leads[id];
+        if (importSame(prior, row)) { return; }
+        var owner = leadOwnerIdentity(row, id);
+        if (!owner.ok || !state.people[owner.personId]) { fail("IMPORT_PERSON_REFERENCE", "leads." + id, "Imported Case has no exact canonical Person owner."); }
+      });
+      Object.keys(state.encounters).forEach(function (id) {
+        var row = state.encounters[id];
+        var prior = current.encounters && current.encounters[id];
+        if (importSame(prior, row)) { return; }
+        if (!Array.isArray(row.subjects)) { fail("ENCOUNTER_SUBJECT_ROSTER_INVALID", "encounters." + id, "Imported Encounter subjects must be an array."); return; }
+        if (row.subjects.some(function (subject) { return !stage5Object(subject) || !storeSubjectId(subject) ||
+            subject.encounterId && storeSubjectText(subject.encounterId) !== id ||
+            storeSubjectOwn(subject, "bookingId") && storeSubjectOwn(subject, "bookinRecordId") && storeSubjectText(subject.bookingId) !== storeSubjectText(subject.bookinRecordId); })) {
+          fail("ENCOUNTER_SUBJECT_ID_CONFLICT", "encounters." + id, "Imported Encounter subject identifiers must be explicit and consistent."); return;
+        }
+        var conflict = encounterSubjectIdentityConflict(prior && prior.subjects, row.subjects, id);
+        if (conflict) { fail(conflict.code, "encounters." + id, "Imported Encounter subject ownership conflicts with existing or historical relationships."); }
+      });
+      Object.keys(state.associations).forEach(function (id) {
+        var row = state.associations[id];
+        if (!stage5Object(row) || row.retractedAt || row.endedAt || importSame(current.associations && current.associations[id], row)) { return; }
+        ["from", "to"].forEach(function (side) {
+          var endpoint = row[side] || {};
+          var type = stage5Type(endpoint.type || row[side + "EntityType"]);
+          var target = storeSubjectText(endpoint.id || row[side + "EntityId"]);
+          var map = stage5Collections[type];
+          if (!map || !target || !state[map][target]) { fail("IMPORT_ASSOCIATION_REFERENCE", "associations." + id + "." + side, "Imported Association has a missing endpoint."); }
+        });
+      });
+      var arrestOwners = Object.create(null);
+      var bookingOwners = Object.create(null);
+      Object.keys(state.people).forEach(function (id) {
+        var person = state.people[id];
+        if (person.arrests !== undefined && !Array.isArray(person.arrests)) { fail("IMPORT_ARREST_INVALID", "people." + id + ".arrests", "Person Arrest history must be an array."); return; }
+        (person.arrests || []).forEach(function (arrest) {
+          if (!stage5Object(arrest) || !storeSubjectText(arrest.arrestId) || arrest.personId && arrest.personId !== id) { fail("IMPORT_ARREST_IDENTITY", "people." + id + ".arrests", "Imported Arrest identifiers are missing or contradictory."); return; }
+          var bookingId = storeSubjectBookingId(arrest);
+          if (arrestOwners[arrest.arrestId] || bookingId && bookingOwners[bookingId]) { fail("IMPORT_ARREST_IDENTITY", "people." + id + ".arrests", "An Arrest or booking has multiple canonical owners."); }
+          arrestOwners[arrest.arrestId] = id;
+          if (bookingId) { bookingOwners[bookingId] = { personId: id, arrest: arrest }; }
+        });
+      });
+      if (Array.isArray(packetRows)) {
+        var seenPackets = Object.create(null);
+        packetRows.forEach(function (packet) {
+          var id = storeSubjectText(packet && packet.id);
+          if (!stage5Object(packet) || !id || seenPackets[id]) { fail("IMPORT_BOOKIN_INVALID", "bookin", "Imported Book-In records require unique identifiers."); return; }
+          if (packet.bookingId && packet.bookingId !== id || packet.bookinRecordId && packet.bookinRecordId !== id) { fail("IMPORT_BOOKIN_IDENTITY", "bookin." + id, "Imported Book-In aliases disagree with its record identifier."); }
+          seenPackets[id] = true;
+          var canonical = bookingOwners[id];
+          if (canonical && (packet.personId && packet.personId !== canonical.personId || packet.arrestId && packet.arrestId !== canonical.arrest.arrestId ||
+              packet.subjectId && packet.subjectId !== canonical.arrest.subjectId || packet.encounterId && packet.encounterId !== canonical.arrest.encounterId ||
+              !!packet.voidedAt !== !!canonical.arrest.voidedAt)) { fail("IMPORT_BOOKIN_IDENTITY", "bookin." + id, "Book-In identity or lifecycle disagrees with its canonical Arrest."); }
+        });
+      }
+    } catch (error) {
+      fail("IMPORT_WORKSPACE_INVALID", "workspace", "The proposed workspace or storage snapshot is malformed: " + (error && error.message || "invalid data"));
+    } finally { state = previousState; }
+    return failure || { ok: true, schema: model.STORE_SCHEMA || "copdocx.store.v1", validationVersion: 1, error: "" };
+  }
+
+  function validateImportedVoidedBooking(packet, workspace, current) {
+    function fail(message) { return objectFailure("IMPORT_VOID_HISTORY_INVALID", message); }
+    try {
+    if (!stage5Object(packet) || !stage5Object(workspace)) { return fail("A void restore requires its complete booking and canonical workspace graph."); }
+    var id = storeSubjectText(packet.id);
+    var personId = storeSubjectText(packet.personId);
+    var leadId = storeSubjectText(packet.leadId);
+    var arrestId = storeSubjectText(packet.arrestId);
+    var encounterId = storeSubjectText(packet.encounterId);
+    var subjectId = storeSubjectText(packet.subjectId);
+    if (!id || !personId || !leadId || !arrestId || !storeSubjectText(packet.voidedAt) || !storeSubjectText(packet.voidReason) || !storeSubjectText(packet.voidTransactionId) ||
+        packet.bookingId && packet.bookingId !== id || packet.bookinRecordId && packet.bookinRecordId !== id) { return fail("A restored void requires explicit consistent identifiers, time, reason and transaction."); }
+    function matches(row) { return row && (storeSubjectText(row.bookingId) === id || storeSubjectText(row.bookinRecordId) === id); }
+    if (current && (current.people && current.people[personId] || current.leads && current.leads[leadId] ||
+        Object.keys(current.people || {}).some(function (key) { return ((current.people[key] || {}).arrests || []).some(function (row) { return matches(row) || row && row.arrestId === arrestId; }); }) ||
+        Object.keys(current.encounters || {}).some(function (key) { return encounterOwnershipRows(current.encounters[key]).some(matches); }))) {
+      return fail("A portable void restore requires a new ownership chain; it cannot replace any existing Person, Case or booking history.");
+    }
+    function ownedArrest(row) {
+      return stage5Object(row) && row.arrestId === arrestId && matches(row) &&
+        (!row.bookingId || row.bookingId === id) && (!row.bookinRecordId || row.bookinRecordId === id) &&
+        (!row.personId || row.personId === personId) && storeSubjectText(row.encounterId) === encounterId && storeSubjectText(row.subjectId) === subjectId &&
+        row.voidedAt === packet.voidedAt && row.voidReason === packet.voidReason && row.voidTransactionId === packet.voidTransactionId;
+    }
+    var person = workspace.people && workspace.people[personId];
+    var lead = workspace.leads && workspace.leads[leadId];
+    var leadPerson = lead && (model.subjectOf ? model.subjectOf(lead) : lead.person);
+    if (!person || person.personId !== personId || !lead || lead.leadId !== leadId || lead.subjectPersonId !== personId || !leadPerson || leadPerson.personId !== personId ||
+        !Array.isArray(person.arrests) || !Array.isArray(leadPerson.arrests)) { return fail("The void restore is missing its exact Person and Case ownership."); }
+    var canonical = [];
+    Object.keys(workspace.people || {}).forEach(function (key) {
+      ((workspace.people[key] || {}).arrests || []).forEach(function (row) { if (matches(row) || row && row.arrestId === arrestId) { canonical.push({ personId: key, row: row }); } });
+    });
+    var projected = leadPerson.arrests.filter(function (row) { return matches(row) || row && row.arrestId === arrestId; });
+    if (canonical.length !== 1 || canonical[0].personId !== personId || !ownedArrest(canonical[0].row) || projected.length !== 1 || !ownedArrest(projected[0])) { return fail("The restored void must have exactly one matching canonical Arrest and matching Case projection."); }
+    var inconsistentCase = Object.keys(workspace.leads || {}).some(function (key) {
+      var row = workspace.leads[key];
+      var subject = row && (model.subjectOf ? model.subjectOf(row) : row.person);
+      return (subject && Array.isArray(subject.arrests) ? subject.arrests : []).some(function (arrest) {
+        return (matches(arrest) || arrest && arrest.arrestId === arrestId) && (!ownedArrest(arrest) || !subject || subject.personId !== personId);
+      });
+    });
+    if (inconsistentCase) { return fail("A Case projection contradicts the restored void ownership."); }
+    var history = Array.isArray(lead.history) ? lead.history : [];
+    var original = history.filter(matches);
+    var voidEvents = history.filter(function (event) { return event && event.type === "BOOKING_VOIDED" && event.voidedBookingId === id; });
+    if (original.length !== 1 || original[0].voidedAt !== packet.voidedAt || original[0].voidReason !== packet.voidReason || original[0].voidTransactionId !== packet.voidTransactionId ||
+        voidEvents.length !== 1 || voidEvents[0].arrestId !== arrestId || voidEvents[0].voidedAt !== packet.voidedAt ||
+        voidEvents[0].voidReason !== packet.voidReason || voidEvents[0].voidTransactionId !== packet.voidTransactionId) { return fail("The original book-in and immutable void event must both remain in Case history."); }
+    if (!!encounterId !== !!subjectId) { return fail("A void restore must preserve both Encounter and subject identity, or neither."); }
+    var activeClaim = Object.keys(workspace.encounters || {}).some(function (key) {
+      return ((workspace.encounters[key] || {}).subjects || []).some(matches);
+    });
+    if (activeClaim) { return fail("A restored void cannot remain an active Encounter booking."); }
+    if (encounterId) {
+      var encounter = workspace.encounters && workspace.encounters[encounterId];
+      var retired = encounter && Array.isArray(encounter.bookingIdentityHistory) ? encounter.bookingIdentityHistory.filter(matches) : [];
+      var tombstone = retired[0];
+      var audit = tombstone && tombstone.bookingVoid;
+      if (!encounter || encounter.encounterId !== encounterId || retired.length !== 1 || !tombstone.bookingUnlinked || tombstone.subjectId !== subjectId ||
+          tombstone.personId !== personId || tombstone.leadId !== leadId || !audit || audit.bookingId !== id || audit.voidedAt !== packet.voidedAt ||
+          audit.reason !== packet.voidReason || audit.transactionId !== packet.voidTransactionId) { return fail("The restored void is missing its exact retired Encounter booking identity."); }
+    }
+    return { ok: true, personId: personId, leadId: leadId, arrestId: arrestId, bookingId: id, subjectId: subjectId, encounterId: encounterId, error: "" };
+    } catch (error) { return fail("The restored void workspace contains malformed ownership or history data."); }
+  }
+
+  function stageImportedBookingProjections(packet) {
+    if (!importWorkspaceContext) { return objectFailure("IMPORT_STAGE_REQUIRED", "Booking import projections require a staged import."); }
+    packet = clone(packet || {});
+    var fresh = adoptDisk();
+    if (!fresh.ok) { return fresh; }
+    var bookingId = storeSubjectText(packet.id);
+    var owner = resolveBookInBooking(bookingId);
+    if (!owner.ok || !owner.found) { return objectFailure("IMPORT_BOOKING_IDENTITY", owner.error || "The imported booking has no canonical Arrest."); }
+    if (["personId", "leadId", "arrestId", "subjectId", "encounterId"].some(function (field) { return packet[field] && storeSubjectText(packet[field]) !== owner[field]; })) { return objectFailure("IMPORT_BOOKING_IDENTITY", "Imported booking identifiers disagree with their canonical owner."); }
+    var arrest = (state.people[owner.personId].arrests || []).filter(function (row) { return row.arrestId === owner.arrestId; })[0];
+    if (!arrest || arrest.voidedAt || packet.voidedAt) { return objectFailure("BOOKING_VOIDED", "Voided bookings cannot create active import projections."); }
+    if (!owner.encounterId) { return { ok: true, record: packet, standalone: true, error: "" }; }
+    var encounter = state.encounters[owner.encounterId];
+    var subjects = (encounter && Array.isArray(encounter.subjects) ? encounter.subjects : []).filter(function (row) { return storeSubjectId(row) === owner.subjectId; });
+    if (subjects.length !== 1) { return objectFailure("IMPORT_BOOKING_IDENTITY", "The imported booking requires exactly one existing Encounter subject."); }
+    var subject = subjects[0];
+    if (storeSubjectText(subject.outcome).toUpperCase() !== "ARRESTED") { return objectFailure("IMPORT_CUSTODY_REVIEW", "An imported booking cannot change an Encounter subject's outcome to arrested."); }
+    if (["personId", "leadId"].some(function (field) { return subject[field] && storeSubjectText(subject[field]) !== owner[field]; }) ||
+        storeSubjectBookingId(subject) && storeSubjectBookingId(subject) !== bookingId) { return objectFailure("IMPORT_BOOKING_IDENTITY", "The imported booking contradicts the selected Encounter subject."); }
+    var before = clone(state);
+    var beforeStorage = clone(importWorkspaceContext.storageSnapshot);
+    var beforeRaw = importWorkspaceContext.workspaceRaw;
+    var result;
+    function reject(value) {
+      state = before;
+      ["localStorage", "sessionStorage"].forEach(function (medium) {
+        var target = importWorkspaceContext.storageSnapshot[medium];
+        Object.keys(target).forEach(function (key) { delete target[key]; });
+        Object.keys(beforeStorage[medium]).forEach(function (key) { target[key] = beforeStorage[medium][key]; });
+      });
+      importWorkspaceContext.workspaceRaw = beforeRaw;
+      return value;
+    }
+    try {
+      var filedAt = packet.encounterProjectionFiledAt || subject.packetFiledAt || arrest.bookInDateTime || packet.dateTime || packet.updatedAt || model.nowIso();
+      var unchanged = storeSubjectBookingId(subject) === bookingId && subject.personId === owner.personId && subject.leadId === owner.leadId && subject.packetFiledAt;
+      if (!unchanged) {
+        result = updateEncounter(owner.encounterId, function (row) {
+          var target = row.subjects.filter(function (item) { return storeSubjectId(item) === owner.subjectId; })[0];
+          target.personId = owner.personId; target.leadId = owner.leadId;
+          target.bookingId = bookingId; target.bookinRecordId = bookingId;
+          target.packetFiledAt = filedAt; target.custody = "IN_CUSTODY";
+          return row;
+        }, { mode: model.isCommitted && model.isCommitted(encounter) ? "commit" : "draft" });
+        if (!result.ok) { return reject(result); }
+      }
+      packet.encounterProjectionFiledAt = filedAt;
+      delete packet.encounterProjectionDraft;
+      result = applyEncounterLocationToArrests(owner.encounterId);
+      if (!result.ok) { return reject(result); }
+      result = linkEncounterVehiclesToPerson({ encounterId: owner.encounterId, subjectId: owner.subjectId, personId: owner.personId, leadId: owner.leadId, bookinRecordId: bookingId });
+      if (!result.ok) { return reject(result); }
+      var officerId = storeSubjectText(subject.arrestingOfficerId);
+      if (officerId) {
+        var adminKey = root.config && root.config.storageKey("admin") || "copdoc.admin.v1";
+        var raw = storageRaw("localStorage", adminKey);
+        var admin = raw === null ? { officers: [], vehicles: [], shifts: [] } : JSON.parse(raw);
+        if (!stage5Object(admin) || !Array.isArray(admin.officers)) { return reject(objectFailure("IMPORT_OFFICER_INVALID", "Admin officer storage is malformed.")); }
+        var officerMatches = admin.officers.filter(function (row) { return row && (storeSubjectText(row.id) === officerId || storeSubjectText(row.officerId) === officerId); });
+        if (officerMatches.length !== 1) { return reject(objectFailure("IMPORT_OFFICER_REFERENCE", "The Encounter arresting officer is missing or ambiguous.")); }
+        var officer = officerMatches[0];
+        var existing = null;
+        var conflict = "";
+        admin.officers.forEach(function (other) {
+          if (!stage5Object(other) || other.fieldArrests !== undefined && !Array.isArray(other.fieldArrests)) { conflict = "Officer Arrest history is malformed."; return; }
+          var count = 0;
+          (other.fieldArrests || []).forEach(function (fact) {
+            if (!stage5Object(fact)) { conflict = "Officer Arrest history is malformed."; return; }
+            var aliases = [fact.bookingId, fact.bookinRecordId].map(storeSubjectText).filter(function (id, index, values) { return id && values.indexOf(id) === index; });
+            if (storeSubjectText(fact.arrestId) !== owner.arrestId && aliases.indexOf(bookingId) < 0) { return; }
+            count += 1;
+            if (aliases.length > 1 || fact.arrestId !== owner.arrestId || aliases.length && aliases[0] !== bookingId ||
+                ["personId", "subjectId", "encounterId"].some(function (field) { return fact[field] && storeSubjectText(fact[field]) !== owner[field]; })) { conflict = "Officer Arrest identity disagrees with the imported booking."; }
+            if (other === officer) { existing = fact; }
+          });
+          if (count > 1) { conflict = "Officer Arrest identity is duplicated."; }
+        });
+        if (conflict) { return reject(objectFailure("IMPORT_OFFICER_IDENTITY", conflict)); }
+        if (existing && (existing.voidedAt || existing.voided || storeSubjectText(existing.status).toUpperCase() === "VOIDED")) { return reject(objectFailure("BOOKING_VOIDED", "Import cannot reactivate a voided officer Arrest.")); }
+        if (!existing && (officer.inactive || officer.junked || officer.archivedAt || officer.meta && officer.meta.archivedAt)) { return reject(objectFailure("IMPORT_OFFICER_INACTIVE", "A new imported Arrest cannot be assigned to an inactive officer.")); }
+        var fact = existing || { bookedAt: filedAt };
+        ["personId", "arrestId", "subjectId", "encounterId"].forEach(function (field) { fact[field] = owner[field]; });
+        fact.bookingId = bookingId;
+        if (Object.prototype.hasOwnProperty.call(fact, "bookinRecordId")) { fact.bookinRecordId = bookingId; }
+        if (!existing) { officer.fieldArrests = officer.fieldArrests || []; officer.fieldArrests.push(fact); }
+        importWorkspaceContext.storageSnapshot.localStorage[adminKey] = JSON.stringify(admin);
+      }
+      return { ok: true, record: packet, standalone: false, officerId: officerId, error: "" };
+    } catch (error) { return reject(objectFailure("IMPORT_BOOKING_PROJECTION", error && error.message || "Booking projections could not be staged.")); }
+  }
+
+  function stageImportedObjectRecord(type, incoming, current) {
+    if (!importWorkspaceContext) { return objectFailure("IMPORT_STAGE_REQUIRED", "Native object import must run inside a staged import."); }
+    type = canonicalObjectType(type);
+    if (!type || !stage5Object(incoming)) { return objectFailure("IMPORT_OBJECT_INVALID", "A supported imported object is required."); }
+    var valid = validateObjectId(type, incoming);
+    if (!valid.ok) { return valid; }
+    var existing = current || objectMap(type)[valid.objectId] || null;
+    function data(row) {
+      var result = clone(row || {});
+      ["meta", "objectRevision", "importSource", "importDataBaseline"].forEach(function (key) { delete result[key]; });
+      return result;
+    }
+    if (existing && importSame(data(existing), data(incoming))) { return { ok: true, objectId: valid.objectId, record: clone(existing), unchanged: true, error: "" }; }
+    var sourceRevision = incoming.objectRevision;
+    var localRevision = Number(existing && existing.objectRevision || 0);
+    if (sourceRevision != null && (!Number.isInteger(Number(sourceRevision)) || Number(sourceRevision) < 0)) { return objectFailure("IMPORT_OBJECT_REVISION", "An imported object revision must be a nonnegative integer."); }
+    var importedBaseline = existing && existing.importDataBaseline;
+    if (importedBaseline && importSame(importedBaseline.source, data(incoming))) { return { ok: true, objectId: valid.objectId, record: clone(existing), unchanged: true, retainedLocalEdits: true, error: "" }; }
+    if (importedBaseline && !importSame(importedBaseline.accepted, data(existing))) { return objectFailure("IMPORT_OBJECT_EDIT_CONFLICT", "The local object and imported source both changed. Review the conflicting versions before replacing either one."); }
+    var expectedSourceRevision = importedBaseline && existing.importSource && existing.importSource.nativeObjectRevision;
+    if (existing && (importedBaseline ? expectedSourceRevision != null && (sourceRevision == null || Number(sourceRevision) <= Number(expectedSourceRevision)) : localRevision && (sourceRevision == null || Number(sourceRevision) <= localRevision))) {
+      return objectFailure("IMPORT_OBJECT_STALE", "The imported object differs from a current local revision. Review the conflicting object before replacing it.");
+    }
+    var preparedInput = clone(incoming);
+    preparedInput.importSource = Object.assign({}, preparedInput.importSource || {}, { nativeObjectRevision: sourceRevision == null ? null : Number(sourceRevision),
+      nativeUpdatedAt: incoming.meta && incoming.meta.updatedAt || incoming.updatedAt || "" });
+    preparedInput.objectRevision = localRevision;
+    var map = objectMap(type);
+    var prior = map[valid.objectId];
+    try {
+      if (existing) { map[valid.objectId] = clone(existing); } else { delete map[valid.objectId]; }
+      var prepared = prepareObjectRecord(type, preparedInput, { expectedRevision: localRevision });
+      if (!prepared.ok) { return prepared; }
+      prepared.record.importDataBaseline = { source: data(incoming), accepted: data(prepared.record) };
+      return { ok: true, objectId: prepared.objectId, record: prepared.record, unchanged: false, error: "" };
+    } finally {
+      if (prior) { map[valid.objectId] = prior; } else { delete map[valid.objectId]; }
+    }
+  }
+
+  function projectImportedBaseballCard(input) {
+    input = input || {};
+    if (!importWorkspaceContext) { return objectFailure("IMPORT_STAGE_REQUIRED", "Card import projection must run inside a staged import."); }
+    var fresh = adoptDisk();
+    if (!fresh.ok) { return fresh; }
+    var personId = storeSubjectText(input.personId);
+    var bookingId = storeSubjectText(input.bookingId || input.bookinRecordId);
+    var person = state.people[personId];
+    if (!person || !bookingId) { return objectFailure("IMPORT_CARD_OWNER", "An imported card needs an exact Person and booking owner."); }
+    if (isJunked(person) || person.meta && person.meta.archivedAt) { return objectFailure("IMPORT_CARD_OWNER", "An imported card cannot edit an inactive Person."); }
+    var owner = resolveBookInBooking(bookingId);
+    if (!owner.ok || !owner.found || owner.personId !== personId) { return objectFailure("IMPORT_CARD_OWNER", owner.error || "The imported card's booking belongs to a different Person or has not been filed."); }
+    var arrest = (person.arrests || []).filter(function (row) { return row.arrestId === owner.arrestId; })[0];
+    if (!arrest || arrest.voidedAt) { return objectFailure("BOOKING_VOIDED", "A card cannot be imported into a voided booking."); }
+    if (!root.baseball || typeof root.baseball.toCanonical !== "function") { return objectFailure("CARD_RENDERER_REQUIRED", "The current baseball card adapter is unavailable."); }
+    var raw = input.baseballCard;
+    if (!stage5Object(raw)) { return objectFailure("IMPORT_CARD_INVALID", "The imported baseball card must be an object."); }
+    var photoMediaId = storeSubjectText(input.photoMediaId || raw.photoMediaId);
+    if (raw.photoDataUrl && !photoMediaId) { return objectFailure("IMPORT_CARD_MEDIA_REQUIRED", "An imported photo requires a prepared Media identifier."); }
+    var cardId = storeSubjectText(input.cardId) || "card_import_" + encodeURIComponent(bookingId);
+    var cards = person.immigration && person.immigration.baseballCards;
+    if (cards !== undefined && !Array.isArray(cards)) { return objectFailure("IMPORT_CARD_INVALID", "Existing Person card storage is malformed."); }
+    cards = cards || [];
+    var exact = cards.filter(function (card) { return card && (card.cardId || card.id) === cardId; });
+    if (exact.length > 1) { return objectFailure("IMPORT_CARD_IDENTITY", "The imported card identifier has multiple existing owners."); }
+    var previous = exact[0] || null;
+    if (previous && previous.bookinRecordId && previous.bookinRecordId !== bookingId) { return objectFailure("IMPORT_CARD_IDENTITY", "The imported card identifier belongs to a different booking."); }
+    function presentationBaseline(rawState, mediaId) {
+      var presentation = root.baseball.normalizeState(rawState || {});
+      presentation.photoMediaId = storeSubjectText(mediaId || presentation.photoMediaId);
+      delete presentation.photoDataUrl;
+      delete presentation.renderedPhotoDataUrl;
+      delete presentation.savedAt;
+      return presentation;
+    }
+    var incomingPresentation = presentationBaseline(raw, photoMediaId);
+    var retainPresentation = false;
+    var retainedLocalEdits = false;
+    if (previous) {
+      var currentPresentation = presentationBaseline(root.baseball.fromCanonical(previous), previous.photoMediaId);
+      var baseline = previous.importPresentationBaseline;
+      if (baseline && importSame(baseline, incomingPresentation) || importSame(currentPresentation, incomingPresentation)) {
+        retainPresentation = true;
+        retainedLocalEdits = !importSame(currentPresentation, incomingPresentation);
+      }
+      if (!retainPresentation && previous.savedAt && raw.savedAt && String(raw.savedAt) < String(previous.savedAt)) {
+        return objectFailure("IMPORT_CARD_STALE", "The imported card predates the saved card. Review the two versions before replacing the newer presentation.");
+      }
+      if (!retainPresentation && (!baseline || !importSame(baseline, currentPresentation))) {
+        return objectFailure("IMPORT_CARD_EDIT_CONFLICT", "The saved card has local edits and the source card also changed. Review the two versions before replacing either one.");
+      }
+    }
+    var card = retainPresentation ? clone(previous) : root.baseball.toCanonical(clone(raw), { cardId: cardId, personId: personId, bookinRecordId: bookingId,
+      photoMediaId: photoMediaId, source: clone(input.source || {}), existing: previous ? clone(previous) : null });
+    if (!stage5Object(card)) { return objectFailure("IMPORT_CARD_INVALID", "The baseball card adapter returned invalid data."); }
+    card.cardId = cardId;
+    card.personId = personId;
+    card.bookinRecordId = bookingId;
+    if (!retainPresentation) { card.photoMediaId = photoMediaId; }
+    // External saved-record revisions describe the source, never local object
+    // concurrency. Source metadata stays alongside the presentation snapshot.
+    if (!retainPresentation) {
+      card.importSource = clone(input.source || {});
+      card.importPresentationBaseline = clone(incomingPresentation);
+    }
+    if (input.finalizedSnapshot !== undefined && input.finalizedSnapshot !== null) {
+      var finalized = clone(input.finalizedSnapshot);
+      var arrestDate = String(arrest.arrestDate || arrest.arrestDateTime || arrest.bookInDateTime || "").slice(0, 10);
+      if (!stage5Object(finalized) || finalized.status !== "FINALIZED" || finalized.version !== 2 ||
+          !stage5Object(finalized.content) || !storeSubjectText(finalized.content.narrative) || !Array.isArray(finalized.content.bullets) ||
+          !finalized.photoMediaId && !finalized.photoDataUrl || finalized.arrestDateKey !== arrestDate ||
+          storeSubjectText(finalized.bookinRecordId || finalized.recordId) !== bookingId ||
+          ["personId", "leadId", "arrestId", "subjectId", "encounterId"].some(function (field) { return finalized[field] && storeSubjectText(finalized[field]) !== owner[field]; }) ||
+          finalized.cardId && finalized.cardId !== cardId || finalized.recordId && finalized.recordId !== bookingId) {
+        return objectFailure("IMPORT_CARD_FINALIZED_IDENTITY", "The finalized card snapshot must match the exact Person, booking, Arrest and arrest date.");
+      }
+      if (previous && previous.finalizedSnapshot && !importSame(previous.finalizedSnapshot, finalized)) { return objectFailure("IMPORT_CARD_FINALIZED_CONFLICT", "Import cannot replace an existing finalized card snapshot. Preserve and review both versions."); }
+      card.finalizedSnapshot = finalized;
+    }
+    if (input.arrestOfDay !== undefined) {
+      var designation = input.arrestOfDay;
+      if (designation && (!stage5Object(designation) || !card.finalizedSnapshot || designation.date !== card.finalizedSnapshot.arrestDateKey)) { return objectFailure("IMPORT_CARD_DESIGNATION", "An arrest-of-day selection must refer to this booking's finalized card and date."); }
+      if (previous && previous.arrestOfDay && !importSame(previous.arrestOfDay, designation)) { return objectFailure("IMPORT_CARD_DESIGNATION", "Import cannot replace an existing daily card selection implicitly."); }
+      if (designation) { card.arrestOfDay = clone(designation); }
+    }
+    if (previous && importSame(previous, card)) { return { ok: true, personId: personId, cardId: cardId, card: clone(card), unchanged: true, retainedLocalEdits: retainedLocalEdits, error: "" }; }
+    var before = clone(state);
+    person = clone(person);
+    person.immigration = person.immigration || {};
+    person.immigration.baseballCards = cards.filter(function (row) { return !row || (row.cardId || row.id) !== cardId; }).concat([card]);
+    var saved = upsertPerson(person, { intent: "update" });
+    if (!saved.ok) { return saved; }
+    Object.keys(state.leads).forEach(function (id) {
+      var lead = state.leads[id];
+      var leadPerson = lead && (model.subjectOf ? model.subjectOf(lead) : lead.person);
+      if (!leadPerson || leadPerson.personId !== personId || lead.meta && lead.meta.archivedAt) { return; }
+      leadPerson.immigration = leadPerson.immigration || {};
+      leadPerson.immigration.baseballCards = clone(state.people[personId].immigration.baseballCards);
+      leadPerson.objectRevision = state.people[personId].objectRevision;
+    });
+    if (!writeDisk()) { state = before; return objectFailure("IMPORT_CARD_FAILED", "The imported card could not be staged."); }
+    return { ok: true, personId: personId, cardId: cardId, card: clone(card), unchanged: false, error: "" };
   }
 
   function prepareObjectRecord(type, input, opts) {
@@ -10587,7 +11184,8 @@
       var sources = [
         { id: "bookin", key: "alien-book-in.saved-records.v1", medium: "localStorage" },
         { id: "admin", key: "copdoc.admin.v1", medium: "localStorage" },
-        { id: "bookingTransactions", key: "copdocx.booking-transactions.v1", medium: "localStorage" }
+        { id: "bookingTransactions", key: "copdocx.booking-transactions.v1", medium: "localStorage" },
+        { id: "importTransactions", key: "copdocx.import-transactions.v1", medium: "localStorage" }
       ];
       if (root.config && Array.isArray(root.config.storageEntries)) {
         root.config.storageEntries.forEach(function (entry) {
@@ -10596,10 +11194,8 @@
         });
       }
       sources.forEach(function (source) {
-        var storage = source.medium === "sessionStorage" ? global.sessionStorage : global.localStorage;
-        if (!storage) { return; }
         var key = root.config && root.config.storageKey(source.id) || source.key;
-        var raw = storage.getItem(key);
+        var raw = storageRaw(source.medium, key);
         if (raw === null) { return; }
         // These preferences are deliberately plain text, not record containers.
         if (["mapBasemap", "importDoneSignal"].indexOf(source.id) !== -1) { return; }
@@ -10616,6 +11212,18 @@
           if (!stage5Object(value) || !stage5Object(value.transactions)) { throw new Error("Booking recovery journal is malformed."); }
           Object.keys(value.transactions).forEach(function (transactionId) {
             walk(value.transactions[transactionId], "transactions." + transactionId, key, "BOOKING_TRANSACTION", transactionId, 0);
+          });
+        } else if (source.id === "importTransactions") {
+          if (!stage5Object(value) || value.schema !== "copdocx.import-transactions.v1" || value.version !== 1 || !stage5Object(value.transactions)) { throw new Error("Import recovery journal is malformed."); }
+          Object.keys(value.transactions).forEach(function (transactionId) {
+            var entry = value.transactions[transactionId];
+            if (!stage5Object(entry) || entry.transactionId !== transactionId ||
+                ["PENDING", "APPLYING", "ROLLING_BACK", "COMPLETED", "ROLLED_BACK"].indexOf(entry.status) === -1 ||
+                !Number.isInteger(entry.revision) || entry.revision < 0 || !Array.isArray(entry.appliedKeys) || !Array.isArray(entry.mediaCreated) ||
+                typeof entry.mediaPrepared !== "boolean" || !stage5Object(entry.plan) || entry.plan.ok !== true || !Array.isArray(entry.plan.changes) ||
+                entry.media !== undefined && !Array.isArray(entry.media)) { throw new Error("Import recovery entry is malformed."); }
+            if (entry.status === "COMPLETED" || entry.status === "ROLLED_BACK") { return; }
+            walk(entry, "importTransactions.transactions." + transactionId, key, "IMPORT_TRANSACTION", transactionId, 0);
           });
         } else if (source.id === "admin") {
           if (!stage5Object(value)) { throw new Error("Admin storage is malformed."); }
@@ -10754,7 +11362,7 @@
     }
     try {
       var journalKey = root.config && root.config.storageKey("bookingTransactions") || "copdocx.booking-transactions.v1";
-      var journalRaw = global.localStorage && global.localStorage.getItem(journalKey);
+      var journalRaw = storageRaw("localStorage", journalKey);
       var journalRows = journalRaw ? JSON.parse(journalRaw).transactions : {};
       Object.keys(journalRows || {}).forEach(function (id) {
         var command = journalRows[id];
@@ -10837,6 +11445,12 @@
   }
 
   model.store = {
+    withImportWorkspace: withImportWorkspace,
+    validateImportWorkspace: validateImportWorkspace,
+    projectImportedBaseballCard: projectImportedBaseballCard,
+    stageImportedObjectRecord: stageImportedObjectRecord,
+    stageImportedBookingProjections: stageImportedBookingProjections,
+    validateImportedVoidedBooking: validateImportedVoidedBooking,
     voidBookingProjection: voidBookingProjection,
     dependenciesFor: dependenciesFor,
     archiveRecord: archiveRecord,

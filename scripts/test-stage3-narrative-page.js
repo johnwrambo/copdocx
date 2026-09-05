@@ -71,7 +71,8 @@ function documentDouble() {
   };
   ["narrativeEngineHost", "narrativeWorkspace", "participantNarratives", "coverageBadge",
     "coverageDetails", "sectionAudit", "outputJson", "activeNarrativeTitle",
-    "supervisorSummaryText", "completeMissingNarrativeButton", "appBarPrimaryAction", "copyNarrativeButton"
+    "supervisorSummaryText", "completeMissingNarrativeButton", "appBarPrimaryAction", "copyNarrativeButton",
+    "narrativeBackToEvidenceButton", "narrativeContinueToReviewButton"
   ].forEach((id) => doc.add(id));
   [["testSelection", "select"], ["resolvedDraft", "textarea"], ["narrativeDraft", "div"],
     ["rebuildButton", "button"], ["copyButton", "button"], ["valuesViewButton", "button"]
@@ -417,6 +418,42 @@ function testUnavailableSourceCannotBeReviewed() {
     "read failures cannot replace a verified source signature with partial facts");
 }
 
+function testEncounterNavigationSavesSnapshots() {
+  const app = boot();
+  app.engine.setManualText("Target draft before changing focus");
+  app.switchSubject(OTHER_ID);
+  app.engine.setManualText("Collateral reviewed draft");
+  app.click("narrativeContinueToReviewButton");
+  assert.equal(app.narrative().output.finalPlainText, "Target draft before changing focus");
+  assert.equal(app.narrative(OTHER_ID).output.finalPlainText, "Collateral reviewed draft");
+  assert.equal(app.narrative().workflowStatus, "DRAFT", "Save must not close or finalize the Encounter");
+  assert.equal(app.model.store.getEncounter(ENCOUNTER_ID).meta.markedComplete, false);
+  assert.equal(app.context.location.href, "encounter-form.html?id=" + ENCOUNTER_ID + "&tab=review");
+
+  const back = boot();
+  back.engine.setManualText("Draft retained before returning to evidence");
+  back.click("narrativeBackToEvidenceButton");
+  assert.equal(back.narrative().output.finalPlainText, "Draft retained before returning to evidence");
+  assert.equal(back.context.location.href, "encounter-form.html?id=" + ENCOUNTER_ID + "&tab=evidence");
+
+  const failed = boot();
+  const before = failed.context.location.href;
+  failed.engine.setManualText("Do not lose this draft");
+  failed.storage.failNext(WORKSPACE_KEY);
+  failed.click("narrativeContinueToReviewButton");
+  assert.equal(failed.context.location.href, before, "A failed save cannot leave the narrative workspace");
+  assert.equal(failed.engine.getOutput().finalPlainText, "Do not lose this draft");
+  assert.equal(failed.narrative(), undefined);
+  failed.click("narrativeContinueToReviewButton");
+  assert.equal(failed.narrative().output.finalPlainText, "Do not lose this draft");
+
+  const closed = boot({ existing: true, locked: true });
+  const bytes = closed.storage.raw(WORKSPACE_KEY);
+  closed.click("narrativeContinueToReviewButton");
+  assert.equal(closed.context.location.href, "encounter-form.html?id=" + ENCOUNTER_ID + "&tab=review");
+  assert.equal(closed.storage.raw(WORKSPACE_KEY), bytes, "Navigating a closed Encounter is read-only");
+}
+
 testCaptureAndStaleSave();
 testReviewRaceAndLegacy();
 testRevisionFailureAndSwitch();
@@ -424,4 +461,5 @@ testFinalizedAndLocked();
 testNoSurnameFallbackAndSupplementPreservation();
 testNoInventedConductAndFlightBeforeArrest();
 testUnavailableSourceCannotBeReviewed();
+testEncounterNavigationSavesSnapshots();
 console.log("STAGE3_NARRATIVE_PAGE_PASSED source review, races, manual drafts, revisions, finalized and legacy lifecycle.");
