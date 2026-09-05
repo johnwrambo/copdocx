@@ -6,11 +6,6 @@
 (function () {
   "use strict";
 
-  var SETTINGS_KEY = "copdocx.settings.v1";
-  var ADMIN_KEY = "copdoc.admin.v1";
-  var IDB_NAME = "copdocx.warrants";
-  var IDB_STORE = "handles";
-  var HANDLE_KEY = "warrantsDirectory";
   var memoryDirectoryHandle = null;
   var activeIssue = null;
   var committedIssue = null;
@@ -61,24 +56,16 @@
     });
   }
 
+  function preferences() { return COPDoc.repositories.preferences; }
+
   function loadSettings() {
-    try {
-      return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") || {};
-    } catch (error) {
-      return {};
-    }
+    try { return preferences().readSettings(); }
+    catch (error) { return {}; }
   }
 
   function saveSettings(partial) {
-    var cur = loadSettings();
-    Object.keys(partial || {}).forEach(function (key) {
-      cur[key] = partial[key];
-    });
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(cur));
-    } catch (error) {
-      /* ignore quota */
-    }
+    try { preferences().patchSettings(partial || {}); }
+    catch (error) { /* Optional destination preferences must not block warrant issuance. */ }
   }
 
   function isCommitted(row) {
@@ -91,7 +78,7 @@
 
   function committedOfficers() {
     try {
-      var parsed = JSON.parse(localStorage.getItem(ADMIN_KEY) || "{}") || {};
+      var parsed = COPDoc.repositories.admin.readSnapshot();
       var officers = parsed.officers || [];
       return officers.filter(function (row) {
         return row && !row.junked && isCommitted(row);
@@ -165,59 +152,12 @@
     el.value = value == null ? "" : String(value);
   }
 
-  function idbOpen() {
-    return new Promise(function (resolve, reject) {
-      if (!window.indexedDB) {
-        reject(new Error("IndexedDB is not available."));
-        return;
-      }
-      var req = indexedDB.open(IDB_NAME, 1);
-      req.onupgradeneeded = function () {
-        if (!req.result.objectStoreNames.contains(IDB_STORE)) {
-          req.result.createObjectStore(IDB_STORE);
-        }
-      };
-      req.onsuccess = function () {
-        resolve(req.result);
-      };
-      req.onerror = function () {
-        reject(req.error);
-      };
-    });
-  }
-
   function loadDirectoryHandle() {
-    return idbOpen()
-      .then(function (db) {
-        return new Promise(function (resolve, reject) {
-          var tx = db.transaction(IDB_STORE, "readonly");
-          var req = tx.objectStore(IDB_STORE).get(HANDLE_KEY);
-          req.onsuccess = function () {
-            resolve(req.result || null);
-          };
-          req.onerror = function () {
-            reject(req.error);
-          };
-        });
-      })
-      .catch(function () {
-        return null;
-      });
+    return COPDoc.repositories.warrants.loadDirectoryHandle();
   }
 
   function saveDirectoryHandle(handle) {
-    return idbOpen().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(IDB_STORE, "readwrite");
-        var req = tx.objectStore(IDB_STORE).put(handle, HANDLE_KEY);
-        req.onsuccess = function () {
-          resolve(handle);
-        };
-        req.onerror = function () {
-          reject(req.error);
-        };
-      });
-    });
+    return COPDoc.repositories.warrants.saveDirectoryHandle(handle);
   }
 
   function ensureDirectoryPermission(handle) {

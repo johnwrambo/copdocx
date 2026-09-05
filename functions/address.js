@@ -1079,14 +1079,10 @@
   }
 
   // ===== Geocode =====
-  const GEOCODE_CACHE_KEY = "addrGeoCache_v1";
 
   function getCachedGeo(query) {
     try {
-      const raw = sessionStorage.getItem(GEOCODE_CACHE_KEY);
-      if (!raw) return null;
-      const cache = JSON.parse(raw);
-      return cache[query] || null;
+      return global.COPDoc.repositories.viewState.getGeocode(query);
     } catch (e) {
       return null;
     }
@@ -1094,14 +1090,7 @@
 
   function setCachedGeo(query, geo) {
     try {
-      const raw = sessionStorage.getItem(GEOCODE_CACHE_KEY) || "{}";
-      const cache = JSON.parse(raw);
-      cache[query] = geo;
-      const keys = Object.keys(cache);
-      if (keys.length > 25) {
-        delete cache[keys[0]];
-      }
-      sessionStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
+      global.COPDoc.repositories.viewState.putGeocode(query, geo);
     } catch (e) {
       /* ignore quota / private mode */
     }

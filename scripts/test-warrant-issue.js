@@ -29,10 +29,7 @@ var context = {
 context.globalThis = context;
 context.window = context;
 vm.createContext(context);
-vm.runInContext(
-  fs.readFileSync(path.join(__dirname, "..", "functions/warrant-issue.js"), "utf8"),
-  context
-);
+require("./support/module-dependencies.js").loadScript(context, "functions/warrant-issue.js");
 
 var api = context.COPDoc.warrantIssue;
 var fail = 0;

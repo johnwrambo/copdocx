@@ -1,6 +1,5 @@
 "use strict";
 
-const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
@@ -253,13 +252,7 @@ function createTab(storageControl, options) {
   return context;
 }
 
-function loadScript(context, relativePath) {
-  const filename = path.join(ROOT, relativePath);
-  vm.runInContext(fs.readFileSync(filename, "utf8"), context, {
-    filename: relativePath
-  });
-  return context;
-}
+const { loadScript } = require("./module-dependencies.js");
 
 function run(context, source) {
   return vm.runInContext(source, context);

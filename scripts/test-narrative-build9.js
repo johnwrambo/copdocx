@@ -287,7 +287,7 @@ dataLibraries.forEach((file) => {
 });
 
 const scriptOrder = Array.from(page.matchAll(/<script\s+src="([^"]+)"/g), (match) => match[1]);
-assert.deepEqual(scriptOrder, [
+const legacyScriptOrder = [
   "functions/workspace-config.js",
   "functions/document-context.js",
   "functions/document-registry.js",
@@ -318,7 +318,15 @@ assert.deepEqual(scriptOrder, [
   "functions/encounter-narrative.js",
   "functions/narratives/source-freshness.js",
   "functions/narratives/narrative-page.js"
-]);
+];
+// Stage 8 adds explicit boundary prerequisites. Preserve the established order
+// of every public script; the Stage 8 host gate validates the new prerequisites.
+assert.deepEqual(scriptOrder.filter(file => legacyScriptOrder.includes(file)), legacyScriptOrder);
+const moduleManifest = require("../functions/module-manifest.js");
+const boundaryPrerequisites = new Set(moduleManifest.modules.flatMap(entry => entry.dependencies));
+for (const file of scriptOrder) {
+  assert(legacyScriptOrder.includes(file) || boundaryPrerequisites.has(file), "Unexpected Narrative host script: " + file);
+}
 assert.match(narratives.ENGINE_MARKUP, /class="narrative-engine-container"/);
 assert.match(narratives.ENGINE_MARKUP, /class="narrative-engine-workspace"/);
 assert.match(narratives.ENGINE_MARKUP, /class="narrative-input-column"/);

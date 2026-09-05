@@ -9,7 +9,7 @@
     return;
   }
 
-  var STORAGE_KEY = "copdocx.photo-picker.v1";
+  var STORAGE_KEY = root.repositories.viewState.schemas.demoPhotos;
   var MAX_EDGE = 1600;
   var JPEG_QUALITY = 0.86;
   var DISPLAY_MAX = 1920;
@@ -94,11 +94,10 @@
       return;
     }
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
+      var parsed = root.repositories.viewState.loadDemoPhotos();
+      if (parsed === undefined) {
         return;
       }
-      var parsed = JSON.parse(raw);
       state.photos = Array.isArray(parsed.photos) ? parsed.photos : [];
       state.selectedId = parsed.selectedId || "";
     } catch (err) {
@@ -111,14 +110,7 @@
       return true;
     }
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          schema: STORAGE_KEY,
-          photos: state.photos,
-          selectedId: state.selectedId
-        })
-      );
+      root.repositories.viewState.saveDemoPhotos(state.photos, state.selectedId);
       return true;
     } catch (err) {
       setStatus("Could not save photos (storage full or blocked).");

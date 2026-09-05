@@ -43,6 +43,7 @@ function loadScanner(overrides) {
   context.globalThis = context;
   context.window = context;
   vm.createContext(context);
+  require("./support/module-dependencies.js").loadDependencies(context, "functions/integrity.js");
   vm.runInContext(scannerSource, context, { filename: "functions/integrity.js" });
   return context;
 }

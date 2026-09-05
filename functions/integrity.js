@@ -217,8 +217,8 @@
     return {
       capturedAt: new Date().toISOString(),
       stores: registryEntries().map(function (entry) {
-        var storage = entry.medium === "sessionStorage" ? global.sessionStorage : global.localStorage;
-        if (!storage || typeof storage.getItem !== "function") {
+        var storage = root.repositories.storage;
+        if (!storage.has(entry.medium)) {
           return {
             id: entry.id,
             key: entry.key,
@@ -229,7 +229,7 @@
           };
         }
         try {
-          var raw = storage.getItem(entry.key);
+          var raw = storage.read(entry.medium, entry.key);
           return {
             id: entry.id,
             key: entry.key,

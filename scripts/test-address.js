@@ -12,10 +12,7 @@ const context = {
   URL: URL
 };
 vm.createContext(context);
-vm.runInContext(
-  fs.readFileSync(path.join(__dirname, "..", "functions/address.js"), "utf8"),
-  context
-);
+require("./support/module-dependencies.js").loadScript(context, "functions/address.js");
 const parseAddress = context.window.parseAddress;
 const validateAddress = context.window.validateAddress;
 const formatAddressQuery = context.window.AddressUtils.formatAddressQuery;

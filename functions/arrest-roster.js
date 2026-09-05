@@ -18,17 +18,9 @@
   var generatedReport = null;
   var generatedReportContext = null;
 
-  function settingsKey() {
-    return root.config && root.config.storageKey ? root.config.storageKey("settings") : "copdocx.settings.v1";
-  }
+  function preferences() { return root.repositories.preferences; }
 
-  function readPreferences() {
-    var settings = JSON.parse(global.localStorage.getItem(settingsKey()) || "{}");
-    if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
-      throw new Error("Report preferences could not be read.");
-    }
-    return { settings: settings, preferences: settings.arrestReportRoster || {} };
-  }
+  function readPreferences() { return { preferences: preferences().readArrestRoster() }; }
 
   function loadPreferences() {
     try { return readPreferences().preferences; }
@@ -37,12 +29,10 @@
 
   function savePreferences(visible, sortKey, sortDir) {
     try {
-      var settings = readPreferences().settings;
-      settings.arrestReportRoster = {
+      preferences().saveArrestRoster({
         version: 1, visibleColumns: COLUMNS.filter(function (col) { return visible[col.id]; }).map(function (col) { return col.id; }),
         sortKey: sortKey, sortDirection: sortDir
-      };
-      global.localStorage.setItem(settingsKey(), JSON.stringify(settings));
+      });
       return true;
     } catch (error) {
       setStatus("Report preferences could not be saved: " + error.message);

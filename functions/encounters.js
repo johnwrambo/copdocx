@@ -1772,16 +1772,9 @@
     });
   }
 
-  var BOOKIN_KEY =
-    (window.COPDoc &&
-      window.COPDoc.config &&
-      window.COPDoc.config.storageKey("bookin")) ||
-    "alien-book-in.saved-records.v1";
-
   function readBookinRecords() {
     try {
-      var raw = localStorage.getItem(BOOKIN_KEY);
-      var list = raw ? JSON.parse(raw) : [];
+      var list = COPDoc.repositories.bookin.readAll();
       if (!Array.isArray(list)) {
         return {
           ok: false,
@@ -1804,7 +1797,7 @@
   }
 
   function writeBookinRecords(list) {
-    localStorage.setItem(BOOKIN_KEY, JSON.stringify(list || []));
+    COPDoc.repositories.bookin.saveAll(list || []);
   }
 
   function subjectsForEncounter(encounterId) {

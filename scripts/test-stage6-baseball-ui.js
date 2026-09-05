@@ -38,6 +38,7 @@ function runtime(storage=createMemoryStorage(initial())){
   const removed=[],media=new Map();t.context.COPDoc.media={async save(input){const mediaId="photo_"+(++mediaIndex);media.set(mediaId,input);return {mediaId};},async blob(id){if(!media.has(id))throw new Error("missing");return {blob:media.get(id).original,mime:"image/png"};},async remove(id){removed.push(id);media.delete(id);}};
   t.context.FileReader=class {readAsDataURL(blob){blob.arrayBuffer().then(b=>{this.result="data:image/png;base64,"+Buffer.from(b).toString("base64");this.onload();});}};
   t.context.formatAlienNumber=x=>x;loadScript(t.context,"functions/baseball-card-contract.js");loadScript(t.context,"functions/baseballcard.js");
+  require("./support/module-dependencies.js").loadDependencies(t.context, "functions/baseball-page.js");
   let source=fs.readFileSync(path.join(ROOT,"functions/baseball-page.js"),"utf8");source=source.replace("  global.persistBaseballCard = persistBaseballCard;","  global.__cardUI={setPhoto:setPhoto,hydrateSavedCard:hydrateSavedCard,preparedEmailCardHtml:preparedEmailCardHtml};\n  global.persistBaseballCard = persistBaseballCard;");vm.runInContext(source,t.context);
   doc._dispatch("DOMContentLoaded");return {...t,doc,ids,removed,media};
 }

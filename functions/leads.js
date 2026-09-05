@@ -2971,14 +2971,8 @@
       });
     }
     try {
-      var raw = localStorage.getItem("alien-book-in.saved-records.v1") || "";
-      if (raw) {
-        var parsed = JSON.parse(raw);
-        var records = Array.isArray(parsed)
-          ? parsed
-          : parsed && Array.isArray(parsed.records)
-            ? parsed.records
-            : [];
+      var records = window.COPDoc.repositories.bookin.readHistoryRecords();
+      if (records.length) {
         records.forEach(function (row) {
           if (row && snapshot && row.leadId === snapshot.leadId) {
             push(
@@ -3222,7 +3216,7 @@
 
   function dropRetiredCaseLayout() {
     try {
-      localStorage.removeItem("copdocx.case-view.layout.v1");
+      window.COPDoc.repositories.workspace.retireCaseLayout();
     } catch (err) {}
   }
 

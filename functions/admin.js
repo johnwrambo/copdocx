@@ -6,8 +6,6 @@
   var config = window.COPDoc && window.COPDoc.config;
   var STORAGE_KEY =
     (config && config.storageKey("admin")) || "copdoc.admin.v1";
-  var WORKSPACE_KEY =
-    (config && config.storageKey("workspace")) || "copdocx.store.v1";
   var DUTY_LABELS = {
     available: "Available",
     "in-field": "In field",
@@ -220,166 +218,20 @@
     };
   }
 
-  function migrateOfficerRow(row) {
-    var dirty = false;
-    if (window.COPDoc && COPDoc.model && COPDoc.model.syncOfficerPlaces) {
-      var before = JSON.stringify({
-        id: row.id,
-        officerId: row.officerId,
-        address: row.address,
-        locations: row.locations
-      });
-      var retainedPlaces = Array.isArray(row.locations) ? row.locations.slice(1) : [];
-      COPDoc.model.syncOfficerPlaces(row);
-      row.locations = (row.locations || []).concat(retainedPlaces.filter(function (place) {
-        return !(row.locations || []).some(function (current) { return place.locationId && current.locationId === place.locationId; });
-      }));
-      if (
-        JSON.stringify({
-          id: row.id,
-          officerId: row.officerId,
-          address: row.address,
-          locations: row.locations
-        }) !== before
-      ) {
-        dirty = true;
-      }
-    } else {
-      if (row.id && !row.officerId) {
-        row.officerId = row.id;
-        dirty = true;
-      }
-      if (row.officerId && !row.id) {
-        row.id = row.officerId;
-        dirty = true;
-      }
-    }
-    return dirty;
-  }
-
-  function migrateVehicleRow(row) {
-    var dirty = false;
-    if (row.governmentVehicle !== true) {
-      row.governmentVehicle = true;
-      dirty = true;
-    }
-    if (row.id && !row.vehicleId) {
-      row.vehicleId = row.id;
-      dirty = true;
-    }
-    if (row.vehicleId && !row.id) {
-      row.id = row.vehicleId;
-      dirty = true;
-    }
-    if (row.plate && !row.licensePlate) {
-      row.licensePlate = row.plate;
-      dirty = true;
-    }
-    if (row.licensePlate && !row.plate) {
-      row.plate = row.licensePlate;
-      dirty = true;
-    }
-    return dirty;
-  }
-
-  function migrateAdminList(list, kind) {
-    var dirty = false;
-    (list || []).forEach(function (row) {
-      if (!row.meta || !row.meta.status) {
-        dirty = true;
-        if (window.COPDoc && COPDoc.model && COPDoc.model.ensureRecordMeta) {
-          COPDoc.model.ensureRecordMeta(row);
-        } else {
-          row.meta = row.meta || {};
-          row.meta.status = "committed";
-          row.meta.committedAt = row.meta.updatedAt || new Date().toISOString();
-        }
-      }
-      if (kind === "officers" && migrateOfficerRow(row)) {
-        dirty = true;
-      }
-      if (kind === "vehicles" && migrateVehicleRow(row)) {
-        dirty = true;
-      }
-    });
-    return dirty;
-  }
-
   var diskError = "";
 
+  function adminCommands() { return COPDoc.application && COPDoc.application.admin; }
+
   function readDisk() {
-    var roster = window.COPDoc && COPDoc.officers;
-    if (roster && roster.readAdmin) {
-      var loaded = roster.readAdmin();
-      return { ok: loaded.ok, missing: loaded.raw === null, data: loaded.data || null, error: loaded.error || "" };
-    }
-    if (typeof localStorage === "undefined") {
-      return { ok: true, missing: true, data: null, error: "" };
-    }
-    var raw = "";
-    try {
-      raw = localStorage.getItem(STORAGE_KEY) || "";
-    } catch (err) {
-      return {
-        ok: false,
-        missing: false,
-        data: null,
-        error: "Cannot read localStorage."
-      };
-    }
-    if (!raw) {
-      return { ok: true, missing: true, data: null, error: "" };
-    }
-    try {
-      return { ok: true, missing: false, data: JSON.parse(raw), error: "" };
-    } catch (err) {
-      return {
-        ok: false,
-        missing: false,
-        data: null,
-        error:
-          "Admin storage is damaged. Do not Save. Copy the site data out if you have a backup."
-      };
-    }
-  }
-
-  function readWorkspaceForReferences() {
-    if (typeof localStorage === "undefined") {
-      return { ok: true, data: {} };
-    }
-    try {
-      var raw = localStorage.getItem(WORKSPACE_KEY) || "";
-      return { ok: true, data: raw ? JSON.parse(raw) : {} };
-    } catch (error) {
-      return {
-        ok: false,
-        data: {},
-        error: "Workspace references could not be inspected; permanent delete is blocked."
-      };
-    }
-  }
-
-  function writeDisk() {
-    if (diskError) {
-      return false;
-    }
-    if (typeof localStorage === "undefined") {
-      return true;
-    }
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      return true;
-    } catch (err) {
-      return false;
-    }
+    var api = adminCommands();
+    if (!api) { return { ok: false, missing: false, data: null, error: "The Admin application service is unavailable." }; }
+    var loaded = api.readAdmin();
+    return { ok: loaded.ok, missing: loaded.raw === null, data: loaded.data || null, error: loaded.error || "" };
   }
 
   function adoptDisk() {
     var disk = readDisk();
-    if (!disk.ok) {
-      diskError = disk.error;
-      return { ok: false, error: disk.error };
-    }
+    if (!disk.ok) { diskError = disk.error; return { ok: false, error: disk.error }; }
     diskError = "";
     state = disk.data || { officers: [], vehicles: [], shifts: [] };
     return { ok: true, error: "" };
@@ -387,28 +239,18 @@
 
   function loadState() {
     var fresh = adoptDisk();
-    if (!fresh.ok) {
-      setStatus(fresh.error);
-      return;
-    }
-    var dirty =
-      migrateAdminList(state.officers, "officers") ||
-      migrateAdminList(state.vehicles, "vehicles");
-    if (dirty && !writeDisk()) {
-      setStatus("Could not write localStorage (quota or private mode).");
-    }
+    if (!fresh.ok) { setStatus(fresh.error); return; }
+    var api = adminCommands();
+    var result = api ? api.migrateLegacy() : { ok: false, error: "The Admin application service is unavailable." };
+    if (!result.ok) { diskError = result.error; setStatus(result.error); return; }
+    fresh = adoptDisk();
+    if (!fresh.ok) { setStatus(fresh.error); }
   }
 
-  function saveState() {
-    return writeDisk();
-  }
-
-  function persistOrRollback() {
-    if (!writeDisk()) {
-      adoptDisk();
-      setStatus("Could not write localStorage (quota or private mode).");
-      return false;
-    }
+  function acceptCommand(result) {
+    if (!result || !result.ok) { setStatus(result && result.error || "The Admin change could not be saved."); return false; }
+    var fresh = adoptDisk();
+    if (!fresh.ok) { setStatus(fresh.error); return false; }
     return true;
   }
 
@@ -869,10 +711,7 @@
       if (!window.confirm("Remove shift " + shiftLine(current) + "?")) {
         return;
       }
-      state.shifts = state.shifts.filter(function (row) {
-        return row.id !== current.id;
-      });
-      if (persistOrRollback()) {
+      if (acceptCommand(adminCommands().removeShift(current.id, current))) {
         setStatus("Shift removed.", true);
         paint();
       }
@@ -901,18 +740,7 @@
       if (!confirmLines(verb, shifts)) {
         return;
       }
-      if (kind === "officers") {
-        state.shifts = state.shifts.filter(function (shift) {
-          return shift.officerId !== id;
-        });
-      } else {
-        state.shifts.forEach(function (shift) {
-          if (shift.vehicleId === id) {
-            shift.vehicleId = "";
-          }
-        });
-      }
-      if (persistOrRollback()) {
+      if (acceptCommand(adminCommands().removeScheduleAssignments(kind, id, shifts))) {
         setStatus(
           kind === "officers"
             ? shifts.length + " shift(s) removed."
@@ -2522,8 +2350,7 @@
       setStatus("New shifts require an active saved officer and fleet vehicle.");
       return;
     }
-    state.shifts.push({
-      id: newId("sft"),
+    var result = adminCommands().addShift({
       date: date,
       officerId: officerId,
       vehicleId: vehicleId,
@@ -2531,7 +2358,7 @@
       end: val("shiftEnd") || "14:00",
       assignment: val("shiftAssignment") || "field"
     });
-    if (!persistOrRollback()) {
+    if (!acceptCommand(result)) {
       return;
     }
     paint();

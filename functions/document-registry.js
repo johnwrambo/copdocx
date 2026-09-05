@@ -19,11 +19,11 @@
     options = options || {};
     entries.push({documentType:type,title:title,template:{id:options.templateId || type,version:options.version || "stage7.1",sourceFiles:sourceFiles},dependencies:dependencies,output:options.output || "text/html",notes:options.notes || ""});
   }
-  var bookinCitation = "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf";
+  var bookinCitation = "functions/documents/bookin-pdf.js#fillCapPage/fillMedicalPdf";
   var bookin = fields("input.", ["firstName","lastName","aNumber","iceEvent","officersName","dateTime","dateOfBirth","age","gender","countryOfCitizenship","caseType","team","cash","travelDocs","propertyTag","cellNum","children","medicalIssues","medicine","communicationAnswer","q1Answer","q2Answer","additionalObservations","referralAnswer"], "input: captured Book-In form", bookinCitation);
   for (var q = 3; q <= 13; q += 1) bookin = bookin.concat(fields("input.",["q" + q + "Answer","q" + q + "Details"],"input: captured Book-In form",bookinCitation));
-  bookin = bookin.concat(fields("person.",["name.firstName","name.lastName","dateOfBirth","sex","citizenship","immigration.alienNumber","immigration.disposition"],"input: Book-In form seed",bookinCitation,"Prefill lineage only; the captured edited form is authoritative for this PDF."));
-  item("bookin.combined-pdf","Book-In CAP and medical packet",["functions/book-in.js"],bookin,{output:"application/pdf",templateId:"book-in-embedded-cap-medical",version:"stage7.1",notes:"Embedded PDF bytes plus CAP/medical mappers. Unused form fields are not dependencies. Medical questions 5/6 are suppressed for Male at capture."});
+  bookin = bookin.concat(fields("person.",["name.firstName","name.lastName","dateOfBirth","sex","citizenship","immigration.alienNumber","immigration.disposition"],"input: Book-In form seed","functions/book-in.js#prefillFromLeadQuery","Prefill lineage only; the captured edited form is authoritative for this PDF."));
+  item("bookin.combined-pdf","Book-In CAP and medical packet",["functions/book-in.js","functions/documents/bookin-pdf.js"],bookin,{output:"application/pdf",templateId:"book-in-embedded-cap-medical",version:"stage7.1",notes:"Embedded PDF bytes plus CAP/medical mappers. Unused form fields are not dependencies. Medical questions 5/6 are suppressed for Male at capture."});
   function warrantDependencies(type) {
     var names = type === "i200" ? ["fileNo","date","determination","officerName","officerTitle","location","nameOfAlien","dateOfService","language","interpreter","basis.charging","basis.pending","basis.deferred","basis.biometric","basis.voluntary"] : ["fileNo","date","fullName","entryPlace","entryDate","inaLaw","officerTitle","location","order.ij","order.official","order.bia","order.court"];
     return fields("input.values.",names,"input: captured warrant form","functions/warrant-issue.js#collectValues")

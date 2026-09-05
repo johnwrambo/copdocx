@@ -8,7 +8,7 @@
 
   var root = (global.COPDoc = global.COPDoc || {});
   var api = (root.map = root.map || {});
-  var STORAGE_KEY = "copdocx.map.markup.v1";
+  var STORAGE_KEY = root.repositories.viewState.schemas.mapMarkup;
 
   var state = { labels: [], arrows: [] };
   var mode = "";
@@ -37,11 +37,10 @@
 
   function loadState() {
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
+      var parsed = root.repositories.viewState.loadMapMarkup();
+      if (parsed === undefined) {
         return;
       }
-      var parsed = JSON.parse(raw);
       state.labels = Array.isArray(parsed.labels) ? parsed.labels : [];
       state.arrows = Array.isArray(parsed.arrows) ? parsed.arrows : [];
     } catch (err) {
@@ -52,7 +51,7 @@
 
   function saveState() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      root.repositories.viewState.saveMapMarkup(state);
     } catch (err) {
       setStatus("Could not save markup.");
     }

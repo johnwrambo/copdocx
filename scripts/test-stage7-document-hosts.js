@@ -55,7 +55,7 @@ const context = {document,Date,JSON,Number,Object,Array,String,Boolean,TextEncod
   setTimeout:callback => callback(),addEventListener:(type,listener) => { (events[type] ||= []).push(listener); }};
 context.window = context;
 vm.createContext(context);
-const run = file => vm.runInContext(fs.readFileSync(path.join(ROOT,file),"utf8"),context,{filename:file});
+const run = file => require("./support/module-dependencies.js").loadScript(context, file);
 pipeline.filter(file => !file.includes("fingerprints")).forEach(run);
 const api = context.COPDoc.documents, key = api.storageKey;
 const hash = "a".repeat(64);

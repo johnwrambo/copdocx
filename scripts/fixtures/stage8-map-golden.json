@@ -1,0 +1,586 @@
+{
+  "baseline": "e1dc487 (Stage 7)",
+  "workspace": {
+    "leads": {
+      "l1": {
+        "leadId": "l1",
+        "person": {
+          "personId": "p1",
+          "name": {
+            "lastName": "FIXTURE",
+            "firstName": "One"
+          }
+        }
+      }
+    },
+    "locations": {
+      "shared": {
+        "locationId": "shared",
+        "street": "Canonical address",
+        "city": "Dallas",
+        "state": "TX",
+        "latitude": "32.7",
+        "longitude": "-96.7"
+      }
+    },
+    "encounters": {
+      "closed": {
+        "encounterId": "closed",
+        "startedAt": "2026-09-01T08:00",
+        "eventType": "COLLISION",
+        "subjects": [
+          {
+            "personId": "changed-live"
+          }
+        ],
+        "completed": {
+          "startedAt": "2026-08-31T09:00",
+          "subjects": [
+            {
+              "leadId": "l1",
+              "lastName": "FIXTURE",
+              "firstName": "One",
+              "outcome": "FLED_FOOT"
+            },
+            {
+              "personId": "p2",
+              "lastName": "FIXTURE",
+              "firstName": "Two",
+              "outcome": "RELEASED"
+            }
+          ],
+          "centerLocationId": "shared",
+          "locations": [
+            {
+              "locationId": "shared",
+              "street": "Snapshot street"
+            },
+            {
+              "locationId": "shared",
+              "street": "Snapshot street"
+            }
+          ],
+          "vehicles": [
+            {
+              "vehicleId": "v1",
+              "year": "2020",
+              "make": "Fixture",
+              "model": "Van",
+              "licensePlate": "TEST",
+              "locations": [
+                {
+                  "locationId": "vehicle-place",
+                  "latLong": "33.1, -97.2",
+                  "street": "Vehicle stop"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "pinOnly": {
+        "encounterId": "pinOnly",
+        "completed": {
+          "startedAt": "2026-09-02T12:00",
+          "subjects": [],
+          "pin": {
+            "latitude": "31.2",
+            "longitude": "-98.1",
+            "arrestLocation": "Pin snapshot",
+            "locationId": "pin-place"
+          }
+        }
+      },
+      "noPlace": {
+        "encounterId": "noPlace",
+        "completed": {
+          "startedAt": "2026-09-03T12:00",
+          "subjects": [
+            {
+              "personId": "p3",
+              "outcome": "ARRESTED"
+            }
+          ],
+          "locations": [],
+          "vehicles": []
+        }
+      },
+      "open": {
+        "encounterId": "open",
+        "subjects": [
+          {
+            "personId": "draft-p"
+          }
+        ],
+        "locations": [
+          {
+            "latitude": "30",
+            "longitude": "-99"
+          }
+        ]
+      }
+    }
+  },
+  "points": [
+    {
+      "lat": 32,
+      "lng": -97
+    },
+    {
+      "latitude": 32,
+      "longitude": -97
+    },
+    {
+      "lat": 32.001,
+      "lng": -97
+    },
+    {
+      "lat": 33,
+      "lng": -98
+    },
+    {
+      "lat": 33,
+      "lng": -98
+    },
+    {
+      "lat": "bad",
+      "lng": 1
+    },
+    {
+      "lat": 34,
+      "lng": -99
+    }
+  ],
+  "pinCases": [
+    {
+      "encounterId": "closed",
+      "startedAt": "2026-09-01T08:00",
+      "eventType": "COLLISION",
+      "subjects": [
+        {
+          "personId": "changed-live"
+        }
+      ],
+      "completed": {
+        "startedAt": "2026-08-31T09:00",
+        "subjects": [
+          {
+            "leadId": "l1",
+            "lastName": "FIXTURE",
+            "firstName": "One",
+            "outcome": "FLED_FOOT"
+          },
+          {
+            "personId": "p2",
+            "lastName": "FIXTURE",
+            "firstName": "Two",
+            "outcome": "RELEASED"
+          }
+        ],
+        "centerLocationId": "shared",
+        "locations": [
+          {
+            "locationId": "shared",
+            "street": "Snapshot street"
+          },
+          {
+            "locationId": "shared",
+            "street": "Snapshot street"
+          }
+        ],
+        "vehicles": [
+          {
+            "vehicleId": "v1",
+            "year": "2020",
+            "make": "Fixture",
+            "model": "Van",
+            "licensePlate": "TEST",
+            "locations": [
+              {
+                "locationId": "vehicle-place",
+                "latLong": "33.1, -97.2",
+                "street": "Vehicle stop"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "encounterId": "pinOnly",
+      "completed": {
+        "startedAt": "2026-09-02T12:00",
+        "subjects": [],
+        "pin": {
+          "latitude": "31.2",
+          "longitude": "-98.1",
+          "arrestLocation": "Pin snapshot",
+          "locationId": "pin-place"
+        }
+      }
+    },
+    {
+      "encounterId": "open",
+      "subjects": [
+        {
+          "personId": "draft-p"
+        }
+      ],
+      "locations": [
+        {
+          "latitude": "30",
+          "longitude": "-99"
+        }
+      ]
+    },
+    {
+      "locations": [
+        {
+          "locationId": "shared",
+          "latitude": "35",
+          "longitude": "-100",
+          "street": "Existing snapshot coordinates"
+        }
+      ]
+    },
+    {
+      "centerLocationId": "second",
+      "locations": [
+        {
+          "locationId": "first",
+          "latitude": "30",
+          "longitude": "-90"
+        },
+        {
+          "locationId": "second",
+          "latitude": "31",
+          "longitude": "-91"
+        }
+      ]
+    },
+    {
+      "vehicles": [
+        {
+          "locations": [
+            {
+              "latLong": "36, -101"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "hydrationCases": [
+    {
+      "locationId": "shared",
+      "street": "Snapshot street"
+    },
+    {
+      "locationId": "shared",
+      "latitude": "35",
+      "longitude": "-100"
+    },
+    {
+      "latLong": "31.123, -97.321"
+    },
+    {
+      "latitude": "0",
+      "longitude": "0"
+    }
+  ],
+  "expected": {
+    "encounters": [
+      {
+        "category": "encounters",
+        "id": "encounters:noPlace:0",
+        "encounterId": "noPlace",
+        "personId": "p3",
+        "locationId": "",
+        "vehicleId": "",
+        "subject": "Encounter noPlace",
+        "extra": "noPlace · 2026-09-03",
+        "address": "(no location)",
+        "association": "Encounter location",
+        "latitude": "",
+        "longitude": "",
+        "hasCoords": false,
+        "photoOwners": [
+          {
+            "type": "PERSON",
+            "id": "p3"
+          }
+        ],
+        "objectPhotoOwners": [],
+        "personPhotoOwners": [
+          {
+            "type": "PERSON",
+            "id": "p3"
+          }
+        ],
+        "flags": {
+          "fled": false,
+          "collision": false
+        },
+        "cols": [
+          "2026-09-03",
+          "noPlace",
+          "No booked subjects",
+          "(no location)"
+        ]
+      },
+      {
+        "category": "encounters",
+        "id": "encounters:pinOnly:pin-place",
+        "encounterId": "pinOnly",
+        "personId": "",
+        "locationId": "pin-place",
+        "vehicleId": "",
+        "subject": "Encounter pinOnly",
+        "extra": "pinOnly · 2026-09-02",
+        "address": "Pin snapshot",
+        "association": "Encounter location",
+        "latitude": "31.2",
+        "longitude": "-98.1",
+        "hasCoords": true,
+        "photoOwners": [
+          {
+            "type": "LOCATION",
+            "id": "pin-place"
+          }
+        ],
+        "objectPhotoOwners": [
+          {
+            "type": "LOCATION",
+            "id": "pin-place"
+          }
+        ],
+        "personPhotoOwners": [],
+        "flags": {
+          "fled": false,
+          "collision": false
+        },
+        "cols": [
+          "2026-09-02",
+          "pinOnly",
+          "No booked subjects",
+          "Pin snapshot"
+        ]
+      },
+      {
+        "category": "encounters",
+        "id": "encounters:closed:shared",
+        "encounterId": "closed",
+        "personId": "p1",
+        "locationId": "shared",
+        "vehicleId": "",
+        "subject": "FIXTURE, One; FIXTURE, Two",
+        "extra": "closed · 2026-08-31",
+        "address": "Snapshot street, Dallas TX",
+        "association": "Encounter location",
+        "latitude": "32.7",
+        "longitude": "-96.7",
+        "hasCoords": true,
+        "photoOwners": [
+          {
+            "type": "LOCATION",
+            "id": "shared"
+          },
+          {
+            "type": "PERSON",
+            "id": "p1"
+          },
+          {
+            "type": "PERSON",
+            "id": "p2"
+          }
+        ],
+        "objectPhotoOwners": [
+          {
+            "type": "LOCATION",
+            "id": "shared"
+          }
+        ],
+        "personPhotoOwners": [
+          {
+            "type": "PERSON",
+            "id": "p1"
+          },
+          {
+            "type": "PERSON",
+            "id": "p2"
+          }
+        ],
+        "flags": {
+          "fled": true,
+          "collision": true
+        },
+        "cols": [
+          "2026-08-31",
+          "closed",
+          "FIXTURE, One; FIXTURE, Two",
+          "Snapshot street, Dallas TX"
+        ]
+      },
+      {
+        "category": "encounters",
+        "id": "encounters:closed:vehicle-place",
+        "encounterId": "closed",
+        "personId": "p1",
+        "locationId": "vehicle-place",
+        "vehicleId": "v1",
+        "subject": "FIXTURE, One; FIXTURE, Two",
+        "extra": "closed · 2026-08-31 · 2020 Fixture Van TEST",
+        "address": "Vehicle stop",
+        "association": "Encounter location",
+        "latitude": "33.1",
+        "longitude": "-97.2",
+        "hasCoords": true,
+        "photoOwners": [
+          {
+            "type": "LOCATION",
+            "id": "vehicle-place"
+          },
+          {
+            "type": "VEHICLE",
+            "id": "v1"
+          },
+          {
+            "type": "PERSON",
+            "id": "p1"
+          },
+          {
+            "type": "PERSON",
+            "id": "p2"
+          }
+        ],
+        "objectPhotoOwners": [
+          {
+            "type": "LOCATION",
+            "id": "vehicle-place"
+          },
+          {
+            "type": "VEHICLE",
+            "id": "v1"
+          }
+        ],
+        "personPhotoOwners": [
+          {
+            "type": "PERSON",
+            "id": "p1"
+          },
+          {
+            "type": "PERSON",
+            "id": "p2"
+          }
+        ],
+        "flags": {
+          "fled": true,
+          "collision": true
+        },
+        "cols": [
+          "2026-08-31",
+          "closed",
+          "FIXTURE, One; FIXTURE, Two",
+          "Vehicle stop"
+        ]
+      }
+    ],
+    "pins": [
+      {
+        "latitude": "32.7",
+        "longitude": "-96.7",
+        "arrestLocation": "Snapshot street, Dallas TX",
+        "locationId": "shared"
+      },
+      {
+        "latitude": "31.2",
+        "longitude": "-98.1",
+        "arrestLocation": "Pin snapshot",
+        "locationId": "pin-place"
+      },
+      {
+        "latitude": "30",
+        "longitude": "-99",
+        "arrestLocation": "",
+        "locationId": ""
+      },
+      {
+        "latitude": "35",
+        "longitude": "-100",
+        "arrestLocation": "Existing snapshot coordinates",
+        "locationId": "shared"
+      },
+      {
+        "latitude": "31",
+        "longitude": "-91",
+        "arrestLocation": "",
+        "locationId": "second"
+      },
+      {
+        "latitude": "36",
+        "longitude": "-101",
+        "arrestLocation": "",
+        "locationId": ""
+      }
+    ],
+    "hydrations": [
+      {
+        "locationId": "shared",
+        "street": "Snapshot street",
+        "latitude": "32.7",
+        "longitude": "-96.7",
+        "city": "Dallas",
+        "state": "TX",
+        "zip": ""
+      },
+      {
+        "locationId": "shared",
+        "latitude": "35",
+        "longitude": "-100"
+      },
+      {
+        "latLong": "31.123, -97.321",
+        "latitude": "31.123",
+        "longitude": "-97.321"
+      },
+      {
+        "latitude": "0",
+        "longitude": "0"
+      }
+    ],
+    "peaks": [
+      {
+        "category": "arrestHeat",
+        "id": "arrestHeat:-1940:640",
+        "subject": "3 arrests",
+        "extra": "Local maximum",
+        "address": "32.0003, -97.0000",
+        "latitude": 32.00033333333334,
+        "longitude": -97,
+        "hasCoords": true,
+        "count": 3,
+        "cols": [
+          "Local max",
+          "3",
+          "32.0003, -97.0000"
+        ]
+      },
+      {
+        "category": "arrestHeat",
+        "id": "arrestHeat:-1960:660",
+        "subject": "2 arrests",
+        "extra": "Local maximum",
+        "address": "33.0000, -98.0000",
+        "latitude": 33,
+        "longitude": -98,
+        "hasCoords": true,
+        "count": 2,
+        "cols": [
+          "Local max",
+          "2",
+          "33.0000, -98.0000"
+        ]
+      }
+    ]
+  }
+}

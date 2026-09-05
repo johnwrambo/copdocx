@@ -601,8 +601,6 @@ const MASTER_SECTION_BY_ID = new Map(
     const objectAdapters = new Map();
     let moduleConfig = { ...DEFAULT_MODULE_CONFIG };
     let sourceEditHandler = null;
-    const TEMPLATE_STORAGE_KEY = "opdoc.narrative.templates.v2";
-    const LEGACY_TEMPLATE_STORAGE_KEY = "opdoc.narrative.templates.v1";
     let savedTemplates = [];
     let templateStorageAvailable = true;
     let activeTemplateId = "master";
@@ -1699,54 +1697,25 @@ const MASTER_SECTION_BY_ID = new Map(
       };
     }
 
-    /*
-      TEMPLATE LIBRARY
-      ----------------
-      localStorage is a prototype convenience, not the integration database.
-      The host application can instead persist getTemplate()/getState() output
-      and restore it with loadTemplate()/loadState().
-    */
-    function loadSavedTemplatesFromStorage() {
-      if (!moduleConfig.enableLocalStorage) {
-        savedTemplates = [];
-        templateStorageAvailable = false;
-        return;
-      }
+    /* The engine owns editing and normalization; the repository owns durable templates. */
+    function templateRepository() {
+      const repositories = window.COPDoc && window.COPDoc.repositories;
+      if (!repositories || typeof repositories.createNarrativeTemplates !== "function") return null;
+      return repositories.templateLibrary(normalizeSavedTemplate);
+    }
 
-      try {
-        const stored = window.localStorage.getItem(TEMPLATE_STORAGE_KEY) ||
-          window.localStorage.getItem(LEGACY_TEMPLATE_STORAGE_KEY);
-        const parsed = stored ? JSON.parse(stored) : [];
-        savedTemplates = Array.isArray(parsed)
-          ? parsed.flatMap((record) => {
-            try {
-              return [normalizeSavedTemplate(record)];
-            } catch (error) {
-              return [];
-            }
-          })
-          : [];
-        templateStorageAvailable = true;
-      } catch (error) {
-        savedTemplates = [];
-        templateStorageAvailable = false;
-      }
+    function loadSavedTemplatesFromStorage() {
+      const repository = moduleConfig.enableLocalStorage && templateRepository();
+      const result = repository ? repository.load() : { ok: false, records: [] };
+      savedTemplates = result.records;
+      templateStorageAvailable = result.ok;
     }
 
     function persistSavedTemplates() {
-      if (!moduleConfig.enableLocalStorage) {
-        templateStorageAvailable = false;
-        return false;
-      }
-
-      try {
-        window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(savedTemplates));
-        templateStorageAvailable = true;
-        return true;
-      } catch (error) {
-        templateStorageAvailable = false;
-        return false;
-      }
+      const repository = moduleConfig.enableLocalStorage && templateRepository();
+      const result = repository ? repository.save(savedTemplates) : { ok: false };
+      templateStorageAvailable = result.ok;
+      return result.ok;
     }
 
     function getSavedTemplate(templateId) {

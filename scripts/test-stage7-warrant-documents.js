@@ -45,7 +45,7 @@ function harness(type, options = {}) {
   c.window = c;
   c.globalThis = c;
   vm.createContext(c);
-  ["functions/pdf/i200-map.js", "functions/pdf/i205-map.js", "functions/pdf/fill-warrant.js", "functions/document-context.js"].forEach(file => vm.runInContext(read(file), c));
+  ["functions/pdf/i200-map.js", "functions/pdf/i205-map.js", "functions/pdf/fill-warrant.js", "functions/document-context.js"].forEach(file => require("./support/module-dependencies.js").loadScript(c, file));
   const capture = c.COPDoc.documents.captureContext;
   Object.assign(c.COPDoc.documents, {
     captureContext: opts => { const ctx = capture(opts); log.captures.push(ctx); return ctx; },
@@ -58,12 +58,12 @@ function harness(type, options = {}) {
     recordDelivery: async (id, event) => log.deliveries.push({ id, event })
   });
   if (options.realLedger) {
-    ["functions/document-registry.js", "functions/document-fingerprints.js", "functions/document-generation.js"].forEach(file => vm.runInContext(read(file), c));
+    ["functions/document-registry.js", "functions/document-fingerprints.js", "functions/document-generation.js"].forEach(file => require("./support/module-dependencies.js").loadScript(c, file));
   }
   c.COPDoc.pdf.fillWarrantPdf = async (url, mapped, bytes) => { log.fills.push({ url, mapped, bytes }); return new Uint8Array([80, 68, 70]); };
   c.COPDoc.pdf.downloadBytes = (filename, bytes) => log.downloads.push({ filename, bytes });
   if (options.missingApi) delete c.COPDoc.documents.generate;
-  vm.runInContext(read("functions/warrant-issue.js"), c);
+  require("./support/module-dependencies.js").loadScript(c, "functions/warrant-issue.js");
   return { c, log, nodes, options, templateBytes };
 }
 

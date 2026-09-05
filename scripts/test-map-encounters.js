@@ -101,10 +101,7 @@ const context = {
 context.window = context;
 context.globalThis = context;
 vm.createContext(context);
-vm.runInContext(
-  fs.readFileSync(path.join(__dirname, "..", "functions", "map-targets.js"), "utf8"),
-  context
-);
+require("./support/module-dependencies.js").loadScript(context, "functions/map-targets.js");
 
 context.COPDoc.map.refreshTargets();
 const rows = context.COPDoc.map.listEncounters();

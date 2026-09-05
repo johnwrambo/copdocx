@@ -1,13 +1,16 @@
 "use strict";
 const fs = require("fs"), path = require("path"), crypto = require("crypto"), vm = require("vm");
 const root = path.resolve(__dirname, "..");
+const { dependencies } = require("./support/module-dependencies.js");
 function build() {
   const context = vm.createContext({});
   vm.runInContext(fs.readFileSync(path.join(root, "functions/document-registry.js"), "utf8"), context);
   const fingerprints = {};
   context.COPDoc.documents.registry.all().forEach(entry => {
     fingerprints[entry.documentType] = {};
-    entry.template.sourceFiles.slice().sort().forEach(file => {
+    // A renderer's extracted prerequisites are part of the same implementation.
+    const sources = new Set(entry.template.sourceFiles.flatMap(file => [file, ...dependencies(file)]));
+    Array.from(sources).sort().forEach(file => {
       if (!/^(?:functions|assets|style|vendor)\/[A-Za-z0-9_./-]+$|^[A-Za-z0-9_-]+\.html$/.test(file) || file.includes("..")) throw new Error("Invalid template source " + file);
       fingerprints[entry.documentType][file] = crypto.createHash("sha256").update(fs.readFileSync(path.join(root, file))).digest("hex");
     });

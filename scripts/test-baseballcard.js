@@ -93,13 +93,7 @@ var context = {
 context.globalThis = context;
 context.window = context;
 vm.createContext(context);
-vm.runInContext(
-  fs.readFileSync(
-    path.join(__dirname, "..", "functions", "baseballcard.js"),
-    "utf8"
-  ),
-  context
-);
+require("./support/module-dependencies.js").loadScript(context, "functions/baseballcard.js");
 
 var fail = 0;
 function check(label, ok, extra) {

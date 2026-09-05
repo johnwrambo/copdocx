@@ -36,7 +36,7 @@ function setup(initial) {
   r.context.TextEncoder = TextEncoder;
   r.context.TextDecoder = TextDecoder;
   r.context.navigator.locks = { request: async (_name, _options, callback) => callback() };
-  ["functions/workspace-config.js", "functions/document-context.js", "functions/document-registry.js", "functions/document-fingerprints.js", "functions/document-generation.js", "functions/book-in.js"].forEach(file => loadScript(r.context, file));
+  ["functions/workspace-config.js", "functions/document-context.js", "functions/document-registry.js", "functions/document-fingerprints.js", "functions/document-generation.js", "functions/documents/bookin-pdf.js", "functions/book-in.js"].forEach(file => loadScript(r.context, file));
   r.context.__form = fixture();
   r.context.__statuses = [];
   r.context.__downloads = [];
@@ -47,7 +47,7 @@ function setup(initial) {
   r.context.__fields = {};
   r.context.__checks = {};
   r.context.__loaded = 0;
-  r.context.PDFLib = { StandardFonts: { Helvetica: "Helvetica" } };
+  r.context.PDFLib = { StandardFonts: { Helvetica: "Helvetica" }, rgb: (r, g, b) => [r, g, b] };
   const generate = r.context.COPDoc.documents.generate;
   r.context.COPDoc.documents.generate = async options => {
     r.context.__captured.push(options.context);
@@ -60,17 +60,17 @@ function setup(initial) {
     setStatus = function (message, level) { __statuses.push({ message: message, level: level }); };
     confirmMissingGenerateFields = async function () { return __confirm(); };
     downloadPdf = function (data, filename) { __downloads.push({data:data,filename:filename}); };
-    ensureMedicalPdfFields = function () {};
-    ensureCapWidgetsAttached = function () {};
-    removeCapLabelSeparators = function () {};
-    extendCapFieldUnderlines = function () {};
-    loadPdfFromBase64 = async function () {
+    PDFLib.PDFDocument = { load: async function () {
       __loaded += 1;
       await __afterLoad();
       var form = {
+        getFields: function () { return []; },
+        createTextField: function () { return { enableMultiline:function(){}, addToPage:function(){} }; },
+        createCheckBox: function () { return { addToPage:function(){} }; },
         getTextField: function (name) {
           if (name === __missingField) throw new Error("Missing synthetic field");
           return {
+            ref: {toString:function(){return name;}},
             acroField: {getWidgets:function(){return [{getRectangle:function(){return {x:0,y:0,width:200,height:30};},setRectangle:function(){}}];}},
             isMultiline:function(){return false;},enableMultiline:function(){},disableMultiline:function(){},setFontSize:function(){},
             setText:function(value){__fields[name]=value;}
@@ -79,12 +79,14 @@ function setup(initial) {
         getCheckBox:function(name){return {check:function(){__checks[name]=true;},uncheck:function(){__checks[name]=false;}};},
         updateFieldAppearances:function(){}
       };
+      var page = { node:{Annots:function(){return null;},addAnnot:function(){}},drawRectangle:function(){},drawLine:function(){} };
       return {
+        getPages:function(){return [page,page];},
         getForm:function(){return form;},
         embedFont:async function(){return {widthOfTextAtSize:function(text,size){return text.length*size/2;},heightAtSize:function(size){return size;}};},
         save:async function(options){__saveOptions=options;return new TextEncoder().encode(JSON.stringify({fields:__fields,checks:__checks}));}
       };
-    };
+    }};
   `);
   r.context.__missingField = "";
   return { ...r, storage, button };

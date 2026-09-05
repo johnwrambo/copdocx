@@ -58,7 +58,7 @@ function harness(page) {
   };
   sandbox.window = sandbox;
   const context = vm.createContext(sandbox);
-  function load(file) { vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context, { filename: file }); }
+  function load(file) { require("./support/module-dependencies.js").loadDependencies(context, file); vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context, { filename: file }); }
   return { context, sandbox, load, api, person, vehicle, operation, sheet, button, downloads, deliveries, generated, statuses, listeners,
     fail(value) { gateError = value; }, before(fn) { beforeRender = fn; }, printed: () => printed, printedHtml: () => printedHtml };
 }

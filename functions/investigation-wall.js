@@ -20,7 +20,6 @@
   var outlineQuery = "";
   var outlineHitsOnly = false;
   var outlineVisible = [];
-  var WINDOWS_KEY = "copdocx.investigation-windows.v1";
   var windowsOpen = { plates: true, objects: false, card: false };
   var windowsPos = { plates: null, objects: null, card: null };
   var windowsLoaded = false;
@@ -117,15 +116,11 @@
   }
 
   function readStoredWindows() {
-    if (typeof sessionStorage === "undefined") {
-      return;
-    }
     try {
-      var raw = sessionStorage.getItem(WINDOWS_KEY);
-      if (!raw) {
+      var parsed = root.repositories.viewState.loadInvestigationWindows();
+      if (parsed === undefined) {
         return;
       }
-      var parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
         windowsOpen.plates = parsed.plates !== false;
         windowsOpen.objects = !!parsed.objects;
@@ -140,13 +135,8 @@
   }
 
   function persistWindows() {
-    if (typeof sessionStorage === "undefined") {
-      return;
-    }
     try {
-      sessionStorage.setItem(
-        WINDOWS_KEY,
-        JSON.stringify({
+      root.repositories.viewState.saveInvestigationWindows({
           plates: windowsOpen.plates,
           objects: windowsOpen.objects,
           card: windowsOpen.card,
@@ -155,8 +145,7 @@
             objects: windowsPos.objects,
             card: windowsPos.card
           }
-        })
-      );
+      });
     } catch (err) {}
   }
 

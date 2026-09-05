@@ -20,13 +20,7 @@ var context = {
 context.globalThis = context;
 context.window = context;
 vm.createContext(context);
-vm.runInContext(
-  fs.readFileSync(
-    path.join(__dirname, "..", "assets/icons/copdoc-icons.js"),
-    "utf8"
-  ),
-  context
-);
+require("./support/module-dependencies.js").loadScript(context, "assets/icons/copdoc-icons.js");
 
 var icons = context.COPDoc && context.COPDoc.icons;
 var mapIcons = context.COPDoc && context.COPDoc.mapIcons;
@@ -386,20 +380,8 @@ check(
 
 context.document = { addEventListener: function () {} };
 context.addEventListener = function () {};
-vm.runInContext(
-  fs.readFileSync(
-    path.join(__dirname, "..", "functions/map-popup.js"),
-    "utf8"
-  ),
-  context
-);
-vm.runInContext(
-  fs.readFileSync(
-    path.join(__dirname, "..", "functions/location-map.js"),
-    "utf8"
-  ),
-  context
-);
+require("./support/module-dependencies.js").loadScript(context, "functions/map-popup.js");
+require("./support/module-dependencies.js").loadScript(context, "functions/location-map.js");
 var locationMap = context.COPDoc && context.COPDoc.locationMap;
 check(
   "location map honors a stored custom pin color",

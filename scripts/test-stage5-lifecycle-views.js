@@ -89,6 +89,7 @@ function descendants(element, tag) {
   loadScript(r.context, "functions/officer-roster.js");
   const document = documentFor("operation-form", ["operationCellsList"]);
   r.context.document = document;
+  require("./support/module-dependencies.js").loadDependencies(r.context, "functions/operations.js");
   const source = fs.readFileSync(path.join(__dirname, "..", "functions/operations.js"), "utf8");
   const anchor = "  window.commitOperation = commitOperation;";
   assert.ok(source.includes(anchor));

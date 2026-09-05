@@ -11,6 +11,7 @@ const {
 } = require("./support/copdoc-vm-harness");
 
 function controller(context, file, exports, setupSource) {
+  require("./support/module-dependencies.js").loadDependencies(context, file);
   let source = fs.readFileSync(path.join(ROOT, file), "utf8");
   let end = source.lastIndexOf("})(typeof window");
   if (end < 0) end = source.lastIndexOf("})();");

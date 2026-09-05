@@ -7,7 +7,6 @@
 
   var root = (global.COPDoc = global.COPDoc || {});
   var PIN_ZOOM = 17;
-  var BASEMAP_KEY = "copdocx.location-map.basemap";
   var BASEMAPS = [
     { id: "map", label: "Map" },
     { id: "satellite", label: "Sat" },
@@ -368,7 +367,7 @@
 
   function rememberedBasemap() {
     try {
-      var name = localStorage.getItem(BASEMAP_KEY) || "map";
+      var name = root.repositories.viewState.loadBasemap() || "map";
       if (name === "satellite" || name === "hybrid" || name === "map") {
         return name;
       }
@@ -378,7 +377,7 @@
 
   function rememberBasemap(name) {
     try {
-      localStorage.setItem(BASEMAP_KEY, name);
+      root.repositories.viewState.saveBasemap(name);
     } catch (error) {}
   }
 

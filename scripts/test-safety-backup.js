@@ -282,6 +282,7 @@ function harness(options) {
   context.window = context;
   context.globalThis = context;
   vm.createContext(context);
+  require("./support/module-dependencies.js").loadDependencies(context, "functions/safety-backup.js");
   vm.runInContext(SOURCE, context, { filename: "functions/safety-backup.js" });
   return {
     backup: context.COPDoc.safetyBackup,

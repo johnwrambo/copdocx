@@ -347,11 +347,6 @@ function buildBaseballCardPlainText(content) {
         .trim();
 }
 
-var BASEBALL_CARD_STYLE_KEY =
-    (typeof window.COPDoc === "object" &&
-        window.COPDoc.config &&
-        window.COPDoc.config.storageKey("baseballCardStyle")) ||
-    "copdocx.baseball.card-style.v1";
 
 var BASEBALL_CARD_STYLE_DEFAULTS = {
     cardWidth: 1050,
@@ -440,11 +435,11 @@ function normalizeBaseballCardStyle(raw) {
 
 function loadBaseballCardStyle() {
     try {
-        var raw = window.localStorage.getItem(BASEBALL_CARD_STYLE_KEY);
+        var raw = window.COPDoc.repositories.preferences.readBaseballStyle();
         if (!raw) {
             return normalizeBaseballCardStyle(BASEBALL_CARD_STYLE_DEFAULTS);
         }
-        return normalizeBaseballCardStyle(JSON.parse(raw));
+        return normalizeBaseballCardStyle(raw);
     } catch (error) {
         return normalizeBaseballCardStyle(BASEBALL_CARD_STYLE_DEFAULTS);
     }
@@ -453,7 +448,7 @@ function loadBaseballCardStyle() {
 function saveBaseballCardStyle(style) {
     var next = normalizeBaseballCardStyle(style);
     try {
-        window.localStorage.setItem(BASEBALL_CARD_STYLE_KEY, JSON.stringify(next));
+        window.COPDoc.repositories.preferences.saveBaseballStyle(next);
     } catch (error) {
         return { ok: false, style: next, error: "The default could not be stored." };
     }
@@ -964,7 +959,7 @@ function baseStructuredState() {
     if (!api) return null;
     if (!baseballStructuredState) {
         var layout;
-        try { layout = JSON.parse(window.localStorage.getItem(BASEBALL_CARD_STYLE_KEY) || "null"); } catch(error) { layout = null; }
+        try { layout = window.COPDoc.repositories.preferences.readBaseballStyle(); } catch(error) { layout = null; }
         baseballStructuredState = api.normalizeState({layout: layout || loadBaseballCardStyle()});
     }
     return baseballStructuredState;
@@ -1133,7 +1128,7 @@ function bindStructuredBaseballControls() {
         setStructuredControls(state); refreshStructuredCard();
     });
     on("bbStyleSaveDefault",function () {
-        try { window.localStorage.setItem(BASEBALL_CARD_STYLE_KEY,JSON.stringify(getBaseballCardState().layout)); setStyleStatus("Saved the appearance default. Save card to keep this card's settings.",true); }
+        try { window.COPDoc.repositories.preferences.saveBaseballStyle(getBaseballCardState().layout); setStyleStatus("Saved the appearance default. Save card to keep this card's settings.",true); }
         catch(error) { setStyleStatus("The appearance default could not be saved.",false); }
     });
     on("bbStyleRestore",function () { var state = getBaseballCardState(); state.layout=api.normalizeLayout({}); setStructuredControls(state); refreshStructuredCard(); });

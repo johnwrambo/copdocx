@@ -106,6 +106,7 @@ function setup() {
   document.getElementById = id => ids[id] || null;
   document.createElement = element;
   const { context } = loadModelTab(createMemoryStorage(), { document, console: quietConsole() });
+  require("./support/module-dependencies.js").loadDependencies(context, "functions/encounters.js");
   let source = fs.readFileSync(path.join(ROOT, "functions/encounters.js"), "utf8");
   const end = source.lastIndexOf("})();");
   assert.ok(end >= 0);

@@ -9,7 +9,7 @@
     return;
   }
 
-  var STORAGE_KEY = "copdocx.file-upload.v1";
+  var STORAGE_KEY = root.repositories.viewState.schemas.demoFiles;
   var MAX_STORE_BYTES = 2.5 * 1024 * 1024;
   var KINDS = {
     subject: "Subject",
@@ -146,11 +146,10 @@
       return;
     }
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
+      var parsed = root.repositories.viewState.loadDemoFiles();
+      if (parsed === undefined) {
         return;
       }
-      var parsed = JSON.parse(raw);
       state.files = Array.isArray(parsed.files) ? parsed.files : [];
       state.selectedId = parsed.selectedId || "";
     } catch (err) {
@@ -178,14 +177,7 @@
       return true;
     }
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          schema: STORAGE_KEY,
-          files: persistableCopy(),
-          selectedId: state.selectedId
-        })
-      );
+      root.repositories.viewState.saveDemoFiles(state.files, state.selectedId, MAX_STORE_BYTES);
       return true;
     } catch (err) {
       setStatus("Could not save files (storage full or blocked).");

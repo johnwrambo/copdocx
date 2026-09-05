@@ -32,15 +32,12 @@ context.globalThis = context;
 context.window = context;
 vm.createContext(context);
 ["workspace-config", "baseball-card-contract", "import-schema", "import-workflow"].forEach(function (name) {
-  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/" + name + ".js"), "utf8"), context);
+  require("./support/module-dependencies.js").loadScript(context, "functions/" + name + ".js");
 });
 ["util", "lead", "person", "encounter", "location", "vehicle", "link", "store"].forEach(function (name) {
-  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/model/" + name + ".js"), "utf8"), context);
+  require("./support/module-dependencies.js").loadScript(context, "functions/model/" + name + ".js");
 });
-vm.runInContext(
-  fs.readFileSync(path.join(__dirname, "..", "functions/transfer.js"), "utf8"),
-  context
-);
+require("./support/module-dependencies.js").loadScript(context, "functions/transfer.js");
 
 var t = context.COPDoc.transfer;
 var fail = 0;
@@ -427,12 +424,9 @@ function testImportPopupOpensCompact() {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   ["workspace-config", "baseball-card-contract", "import-schema", "import-workflow"].forEach(function (name) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/" + name + ".js"), "utf8"), sandbox);
+    require("./support/module-dependencies.js").loadScript(sandbox, "functions/" + name + ".js");
   });
-  vm.runInContext(
-    fs.readFileSync(path.join(__dirname, "..", "functions/transfer.js"), "utf8"),
-    sandbox
-  );
+  require("./support/module-dependencies.js").loadScript(sandbox, "functions/transfer.js");
   sandbox.openFileImport();
   check("import popup opens", !!(opened && opened.name === "copdoc-import"));
   check(
@@ -511,12 +505,9 @@ function testLoadModelScriptReady() {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   ["workspace-config", "baseball-card-contract", "import-schema", "import-workflow"].forEach(function (name) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "functions/" + name + ".js"), "utf8"), sandbox);
+    require("./support/module-dependencies.js").loadScript(sandbox, "functions/" + name + ".js");
   });
-  vm.runInContext(
-    fs.readFileSync(path.join(__dirname, "..", "functions/transfer.js"), "utf8"),
-    sandbox
-  );
+  require("./support/module-dependencies.js").loadScript(sandbox, "functions/transfer.js");
   return sandbox.COPDoc.transfer
     .loadModelScript("functions/model/util.js")
     .then(function () {

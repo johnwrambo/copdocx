@@ -162,14 +162,8 @@ documentStub.body.getAttribute = function () {
 
 vm.createContext(context);
 require("./support/document-ui-test-runtime").installDocumentRuntime(context);
-vm.runInContext(
-  fs.readFileSync(path.join(__dirname, "..", "functions", "baseballcard.js"), "utf8"),
-  context
-);
-vm.runInContext(
-  fs.readFileSync(path.join(__dirname, "..", "functions", "baseball-page.js"), "utf8"),
-  context
-);
+require("./support/module-dependencies.js").loadScript(context, "functions/baseballcard.js");
+require("./support/module-dependencies.js").loadScript(context, "functions/baseball-page.js");
 
 function check(label, ok, extra) {
   if (!ok) {

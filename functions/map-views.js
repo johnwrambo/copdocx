@@ -13,7 +13,7 @@
 
   var root = (global.COPDoc = global.COPDoc || {});
   var api = (root.map = root.map || {});
-  var STORAGE_KEY = "copdocx.map.views.v1";
+  var STORAGE_KEY = root.repositories.viewState.schemas.mapViews;
   var MAX_PRESETS = 12;
 
   api.setMode = null;
@@ -32,15 +32,11 @@
   }
 
   function loadState() {
-    if (typeof localStorage === "undefined") {
-      return emptyState();
-    }
     try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
+      var parsed = root.repositories.viewState.loadMapViews();
+      if (parsed === undefined) {
         return emptyState();
       }
-      var parsed = JSON.parse(raw);
       return {
         home: isView(parsed.home) ? parsed.home : null,
         presets: Array.isArray(parsed.presets)
@@ -53,11 +49,8 @@
   }
 
   function saveState(state) {
-    if (typeof localStorage === "undefined") {
-      return;
-    }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      root.repositories.viewState.saveMapViews(state);
     } catch (err) {
       showHint("Could not save the view (storage blocked).", false);
     }

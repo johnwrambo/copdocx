@@ -24,8 +24,12 @@
 
   function readJson(key, fallback) {
     try {
-      var raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
+      var repositories = window.COPDoc.repositories, value;
+      if (key === WORKSPACE_KEY) value = repositories.workspace.readSnapshot();
+      else if (key === ADMIN_KEY) value = repositories.admin.readSnapshot();
+      else if (key === BOOKIN_KEY) value = repositories.bookin.readAll();
+      else throw new Error("Unknown overview data source.");
+      return value == null ? fallback : value;
     } catch (error) {
       if (window.COPDoc && COPDoc.setAppBarStatus) {
         COPDoc.setAppBarStatus("Some local workspace data could not be read.");

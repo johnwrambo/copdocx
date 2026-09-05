@@ -640,7 +640,6 @@
     searcharea: "SearchArea"
   });
 
-  var MAP_ICON_STORAGE_KEY = "copdocx.map.icons.v1";
   var MAP_LIBRARIES = [
     {
       id: "standard",
@@ -726,9 +725,7 @@
 
   function loadMapLibraryId() {
     try {
-      if (!g.localStorage) return "standard";
-      var raw = g.localStorage.getItem(MAP_ICON_STORAGE_KEY);
-      var stored = raw ? JSON.parse(raw) : null;
+      var stored = g.COPDoc.repositories.viewState.loadMapIcons();
       return resolveMapLibraryId(stored && stored.libraryId);
     } catch (err) {
       return "standard";
@@ -737,14 +734,7 @@
 
   function persistMapLibraryId(id) {
     try {
-      if (!g.localStorage) return;
-      var raw = g.localStorage.getItem(MAP_ICON_STORAGE_KEY);
-      var stored = raw ? JSON.parse(raw) : {};
-      if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
-        stored = {};
-      }
-      stored.libraryId = id;
-      g.localStorage.setItem(MAP_ICON_STORAGE_KEY, JSON.stringify(stored));
+      g.COPDoc.repositories.viewState.saveMapIconLibrary(id);
     } catch (err) {}
   }
 

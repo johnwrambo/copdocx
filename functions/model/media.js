@@ -887,7 +887,7 @@
     if (owner.type === "BOOKIN" || owner.type === "OFFICER") {
       var sourceId = owner.type === "BOOKIN" ? "bookin" : "admin";
       var sourceKey = root.config && root.config.storageKey(sourceId) || (sourceId === "bookin" ? "alien-book-in.saved-records.v1" : "copdoc.admin.v1");
-      var raw = global.localStorage && global.localStorage.getItem(sourceKey);
+      var raw = root.repositories.storage.has("localStorage") && root.repositories.storage.read("localStorage", sourceKey);
       if (raw) {
         var value;
         try { value = JSON.parse(raw); } catch (error) { throw removalError([], "Cannot verify the media owner. Its files were preserved."); }
@@ -902,7 +902,7 @@
   function remove(mediaId, importTransactionId) {
     if (importTransactionId) {
       try {
-        var journal = JSON.parse(global.localStorage.getItem("copdocx.import-transactions.v1") || "null");
+        var journal = JSON.parse(root.repositories.storage.read("localStorage", "copdocx.import-transactions.v1") || "null");
         var command = journal && journal.transactions && journal.transactions[importTransactionId];
         var owned = command && (command.media || []).find(function (entry) { return entry.bundle && entry.bundle.meta.mediaId === mediaId && entry.existed === false; });
         if (!command || command.status !== "ROLLING_BACK" || !owned || command.mediaCreated.indexOf(mediaId) < 0) throw new Error("Import does not own this Media rollback.");

@@ -5,8 +5,6 @@
 (function () {
   var config = window.COPDoc && window.COPDoc.config;
   var PRODUCT_VERSION = (config && config.productVersion) || "0.69.2";
-  var ADMIN_STORAGE_KEY =
-    (config && config.storageKey("admin")) || "copdoc.admin.v1";
   // Workspace import/export lives on Home. This empty collection remains the
   // config marker for pages that have no page-specific download tools.
   var WORKSPACE_FILE = [];
@@ -143,8 +141,7 @@
       return false;
     }
     try {
-      var raw = localStorage.getItem(ADMIN_STORAGE_KEY);
-      var admin = raw ? JSON.parse(raw) : {};
+      var admin = COPDoc.repositories.admin.readSnapshot();
       var list = kind === "officer" ? admin.officers : admin.vehicles;
       var i;
       for (i = 0; i < (list || []).length; i++) {

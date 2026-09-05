@@ -34,6 +34,7 @@ context.IMMIGRATION_STATUS = [];
 vm.createContext(context);
 
 function load(rel) {
+  require("./support/module-dependencies.js").loadDependencies(context, rel);
   vm.runInContext(
     fs.readFileSync(path.join(__dirname, "..", rel), "utf8"),
     context

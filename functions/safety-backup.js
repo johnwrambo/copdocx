@@ -150,13 +150,9 @@
   }
 
   function storageFor(medium) {
-    if (medium === "localStorage") {
-      return global.localStorage;
-    }
-    if (medium === "sessionStorage") {
-      return global.sessionStorage;
-    }
-    return null;
+    if (medium !== "localStorage" && medium !== "sessionStorage") return null;
+    if (!root.repositories.storage.has(medium)) return null;
+    return { getItem: function (key) { return root.repositories.storage.read(medium, key); } };
   }
 
   function captureRawStorage() {

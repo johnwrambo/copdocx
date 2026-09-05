@@ -5,7 +5,6 @@
 (function (global) {
   "use strict";
 
-  var HANDOFF_KEY = "copdocx.baseball.handoff.v1";
   var photoDataUrl = "";
   var loadedPhotoMediaId = "";
   var pendingPhotoName = "";
@@ -39,8 +38,7 @@
 
   function readHandoff() {
     try {
-      var raw = sessionStorage.getItem(HANDOFF_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return global.COPDoc.repositories.bookin.readHandoff();
     } catch (error) {
       return null;
     }
@@ -207,7 +205,7 @@
         [row.bookinRecordId, row.bookingId].map(text).indexOf(recordId) !== -1;
     });
     try {
-      var packets = JSON.parse(localStorage.getItem("alien-book-in.saved-records.v1") || "[]");
+      var packets = global.COPDoc.repositories.bookin.readAll();
       if (!Array.isArray(packets)) throw new Error("Book-In data is unavailable.");
       voided = voided || packets.some(function (row) {
         return row && row.voidedAt && recordId &&
