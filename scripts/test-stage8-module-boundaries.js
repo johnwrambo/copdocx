@@ -18,7 +18,7 @@ const layers = new Set(["ui", "domain", "projection", "repository", "application
 assert.equal(manifest.schema, "copdocx.modules.v1");
 assert.equal(manifest.version, 1);
 assert.equal(entries.size, manifest.modules.length, "Each module has exactly one declared owner layer.");
-const runtimeFiles = filesUnder(path.join(ROOT, "functions"), ".js").map(file => path.relative(ROOT, file)).filter(file => file !== "functions/module-manifest.js");
+const runtimeFiles = filesUnder(path.join(ROOT, "functions"), ".js").map(file => path.relative(ROOT, file).replace(/\\/g, "/")).filter(file => file !== "functions/module-manifest.js");
 for (const file of runtimeFiles) assert(entries.has(file), "Unclassified runtime module: " + file);
 for (const entry of manifest.modules) {
   assert(fs.existsSync(path.join(ROOT, entry.path)), "Missing declared module: " + entry.path);

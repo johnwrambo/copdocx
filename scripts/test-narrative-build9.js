@@ -15,7 +15,8 @@ const dataLibraries = [
   "data/narratives/sections/08-custody.js",
   "data/narratives/sections/09-vehicle-property.js",
   "data/narratives/sections/10-final-disposition.js",
-  "data/narratives/narrative-master.js"
+  "data/narratives/narrative-master.js",
+  "functions/narratives/narrative-library-store.js"
 ];
 
 dataLibraries.forEach((file) => require(path.join(root, file)));

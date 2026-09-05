@@ -82,7 +82,12 @@
   }
 
   function isEncounterPage(page) {
-    return page === "encounter" || page === "encounter-form" || page === "narrative";
+    return (
+      page === "encounter" ||
+      page === "encounter-form" ||
+      page === "narrative" ||
+      page === "narrative-library"
+    );
   }
 
   function isInvestigatePage(page) {
@@ -286,6 +291,22 @@
         tab: "oracle",
         file: WORKSPACE_FILE,
         actions: []
+      };
+    }
+    if (page === "narrative-library") {
+      return {
+        tab: "encounter",
+        file: WORKSPACE_FILE,
+        actions: [
+          {
+            id: "downloadLibraryButton",
+            label: "Download JSON"
+          },
+          {
+            label: "Open I-213 lab",
+            href: "narrative.html"
+          }
+        ]
       };
     }
     if (page === "integrity") {

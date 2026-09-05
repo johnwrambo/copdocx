@@ -23,6 +23,7 @@
     { id: "mapIcons", key: "copdocx.map.icons.v1", medium: "localStorage", owner: "map", portable: true },
     { id: "mapMarkup", key: "copdocx.map.markup.v1", medium: "localStorage", owner: "map", portable: true },
     { id: "mapBasemap", key: "copdocx.location-map.basemap", medium: "localStorage", owner: "map", portable: true },
+    { id: "narrativeLibrary", key: "copdocx.narrative-library.v1", medium: "localStorage", owner: "narrative-library", portable: true },
     { id: "narrativeTemplates", key: "opdoc.narrative.templates.v2", medium: "localStorage", owner: "narrative", portable: true },
     { id: "narrativeTemplatesLegacy", key: "opdoc.narrative.templates.v1", medium: "localStorage", owner: "narrative", portable: false },
     { id: "photoPickerLab", key: "copdocx.photo-picker.v1", medium: "localStorage", owner: "photo-picker-lab", portable: false },

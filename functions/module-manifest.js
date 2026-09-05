@@ -477,6 +477,20 @@
       ]
     },
     {
+      "path": "functions/narratives/narrative-library-store.js",
+      "layer": "repository",
+      "dependencies": [
+        "functions/repositories/browser-storage.js"
+      ]
+    },
+    {
+      "path": "functions/narratives/narrative-library-page.js",
+      "layer": "ui",
+      "dependencies": [
+        "functions/narratives/narrative-library-store.js"
+      ]
+    },
+    {
       "path": "functions/narratives/narrative-markup.js",
       "layer": "ui",
       "dependencies": []

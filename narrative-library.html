@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Narrative Library</title>
+    <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/repositories/browser-storage.js"></script>
+  </head>
+  <body data-page="narrative-library">
+    <header class="app-bar">
+      <div class="app-bar-info">
+        <span class="app-bar-product">COPDoc</span>
+        <span id="appVersion" class="app-version" data-version="0.69.2">
+          Version 0.69.2
+        </span>
+        <span id="currentDate" class="app-bar-date"></span>
+      </div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div>
+      <p
+        id="appBarStatus"
+        class="app-bar-status"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        hidden
+      ></p>
+    </header>
+
+    <main class="page page-wide page-narrative-library">
+      <header class="page-header">
+        <h1>Narrative library</h1>
+        <div class="page-meta">
+          <p>
+            Browse Master wording, save a new version without deleting the old one,
+            and map Stop-tab event types to default helper selections.
+          </p>
+        </div>
+      </header>
+
+      <div class="library-grid">
+        <fieldset class="card-static library-option-card">
+          <legend>Option</legend>
+          <div class="row">
+            <div class="field">
+              <label for="librarySection">Section</label>
+              <select id="librarySection"></select>
+            </div>
+            <div class="field">
+              <label for="libraryField">Field</label>
+              <select id="libraryField"></select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field field-span-2">
+              <label for="libraryLineage">Option</label>
+              <select id="libraryLineage"></select>
+            </div>
+          </div>
+          <p class="section-note">
+            Check the wording that should display. Older wording stays in this list.
+          </p>
+          <div id="libraryVersions" class="library-history" aria-label="Saved wordings"></div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Wording</legend>
+          <p class="section-note">
+            Save keeps the previous wording and makes this one current.
+          </p>
+          <div class="field">
+            <label for="libraryLabel">Label</label>
+            <input id="libraryLabel" type="text" maxlength="160" />
+          </div>
+          <div class="field">
+            <label for="libraryText">Generated sentence</label>
+            <textarea id="libraryText" rows="5" spellcheck="true"></textarea>
+          </div>
+          <p id="libraryUsedVariables" class="section-note"></p>
+          <p id="libraryOptionPreview" class="library-preview"></p>
+          <div class="record-actions">
+            <button type="button" id="librarySaveVersion" class="action-button">
+              Save as new current version
+            </button>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="library-grid">
+        <fieldset class="card-static">
+          <legend>Variables</legend>
+          <p class="section-note">
+            Type placeholders in square brackets, all caps. Click a chip to insert
+            at the cursor. Two of the same kind stay independent with a slot:
+            <code>[TARGET::t1]</code> and <code>[TARGET::t2]</code>.
+            Do not put a person’s real name in the template.
+          </p>
+          <div id="libraryVariableList" class="library-variable-list"></div>
+        </fieldset>
+
+        <fieldset class="card-static">
+          <legend>Encounter profile</legend>
+          <p class="section-note">
+            Stop-tab <strong>event type</strong> can load these defaults in the
+            I-213. They are helpers only; the officer can still change any row.
+          </p>
+          <div class="field">
+            <label for="libraryEventType">Event type</label>
+            <select id="libraryEventType"></select>
+          </div>
+          <div id="libraryProfileFields" class="library-profile-fields"></div>
+          <p id="libraryProfilePreview" class="library-preview"></p>
+          <div class="record-actions">
+            <button type="button" id="librarySaveProfile" class="action-button">
+              Save profile
+            </button>
+          </div>
+        </fieldset>
+      </div>
+    </main>
+
+    <script src="functions/repositories/admin.js"></script>
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="data/encounter-catalogs.js"></script>
+    <script src="data/narratives/narrative-shared-options.js"></script>
+    <script src="data/narratives/sections/01-origin.js"></script>
+    <script src="data/narratives/sections/02-authority.js"></script>
+    <script src="data/narratives/sections/03-context.js"></script>
+    <script src="data/narratives/sections/04-observation.js"></script>
+    <script src="data/narratives/sections/05-contact.js"></script>
+    <script src="data/narratives/sections/06-conduct-incidents.js"></script>
+    <script src="data/narratives/sections/07-confirmation.js"></script>
+    <script src="data/narratives/sections/08-custody.js"></script>
+    <script src="data/narratives/sections/09-vehicle-property.js"></script>
+    <script src="data/narratives/sections/10-final-disposition.js"></script>
+    <script src="data/narratives/narrative-master.js"></script>
+    <script src="functions/narratives/narrative-library-store.js"></script>
+    <script src="functions/narratives/narrative-library-page.js"></script>
+  </body>
+</html>

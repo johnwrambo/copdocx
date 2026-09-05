@@ -39,13 +39,15 @@ Until book-in is split, `bookin.html` is the working form. Prefill uses **`booki
 
 ### Non-record pages
 
-`home.html` (`data-page="home"`), `oracle.html` (`data-page="oracle"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`), `mobile-target-sheet.html` (`data-page="mobile-target-sheet"`).
+`home.html` (`data-page="home"`), `oracle.html` (`data-page="oracle"`), `admin.html` (`data-page="dashboard"`), `schedule.html`, `map.html`, `narrative.html`, `narrative-library.html` (`data-page="narrative-library"`), `baseballcard.html`, `photo-picker.html` (`data-page="photo-picker"`), `file-upload.html` (`data-page="file-upload"`), `mobile-target-sheet.html` (`data-page="mobile-target-sheet"`).
 `i200-form.html` (`data-page="i200-form"`) and `i205-form.html` (`data-page="i205-form"`) are case-view issuance forms (`?id=` is the **leadId**). Cases tab stays current. They are not a warrant triad.
 Operations tab: `operations.html` / `operation.html` / `operation-form.html` (**0.62.0**). Pocket brief `operation-brief.html` (**0.66.0**). `encounter.html` is the 0.11.0 list.
 
 Home is a briefing hub, not a record triad. Its painter makes read-only cross-store projections for filed cases, available officers/fleet, weekly Book-ins, today's shifts, mapped priority targets, and open follow-ups. Its **Tools / Utilities** card owns workspace Import JSON, Export JSON/CSV, and Lock this tab. The transfer dialogs are the only Home actions that write stores.
 
 `oracle.html` is a read-only analysis page (`data-page="oracle"`). Empty action slot. It counts committed arrests and completed encounter snapshots; it does not write workspace, admin, or book-in stores. Chrome tab **Oracle**. Home tile links here.
+
+`narrative-library.html` versions Master I-213 wording without deleting v1. New option text is appended and marked current; older versions stay selectable. Encounter profiles map Stop-tab event types to default field options as helpers only. Overlay lives in `copdocx.narrative-library.v1`. Home tile **Narrative library**.
 
 `photo-picker.html` remains a development workspace for upload / crop / tags with no owner. Owner-scoped Add photo links open it embedded in `photo-picker-modal.js`; Save closes the modal and leaves the parent URL/form/wall intact. It writes media only. Not a chrome tab. Isolated lab key `copdocx.photo-picker.v1`.
 
