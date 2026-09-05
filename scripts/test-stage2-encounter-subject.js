@@ -849,6 +849,8 @@ function loadBookInRuntime(storage) {
       pathname: "/bookin.html"
     }
   });
+  loadScript(tab.context, "functions/officer-roster.js");
+  loadScript(tab.context, "functions/booking-workflow.js");
   loadScript(tab.context, "functions/book-in.js");
   return tab;
 }
@@ -862,18 +864,12 @@ function prepareBookInFunctions(context) {
       "currentEncounterRole = function () { return 'TARGET'; };",
       "renderSavedRecords = function () {};",
       "rememberFormSignature = function () {};",
-      "setStatus = function () {};",
-      "COPDoc.model.store.applyEncounterLocationToArrests = function () { return { ok: true }; };",
-      "COPDoc.model.store.linkEncounterVehiclesToPerson = function () { return { ok: true }; };",
-      "promoteBookInRecord = function () { return {",
-      "  ok: true, leadId: 'lead_stage2_bookin', personId: 'person_stage2_bookin',",
-      "  arrestId: 'arr_stage2_bookin'",
-      "}; };"
+      "setStatus = function () {};"
     ].join("\n")
   );
 }
 
-function exerciseBookInSynchronization() {
+async function exerciseBookInSynchronization() {
   const storage = createMemoryStorage();
   const tab = loadBookInRuntime(storage);
   const { model, context } = tab;
@@ -929,7 +925,7 @@ function exerciseBookInSynchronization() {
   prepareBookInFunctions(context);
   run(context, "activeRecordId = 'bk_stage2_bookin'; pendingLeadId = 'lead_stage2_bookin';");
 
-  assert.strictEqual(run(context, "saveCurrentRecord({ quiet: true, stay: true })"), true);
+  assert.strictEqual(await run(context, "saveCurrentRecord({ quiet: true, stay: true })"), true);
   model.store.loadFromDisk();
   assert.strictEqual(
     model.store.getEncounter(encounter.encounterId).subjects[0].outcome,
@@ -937,12 +933,32 @@ function exerciseBookInSynchronization() {
     "quiet autosave must not project or force an arrest"
   );
 
-  assert.strictEqual(run(context, "saveCurrentRecord({ stay: true })"), true);
+  for (const outcome of ["RELEASED", "FLED"]) {
+    const notArrested = model.store.getEncounter(encounter.encounterId);
+    notArrested.subjects[0].outcome = outcome;
+    requireOk(model.store.saveEncounter(notArrested, { mode: "draft" }), "set nonarrested outcome");
+    const beforeRejectedBooking = storage.dump();
+    assert.strictEqual(
+      await run(context, "saveCurrentRecord({ stay: true })"),
+      false,
+      "booking must require an explicit arrested disposition in the Encounter"
+    );
+    assert.deepStrictEqual(
+      storage.dump(),
+      beforeRejectedBooking,
+      "a released or fled subject must not produce a packet, Arrest, or transaction write"
+    );
+  }
+  const readyToBook = model.store.getEncounter(encounter.encounterId);
+  readyToBook.subjects[0].outcome = "ARRESTED";
+  readyToBook.subjects[0].custody = "IN_CUSTODY";
+  requireOk(model.store.saveEncounter(readyToBook, { mode: "draft" }), "mark subject arrested before booking");
+  assert.strictEqual(await run(context, "saveCurrentRecord({ stay: true })"), true);
   model.store.loadFromDisk();
   const after = model.store.getEncounter(encounter.encounterId).subjects[0];
   const packet = storage.json(BOOKIN_KEY, [])[0];
   assert.strictEqual(after.subjectId, "sub_stage2_bookin");
-  assert.strictEqual(after.outcome, "ARRESTED", "explicit Book-In save may project custody outcome");
+  assert.strictEqual(after.outcome, "ARRESTED", "Book-In must preserve the explicit Encounter outcome");
   assert.strictEqual(
     after.occupantRole,
     "DRIVER",
@@ -1193,12 +1209,12 @@ function exerciseBookInSynchronization() {
     context,
     "activeRecordId = 'bk_stage2_preserve'; " +
       "__promotionCalls = 0; " +
-      "promoteBookInRecord = function () { __promotionCalls += 1; return { ok: true }; };"
+      "COPDoc.model.store.promoteBookInRecord = function () { __promotionCalls += 1; return { ok: true }; };"
   );
   const workspaceBeforeRejectedSave = storage.raw(WORKSPACE_KEY);
   const packetsBeforeRejectedSave = storage.raw(BOOKIN_KEY);
   assert.strictEqual(
-    run(context, "saveCurrentRecord({ stay: true })"),
+    await run(context, "saveCurrentRecord({ stay: true })"),
     false,
     "an exact subjectId cannot claim a Book-In ID owned by another subject"
   );
@@ -1362,11 +1378,12 @@ function exerciseNarrativeExistingSaveContract() {
   );
 }
 
+async function main() {
 exerciseModelContract();
 exerciseStoreMigrationAndPermanence();
 exerciseNarrativeProjection();
 exerciseLegacyBookinOnlyNarrativeProjection();
-exerciseBookInSynchronization();
+await exerciseBookInSynchronization();
 exerciseOracleJoin();
 exerciseReportJoinKey();
 exerciseNarrativeExistingSaveContract();
@@ -1375,3 +1392,7 @@ console.log(
   "STAGE2_ENCOUNTER_SUBJECT_PASSED",
   "model, migration, persistence, narrative, Book-In, Oracle, and report contracts."
 );
+
+}
+
+main().catch(error => { console.error(error); process.exitCode = 1; });

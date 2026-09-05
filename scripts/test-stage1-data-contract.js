@@ -123,14 +123,24 @@ const registry = config.storageEntries.map((entry) => ({
   owner: entry.owner,
   portable: entry.portable
 }));
-const storeIds = Object.keys(manifest.storage);
-assert.strictEqual(storeIds.length, registry.length, "manifest must cover every registry entry exactly");
+// Stage 1 is a historical freeze. Later stores are documented additively;
+// an overlay may not replace any frozen storage authority or key.
+const storageOverlay = readJson(path.join(root, "docs", "stage-4-booking-storage.json"));
+assert.strictEqual(storageOverlay.schema, "copdocx.storage-contract-overlay.v1");
+assert.strictEqual(storageOverlay.stage, 4);
+assert.deepStrictEqual(Object.keys(storageOverlay.storage), ["bookingTransactions"]);
+Object.keys(storageOverlay.storage).forEach((id) => {
+  assert.ok(!Object.prototype.hasOwnProperty.call(manifest.storage, id), "overlay must not replace frozen storage " + id);
+});
+const documentedStorage = Object.assign({}, manifest.storage, storageOverlay.storage);
+const storeIds = Object.keys(documentedStorage);
+assert.strictEqual(storeIds.length, registry.length, "manifest plus additive overlays must cover every registry entry exactly");
 unique(storeIds, "manifest storage IDs");
 unique(registry.map((entry) => entry.id), "runtime storage IDs");
 unique(registry.map((entry) => entry.key), "runtime storage keys");
 
 for (const entry of registry) {
-  const documented = manifest.storage[entry.id];
+  const documented = documentedStorage[entry.id];
   assert.ok(documented, "storage registry entry is undocumented: " + entry.id);
   ["key", "medium", "owner", "portable"].forEach((field) => {
     assert.deepStrictEqual(
@@ -284,6 +294,7 @@ requiredEntities.filter((name) => !["IntegrityReport"].includes(name)).forEach((
 
 const sources = [];
 collectSourceLocations(manifest, sources);
+collectSourceLocations(storageOverlay, sources);
 const uniqueSources = new Map();
 sources.forEach((location) => {
   const key = [location.relativePath, location.firstLine, location.lastLine].join(":");

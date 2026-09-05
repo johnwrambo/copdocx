@@ -21,6 +21,7 @@ function check(label, ok, extra) {
 var form = read("encounter-form.html");
 var list = read("encounter.html");
 var js = read("functions/encounters.js");
+var bookingWorkflow = read("functions/booking-workflow.js");
 var chrome = read("functions/app-bar.js");
 var config = read("functions/workspace-config.js");
 var css = read("style/style.css");
@@ -83,8 +84,8 @@ check("add new does not saveLead", js.indexOf("saveLead") === -1);
 check("add new does not open Book-in", js.indexOf("openSubjectBrowse") !== -1 && js.indexOf("openNewSubject") !== -1);
 check("edit reopens the float", js.indexOf("openEditSubject") !== -1);
 check("book float is in-page", form.indexOf('id="encBookFloat"') !== -1 && form.indexOf('id="confirmBookin"') !== -1);
-check("book uses promoteBookInToLead", js.indexOf("promoteBookInToLead") !== -1);
-check("book records officer field arrests", js.indexOf("recordFieldArrest") !== -1);
+check("book uses shared recoverable workflow", js.indexOf("await api.bookSubject") !== -1 && form.indexOf("functions/booking-workflow.js") !== -1);
+check("booking workflow records officer field arrests", bookingWorkflow.indexOf("root.officers.recordFieldArrest") !== -1);
 check("book is arrested only", js.indexOf("only for arrested") !== -1);
 check("generate docs opens book-in packet", js.indexOf("Generate docs") !== -1);
 check("evidence grid", form.indexOf('id="evidenceGrid"') !== -1 && form.indexOf('id="addEncounterFile"') !== -1);

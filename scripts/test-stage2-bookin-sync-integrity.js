@@ -26,7 +26,15 @@ function loadBookInRuntime(storage, encounterId) {
       pathname: "/bookin.html"
     }
   });
+  loadScript(tab.context, "functions/officer-roster.js");
+  loadScript(tab.context, "functions/booking-workflow.js");
   loadScript(tab.context, "functions/book-in.js");
+  tab.context.__realBookinStore = {
+    loadFromDisk: tab.model.store.loadFromDisk,
+    getEncounter: tab.model.store.getEncounter,
+    saveEncounter: tab.model.store.saveEncounter
+  };
+  tab.context.__realBookinPromotion = tab.model.store.promoteBookInRecord;
   run(tab.context, "setStatus = function () {}; renderSavedRecords = function () {};");
   return tab;
 }
@@ -44,6 +52,42 @@ function installEncounterStore(context, encounter) {
       "};"
     ].join("\n")
   );
+}
+
+// Validation-only fixtures use a small store double. Successful booking fixtures
+// restore the real store so the complete journaled workflow executes.
+function persistEncounterFixture(context, model) {
+  const encounter = context.__bookinSyncEncounter;
+  Object.assign(model.store, context.__realBookinStore);
+  const seededPeople = new Set();
+  (encounter.subjects || []).forEach(subject => {
+    if (subject.personId && !seededPeople.has(subject.personId)) {
+      seededPeople.add(subject.personId);
+      const person = model.createPerson({
+        personId: subject.personId,
+        name: { lastName: "SYNC", firstName: "TEST" }
+      });
+      const saved = subject.leadId
+        ? model.store.saveLead(model.createLead({
+          leadId: subject.leadId,
+          subjectPersonId: person.personId,
+          person
+        }), { mode: "commit" })
+        : model.store.upsertPerson(person);
+      assert.ok(saved.ok, saved.error);
+    }
+  });
+  const record = model.createEncounterRecord(encounter);
+  record.startedAt = record.startedAt || "2026-09-05T13:00";
+  const saved = model.store.saveEncounter(record, { mode: "draft" });
+  assert.ok(saved.ok, saved.error);
+  Object.defineProperty(context, "__bookinSyncEncounter", {
+    configurable: true,
+    get() {
+      model.store.loadFromDisk();
+      return model.store.getEncounter(encounter.encounterId);
+    }
+  });
 }
 
 function strictCanonicalSubjectIds() {
@@ -125,7 +169,7 @@ function duplicateCanonicalSubjectIdsAreRejected() {
   );
 }
 
-function missingEncounterFailsBeforePromotion() {
+async function missingEncounterFailsBeforePromotion() {
   const encounterId = "enc_bookin_missing";
   const storage = createMemoryStorage();
   const { context } = loadBookInRuntime(storage, encounterId);
@@ -148,12 +192,12 @@ function missingEncounterFailsBeforePromotion() {
       "currentEncounterRole = function () { return 'TARGET'; };",
       "renderSavedRecords = function () {}; rememberFormSignature = function () {};",
       "__missingEncounterPromotionCalls = 0;",
-      "promoteBookInRecord = function () { __missingEncounterPromotionCalls += 1; return { ok: true }; };",
+      "COPDoc.model.store.promoteBookInRecord = function () { __missingEncounterPromotionCalls += 1; return { ok: true }; };",
       "activeRecordId = 'bk_missing_encounter';"
     ].join("\n")
   );
   const before = storage.raw(BOOKIN_KEY);
-  assert.strictEqual(run(context, "saveCurrentRecord({ stay: true })"), false);
+  assert.strictEqual(await run(context, "saveCurrentRecord({ stay: true })"), false);
   assert.strictEqual(run(context, "__missingEncounterPromotionCalls"), 0);
   assert.strictEqual(
     storage.raw(BOOKIN_KEY),
@@ -162,7 +206,7 @@ function missingEncounterFailsBeforePromotion() {
   );
 }
 
-function legacyPreflightRejectsAmbiguityBeforePromotion() {
+async function legacyPreflightRejectsAmbiguityBeforePromotion() {
   const encounterId = "enc_bookin_legacy_preflight";
   const storage = createMemoryStorage();
   const { context, model } = loadBookInRuntime(storage, encounterId);
@@ -203,7 +247,7 @@ function legacyPreflightRejectsAmbiguityBeforePromotion() {
       "currentEncounterRole = function () { return 'TARGET'; };",
       "renderSavedRecords = function () {}; rememberFormSignature = function () {};",
       "__legacyPromotionCalls = 0;",
-      "promoteBookInRecord = function () {",
+      "COPDoc.model.store.promoteBookInRecord = function () {",
       "  __legacyPromotionCalls += 1;",
       "  return { ok: true, leadId: 'lead_wrong', personId: 'person_shared', arrestId: 'arr_wrong' };",
       "};",
@@ -212,7 +256,7 @@ function legacyPreflightRejectsAmbiguityBeforePromotion() {
   );
   const packetsBefore = storage.raw(BOOKIN_KEY);
   assert.strictEqual(
-    run(context, "saveCurrentRecord({ stay: true })"),
+    await run(context, "saveCurrentRecord({ stay: true })"),
     false,
     "an ambiguous ID-less legacy claim must fail before promotion"
   );
@@ -246,6 +290,8 @@ function legacyPreflightRejectsAmbiguityBeforePromotion() {
   );
   assert.strictEqual(unique.ok, true, "a unique compatible legacy claim remains valid");
   assert.strictEqual(unique.subject.subjectId, "sub_legacy_a");
+  context.__bookinSyncEncounter.subjects[0].outcome = "ARRESTED";
+  context.__bookinSyncEncounter.subjects[0].custody = "IN_CUSTODY";
   storage.setRaw(BOOKIN_KEY, [
     {
       id: "bk_legacy_ambiguous",
@@ -260,16 +306,16 @@ function legacyPreflightRejectsAmbiguityBeforePromotion() {
     context,
     [
       "__promotedCanonicalSubjectId = '';",
-      "promoteBookInRecord = function (record) {",
+      "COPDoc.model.store.promoteBookInRecord = function (record, options) {",
       "  __promotedCanonicalSubjectId = record.subjectId;",
-      "  return { ok: true, leadId: 'lead_unique', personId: 'person_shared', arrestId: 'arr_unique' };",
+      "  return __realBookinPromotion(record, options);",
       "};",
-      "COPDoc.model.store.applyEncounterLocationToArrests = function () { return { ok: true }; };",
-      "COPDoc.model.store.linkEncounterVehiclesToPerson = function () { return { ok: true }; };",
+      "collectFormData = function () { return { firstName: 'TEST', lastName: 'SYNC', foreignWarrants: 'no', dateTime: '2026-09-05T14:00', arrestTime: '13:00' }; };",
       "activeRecordId = 'bk_legacy_ambiguous';"
     ].join("\n")
   );
-  assert.strictEqual(run(context, "saveCurrentRecord({ stay: true })"), true);
+  persistEncounterFixture(context, model);
+  assert.strictEqual(await run(context, "saveCurrentRecord({ stay: true })"), true);
   assert.strictEqual(
     run(context, "__promotedCanonicalSubjectId"),
     "sub_legacy_a",
@@ -285,7 +331,7 @@ function legacyPreflightRejectsAmbiguityBeforePromotion() {
   assert.strictEqual(genuinelyNew.subject, null);
 }
 
-function explicitSaveDoesNotSweepQuietPacket() {
+async function explicitSaveDoesNotSweepQuietPacket() {
   const encounterId = "enc_bookin_scoped_projection";
   const storage = createMemoryStorage();
   const { context, model } = loadBookInRuntime(storage, encounterId);
@@ -303,8 +349,8 @@ function explicitSaveDoesNotSweepQuietPacket() {
         subjectId: "sub_explicit",
         encounterId,
         role: "COLLATERAL",
-        outcome: "RELEASED",
-        custody: "RELEASED"
+        outcome: "ARRESTED",
+        custody: "IN_CUSTODY"
       })
     ]
   });
@@ -337,17 +383,13 @@ function explicitSaveDoesNotSweepQuietPacket() {
       "}; };",
       "captureFormState = function () { return {}; };",
       "currentEncounterRole = function () { return 'TARGET'; };",
-      "renderSavedRecords = function () {}; rememberFormSignature = function () {};",
-      "promoteBookInRecord = function (record) { return {",
-      "  ok: true, leadId: 'lead_' + record.id, personId: 'person_' + record.id, arrestId: 'arr_' + record.id",
-      "}; };",
-      "COPDoc.model.store.applyEncounterLocationToArrests = function () { return { ok: true }; };",
-      "COPDoc.model.store.linkEncounterVehiclesToPerson = function () { return { ok: true }; };"
+      "renderSavedRecords = function () {}; rememberFormSignature = function () {};"
     ].join("\n")
   );
+  persistEncounterFixture(context, model);
 
   run(context, "activeRecordId = 'bk_quiet';");
-  assert.strictEqual(run(context, "saveCurrentRecord({ quiet: true, stay: true })"), true);
+  assert.strictEqual(await run(context, "saveCurrentRecord({ quiet: true, stay: true })"), true);
   assert.strictEqual(
     storage.json(BOOKIN_KEY, []).find(row => row.id === "bk_quiet").encounterProjectionFiledAt,
     undefined,
@@ -375,8 +417,9 @@ function explicitSaveDoesNotSweepQuietPacket() {
     "startup reconciliation must not promote a quiet autosave"
   );
 
-  run(context, "activeRecordId = 'bk_explicit';");
-  assert.strictEqual(run(context, "saveCurrentRecord({ stay: true })"), true);
+  // Switching the fixture's displayed record also changes its loaded revision.
+  run(context, "activeRecordId = 'bk_explicit'; activeRecordBaseUpdatedAt = ''; ");
+  assert.strictEqual(await run(context, "saveCurrentRecord({ stay: true })"), true);
   assert.ok(
     storage.json(BOOKIN_KEY, []).find(row => row.id === "bk_explicit").encounterProjectionFiledAt,
     "an explicitly promoted packet must persist its projection marker"
@@ -391,7 +434,7 @@ function explicitSaveDoesNotSweepQuietPacket() {
   assert.strictEqual(explicit.bookingId, "bk_explicit");
 }
 
-function cancelDetachesQuietCanonicalDraft() {
+async function cancelDetachesQuietCanonicalDraft() {
   const encounterId = "enc_bookin_cancel_quiet";
   const storage = createMemoryStorage();
   const { context, model } = loadBookInRuntime(storage, encounterId);
@@ -426,7 +469,7 @@ function cancelDetachesQuietCanonicalDraft() {
       "activeRecordId = 'bk_cancel_quiet';"
     ].join("\n")
   );
-  assert.strictEqual(run(context, "saveCurrentRecord({ quiet: true, stay: true })"), true);
+  assert.strictEqual(await run(context, "saveCurrentRecord({ quiet: true, stay: true })"), true);
   let packet = storage.json(BOOKIN_KEY, [])[0];
   assert.strictEqual(packet.personId, "person_cancel_quiet");
   assert.strictEqual(packet.leadId, "lead_cancel_quiet");
@@ -452,7 +495,7 @@ function cancelDetachesQuietCanonicalDraft() {
   assert.strictEqual(run(context, "__cancelReconcilePromotionCalls"), 0);
 }
 
-function legacyFiledPacketIsNotReclassifiedAsDraft() {
+async function legacyFiledPacketIsNotReclassifiedAsDraft() {
   const encounterId = "enc_bookin_legacy_filed";
   const storage = createMemoryStorage();
   const { context, model } = loadBookInRuntime(storage, encounterId);
@@ -482,17 +525,27 @@ function legacyFiledPacketIsNotReclassifiedAsDraft() {
       formState: {}
     }
   ]);
+  persistEncounterFixture(context, model);
+  const lead = model.store.getLead("lead_legacy_filed");
+  lead.person.arrests = [model.createArrest({
+    arrestId: "arr_legacy_filed",
+    bookinRecordId: "bk_legacy_filed",
+    encounterId,
+    subjectId: "sub_legacy_filed"
+  })];
+  const savedLead = model.store.saveLead(lead, { mode: "commit" });
+  assert.ok(savedLead.ok, savedLead.error);
   run(
     context,
     [
-      "collectFormData = function () { return { foreignWarrants: 'no' }; };",
+      "collectFormData = function () { return { firstName: 'TEST', lastName: 'SYNC', foreignWarrants: 'no', dateTime: '2026-09-05T14:00', arrestTime: '13:00' }; };",
       "captureFormState = function () { return {}; };",
       "currentEncounterRole = function () { return 'TARGET'; };",
       "renderSavedRecords = function () {}; rememberFormSignature = function () {};",
       "activeRecordId = 'bk_legacy_filed';"
     ].join("\n")
   );
-  assert.strictEqual(run(context, "saveCurrentRecord({ quiet: true, stay: true })"), true);
+  assert.strictEqual(await run(context, "saveCurrentRecord({ quiet: true, stay: true })"), true);
   let packet = storage.json(BOOKIN_KEY, [])[0];
   assert.strictEqual(
     packet.encounterProjectionDraft,
@@ -536,33 +589,42 @@ function importPromotionSkipsQuietDrafts() {
 
 function nativeQuickBookInRemainsIntentional() {
   const source = fs.readFileSync(path.join(ROOT, "functions/encounters.js"), "utf8");
-  assert.match(
-    source,
-    /promoteBookInToLead\(input\)/,
-    "the native Encounter quick Book-In must explicitly promote its packet"
+  const quickBook = source.slice(
+    source.indexOf("async function saveBookToEncounter()"),
+    source.indexOf("function bindBookFloat()")
   );
   assert.match(
-    source,
-    /var packet = \{[\s\S]{0,500}subjectId: subjectKey\(row\)[\s\S]{0,160}encounterProjectionFiledAt: now/,
+    quickBook,
+    /await api\.bookSubject\(packet, \{ promotionInput: input \}\)/,
+    "the native Encounter quick Book-In must await the complete booking workflow"
+  );
+  assert.match(
+    quickBook,
+    /var packet = \{[\s\S]{0,100}id: packetId,[\s\S]{0,100}subjectId: subjectKey\(row\)/,
     "the native quick Book-In packet must retain the selected Encounter subjectId"
   );
   assert.match(
-    source,
-    /row\.bookingId = packetId;[\s\S]{0,160}row\.packetFiledAt = now;/,
-    "the native quick Book-In must intentionally project its booking onto the selected row"
+    quickBook,
+    /m\.store\.loadFromDisk\(\);[\s\S]{0,100}m\.store\.getEncounter\(encounter\.encounterId\)/,
+    "the native quick Book-In must reload the persisted subject link after completion"
   );
 }
 
+async function main() {
 strictCanonicalSubjectIds();
 duplicateCanonicalSubjectIdsAreRejected();
-missingEncounterFailsBeforePromotion();
-legacyPreflightRejectsAmbiguityBeforePromotion();
-explicitSaveDoesNotSweepQuietPacket();
-cancelDetachesQuietCanonicalDraft();
-legacyFiledPacketIsNotReclassifiedAsDraft();
+await missingEncounterFailsBeforePromotion();
+await legacyPreflightRejectsAmbiguityBeforePromotion();
+await explicitSaveDoesNotSweepQuietPacket();
+await cancelDetachesQuietCanonicalDraft();
+await legacyFiledPacketIsNotReclassifiedAsDraft();
 importPromotionSkipsQuietDrafts();
 nativeQuickBookInRemainsIntentional();
 
 console.log(
   "STAGE2_BOOKIN_SYNC_INTEGRITY_PASSED strict canonical joins and scoped custody projection."
 );
+
+}
+
+main().catch(error => { console.error(error); process.exitCode = 1; });

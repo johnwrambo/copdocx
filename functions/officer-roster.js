@@ -279,36 +279,76 @@
     if (!id) {
       return { ok: false, error: "Officer is missing." };
     }
-    var admin = readAdmin();
-    admin.officers = admin.officers || [];
-    var officer = null;
-    var i;
-    for (i = 0; i < admin.officers.length; i++) {
-      if (
-        admin.officers[i] &&
-        (admin.officers[i].id === id || admin.officers[i].officerId === id)
-      ) {
-        officer = admin.officers[i];
-        break;
+    function text(value) { return String(value == null ? "" : value).trim(); }
+    function bookingClaims(row) {
+      return [text(row && row.bookingId), text(row && row.bookinRecordId)]
+        .filter(function (value, index, values) { return value && values.indexOf(value) === index; });
+    }
+    var arrestId = text(entry.arrestId);
+    var bookingIds = bookingClaims(entry);
+    if (!arrestId || bookingIds.length > 1) {
+      return { ok: false, error: "A stable Arrest identifier and consistent booking identifiers are required." };
+    }
+    var admin;
+    try {
+      var raw = global.localStorage.getItem(ADMIN_KEY);
+      admin = raw === null ? { officers: [] } : JSON.parse(raw);
+      if (!admin || typeof admin !== "object" || Array.isArray(admin) || !Array.isArray(admin.officers)) {
+        return { ok: false, error: "Officer storage is malformed. Run Integrity before retrying." };
       }
+    } catch (error) {
+      return { ok: false, error: "Could not read officer storage. Run Integrity before retrying." };
     }
-    if (!officer) {
-      return { ok: false, error: "Officer not found." };
-    }
-    officer.fieldArrests = Array.isArray(officer.fieldArrests)
-      ? officer.fieldArrests
-      : [];
-    var arrestId = String(entry.arrestId || "");
-    var exists = officer.fieldArrests.some(function (row) {
-      return arrestId && row && String(row.arrestId || "") === arrestId;
+    var matches = admin.officers.filter(function (row) {
+      return row && (text(row.id) === id || text(row.officerId) === id);
     });
-    if (!exists) {
-      officer.fieldArrests.push({
-        arrestId: arrestId,
-        encounterId: String(entry.encounterId || ""),
-        personId: String(entry.personId || ""),
-        bookedAt: String(entry.bookedAt || new Date().toISOString())
+    if (matches.length !== 1) {
+      return { ok: false, error: matches.length ? "Officer identity is duplicated." : "Officer not found." };
+    }
+    var officer = matches[0];
+    var incoming = {
+      arrestId: arrestId, bookingId: bookingIds[0] || "", subjectId: text(entry.subjectId),
+      encounterId: text(entry.encounterId), personId: text(entry.personId)
+    };
+    var conflict = "";
+    var existing = null;
+    admin.officers.forEach(function (owner) {
+      if (!owner || typeof owner !== "object" || Array.isArray(owner) ||
+          (owner.fieldArrests !== undefined && !Array.isArray(owner.fieldArrests))) {
+        conflict = "Officer Arrest storage is malformed. Run Integrity before retrying.";
+        return;
+      }
+      var arrestMatches = 0;
+      (owner.fieldArrests || []).forEach(function (row) {
+        var aliases = bookingClaims(row);
+        var sameArrest = text(row && row.arrestId) === arrestId;
+        var sameBooking = incoming.bookingId && aliases.indexOf(incoming.bookingId) !== -1;
+        if (!sameArrest && !sameBooking) { return; }
+        arrestMatches += 1;
+        if (!row || aliases.length > 1 || !sameArrest ||
+            ["subjectId", "personId", "encounterId"].some(function (field) {
+              return incoming[field] && text(row[field]) && incoming[field] !== text(row[field]);
+            }) || (incoming.bookingId && aliases.length && aliases[0] !== incoming.bookingId)) {
+          conflict = "Officer Arrest identity conflicts with this booking.";
+        }
+        if (owner === officer) { existing = row; }
       });
+      if (arrestMatches > 1) { conflict = "Officer Arrest identity is duplicated."; }
+    });
+    if (conflict) { return { ok: false, error: conflict }; }
+    officer.fieldArrests = officer.fieldArrests || [];
+    var before = JSON.stringify(existing);
+    if (existing) {
+      Object.keys(incoming).forEach(function (field) {
+        if (incoming[field]) { existing[field] = incoming[field]; }
+      });
+      if (incoming.bookingId && Object.prototype.hasOwnProperty.call(existing, "bookinRecordId")) {
+        existing.bookinRecordId = incoming.bookingId;
+      }
+      if (JSON.stringify(existing) === before) { return { ok: true, error: "" }; }
+    } else {
+      incoming.bookedAt = text(entry.bookedAt) || new Date().toISOString();
+      officer.fieldArrests.push(incoming);
     }
     try {
       global.localStorage.setItem(ADMIN_KEY, JSON.stringify(admin));

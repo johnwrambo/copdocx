@@ -1,0 +1,30 @@
+{
+  "schema": "copdocx.storage-contract-overlay.v1",
+  "stage": 4,
+  "description": "Additive Stage 4 storage contract. The Stage 1 architecture manifest remains a frozen historical description of its original 22 stores.",
+  "storage": {
+    "bookingTransactions": {
+      "key": "copdocx.booking-transactions.v1",
+      "medium": "localStorage",
+      "owner": "booking-workflow",
+      "portable": false,
+      "rootType": "object",
+      "schema": "copdocx.booking-transactions.v1",
+      "authority": "Durable booking requests, stable identity assignments, execution checkpoints and completion receipts. Domain objects remain authoritative in Workspace, Book-In and Admin stores.",
+      "readers": ["functions/booking-workflow.js", "functions/integrity.js", "functions/safety-backup.js"],
+      "writers": ["functions/booking-workflow.js"],
+      "migration": "Missing key means no journal. Version 1 requires a transactions dictionary; malformed or unsupported journal data must not be overwritten or interpreted as empty.",
+      "backup": "Exact registered raw bytes are included in the recovery archive regardless of portable=false.",
+      "transfer": "Excluded from normal transfer exports and imports: a recovery request belongs to its original workspace.",
+      "fields": {
+        "root": ["schema", "transactions"],
+        "transactionRequired": ["transactionId", "bookingId", "encounterId", "subjectId", "personId", "leadId", "arrestId", "status", "completedSteps", "createdAt", "updatedAt"],
+        "status": ["PENDING", "COMPLETED", "FAILED"],
+        "request": "Unfinished transactions retain request.packet and request.options for recovery. Completed receipts may omit the request.",
+        "identity": "Dictionary key equals transactionId; supplied booking, subject, Encounter, Person, Lead and Arrest identifiers must agree with request and durable records.",
+        "optional": ["lastError", "request", "checkpoints", "additional workflow fields"]
+      },
+      "evidence": "VERIFIED"
+    }
+  }
+}

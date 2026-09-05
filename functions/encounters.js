@@ -2569,7 +2569,10 @@
     };
   }
 
+  var quickBookingInProgress = false;
+
   function closeBookFloat() {
+    if (quickBookingInProgress) return;
     var floatEl = byId("encBookFloat");
     if (floatEl) {
       floatEl.hidden = true;
@@ -2577,6 +2580,7 @@
   }
 
   function openBookFloat(row) {
+    if (quickBookingInProgress) return;
     if (!row) {
       return;
     }
@@ -2699,7 +2703,13 @@
     window.location.href = bookinHref(encId, bookingId, key);
   }
 
-  function saveBookToEncounter() {
+  async function saveBookToEncounter() {
+    if (quickBookingInProgress) return false;
+    var api = window.COPDoc && COPDoc.booking;
+    if (!api || typeof api.bookSubject !== "function") {
+      setStatus("The booking workflow is unavailable. No booking was filed.");
+      return false;
+    }
     var key = (byId("bookSubjectKey") && byId("bookSubjectKey").value) || "";
     var row = null;
     encounterSubjects.forEach(function (item) {
@@ -2737,10 +2747,12 @@
     var cash = String((byId("bookCash") && byId("bookCash").value) || "").trim();
     var travelDocs = String((byId("bookId") && byId("bookId").value) || "").trim();
     var now = new Date().toISOString();
-    var packetId =
-      window.crypto && typeof window.crypto.randomUUID === "function"
+    var packetId = subjectBookingId(row) ||
+      (typeof api.pendingBookingId === "function" &&
+        api.pendingBookingId(encounter.encounterId, key)) ||
+      (window.crypto && typeof window.crypto.randomUUID === "function"
         ? window.crypto.randomUUID()
-        : "record-" + Date.now().toString(16);
+        : "record-" + Date.now().toString(16));
     var officerName = officerDisplayName(row.arrestingOfficerId);
     var booking = {
       cash: cash,
@@ -2761,20 +2773,11 @@
             booking: booking
           })
         : {};
-    var promoted =
-      m && m.store && typeof m.store.promoteBookInToLead === "function"
-        ? m.store.promoteBookInToLead(input)
-        : { ok: false, error: "Could not file the case." };
-    if (!promoted || !promoted.ok) {
-      setStatus((promoted && promoted.error) || "Could not book this subject.");
-      return;
-    }
     var packet = {
       id: packetId,
       subjectId: subjectKey(row),
       createdAt: now,
       updatedAt: now,
-      encounterProjectionFiledAt: now,
       firstName: row.firstName || "",
       lastName: row.lastName || "",
       aNumber: row.alienNumber || "",
@@ -2788,9 +2791,8 @@
       vehiclePosition: input.vehiclePosition || subjectOccupantRole(row),
       team: shared.team || encounter.team || "",
       officersName: officerName,
-      personId: promoted.personId || row.personId || "",
-      leadId: promoted.leadId || "",
-      arrestId: promoted.arrestId || "",
+      personId: row.personId || "",
+      leadId: row.leadId || "",
       formState: {
         lastName: bookFormStateField(row.lastName),
         firstName: bookFormStateField(row.firstName),
@@ -2812,65 +2814,37 @@
         )
       }
     };
-    var packets = packetStore.records;
-    packets.push(packet);
-    writeBookinRecords(packets);
-    row.bookingId = packetId;
-    row.bookinRecordId = packetId;
-    row.packetFiledAt = now;
-    row.leadId = promoted.leadId || row.leadId || "";
-    row.personId = promoted.personId || row.personId || "";
-    row.docsGeneratedAt = "";
-    row = cloneSubject(row, encounter.encounterId);
-    encounterSubjects = encounterSubjects.map(function (item) {
-      return subjectKey(item) === key ? row : item;
-    });
-    if (saveDraftQuiet({ force: true }) === false) {
-      paintSubjectsTable(encounter.encounterId);
-      paintBanner();
-      setStatus(
-        "The case and Book-In packet were saved, but the Encounter link did not finish. Retry from the linked packet."
-      );
-      return;
-    }
-    var linkageWarnings = [];
-    if (encounter.encounterId && row.personId && m.store.linkEncounterVehiclesToPerson) {
-      var vehicleLink = m.store.linkEncounterVehiclesToPerson({
-        encounterId: encounter.encounterId,
-        subjectId: subjectKey(row),
-        bookinRecordId: packetId,
-        leadId: row.leadId,
-        personId: row.personId
-      });
-      if (!vehicleLink || !vehicleLink.ok) {
-        linkageWarnings.push(
-          (vehicleLink && vehicleLink.error) || "Encounter vehicles were not linked."
-        );
+    var displayedBefore = JSON.stringify(collectEncounter());
+    quickBookingInProgress = true;
+    var confirmButton = byId("confirmBookin");
+    if (confirmButton) confirmButton.disabled = true;
+    try {
+      setStatus("Filing Book-In…");
+      var result = await api.bookSubject(packet, { promotionInput: input });
+      if (!result || !result.ok) {
+        setStatus((result && result.error) ||
+          "Booking did not finish. Retry here or open Book-In to resume the saved booking.");
+        return false;
       }
+      m.store.loadFromDisk();
+      var fresh = m.store.getEncounter(encounter.encounterId);
+      var formChanged = JSON.stringify(collectEncounter()) !== displayedBefore;
+      quickBookingInProgress = false;
+      closeBookFloat();
+      if (fresh && !formChanged) {
+        hydrateEncounter(fresh);
+        setStatus("Booked-in " + subjectLabel(row) + ".", true);
+      } else {
+        setStatus("Booking completed. Your newer Encounter edits are still visible; reload the Encounter before saving them.");
+      }
+      return true;
+    } catch (error) {
+      setStatus((error && error.message) || "Booking did not finish. The recovery record is retained.");
+      return false;
+    } finally {
+      quickBookingInProgress = false;
+      if (confirmButton) confirmButton.disabled = false;
     }
-    if (
-      row.arrestingOfficerId &&
-      window.COPDoc &&
-      COPDoc.officers &&
-      typeof COPDoc.officers.recordFieldArrest === "function"
-    ) {
-      COPDoc.officers.recordFieldArrest(row.arrestingOfficerId, {
-        arrestId: promoted.arrestId || "",
-        encounterId: encounter.encounterId,
-        subjectId: subjectKey(row),
-        personId: row.personId,
-        bookedAt: now
-      });
-    }
-    closeBookFloat();
-    paintSubjectsTable(encounter.encounterId);
-    paintBanner();
-    setStatus(
-      linkageWarnings.length
-        ? "Booked-in " + subjectLabel(row) + ", with warning: " + linkageWarnings.join(" ")
-        : "Booked-in " + subjectLabel(row) + ".",
-      linkageWarnings.length === 0
-    );
   }
 
   function bindBookFloat() {

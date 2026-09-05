@@ -230,6 +230,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     ]);
 
     let activeRecordId = null;
+    let activeRecordBaseUpdatedAt = null;
+    let bookingSaveInProgress = false;
     let pendingLeadId = "";
     let pendingRecordsImportMode = "merge";
     let suppressAutoSave = false;
@@ -1494,6 +1496,28 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       }
     }
 
+    function readSavedRecordsForWrite() {
+      let records;
+      try {
+        const raw = localStorage.getItem(SAVED_RECORDS_STORAGE_KEY);
+        records = raw == null ? [] : JSON.parse(raw);
+      } catch (error) {
+        throw new Error("Saved packets could not be read. No Book-In changes were made.");
+      }
+      if (!Array.isArray(records) || records.some(record =>
+        !isPlainRecordObject(record) ||
+        typeof record.id !== "string" || !record.id.trim() ||
+        !isPlainRecordObject(record.formState)
+      )) {
+        throw new Error("Saved packets need an integrity review. No Book-In changes were made.");
+      }
+      const ids = records.map(record => record.id.trim());
+      if (new Set(ids).size !== ids.length) {
+        throw new Error("Saved packets contain duplicate IDs. No Book-In changes were made.");
+      }
+      return records;
+    }
+
     function writeSavedRecords(records) {
       try {
         localStorage.setItem(
@@ -2415,8 +2439,15 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       if (!store || typeof store.bookInPromotionInput !== "function") {
         return null;
       }
+      const recoveryApi = window.COPDoc && COPDoc.booking;
+      const recovery = recoveryApi && typeof recoveryApi.listTransactions === "function"
+        ? recoveryApi.listTransactions() : { ok: true, transactions: [] };
+      if (!recovery || !recovery.ok) return null;
+      const reserved = new Set((recovery.transactions || [])
+        .filter(transaction => transaction && transaction.status !== "COMPLETED")
+        .map(transaction => transaction.bookingId));
       const pending = records.filter(record => {
-        if (record.encounterProjectionDraft === true) {
+        if (reserved.has(record.id) || record.encounterProjectionDraft === true) {
           return false;
         }
         if (record.leadId && record.personId && record.arrestId) {
@@ -2440,6 +2471,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     async function importRecordsBackupFile(event) {
+      if (bookingSaveInProgress) {
+        setStatus("Wait for the current Book-In save before importing packets.", "warning");
+        return;
+      }
       const fileInput = event.currentTarget;
       const file = fileInput.files?.[0];
 
@@ -2492,6 +2527,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           }
           writeSavedRecords(promotion.rows || replacementRecords);
           activeRecordId = null;
+          activeRecordBaseUpdatedAt = null;
           renderSavedRecords();
           setStatus(
             `Backup restored: ${backup.records.length} saved record${backup.records.length === 1 ? "" : "s"} from app version ${backup.appVersion}.${promotionStatusText(promotion)}`,
@@ -3468,6 +3504,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function cancelInlineRecordEdit() {
+      if (bookingSaveInProgress) return;
       if (!inlineRecordEditState) {
         return;
       }
@@ -3476,12 +3513,18 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       setStatus("Table edit cancelled.");
     }
 
-    function saveInlineRecordEdit() {
+    async function saveInlineRecordEdit() {
+      if (bookingSaveInProgress) {
+        setStatus("A Book-In save is already in progress.", "warning");
+        return false;
+      }
       if (!inlineRecordEditState) {
         return;
       }
       const state = inlineRecordEditState;
-      const records = readSavedRecords();
+      let records;
+      try { records = readSavedRecordsForWrite(); }
+      catch (error) { setStatus(error.message, "error"); return false; }
       const index = records.findIndex(row => row.id === state.recordId);
       if (index < 0) {
         inlineRecordEditState = null;
@@ -3534,41 +3577,51 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       setRecordFormStateValue(record, "arrestTime", "arrest_time", record.arrestTime, "time");
       setRecordFormStateValue(record, "arrestTimeManual", "arrest_time_manual", record.arrestTime ? "true" : "", "hidden");
 
-      const promoted = promoteRecordsToCases([record]);
-      if (!promoted || !promoted.ok || promoted.failed) {
-        const promotionError =
-          promoted &&
-          promoted.errors &&
-          promoted.errors[0] &&
-          promoted.errors[0].error;
-        setStatus(
-          promotionError || "Could not update the canonical case. No changes were saved.",
-          "error"
-        );
-        return;
+      const bookingApi = window.COPDoc && COPDoc.booking;
+      if (!bookingApi || typeof bookingApi.bookSubject !== "function") {
+        setStatus("The booking workflow is unavailable. No table edits were filed.", "error");
+        return false;
       }
-      const linked = (promoted.rows && promoted.rows[0]) || record;
-      linked.encounterProjectionFiledAt =
-        linked.encounterProjectionFiledAt || record.updatedAt;
-      delete linked.encounterProjectionDraft;
-      records[index] = linked;
-      writeSavedRecords(records);
-      if (activeRecordId === linked.id) {
-        suppressAutoSave = true;
-        restoreFormState(linked.formState);
-        pendingLeadId = linked.leadId || pendingLeadId;
-        rememberFormSignature();
-        suppressAutoSave = false;
+      bookingSaveInProgress = true;
+      const submittedDraft = JSON.stringify(state.draft);
+      try {
+        const result = await bookingApi.bookSubject(record, {
+          expectedUpdatedAt: String(records[index].updatedAt || "")
+        });
+        if (!result || !result.ok) {
+          setStatus((result && result.error) ||
+            "Table edits did not finish. Use Resume booking below.", "error");
+          renderBookingRecovery();
+          return false;
+        }
+        const linked = result.record || record;
+        if (activeRecordId === linked.id) {
+          activeRecordBaseUpdatedAt = String(linked.updatedAt || "");
+          pendingLeadId = linked.leadId || pendingLeadId;
+          // A form being edited alongside the table must retain its new input.
+          if (currentFormSignature() === lastSavedSignature) {
+            suppressAutoSave = true;
+            restoreFormState(linked.formState);
+            rememberFormSignature();
+            suppressAutoSave = false;
+          }
+        }
+        const newerEdits = JSON.stringify(state.draft) !== submittedDraft;
+        if (newerEdits) state.baseUpdatedAt = String(linked.updatedAt || "");
+        else inlineRecordEditState = null;
+        renderSavedRecords();
+        renderBookingRecovery();
+        setStatus(newerEdits
+          ? "Saved table edits. Newer edits are still waiting to save."
+          : "Saved table edits and verified the booking links.", newerEdits ? "warning" : "success");
+        return true;
+      } catch (error) {
+        setStatus(error.message || "Table edits did not finish.", "error");
+        renderBookingRecovery();
+        return false;
+      } finally {
+        bookingSaveInProgress = false;
       }
-      inlineRecordEditState = null;
-      if (linked.encounterProjectionFiledAt) {
-        syncEncounterSubjects(linked);
-      }
-      renderSavedRecords();
-      setStatus(
-        `Saved table edits and updated ${linked.leadId ? "the canonical case" : "the Book-In record"}.${promotionStatusText(promoted)}`,
-        promoted.failed ? "warning" : "success"
-      );
     }
 
     function appendInlineField(container, labelText, field, type = "text", sourceSelectId = "") {
@@ -3633,7 +3686,85 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       cell.replaceChildren(editor);
     }
 
+    function renderBookingRecovery() {
+      const host = document.querySelector(".records-panel");
+      const api = window.COPDoc && COPDoc.booking;
+      if (!host || !api || typeof api.listTransactions !== "function") return;
+      let panel = document.getElementById("bookingRecoveryPanel");
+      if (!panel) {
+        panel = document.createElement("section");
+        panel.id = "bookingRecoveryPanel";
+        panel.className = "records-empty";
+        panel.setAttribute("aria-live", "polite");
+        host.appendChild(panel);
+      }
+      panel.replaceChildren();
+      let result;
+      try { result = api.listTransactions(); }
+      catch (error) { result = { ok: false }; }
+      if (!result || !result.ok) {
+        panel.hidden = false;
+        panel.textContent = "Booking recovery records could not be read. Run Integrity before filing another booking.";
+        return;
+      }
+      const rows = Array.isArray(result.transactions) ? result.transactions : [];
+      const pending = rows.filter(row => row && String(row.status || "").toUpperCase() !== "COMPLETED");
+      const completed = rows.length - pending.length;
+      panel.hidden = rows.length === 0;
+      if (!rows.length) return;
+      const title = document.createElement("strong");
+      title.textContent = pending.length ? "Bookings needing attention" : "Booking recovery";
+      panel.appendChild(title);
+      if (completed) {
+        const summary = document.createElement("p");
+        summary.textContent = completed + " completed booking receipt" + (completed === 1 ? "" : "s") + ".";
+        panel.appendChild(summary);
+      }
+      pending.forEach(transaction => {
+        const row = document.createElement("div");
+        row.className = "records-toolbar";
+        const label = document.createElement("span");
+        label.textContent = "Booking " + String(transaction.bookingId || transaction.transactionId || "") +
+          " · " + String(transaction.status || "PENDING");
+        const resumeButton = document.createElement("button");
+        resumeButton.type = "button";
+        resumeButton.className = "action-button-secondary compact";
+        resumeButton.dataset.recordIgnore = "true";
+        resumeButton.textContent = "Resume booking";
+        resumeButton.addEventListener("click", async function () {
+          if (bookingSaveInProgress) {
+            setStatus("A Book-In save is already in progress.", "warning");
+            return;
+          }
+          bookingSaveInProgress = true;
+          resumeButton.disabled = true;
+          try {
+            const resumed = await api.resume(transaction.transactionId);
+            if (!resumed || !resumed.ok) {
+              setStatus((resumed && resumed.error) || "Booking still needs attention. Your saved recovery record is retained.", "error");
+            } else {
+              const packet = resumed.record;
+              if (packet && activeRecordId === packet.id) {
+                activeRecordBaseUpdatedAt = String(packet.updatedAt || "");
+                pendingLeadId = packet.leadId || pendingLeadId;
+              }
+              setStatus("Booking completed and its links were verified. Form edits have been preserved.", "success");
+            }
+            renderSavedRecords();
+          } catch (error) {
+            setStatus(error.message || "Booking could not resume.", "error");
+          } finally {
+            bookingSaveInProgress = false;
+            renderBookingRecovery();
+          }
+        });
+        row.append(label, resumeButton);
+        panel.appendChild(row);
+      });
+    }
+
     function renderSavedRecords() {
+      renderBookingRecovery();
       const records = listedSavedRecords()
         .slice()
         .sort(function (left, right) {
@@ -3711,41 +3842,39 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       lastSavedSignature = currentFormSignature();
     }
 
-    function promoteBookInRecord(record, data) {
-      const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
-      if (!store || typeof store.promoteBookInRecord !== "function") {
-        return { ok: false, error: "Lead store is not available." };
-      }
-      record.leadId = record.leadId || pendingLeadId || "";
-      return store.promoteBookInRecord(record, {
-        formData: {
-          ...data,
-          sex: getRadioValue("sex") || data.gender || "",
-          citizenship: resolveCitizenshipCode(
-            getValue("citizenship") || data.countryOfCitizenship
-          ),
-          disposition: data.caseType || "",
-          status: getValue("immigrationStatus"),
-          iceEventNumber: data.iceEvent || "",
-          encounterId: record.encounterId || "",
-          subjectId: record.subjectId || currentEncounterSubjectId(),
-          encounterNumber: data.encounterNumber || record.encounterId || "",
-          subjectRole: record.encounterRole || data.subjectRole || "",
-          bookInDateTime: data.dateTime || "",
-          arrestTime: data.arrestTime || "",
-          arrestDateTime: data.dateTime || "",
-          arrestingOfficer: data.officersName || "",
-          foreignWarrantsKnown: true,
-          hasForeignWarrants: data.foreignWarrants === "yes",
-          foreignWarrantCountry: data.foreignWarrantCountry || ""
-        }
-      });
+    function bookInPromotionFormData(record, data) {
+      return {
+        ...data,
+        sex: getRadioValue("sex") || data.gender || "",
+        citizenship: resolveCitizenshipCode(
+          getValue("citizenship") || data.countryOfCitizenship
+        ),
+        disposition: data.caseType || "",
+        status: getValue("immigrationStatus"),
+        iceEventNumber: data.iceEvent || "",
+        encounterId: record.encounterId || "",
+        subjectId: record.subjectId || currentEncounterSubjectId(),
+        encounterNumber: data.encounterNumber || record.encounterId || "",
+        subjectRole: record.encounterRole || data.subjectRole || "",
+        bookInDateTime: data.dateTime || "",
+        arrestTime: data.arrestTime || "",
+        arrestingOfficer: data.officersName || "",
+        foreignWarrantsKnown: true,
+        hasForeignWarrants: data.foreignWarrants === "yes",
+        foreignWarrantCountry: data.foreignWarrantCountry || ""
+      };
     }
 
-    function saveCurrentRecord(options) {
+    async function saveCurrentRecord(options) {
       const quiet = Boolean(options && options.quiet);
-      const shouldPromote = !quiet || Boolean(options && options.promote);
+      if (bookingSaveInProgress) {
+        if (!quiet) setStatus("A Book-In save is already in progress.", "warning");
+        return false;
+      }
+      bookingSaveInProgress = true;
+      let savedWithNewerEdits = false;
       try {
+        let shouldPromote = !quiet || Boolean(options && options.promote);
         const data = collectFormData();
         if (
           shouldPromote &&
@@ -3756,7 +3885,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           document.getElementById("foreignWarrantCountry")?.focus();
           return false;
         }
-        const records = readSavedRecords();
+        const records = readSavedRecordsForWrite();
         const now = new Date().toISOString();
         const existingIndex = records.findIndex(
           record => record.id === activeRecordId
@@ -3765,6 +3894,13 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         const existing = existingIndex >= 0
           ? records[existingIndex]
           : null;
+        if (activeRecordBaseUpdatedAt !== null &&
+            (!existing || String(existing.updatedAt || "") !== activeRecordBaseUpdatedAt)) {
+          setStatus("That packet changed in another window. Reopen it before saving.", "warning");
+          return false;
+        }
+        shouldPromote = shouldPromote || Boolean(existing &&
+          (existing.encounterProjectionFiledAt || existing.arrestId));
 
         const encounterId =
           currentEncounterId() || (existing && existing.encounterId) || "";
@@ -3797,9 +3933,14 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           return false;
         }
 
-        const record = {
+        const bookingApi = window.COPDoc && COPDoc.booking;
+        const pendingPacketId = encounterId && requestedSubjectId && bookingApi &&
+          typeof bookingApi.pendingBookingId === "function"
+          ? bookingApi.pendingBookingId(encounterId, requestedSubjectId)
+          : "";
+        let record = {
           ...(existing || {}),
-          id: existing ? existing.id : createRecordId(),
+          id: existing ? existing.id : activeRecordId || pendingPacketId || createRecordId(),
           createdAt: existing ? existing.createdAt : now,
           updatedAt: now,
           createdWithVersion: existing
@@ -3886,124 +4027,92 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           record.encounterProjectionDraft = true;
         }
 
-        let promoteError = "";
-        let linkError = "";
-        let projectionFiled = false;
-        if (shouldPromote) {
-          const promoted = promoteBookInRecord(record, data);
-          if (promoted && promoted.ok) {
-            record.leadId = promoted.leadId || record.leadId;
-            record.personId = promoted.personId || record.personId;
-            record.arrestId = promoted.arrestId || record.arrestId || "";
-            record.subjectRole = promoted.subjectRole || record.subjectRole || "";
-            record.encounterRole =
-              promoted.subjectRole || record.encounterRole || "";
-            record.vehiclePosition =
-              promoted.vehiclePosition || record.vehiclePosition || "";
-            record.encounterProjectionFiledAt = now;
-            delete record.encounterProjectionDraft;
-            projectionFiled = true;
-            pendingLeadId = record.leadId || pendingLeadId;
-          } else {
-            promoteError =
-              (promoted && promoted.error) ||
-              "The canonical case could not be updated. No changes were saved.";
-            setStatus(promoteError, "error");
+        if (bookingApi && typeof bookingApi.listTransactions === "function") {
+          const recovery = bookingApi.listTransactions();
+          if (!recovery || !recovery.ok) {
+            setStatus("Booking recovery records could not be read. No changes were saved.", "error");
+            renderBookingRecovery();
             return false;
           }
+          const unfinished = (recovery.transactions || []).some(transaction =>
+            transaction && transaction.bookingId === record.id && transaction.status !== "COMPLETED");
+          if (unfinished && quiet) {
+            setStatus("Resume the pending booking below before saving newer form edits.", "warning");
+            renderBookingRecovery();
+            return false;
+          }
+          shouldPromote = shouldPromote || unfinished;
         }
-
-        if (existingIndex >= 0) {
-          records[existingIndex] = record;
-        } else {
-          records.push(record);
-        }
-
-        writeSavedRecords(records);
+        // A linked filed subject also makes a legacy packet a filed save.
+        shouldPromote = shouldPromote || Boolean(subjectAlreadyOwnsBooking &&
+          subjectLink.subject && String(subjectLink.subject.outcome || "").toUpperCase() === "ARRESTED");
+        const submittedSignature = currentFormSignature();
         activeRecordId = record.id;
+        if (shouldPromote) {
+          if (!bookingApi || typeof bookingApi.bookSubject !== "function") {
+            setStatus("The booking workflow is unavailable. No booking was filed.", "error");
+            return false;
+          }
+          setStatus(quiet ? "Saving Book-In changes…" : "Filing Book-In…");
+          const result = await bookingApi.bookSubject(record, {
+            formData: bookInPromotionFormData(record, data),
+            expectedUpdatedAt: existing ? String(existing.updatedAt || "") : null
+          });
+          if (!result || !result.ok) {
+            activeRecordId = (result && result.bookingId) || record.id;
+            renderBookingRecovery();
+            setStatus((result && result.error) ||
+              "Booking did not finish. Your form is still here; use Resume booking below.", "error");
+            return false;
+          }
+          record = result.record || record;
+          pendingLeadId = record.leadId || pendingLeadId;
+        } else {
+          // Unfiled drafts remain local packets, without canonical side effects.
+          if (existingIndex >= 0) records[existingIndex] = record;
+          else records.push(record);
+          writeSavedRecords(records);
+        }
+        activeRecordId = record.id;
+        activeRecordBaseUpdatedAt = String(record.updatedAt || "");
+        lastSavedSignature = submittedSignature;
+        savedWithNewerEdits = currentFormSignature() !== submittedSignature;
         renderSavedRecords();
-        rememberFormSignature();
-        let subjectSync = null;
-        if (projectionFiled) {
-          subjectSync = syncEncounterSubjects(record);
-          if (subjectSync && (subjectSync.error || subjectSync.warning)) {
-            linkError = subjectSync.error || subjectSync.warning;
-          }
-        }
-        if (!quiet && record.encounterId && window.COPDoc && COPDoc.model && COPDoc.model.store) {
-          const pinStore = COPDoc.model.store;
-          if (typeof pinStore.applyEncounterLocationToArrests === "function") {
-            pinStore.applyEncounterLocationToArrests(record.encounterId);
-          }
-        }
-        if (!quiet && !promoteError && record.encounterId && record.personId) {
-          const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
-          if (store && typeof store.linkEncounterVehiclesToPerson === "function") {
-            const linked = store.linkEncounterVehiclesToPerson({
-              encounterId: record.encounterId,
-              bookinRecordId: record.id,
-              leadId: record.leadId,
-              personId: record.personId
-            });
-            if (!linked || !linked.ok) {
-              linkError =
-                (linked && linked.error) ||
-                "Encounter vehicles could not be linked to the case.";
-            }
-          }
-        }
-        if (shouldPromote && record.leadId) {
-          rememberLeadInUrl(record.leadId);
-        }
-
-        if (linkError) {
-          setStatus(
-            `Book-in saved, but its Encounter links are incomplete. ${linkError}`,
-            "warning"
-          );
+        renderBookingRecovery();
+        if (shouldPromote && record.leadId) rememberLeadInUrl(record.leadId);
+        if (savedWithNewerEdits) {
+          setStatus("Saved. Newer form edits are waiting to save.", "warning");
         } else if (quiet) {
           setStatus("Auto-saved.", "success");
         } else if (record.leadId && record.encounterId) {
-          setStatus(
-            `Saved ${getRecordSubjectLabel(record)} to this encounter.`,
-            "success"
-          );
+          setStatus(`Saved ${getRecordSubjectLabel(record)} to this encounter.`, "success");
         } else if (record.leadId) {
-          setStatus(
-            `Filed as detainee: ${getRecordSubjectLabel(record)}`,
-            "success"
-          );
-        } else if (existing) {
-          setStatus(
-            `Saved record updated: ${getRecordSubjectLabel(record)}`,
-            "success"
-          );
+          setStatus(`Filed as detainee: ${getRecordSubjectLabel(record)}`, "success");
         } else {
-          setStatus(
-            `Record saved: ${getRecordSubjectLabel(record)}`,
-            "success"
-          );
+          setStatus(`Record saved: ${getRecordSubjectLabel(record)}`, "success");
         }
-        if (
-          !quiet &&
-          !promoteError &&
-          !linkError &&
-          currentEncounterId() &&
-          !(options && options.stay)
-        ) {
-          window.location.href =
-            "encounter-form.html?id=" +
+        if (!quiet && !savedWithNewerEdits && currentEncounterId() &&
+            !(options && options.stay)) {
+          window.location.href = "encounter-form.html?id=" +
             encodeURIComponent(currentEncounterId());
         }
-        return !linkError;
+        return true;
       } catch (error) {
         console.error(error);
         setStatus(`Error: ${error.message}`, "error");
+        renderBookingRecovery();
         return false;
+      } finally {
+        bookingSaveInProgress = false;
+        if (savedWithNewerEdits) requestAutoSave();
       }
     }
 
     function loadSavedRecord(recordId) {
+      if (bookingSaveInProgress) {
+        setStatus("Wait for the current Book-In save to finish.", "warning");
+        return;
+      }
       const record = readSavedRecords().find(
         item => item.id === recordId
       );
@@ -4020,6 +4129,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         setEncounterRole(record.encounterRole);
       }
       activeRecordId = record.id;
+      activeRecordBaseUpdatedAt = String(record.updatedAt || "");
       pendingLeadId = record.leadId || "";
       renderSavedRecords();
       rememberFormSignature();
@@ -4235,6 +4345,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function deleteSavedRecord(recordId) {
+      if (bookingSaveInProgress) {
+        setStatus("Wait for the current Book-In save to finish.", "warning");
+        return;
+      }
       const records = readSavedRecords();
       const record = records.find(item => item.id === recordId);
 
@@ -4282,6 +4396,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
       if (activeRecordId === recordId) {
         activeRecordId = null;
+        activeRecordBaseUpdatedAt = null;
       }
 
       renderSavedRecords();
@@ -4292,14 +4407,19 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function startNewRecord() {
+      if (bookingSaveInProgress) {
+        setStatus("Wait for the current Book-In save to finish.", "warning");
+        return;
+      }
       pendingLeadId = "";
       activeRecordId = null;
+      activeRecordBaseUpdatedAt = null;
       clearForm();
       rememberLeadInUrl("");
       setStatus("New blank record ready.");
     }
 
-    function addAnotherEncounterSubject() {
+    async function addAnotherEncounterSubject() {
       const last = getValue("lastName");
       const first = getValue("firstName");
       const aNumber = getValue("alienNumber");
@@ -4308,7 +4428,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
           ? alienNumberDigits(aNumber)
           : String(aNumber || "").replace(/\D/g, "");
       if (last || first || digits) {
-        if (!saveCurrentRecord({ stay: true })) {
+        if (!(await saveCurrentRecord({ stay: true }))) {
           return;
         }
       }
@@ -4321,6 +4441,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function cancelEncounterBookIn() {
+      if (bookingSaveInProgress) {
+        setStatus("Wait for the current Book-In save to finish.", "warning");
+        return;
+      }
       const encounterId = currentEncounterId();
       suppressAutoSave = true;
       if (activeRecordId) {
@@ -4466,6 +4590,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function applyLeadToForm(snap, message) {
+      if (bookingSaveInProgress) {
+        setStatus("Wait for the current Book-In save to finish.", "warning");
+        return;
+      }
       suppressAutoSave = true;
       pendingLeadId = "";
       clearForm({ quiet: true });
@@ -5766,11 +5894,11 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function requestAutoSave() {
-      if (suppressAutoSave) {
+      if (suppressAutoSave || bookingSaveInProgress) {
         return;
       }
       window.setTimeout(function () {
-        if (suppressAutoSave) {
+        if (suppressAutoSave || bookingSaveInProgress) {
           return;
         }
         if (currentFormSignature() === lastSavedSignature) {
@@ -5802,6 +5930,10 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
     }
 
     function clearForm(options) {
+      if (bookingSaveInProgress) {
+        setStatus("Wait for the current Book-In save to finish.", "warning");
+        return;
+      }
       const quiet = Boolean(options && options.quiet);
       suppressAutoSave = true;
       document
@@ -5831,6 +5963,7 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       updateAge();
 
       activeRecordId = null;
+      activeRecordBaseUpdatedAt = null;
 
       applyEncounterStopToForm();
       setDefaultTeam();
@@ -6056,9 +6189,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
         }
 
         window.addEventListener("storage", event => {
-          if (event.key === SAVED_RECORDS_STORAGE_KEY) {
-            renderSavedRecords();
-          }
+          if (event.key === SAVED_RECORDS_STORAGE_KEY) renderSavedRecords();
+          renderBookingRecovery();
         });
       }
     );
@@ -6082,8 +6214,8 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       }
     }
 
-    function openBaseballCard() {
-      if (!saveCurrentRecord({ quiet: true, promote: true })) {
+    async function openBaseballCard() {
+      if (!(await saveCurrentRecord({ quiet: true, promote: true }))) {
         return;
       }
       const leadId = bookInLeadId();

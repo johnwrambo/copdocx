@@ -11,12 +11,13 @@
   var root = (global.COPDoc = global.COPDoc || {});
   var REPORT_SCHEMA = "copdocx.integrity-report.v1";
   var RULESET_VERSION = "copdocx.integrity-rules.v1";
-  var SCANNER_VERSION = "0.1.0";
+  var SCANNER_VERSION = "0.2.0";
   var MEDIA_DB_NAME = "copdocx.media.v1";
   var FALLBACK_ENTRIES = [
     { id: "workspace", key: "copdocx.store.v1", medium: "localStorage" },
     { id: "admin", key: "copdoc.admin.v1", medium: "localStorage" },
     { id: "bookin", key: "alien-book-in.saved-records.v1", medium: "localStorage" },
+    { id: "bookingTransactions", key: "copdocx.booking-transactions.v1", medium: "localStorage" },
     { id: "bookinColumns", key: "alien-book-in.saved-record-columns.v1", medium: "localStorage" },
     { id: "settings", key: "copdocx.settings.v1", medium: "localStorage" },
     { id: "importDoneSignal", key: "copdocx.import.done.v1", medium: "localStorage" },
@@ -292,7 +293,7 @@
     if (Array.isArray(input.stores)) {
       input.stores.forEach(function (entry) {
         if (!entry || !entry.id) return;
-        var isDomainStore = ["workspace", "admin", "bookin"].indexOf(entry.id) >= 0;
+        var isDomainStore = ["workspace", "admin", "bookin", "bookingTransactions"].indexOf(entry.id) >= 0;
         var parsed = isDomainStore
           ? parseStoreEntry(entry)
           : { status: entry.status || (entry.raw == null ? "missing" : "ok"), value: null, error: entry.error || "" };
@@ -313,7 +314,8 @@
     [
       ["workspace", "copdocx.store.v1"],
       ["admin", "copdoc.admin.v1"],
-      ["bookin", "alien-book-in.saved-records.v1"]
+      ["bookin", "alien-book-in.saved-records.v1"],
+      ["bookingTransactions", "copdocx.booking-transactions.v1"]
     ].forEach(function (spec) {
       if (own(input, spec[0])) byId[spec[0]] = directStore(spec[0], input[spec[0]], spec[1]);
       if (!byId[spec[0]]) byId[spec[0]] = directStore(spec[0], undefined, spec[1]);
@@ -342,6 +344,7 @@
       workspace: byId.workspace,
       admin: byId.admin,
       bookin: byId.bookin,
+      bookingTransactions: byId.bookingTransactions,
       media: byId.media
     };
   }
@@ -541,9 +544,10 @@
     scanInputStatus(ctx, ws, "Workspace");
     scanInputStatus(ctx, admin, "Admin");
     scanInputStatus(ctx, bookin, "Book-In");
+    scanInputStatus(ctx, ctx.snapshot.bookingTransactions, "Booking recovery");
     scanInputStatus(ctx, ctx.snapshot.media, "Media");
     ctx.snapshot.stores.forEach(function (row) {
-      if (["workspace", "admin", "bookin"].indexOf(row.id) >= 0) return;
+      if (["workspace", "admin", "bookin", "bookingTransactions"].indexOf(row.id) >= 0) return;
       if (row.status === "unavailable") scanInputStatus(ctx, row, row.id || row.key || "Registered");
     });
     if (ws.status === "ok") {
@@ -2038,6 +2042,118 @@
     });
   }
 
+  /** Journal findings deliberately exclude request values and lastError text. */
+  function scanBookingTransactions(ctx) {
+    var store = ctx.snapshot.bookingTransactions;
+    if (store.status !== "ok") return;
+    var journal = store.value;
+    function report(rule, severity, title, id, field, actual) {
+      var path = id ? "transactions." + id + (field ? "." + field : "") : "$";
+      finding(ctx, rule, severity, "transaction", title,
+        [{ store: "bookingTransactions", type: "BOOKING_TRANSACTION", id: id || "", path: path }],
+        [{ store: "bookingTransactions", path: path, expected: "valid consistent booking journal", actual: actual }]);
+    }
+    if (!isObject(journal) || journal.schema !== "copdocx.booking-transactions.v1" || !isObject(journal.transactions)) {
+      report("BOOKING_JOURNAL_INVALID", "critical", "Booking recovery journal has an unsupported shape", "", "", "invalid root or schema");
+      addBlocked(ctx, "Booking recovery domain checks");
+      return;
+    }
+    var ids = ["transactionId", "bookingId", "encounterId", "subjectId", "personId", "leadId", "arrestId"];
+    var claimsByBooking = Object.create(null);
+    var activeBySubject = Object.create(null);
+    var activeByBooking = Object.create(null);
+    var count = 0;
+    function mismatch(a, b, fields) {
+      return fields.some(function (field) {
+        return text(a && a[field]) && text(b && b[field]) && text(a[field]) !== text(b[field]);
+      });
+    }
+    Object.keys(journal.transactions).sort().forEach(function (key) {
+      var row = journal.transactions[key];
+      count += 1;
+      var invalid = !isObject(row) || !key || key !== text(key);
+      if (!invalid) {
+        invalid = ids.some(function (field) {
+          return typeof row[field] !== "string" || row[field] !== text(row[field]);
+        }) || row.transactionId !== key || !row.bookingId ||
+          ["PENDING", "COMPLETED", "FAILED"].indexOf(row.status) < 0 ||
+          !Array.isArray(row.completedSteps) || row.completedSteps.some(function (step, index, steps) {
+            return typeof step !== "string" || !text(step) || step !== text(step) || steps.indexOf(step) !== index;
+          }) || ["createdAt", "updatedAt"].some(function (field) {
+            return typeof row[field] !== "string" || !row[field] || !isFinite(Date.parse(row[field]));
+          }) || (own(row, "lastError") && typeof row.lastError !== "string") ||
+          Boolean(row.encounterId) !== Boolean(row.subjectId);
+      }
+      if (!invalid && row.status !== "COMPLETED") {
+        invalid = !isObject(row.request) || !isObject(row.request.packet) || !isObject(row.request.options);
+      }
+      if (!invalid && own(row, "request")) {
+        invalid = !isObject(row.request) || !isObject(row.request.packet) || !isObject(row.request.options);
+      }
+      if (invalid) {
+        report("BOOKING_TRANSACTION_INVALID", "critical", "Booking recovery transaction is malformed", key, "", "invalid transaction fields");
+        return;
+      }
+      var unfinished = row.status !== "COMPLETED";
+      if (unfinished) {
+        report("BOOKING_TRANSACTION_INCOMPLETE", "high", "A booking requires recovery", key, "status", row.status);
+      }
+      var conflictFields = [];
+      function conflict(field) {
+        if (conflictFields.indexOf(field) < 0) conflictFields.push(field);
+      }
+      var requestPacket = row.request && row.request.packet;
+      if (requestPacket) {
+        ["id", "bookingId", "bookinRecordId"].forEach(function (field) {
+          if (text(requestPacket[field]) && text(requestPacket[field]) !== row.bookingId) conflict("request.packet." + field);
+        });
+        if (mismatch(row, requestPacket, ["encounterId", "subjectId", "personId", "leadId", "arrestId"])) conflict("request.packet");
+      }
+      var prior = claimsByBooking[row.bookingId];
+      if (prior && mismatch(prior, row, ["encounterId", "subjectId", "personId", "leadId", "arrestId"])) conflict("bookingId");
+      claimsByBooking[row.bookingId] = row;
+      if (unfinished) {
+        var subjectKey = row.encounterId && JSON.stringify([row.encounterId, row.subjectId]);
+        if (activeByBooking[row.bookingId] || (subjectKey && activeBySubject[subjectKey])) {
+          report("BOOKING_TRANSACTION_DUPLICATE_ACTIVE", "critical", "Multiple unfinished bookings claim the same owner", key, "bookingId", "competing unfinished transactions");
+        }
+        activeByBooking[row.bookingId] = key;
+        if (subjectKey) activeBySubject[subjectKey] = key;
+      }
+      var packets = ctx.indexes.bookinRows.filter(function (packet) {
+        return text(packet && packet.id) === row.bookingId;
+      });
+      if (packets.length > 1) conflict("bookingId");
+      packets.forEach(function (packet) {
+        if (mismatch(row, packet, ["encounterId", "subjectId", "personId", "leadId", "arrestId"]) ||
+          (text(packet.bookingId) && text(packet.bookingId) !== row.bookingId) ||
+          (text(packet.bookinRecordId) && text(packet.bookinRecordId) !== row.bookingId)) conflict("bookingId");
+      });
+      if (row.encounterId && ctx.snapshot.workspace.status === "ok") {
+        var encounter = ctx.indexes.encounters[row.encounterId];
+        var subjects = list(encounter && encounter.subjects).filter(function (subject) {
+          return text(subject && subject.subjectId) === row.subjectId;
+        });
+        if ((unfinished && subjects.length !== 1) || subjects.length > 1) conflict("subjectId");
+        subjects.forEach(function (subject) {
+          if (mismatch(row, subject, ["encounterId", "personId", "leadId"]) ||
+            (text(subject.bookingId) && text(subject.bookingId) !== row.bookingId) ||
+            (text(subject.bookinRecordId) && text(subject.bookinRecordId) !== row.bookingId)) conflict("subjectId");
+        });
+      }
+      var lead = row.leadId && ctx.indexes.leads[row.leadId];
+      if (lead && row.personId && text(lead.subjectPersonId) && text(lead.subjectPersonId) !== row.personId) conflict("leadId");
+      var arrest = row.arrestId && ctx.indexes.arrests[row.arrestId];
+      if (arrest && ((row.personId && arrest.personId !== row.personId) ||
+        mismatch(row, arrest.row, ["encounterId", "subjectId"]) ||
+        (text(arrest.row.bookinRecordId) && text(arrest.row.bookinRecordId) !== row.bookingId))) conflict("arrestId");
+      conflictFields.forEach(function (field) {
+        report("BOOKING_TRANSACTION_IDENTITY_CONFLICT", "critical", "Booking recovery identifiers disagree", key, field, "contradictory identity references");
+      });
+    });
+    ctx.scanned.bookingTransactions = count;
+  }
+
   function countsForInputs(ctx) {
     var idx = ctx.indexes;
     return {
@@ -2059,6 +2175,7 @@
         shifts: list(idx.admin.shifts).length
       },
       bookin: { records: idx.bookinRows.length },
+      bookingTransactions: { transactions: ctx.scanned.bookingTransactions || 0 },
       media: { metadata: idx.mediaRows.length, blobKeys: idx.blobKeys.length }
     };
   }
@@ -2097,6 +2214,7 @@
         workspace: reportInput(ctx.snapshot.workspace, inputCounts.workspace),
         admin: reportInput(ctx.snapshot.admin, inputCounts.admin),
         bookin: reportInput(ctx.snapshot.bookin, inputCounts.bookin),
+        bookingTransactions: reportInput(ctx.snapshot.bookingTransactions, inputCounts.bookingTransactions),
         media: reportInput(ctx.snapshot.media, inputCounts.media),
         registered: registered
       },
@@ -2125,6 +2243,7 @@
     scanPersonEncounterReverse(ctx);
     scanEncounters(ctx);
     scanBookingsAndArrests(ctx);
+    scanBookingTransactions(ctx);
     scanAssociations(ctx);
     scanInvestigations(ctx);
     scanOperations(ctx);

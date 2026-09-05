@@ -15,15 +15,19 @@ const {
 const WORKSPACE_KEY = "copdocx.store.v1";
 const BOOKIN_KEY = "alien-book-in.saved-records.v1";
 const ADMIN_KEY = "copdoc.admin.v1";
+const BOOKING_JOURNAL_KEY = "copdocx.booking-transactions.v1";
 const strict = process.argv.includes("--strict");
 const baseline = JSON.parse(
   fs.readFileSync(path.join(__dirname, "stage0-known-risks.json"), "utf8")
 );
-const resolutionFile = path.join(__dirname, "stage2-resolved-risks.json");
-const resolution = fs.existsSync(resolutionFile)
-  ? JSON.parse(fs.readFileSync(resolutionFile, "utf8"))
-  : { resolvedRiskIds: [] };
-const resolvedRiskIds = new Set(resolution.resolvedRiskIds || []);
+const resolvedRiskIds = new Set(
+  ["stage2-resolved-risks.json", "stage4-resolved-risks.json"].flatMap(filename => {
+    const resolutionFile = path.join(__dirname, filename);
+    return fs.existsSync(resolutionFile)
+      ? JSON.parse(fs.readFileSync(resolutionFile, "utf8")).resolvedRiskIds || []
+      : [];
+  })
+);
 
 function requireOk(result, step) {
   if (!result || !result.ok) {
@@ -135,11 +139,13 @@ function loadBookInRuntime(storage, location) {
     document: doc,
     location: location || { search: "", pathname: "/bookin.html" }
   });
+  loadScript(tab.context, "functions/officer-roster.js");
+  loadScript(tab.context, "functions/booking-workflow.js");
   loadScript(tab.context, "functions/book-in.js");
   return tab;
 }
 
-function probePartialBookIn() {
+async function probePartialBookIn() {
   const storage = createMemoryStorage();
   const { context } = loadBookInRuntime(storage);
   run(
@@ -160,25 +166,62 @@ function probePartialBookIn() {
       "setStatus = function () {};"
     ].join("\n")
   );
+  storage.resetWriteHistory();
   storage.failNext(BOOKIN_KEY);
-  const saveReturned = run(context, "saveCurrentRecord({ promote: true, stay: true })");
+  const saveReturned = await run(context, "saveCurrentRecord({ promote: true, stay: true })");
   const workspace = storage.json(WORKSPACE_KEY, {});
   const leads = Object.values(workspace.leads || {});
   const arrests = leads.flatMap((lead) => ((lead.person && lead.person.arrests) || []));
   const packetStoreExists = storage.raw(BOOKIN_KEY) !== null;
+  const interruptedJournal = storage.json(BOOKING_JOURNAL_KEY, {});
+  const transactions = Object.values(interruptedJournal.transactions || {});
+  const transaction = transactions.find(row => row.bookingId === "bk_partial_write");
+  const writes = storage.history();
+  const journalWrite = writes.findIndex(row => row.key === BOOKING_JOURNAL_KEY && !row.failed);
+  const firstDomainWrite = writes.findIndex(row =>
+    [WORKSPACE_KEY, BOOKIN_KEY, ADMIN_KEY].includes(row.key)
+  );
+  const journalBeforeWrites = journalWrite >= 0 && firstDomainWrite > journalWrite;
+  const durableFailure = transaction && transaction.status !== "COMPLETED" &&
+    transaction.request && transaction.request.packet;
+
+  // Reload all runtime globals to prove recovery comes from the durable request,
+  // not the form or a remembered in-memory promotion result.
+  const restarted = loadBookInRuntime(storage);
+  const resumed = transaction
+    ? await restarted.context.COPDoc.booking.resume(transaction.transactionId)
+    : { ok: false, error: "Missing recovery transaction" };
+  const repeated = transaction
+    ? await restarted.context.COPDoc.booking.resume(transaction.transactionId)
+    : { ok: false };
+  const finalWorkspace = storage.json(WORKSPACE_KEY, {});
+  const finalLeads = Object.values(finalWorkspace.leads || {});
+  const finalArrests = finalLeads.flatMap(lead => ((lead.person && lead.person.arrests) || []));
+  const finalPackets = storage.json(BOOKIN_KEY, []);
+  const finalJournal = storage.json(BOOKING_JOURNAL_KEY, {});
+  const receipt = transaction && (finalJournal.transactions || {})[transaction.transactionId];
+  const exactlyOnce = finalLeads.length === 1 && finalArrests.length === 1 &&
+    finalPackets.length === 1 && finalPackets[0].id === "bk_partial_write" &&
+    finalArrests[0].bookinRecordId === "bk_partial_write" &&
+    finalPackets[0].leadId === finalLeads[0].leadId &&
+    finalPackets[0].arrestId === finalArrests[0].arrestId;
+  const recoveryVerified = saveReturned === false && journalBeforeWrites && durableFailure &&
+    !packetStoreExists && !!resumed.ok && !!repeated.ok && exactlyOnce &&
+    receipt && receipt.status === "COMPLETED";
   return {
-    reproduced:
-      saveReturned === false &&
-      leads.length === 1 &&
-      arrests.length === 1 &&
-      !!arrests[0].bookinRecordId &&
-      !packetStoreExists,
+    reproduced: !recoveryVerified,
     observed: {
       saveReturned,
-      canonicalLeadCount: leads.length,
-      canonicalArrestCount: arrests.length,
-      arrestBookinRecordId: arrests[0] && arrests[0].bookinRecordId,
-      packetStoreExists
+      partialCanonicalLeadCount: leads.length,
+      partialCanonicalArrestCount: arrests.length,
+      packetStoreExists,
+      journalBeforeWrites,
+      durableRecoveryRequest: !!durableFailure,
+      resumeOk: !!resumed.ok,
+      repeatOk: !!repeated.ok,
+      exactlyOnce,
+      finalStatus: receipt && receipt.status,
+      resumeError: resumed.error || ""
     }
   };
 }
@@ -507,6 +550,7 @@ const probes = {
   "S0-CONCURRENCY-001": probeOverlappingTabWrite
 };
 
+async function main() {
 let unexpected = 0;
 let reproduced = 0;
 let resolved = 0;
@@ -518,15 +562,15 @@ resolvedRiskIds.forEach((riskId) => {
   }
 });
 
-baseline.risks.forEach((risk) => {
+for (const risk of baseline.risks) {
   const probe = probes[risk.id];
   if (!probe) {
     unexpected += 1;
     console.error("HARNESS_ERROR", risk.id, "No probe is registered.");
-    return;
+    continue;
   }
   try {
-    const result = probe();
+    const result = await probe();
     if (resolvedRiskIds.has(risk.id)) {
       if (!result.reproduced) {
         resolved += 1;
@@ -537,7 +581,7 @@ baseline.risks.forEach((risk) => {
           risk.title,
           JSON.stringify(result.observed)
         );
-        return;
+        continue;
       }
       unexpected += 1;
       console.error(
@@ -547,13 +591,13 @@ baseline.risks.forEach((risk) => {
         risk.title,
         JSON.stringify(result.observed)
       );
-      return;
+      continue;
     }
     if (result.reproduced) {
       reproduced += 1;
       const prefix = strict ? "STRICT_FAILURE" : "KNOWN_RISK_REPRODUCED";
       console.log(prefix, risk.id, "-", risk.title, JSON.stringify(result.observed));
-      return;
+      continue;
     }
     if (strict) {
       console.log(
@@ -563,7 +607,7 @@ baseline.risks.forEach((risk) => {
         risk.title,
         JSON.stringify(result.observed)
       );
-      return;
+      continue;
     }
     unexpected += 1;
     console.error(
@@ -581,7 +625,7 @@ baseline.risks.forEach((risk) => {
       error && error.stack ? error.stack : String(error)
     );
   }
-});
+}
 
 const expected = baseline.risks.length;
 const expectedResolved = resolvedRiskIds.size;
@@ -614,3 +658,7 @@ if (strict) {
       resolved + "/" + expectedResolved + " planned risks stayed resolved in isolated memory."
   );
 }
+
+}
+
+main().catch(error => { console.error(error); process.exitCode = 1; });

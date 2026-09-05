@@ -1,0 +1,8 @@
+{
+  "schema": "copdocx.stage4-resolved-risks.v1",
+  "stage": 4,
+  "scope": "Journaled, idempotent Book-In recovery; partial writes remain visible and resumable",
+  "resolvedRiskIds": [
+    "S0-BOOKIN-001"
+  ]
+}

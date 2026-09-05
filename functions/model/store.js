@@ -1280,6 +1280,7 @@
       return { ok: false, leadId: snapshot.leadId, error: fresh.error };
     }
     var mode = (opts && opts.mode) || "commit";
+    var bookingBefore = opts && opts.bookingWorkflow ? clone(state) : null;
     var previous = state.leads[snapshot.leadId]
       ? clone(state.leads[snapshot.leadId])
       : null;
@@ -1306,6 +1307,13 @@
       merged.subjectPersonId = incomingSubjectId;
     }
     var record = canonicalLeadGraph(merged, previous);
+    if (bookingBefore) {
+      var bookingSubject = model.subjectOf ? model.subjectOf(record) : record.person;
+      var bookingPerson = bookingSubject && state.people[bookingSubject.personId];
+      if (bookingPerson && Array.isArray(bookingPerson.encounters)) {
+        bookingSubject.encounters = clone(bookingPerson.encounters);
+      }
+    }
     record.schema = snapshot.schema || model.SCHEMA;
     record.leadId = snapshot.leadId;
     if (typeof model.stampMeta === "function") {
@@ -1322,8 +1330,30 @@
     state.leads[record.leadId] = clone(record);
     state.currentLeadId = record.leadId;
     rememberPeople(record);
+    if (bookingBefore && opts.bookingTransactionId) {
+      var savedBookingPerson = state.people[record.subjectPersonId];
+      var savedBookingArrest = savedBookingPerson && (savedBookingPerson.arrests || []).filter(function (row) {
+        return row && row.arrestId === opts.bookingArrestId;
+      })[0];
+      var leadBookingArrest = record.person && (record.person.arrests || []).filter(function (row) {
+        return row && row.arrestId === opts.bookingArrestId;
+      })[0];
+      if (!savedBookingArrest || !leadBookingArrest) {
+        state = bookingBefore;
+        return { ok: false, leadId: record.leadId, error: "The booking Arrest acknowledgement could not be prepared." };
+      }
+      savedBookingArrest.bookingTransactionId = opts.bookingTransactionId;
+      savedBookingArrest.bookingTransactionSource = bookingSourceFingerprint(savedBookingPerson, savedBookingArrest);
+      leadBookingArrest.bookingTransactionId = savedBookingArrest.bookingTransactionId;
+      leadBookingArrest.bookingTransactionSource = savedBookingArrest.bookingTransactionSource;
+      state.leads[record.leadId] = clone(record);
+    }
     if (!writeDisk()) {
-      adoptDisk();
+      if (bookingBefore) {
+        state = bookingBefore;
+      } else {
+        adoptDisk();
+      }
       return {
         ok: false,
         leadId: record.leadId,
@@ -3355,7 +3385,11 @@
     snap.person = person;
     snap.subjectPersonId = person.personId;
     snap.caseRole = "DETAINEE";
-    var saved = saveLead(snap, { mode: "commit" });
+    var saved = saveLead(snap, {
+      mode: "commit", bookingWorkflow: true,
+      bookingTransactionId: storeSubjectText(input.bookingTransactionId),
+      bookingArrestId: arrestId
+    });
     if (!saved || !saved.ok) {
       return {
         ok: false,
@@ -3376,6 +3410,210 @@
       existing: existing,
       error: ""
     };
+  }
+
+  // A local change detector, not a security signature. Only promotion-owned facts
+  // participate; later Encounter location/vehicle projections must not invalidate it.
+  function bookingSourceFingerprint(person, arrest) {
+    person = person || {};
+    var imm = person.immigration || {};
+    var criminal = person.criminal || {};
+    var ownedArrest = {};
+    var excluded = ["bookingTransactionId", "bookingTransactionSource", "meta", "createdAt", "updatedAt",
+      "arrestLocation", "latitude", "longitude", "sharedStop", "location", "locationId", "vehicleIds"];
+    Object.keys(arrest || {}).forEach(function (key) {
+      if (excluded.indexOf(key) === -1) { ownedArrest[key] = arrest[key]; }
+    });
+    var projection = {
+      personId: person.personId, caseRole: person.caseRole, name: person.name,
+      sex: person.sex, dateOfBirth: person.dateOfBirth, age: person.age,
+      citizenship: person.citizenship, alienNumber: imm.alienNumber,
+      disposition: imm.disposition, status: imm.status, fbiNumber: criminal.fbiNumber,
+      foreignWarrantsKnown: criminal.foreignWarrantsKnown,
+      hasForeignWarrants: criminal.hasForeignWarrants,
+      foreignWarrantCountry: criminal.foreignWarrantCountry, arrest: ownedArrest
+    };
+    function stable(value) {
+      if (!value || typeof value !== "object") { return value; }
+      if (Array.isArray(value)) { return value.map(stable); }
+      var sorted = {};
+      Object.keys(value).sort().forEach(function (key) { sorted[key] = stable(value[key]); });
+      return sorted;
+    }
+    var serialized = JSON.stringify(stable(projection));
+    var hash = 2166136261;
+    var second = 2246822507;
+    for (var i = 0; i < serialized.length; i += 1) {
+      hash = Math.imul(hash ^ serialized.charCodeAt(i), 16777619) >>> 0;
+      second = Math.imul(second ^ serialized.charCodeAt(i), 3266489909) >>> 0;
+    }
+    return "booking-v1:" + serialized.length + ":" + hash.toString(16) + ":" + second.toString(16);
+  }
+
+  /** Read durable booking ownership without repairing, normalizing, or writing. */
+  function resolveBookInBooking(bookingId) {
+    bookingId = storeSubjectText(bookingId);
+    var result = {
+      ok: true, found: false, bookingId: bookingId, personId: "", leadId: "",
+      arrestId: "", subjectId: "", encounterId: "", error: "", code: "",
+      bookingTransactionId: "", bookingTransactionSource: "", sourceFingerprint: "", transactionUnchanged: false
+    };
+    function fail(message) {
+      result.ok = false;
+      result.code = "BOOKIN_RECOVERY_IDENTITY_CONFLICT";
+      result.error = message;
+      return result;
+    }
+    function object(value) {
+      return !!value && typeof value === "object" && !Array.isArray(value);
+    }
+    function claims(row) {
+      return [row && row.bookingId, row && row.bookinRecordId]
+        .map(storeSubjectText).filter(function (value, index, values) {
+          return value && values.indexOf(value) === index;
+        });
+    }
+    function owns(row) { return claims(row).indexOf(bookingId) !== -1; }
+    if (!bookingId) { return fail("A booking identifier is required for recovery."); }
+    var data;
+    if (typeof localStorage === "undefined") { return result; }
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw === null) { return result; }
+      data = JSON.parse(raw);
+    } catch (readError) {
+      return fail("Cannot read durable workspace booking data. Run Integrity before retrying.");
+    }
+    if (!object(data) || !object(data.people) || !object(data.leads)) {
+      return fail("Workspace Person or Case storage is malformed. Run Integrity before retrying.");
+    }
+    var canonical = [];
+    var projections = [];
+    var historyLeads = [];
+    var ownerLeads = [];
+    var error = "";
+    Object.keys(data.people).some(function (personKey) {
+      var person = data.people[personKey];
+      if (!object(person) || storeSubjectText(person.personId) !== personKey ||
+          (person.arrests !== undefined && !Array.isArray(person.arrests))) {
+        error = "Person storage has invalid identifiers or Arrest data. Run Integrity before retrying.";
+        return true;
+      }
+      (person.arrests || []).forEach(function (arrest) {
+        if (!object(arrest)) {
+          error = "Person Arrest storage is malformed. Run Integrity before retrying.";
+        } else if (owns(arrest)) {
+          if (claims(arrest).length !== 1 || !storeSubjectText(arrest.arrestId) ||
+              (storeSubjectText(arrest.personId) && storeSubjectText(arrest.personId) !== personKey)) {
+            error = "The booking Arrest has contradictory or missing identity.";
+          }
+          canonical.push({ personId: personKey, row: arrest });
+        }
+      });
+      return !!error;
+    });
+    if (error) { return fail(error); }
+    Object.keys(data.leads).some(function (leadKey) {
+      var lead = data.leads[leadKey];
+      var person = lead && (model.subjectOf ? model.subjectOf(lead) : lead.person);
+      if (!object(lead) || (lead.history !== undefined && !Array.isArray(lead.history)) ||
+          (person && person.arrests !== undefined && !Array.isArray(person.arrests))) {
+        error = "Case booking history is malformed. Run Integrity before retrying.";
+        return true;
+      }
+      var leadMatches = (person && person.arrests || []).filter(owns);
+      var historyMatches = (lead.history || []).filter(owns);
+      var personId = storeSubjectText(person && person.personId);
+      var validOwner = storeSubjectText(lead.leadId) === leadKey && personId &&
+        data.people[personId] && (!storeSubjectText(lead.subjectPersonId) ||
+        storeSubjectText(lead.subjectPersonId) === personId);
+      if (validOwner) { ownerLeads.push({ leadId: leadKey, personId: personId }); }
+      if (!leadMatches.length && !historyMatches.length) { return false; }
+      if (!validOwner || leadMatches.length > 1 || historyMatches.length > 1) {
+        error = "A Case has ambiguous booking history or contradictory Person ownership.";
+        return true;
+      }
+      leadMatches.forEach(function (arrest) {
+        if (claims(arrest).length !== 1 || !storeSubjectText(arrest.arrestId) ||
+            (storeSubjectText(arrest.personId) && storeSubjectText(arrest.personId) !== personId)) {
+          error = "The Case Arrest has contradictory or missing identity.";
+        }
+        projections.push({ leadId: leadKey, personId: personId, row: arrest });
+      });
+      historyMatches.forEach(function (history) {
+        if (claims(history).length !== 1) {
+          error = "Case booking history has contradictory identifiers.";
+        }
+        historyLeads.push({ leadId: leadKey, personId: personId });
+      });
+      return !!error;
+    });
+    if (error) { return fail(error); }
+    if (!canonical.length && !projections.length && !historyLeads.length) { return result; }
+    if (canonical.length !== 1) {
+      return fail("The booking does not have exactly one canonical Person Arrest. Run Integrity before retrying.");
+    }
+    var owner = canonical[0];
+    var arrest = owner.row;
+    result.personId = owner.personId;
+    result.arrestId = storeSubjectText(arrest.arrestId);
+    result.subjectId = storeSubjectText(arrest.subjectId);
+    result.encounterId = storeSubjectText(arrest.encounterId);
+    result.bookingTransactionId = storeSubjectText(arrest.bookingTransactionId);
+    result.bookingTransactionSource = storeSubjectText(arrest.bookingTransactionSource);
+    result.sourceFingerprint = bookingSourceFingerprint(data.people[result.personId], arrest);
+    result.transactionUnchanged = !!result.bookingTransactionId &&
+      result.bookingTransactionSource === result.sourceFingerprint;
+    projections.forEach(function (projection) {
+      if (projection.personId !== result.personId ||
+          ["arrestId", "subjectId", "encounterId"].some(function (field) {
+            return storeSubjectText(projection.row[field]) !== result[field];
+          })) {
+        error = "Canonical Person and Case booking Arrest identities disagree.";
+      }
+      var projectedPerson = model.subjectOf
+        ? model.subjectOf(data.leads[projection.leadId])
+        : data.leads[projection.leadId].person;
+      if (bookingSourceFingerprint(projectedPerson, projection.row) !== result.sourceFingerprint) {
+        result.transactionUnchanged = false;
+      }
+    });
+    var matchedLeads = projections.concat(historyLeads);
+    if (!matchedLeads.length) {
+      matchedLeads = ownerLeads.filter(function (lead) { return lead.personId === result.personId; });
+    }
+    var leadIds = [];
+    matchedLeads.forEach(function (lead) {
+      if (lead.personId !== result.personId) { error = "The booking is claimed by a different Case Person."; }
+      if (leadIds.indexOf(lead.leadId) === -1) { leadIds.push(lead.leadId); }
+    });
+    if (error) { return fail(error); }
+    if (leadIds.length !== 1) { return fail("The booking does not have exactly one owning Case."); }
+    result.leadId = leadIds[0];
+    // Arrest IDs are permanent even when another row omits its booking alias.
+    Object.keys(data.people).forEach(function (personId) {
+      (data.people[personId].arrests || []).forEach(function (other) {
+        if (other === arrest || storeSubjectText(other && other.arrestId) !== result.arrestId) { return; }
+        error = "The booking Arrest identifier is duplicated or owned by another Person.";
+      });
+    });
+    Object.keys(data.leads).forEach(function (leadId) {
+      var lead = data.leads[leadId];
+      var leadPerson = model.subjectOf ? model.subjectOf(lead) : lead.person;
+      (leadPerson && leadPerson.arrests || []).forEach(function (other) {
+        if (storeSubjectText(other && other.arrestId) !== result.arrestId) { return; }
+        if (leadId !== result.leadId || storeSubjectText(leadPerson.personId) !== result.personId ||
+            claims(other).length !== 1 || claims(other)[0] !== bookingId) {
+          error = "The booking Arrest identifier has conflicting Case ownership.";
+        }
+      });
+    });
+    if (error) { return fail(error); }
+    if (result.subjectId && !result.encounterId) {
+      return fail("The booking subject has no Encounter identifier.");
+    }
+    result.found = true;
+    return result;
   }
 
   function promoteBookInRecord(record, options) {
@@ -3426,6 +3664,30 @@
     }
     input.bookingId = suppliedBookingClaims[0] || "";
     input.bookinRecordId = suppliedBookingClaims[0] || "";
+    if (options.recoverBooking === true) {
+      var recovery = resolveBookInBooking(input.bookingId);
+      if (!recovery.ok) { return recovery; }
+      if (recovery.found) {
+        if (storeSubjectText(options.bookingTransactionId) &&
+            storeSubjectText(options.bookingTransactionId) === recovery.bookingTransactionId &&
+            !recovery.transactionUnchanged) {
+          return { ok: false, code: "BOOKIN_RECOVERY_SOURCE_CHANGED", error: "Booking facts changed after this transaction was saved. Review the current records before retrying." };
+        }
+        var conflict = ["personId", "leadId", "arrestId", "subjectId", "encounterId"].some(function (field) {
+          var recordValue = storeSubjectText(record[field]);
+          var suppliedValue = storeSubjectText(supplied && supplied[field]);
+          return (recordValue && suppliedValue && recordValue !== suppliedValue) ||
+            (recovery[field] && ((recordValue && recordValue !== recovery[field]) ||
+            (suppliedValue && suppliedValue !== recovery[field])));
+        });
+        if (conflict) {
+          return { ok: false, code: "BOOKIN_RECOVERY_IDENTITY_CONFLICT", error: "Supplied booking identifiers disagree with durable ownership." };
+        }
+        ["personId", "leadId", "arrestId", "subjectId", "encounterId"].forEach(function (field) {
+          input[field] = recovery[field] || input[field];
+        });
+      }
+    }
     input.alienNumber = input.alienNumber || input.aNumber || "";
     input.citizenship = input.citizenship || input.countryOfCitizenship || "";
     input.disposition = input.disposition || input.caseType || "";
@@ -3448,6 +3710,7 @@
     );
     input.preserveMissingArrestFields =
       options.preserveMissingArrestFields === true;
+    input.bookingTransactionId = storeSubjectText(options.bookingTransactionId);
     return promoteBookInToLead(input);
   }
 
@@ -10135,6 +10398,7 @@
     promoteBookInToLead: promoteBookInToLead,
     bookInPromotionInput: bookInPromotionInput,
     promoteBookInRecord: promoteBookInRecord,
+    resolveBookInBooking: resolveBookInBooking,
     promoteBookInRecords: promoteBookInRecords,
     linkEncounterVehiclesToPerson: linkEncounterVehiclesToPerson,
     allPeople: allPeople,
