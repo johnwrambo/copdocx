@@ -111,6 +111,9 @@ check(
     form.indexOf('functions/narratives/encounter-launcher.js') !== -1 &&
     narrativeLauncher.indexOf('"narrative.html?encounterId=" + encodeURIComponent(id)') !== -1 &&
     narrativeLauncher.indexOf('autosave.bind({ key: "encounter-form" })') !== -1 &&
+    narrativeLauncher.indexOf('byId("tabbtn-narrative")') !== -1 &&
+    narrativeLauncher.indexOf('tab.addEventListener("click", openWorkspace)') !== -1 &&
+    narrativeLauncher.indexOf("event.stopPropagation()") !== -1 &&
     form.indexOf("narrativeEngineHost") === -1 &&
     form.indexOf("narrative-builder-engine.js") === -1
 );

@@ -44,6 +44,7 @@
     var id = encounterId();
     if (event) {
       event.preventDefault();
+      event.stopPropagation();
     }
     if (!id) {
       setStatus("Create the encounter first.");
@@ -64,7 +65,7 @@
       if (model && model.store && typeof model.store.loadFromDisk === "function") {
         model.store.loadFromDisk();
         if (!model.store.getEncounter(id)) {
-          setStatus("Save encounter details before opening the I-213 workspace.");
+          setStatus("Enter at least one encounter detail before opening the I-213 workspace.");
           return;
         }
       }
@@ -74,12 +75,19 @@
 
   function boot() {
     var link = byId("openEncounterNarrativesButton");
-    if (!link || link.dataset.narrativeLauncherBound === "true") {
+    var tab = byId("tabbtn-narrative");
+    if (!link && !tab) {
       return;
     }
-    link.dataset.narrativeLauncherBound = "true";
     syncLink();
-    link.addEventListener("click", openWorkspace);
+    if (link && link.dataset.narrativeLauncherBound !== "true") {
+      link.dataset.narrativeLauncherBound = "true";
+      link.addEventListener("click", openWorkspace);
+    }
+    if (tab && tab.dataset.narrativeLauncherBound !== "true") {
+      tab.dataset.narrativeLauncherBound = "true";
+      tab.addEventListener("click", openWorkspace);
+    }
     var form = byId("encounterForm");
     if (form) {
       form.addEventListener("change", syncLink);
