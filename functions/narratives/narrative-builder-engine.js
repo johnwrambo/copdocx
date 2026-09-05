@@ -613,6 +613,7 @@ const MASTER_SECTION_BY_ID = new Map(
     let elementEditorState = null;
     let templateDialogReturnFocus = null;
     let elementDialogReturnFocus = null;
+    let copyOutputHandler = null;
     let dataPacket = null;
     let dataObjectById = new Map();
     let viewMode = "types";
@@ -5104,25 +5105,14 @@ const MASTER_SECTION_BY_ID = new Map(
         return false;
       }
 
-      try {
-        await navigator.clipboard.writeText(narrativeText);
-      } catch (error) {
-        const fallback = document.createElement("textarea");
-        fallback.value = narrativeText;
-        fallback.setAttribute("readonly", "");
-        fallback.style.position = "fixed";
-        fallback.style.opacity = "0";
-        document.body.appendChild(fallback);
-        fallback.select();
-        document.execCommand("copy");
-        fallback.remove();
+      if (copyOutputHandler) {
+        try { return await copyOutputHandler(narrativeText); }
+        catch (error) { updateStatus("Narrative not copied: " + error.message); return false; }
       }
-
-      const tokenStatus = getTokenStatus();
-      updateStatus(tokenStatus.unresolved
-        ? `Narrative copied with ${tokenStatus.unresolved} unresolved placeholder${tokenStatus.unresolved === 1 ? "" : "s"}.`
-        : "Resolved narrative copied to the clipboard.");
-      return true;
+      // The native host installs a tracked delivery handler. Standalone training
+      // hosts must also provide that boundary before exporting case prose.
+      updateStatus("Document tracking is unavailable. Reload this page before copying the narrative.");
+      return false;
     }
 
     function resetEncounterState(options = {}) {
@@ -6917,6 +6907,10 @@ const MASTER_SECTION_BY_ID = new Map(
       registerObjectAdapter,
       unregisterObjectAdapter,
       setSourceEditHandler,
+      setCopyOutputHandler: function (handler) {
+        if (handler !== null && typeof handler !== "function") throw new TypeError("Copy output handler must be a function or null.");
+        copyOutputHandler = handler;
+      },
       getNarrative: getNarrativeText,
       getOutput: getNarrativeOutput,
       getSections: getStructuredNarrativeSections,

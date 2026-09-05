@@ -14,6 +14,7 @@
     { id: "bookin", key: "alien-book-in.saved-records.v1", medium: "localStorage", owner: "book-in", portable: true },
     { id: "bookingTransactions", key: "copdocx.booking-transactions.v1", medium: "localStorage", owner: "booking-workflow", portable: false },
     { id: "importTransactions", key: "copdocx.import-transactions.v1", medium: "localStorage", owner: "import-workflow", portable: false },
+    { id: "documentGenerations", key: "copdocx.document-generations.v1", medium: "localStorage", owner: "document-generation", portable: false },
     { id: "bookinColumns", key: "alien-book-in.saved-record-columns.v1", medium: "localStorage", owner: "book-in", portable: false },
     { id: "settings", key: "copdocx.settings.v1", medium: "localStorage", owner: "settings", portable: true },
     { id: "importDoneSignal", key: "copdocx.import.done.v1", medium: "localStorage", owner: "transfer", portable: false },

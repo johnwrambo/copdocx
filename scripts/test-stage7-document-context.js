@@ -1,0 +1,88 @@
+"use strict";
+// Synthetic contexts only. Guards provenance and rename-impact contracts, not
+// duplicate renderer implementation. Manifest is generated from reviewed JS.
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const ROOT = path.resolve(__dirname,"..");
+const sandbox = {COPDoc:{},Date,Object,Array,JSON,Number,String,Boolean};
+vm.createContext(sandbox);
+["document-registry.js","document-context.js"].forEach(file => vm.runInContext(fs.readFileSync(path.join(ROOT,"functions",file),"utf8"),sandbox,{filename:file}));
+const documents = sandbox.COPDoc.documents;
+const input = {rows:[{name:"Synthetic",amount:0,flags:[false,null]}],note:"",optional:undefined};
+const person = {personId:"p1",name:{firstName:"Initial"}};
+const options = {documentType:"arrest-report.email",input,person,encounter:{encounterId:"e1"},encounterSubject:{subjectId:"s1",personId:"p1",encounterId:"e1",bookingId:"b1"},booking:{id:"b1",personId:"p1",subjectId:"s1",encounterId:"e1"},arrest:{arrestId:"a1",subjectId:"s1",bookinRecordId:"b1"},sources:[{type:"PERSON",id:"p1",revision:7,authority:"canonical"},{type:"REPORT_FORM",id:"selection",authority:"draft"}],capturedAt:"2026-09-05T00:00:00.000Z"};
+const context = documents.captureContext(options);
+input.rows[0].name = "Changed after click";
+person.name.firstName = "Changed person";
+assert.strictEqual(context.input.rows[0].name,"Synthetic");
+assert.strictEqual(context.entities.person.name.firstName,"Initial");
+assert.strictEqual(context.input.rows[0].amount,0);
+assert.strictEqual(context.input.rows[0].flags[0],false);
+assert.strictEqual(context.input.note,"");
+assert.strictEqual(Object.hasOwn(context.input,"optional"),false);
+assert(Object.isFrozen(context) && Object.isFrozen(context.input.rows[0]) && Object.isFrozen(context.entities.person.name));
+assert.throws(() => { context.input.rows[0].name = "Forbidden"; },TypeError);
+assert.strictEqual(context.generatingOfficerId,null);
+assert.strictEqual(context.sources[1].revision,null);
+const capture = patch => documents.captureContext(Object.assign({},options,patch));
+assert.throws(() => capture({person:{personId:"wrong"}}),/conflicting/);
+assert.throws(() => capture({encounter:{encounterId:"wrong"}}),/conflicting/);
+assert.throws(() => capture({booking:{id:"wrong"}}),/conflicting/);
+assert.throws(() => capture({booking:{id:"b1",bookingId:"wrong"}}),/conflicting/);
+assert.throws(() => capture({arrest:{subjectId:"wrong"}}),/conflicting/);
+assert.throws(() => capture({sources:[{type:"PERSON",id:"p1"}]}),/authority/);
+assert.throws(() => capture({sources:[{type:"PERSON",id:"p1",revision:1,authority:"canonical"},{type:"PERSON",id:"p1",revision:2,authority:"canonical"}]}),/conflicting revisions/);
+assert.throws(() => capture({input:{bad:Infinity}}),/JSON data/);
+assert.throws(() => capture({input:{bad:new Date()}}),/JSON data/);
+assert.throws(() => capture({input:{bad:() => 1}}),/JSON data/);
+assert.throws(() => capture({input:{bad:[undefined]}}),/JSON data/);
+assert.throws(() => capture({input:{bad:new Array(2)}}),/dense array/);
+const cyclic = {}; cyclic.self = cyclic;
+assert.throws(() => capture({input:cyclic}),/cycle/);
+assert.throws(() => capture({officers:{}}),/array/);
+assert.throws(() => capture({documentType:"typo.output"}),/Unknown document/);
+const dangerous = JSON.parse('{"__proto__":{"polluted":true},"constructor":{"keep":1}}');
+const preserved = capture({input:dangerous});
+assert.strictEqual(Object.getPrototypeOf(preserved.input).polluted,undefined);
+assert.strictEqual(Object.hasOwn(preserved.input,"__proto__"),true);
+assert.strictEqual(preserved.input.constructor.keep,1);
+assert.strictEqual(documents.stableStringify({b:2,a:{y:0,x:false}}),'{"a":{"x":false,"y":0},"b":2}');
+assert.notStrictEqual(documents.stableStringify({rows:[1,2]}),documents.stableStringify({rows:[2,1]}));
+
+const registry = documents.registry;
+const ids = field => Array.from(registry.dependentsOf(field),entry => entry.documentType).sort();
+assert(ids("person.dob").includes("bookin.combined-pdf"));
+assert.deepStrictEqual(ids("person.dob"),ids("person.dateOfBirth"));
+assert(ids("person.dateOfBirth").includes("lead.csv"));
+assert(ids("person.dateOfBirth").includes("narrative.text"));
+assert(!ids("person.dateOfBirth").includes("warrant.i200"),"warrant does not consume date of birth");
+assert(!ids("input.q7Details").includes("warrant.i200"));
+assert(ids("input.q7Details").includes("bookin.combined-pdf"));
+assert(ids("lead.vehicles[0].plate").includes("lead.csv"),"stored legacy alias remains visible");
+assert(ids("vehicle.licensePlate").includes("lead.csv"),"canonical vehicle rename affects CSV");
+assert(ids("person.immigration.baseballCards[12].finalizedSnapshot.content.narrative").includes("arrest-report.email"));
+assert(ids("person.name").includes("lead.csv"),"parent rename detects leaf reads");
+assert(ids("input.state.arbitraryTemplateExtension").includes("narrative.text"),"extensible input roots are conservatively covered");
+assert.deepStrictEqual(ids("unknownDomain.unusedField"),[]);
+assert.deepStrictEqual(ids(""),[]);
+const manifest = JSON.parse(JSON.stringify(registry.manifest()));
+assert.strictEqual(new Set(manifest.documentTypes.map(entry => entry.documentType)).size,12);
+assert(ids("input.map.zoom").includes("map-brief.print"));
+assert(ids("officer.id").includes("operation-brief.html"));
+for (const entry of manifest.documentTypes) {
+  assert(entry.template.id && entry.template.version && entry.dependencies.length);
+  for (const file of entry.template.sourceFiles) assert(fs.existsSync(path.join(ROOT,file)),"Missing template source " + file);
+  for (const dependency of entry.dependencies) {
+    assert(dependency.field && dependency.source && dependency.authority);
+    const [file,functions] = dependency.citation.split("#");
+    assert(fs.existsSync(path.join(ROOT,file)),"Missing citation " + dependency.citation);
+    const source = fs.readFileSync(path.join(ROOT,file),"utf8");
+    for (const name of functions.split("/")) assert(new RegExp("\\bfunction\\s+" + name + "\\s*\\(").test(source),"Missing cited function " + dependency.citation);
+  }
+}
+const manifestPath = path.join(ROOT,"docs/stage-7-document-dependencies.json");
+if (process.argv.includes("--write-manifest")) fs.writeFileSync(manifestPath,JSON.stringify(manifest,null,2) + "\n");
+assert.deepStrictEqual(JSON.parse(fs.readFileSync(manifestPath,"utf8")),manifest,"Reviewed dependency manifest drifted from runtime registry");
+console.log("Stage 7 document context: immutable captured input, explicit authority, join guards, 12 document dependency contracts, source citations and JSON manifest passed.");

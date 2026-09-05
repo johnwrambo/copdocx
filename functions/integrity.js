@@ -19,6 +19,7 @@
     { id: "bookin", key: "alien-book-in.saved-records.v1", medium: "localStorage" },
     { id: "bookingTransactions", key: "copdocx.booking-transactions.v1", medium: "localStorage" },
     { id: "importTransactions", key: "copdocx.import-transactions.v1", medium: "localStorage" },
+    { id: "documentGenerations", key: "copdocx.document-generations.v1", medium: "localStorage" },
     { id: "bookinColumns", key: "alien-book-in.saved-record-columns.v1", medium: "localStorage" },
     { id: "settings", key: "copdocx.settings.v1", medium: "localStorage" },
     { id: "importDoneSignal", key: "copdocx.import.done.v1", medium: "localStorage" },
@@ -294,7 +295,7 @@
     if (Array.isArray(input.stores)) {
       input.stores.forEach(function (entry) {
         if (!entry || !entry.id) return;
-        var isDomainStore = ["workspace", "admin", "bookin", "bookingTransactions", "importTransactions"].indexOf(entry.id) >= 0;
+        var isDomainStore = ["workspace", "admin", "bookin", "bookingTransactions", "importTransactions", "documentGenerations"].indexOf(entry.id) >= 0;
         var parsed = isDomainStore
           ? parseStoreEntry(entry)
           : { status: entry.status || (entry.raw == null ? "missing" : "ok"), value: null, error: entry.error || "" };
@@ -317,7 +318,8 @@
       ["admin", "copdoc.admin.v1"],
       ["bookin", "alien-book-in.saved-records.v1"],
       ["bookingTransactions", "copdocx.booking-transactions.v1"],
-      ["importTransactions", "copdocx.import-transactions.v1"]
+      ["importTransactions", "copdocx.import-transactions.v1"],
+      ["documentGenerations", "copdocx.document-generations.v1"]
     ].forEach(function (spec) {
       if (own(input, spec[0])) byId[spec[0]] = directStore(spec[0], input[spec[0]], spec[1]);
       if (!byId[spec[0]]) byId[spec[0]] = directStore(spec[0], undefined, spec[1]);
@@ -348,6 +350,7 @@
       bookin: byId.bookin,
       bookingTransactions: byId.bookingTransactions,
       importTransactions: byId.importTransactions,
+      documentGenerations: byId.documentGenerations,
       media: byId.media
     };
   }
@@ -549,9 +552,10 @@
     scanInputStatus(ctx, bookin, "Book-In");
     scanInputStatus(ctx, ctx.snapshot.bookingTransactions, "Booking recovery");
     scanInputStatus(ctx, ctx.snapshot.importTransactions, "Import recovery");
+    scanInputStatus(ctx, ctx.snapshot.documentGenerations, "Document history");
     scanInputStatus(ctx, ctx.snapshot.media, "Media");
     ctx.snapshot.stores.forEach(function (row) {
-      if (["workspace", "admin", "bookin", "bookingTransactions", "importTransactions"].indexOf(row.id) >= 0) return;
+      if (["workspace", "admin", "bookin", "bookingTransactions", "importTransactions", "documentGenerations"].indexOf(row.id) >= 0) return;
       if (row.status === "unavailable") scanInputStatus(ctx, row, row.id || row.key || "Registered");
     });
     if (ws.status === "ok") {
@@ -2133,6 +2137,32 @@
     });
   }
 
+  /** Historical receipts are not live ownership links; never include raw source or output values. */
+  function scanDocumentGenerations(ctx) {
+    var store = ctx.snapshot.documentGenerations;
+    if (!store || store.status !== "ok") return;
+    var ledger = store.value;
+    function report(rule, severity, title, id) {
+      finding(ctx, rule, severity, "document", title,
+        [{ store: "documentGenerations", type: "DOCUMENT_GENERATION", id: id || "", path: id ? "records." + id : "$" }],
+        [{ store: "documentGenerations", path: id ? "records." + id : "$", expected: "valid generation receipt", actual: rule === "DOCUMENT_GENERATION_PENDING" ? "pending" : "invalid receipt" }]);
+    }
+    if (!isObject(ledger) || ledger.schema !== "copdocx.document-generations.v1" || ledger.version !== 1 || !Number.isInteger(ledger.revision) || ledger.revision < 0 || !isObject(ledger.records)) {
+      report("DOCUMENT_HISTORY_INVALID", "high", "Document history has an unsupported shape", ""); return;
+    }
+    ctx.scanned.documentGenerations = Object.keys(ledger.records).length;
+    Object.keys(ledger.records).sort().forEach(function (id) {
+      var row = ledger.records[id], hash = /^[a-f0-9]{64}$/;
+      var invalid = !isObject(row) || row.generationId !== id || !isObject(row.template) || !hash.test(row.inputHash) || !hash.test(row.sourceFingerprint) || !hash.test(row.templateHash) || !Array.isArray(row.sources) || !Array.isArray(row.deliveries) || ["PENDING", "GENERATED", "FAILED"].indexOf(row.status) < 0;
+      if (!invalid && row.status === "GENERATED") invalid = !hash.test(row.outputHash) || !Number.isInteger(row.outputBytes) || row.outputBytes < 0;
+      if (!invalid && root.documents && root.documents.validateLedger) {
+        try { var single = { schema: ledger.schema, version: 1, revision: ledger.revision, records: {} }; single.records[id] = row; root.documents.validateLedger(single); } catch (error) { invalid = true; }
+      }
+      if (invalid) report("DOCUMENT_HISTORY_INVALID", "high", "A document generation receipt is invalid", id);
+      else if (row.status === "PENDING") report("DOCUMENT_GENERATION_PENDING", "info", "A document generation is active or was interrupted; inspect Document history", id);
+    });
+  }
+
   /** Journal findings deliberately exclude request values and lastError text. */
   function scanBookingTransactions(ctx) {
     var store = ctx.snapshot.bookingTransactions;
@@ -2277,6 +2307,7 @@
       bookin: { records: idx.bookinRows.length },
       bookingTransactions: { transactions: ctx.scanned.bookingTransactions || 0 },
       importTransactions: { transactions: ctx.scanned.importTransactions || 0 },
+      documentGenerations: { records: ctx.scanned.documentGenerations || 0 },
       media: { metadata: idx.mediaRows.length, blobKeys: idx.blobKeys.length }
     };
   }
@@ -2317,6 +2348,7 @@
         bookin: reportInput(ctx.snapshot.bookin, inputCounts.bookin),
         bookingTransactions: reportInput(ctx.snapshot.bookingTransactions, inputCounts.bookingTransactions),
         importTransactions: reportInput(ctx.snapshot.importTransactions, inputCounts.importTransactions),
+        documentGenerations: reportInput(ctx.snapshot.documentGenerations, inputCounts.documentGenerations),
         media: reportInput(ctx.snapshot.media, inputCounts.media),
         registered: registered
       },
@@ -2347,6 +2379,7 @@
     scanBookingsAndArrests(ctx);
     scanBookingTransactions(ctx);
     scanImportTransactions(ctx);
+    scanDocumentGenerations(ctx);
     scanAssociations(ctx);
     scanInvestigations(ctx);
     scanOperations(ctx);

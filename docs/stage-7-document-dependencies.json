@@ -1,0 +1,3169 @@
+{
+  "schema": "copdocx.document-dependencies.v1",
+  "scope": "Explicit reviewed direct inputs and upstream seed/snapshot lineage for user-requested document delivery. Conditional roots are conservative rename-impact boundaries; this is not automatic code reflection.",
+  "queryAliases": {
+    "person.dob": "person.dateOfBirth"
+  },
+  "documentTypes": [
+    {
+      "documentType": "bookin.combined-pdf",
+      "title": "Book-In CAP and medical packet",
+      "template": {
+        "id": "book-in-embedded-cap-medical",
+        "version": "stage7.1",
+        "sourceFiles": [
+          "functions/book-in.js"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "input.firstName",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.lastName",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.aNumber",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.iceEvent",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.officersName",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.dateTime",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.dateOfBirth",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.age",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.gender",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.countryOfCitizenship",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.caseType",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.team",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.cash",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.travelDocs",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.propertyTag",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.cellNum",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.children",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.medicalIssues",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.medicine",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.communicationAnswer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q1Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q2Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.additionalObservations",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.referralAnswer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q3Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q3Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q4Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q4Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q5Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q5Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q6Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q6Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q7Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q7Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q8Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q8Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q9Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q9Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q10Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q10Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q11Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q11Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q12Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q12Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q13Answer",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "input.q13Details",
+          "source": "input: captured Book-In form",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": ""
+        },
+        {
+          "field": "person.name.firstName",
+          "source": "input: Book-In form seed",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": "Prefill lineage only; the captured edited form is authoritative for this PDF."
+        },
+        {
+          "field": "person.name.lastName",
+          "source": "input: Book-In form seed",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": "Prefill lineage only; the captured edited form is authoritative for this PDF."
+        },
+        {
+          "field": "person.dateOfBirth",
+          "source": "input: Book-In form seed",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": "Prefill lineage only; the captured edited form is authoritative for this PDF."
+        },
+        {
+          "field": "person.sex",
+          "source": "input: Book-In form seed",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": "Prefill lineage only; the captured edited form is authoritative for this PDF."
+        },
+        {
+          "field": "person.citizenship",
+          "source": "input: Book-In form seed",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": "Prefill lineage only; the captured edited form is authoritative for this PDF."
+        },
+        {
+          "field": "person.immigration.alienNumber",
+          "source": "input: Book-In form seed",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": "Prefill lineage only; the captured edited form is authoritative for this PDF."
+        },
+        {
+          "field": "person.immigration.disposition",
+          "source": "input: Book-In form seed",
+          "authority": "draft",
+          "citation": "functions/book-in.js#collectFormData/fillCapPage/fillMedicalPdf",
+          "notes": "Prefill lineage only; the captured edited form is authoritative for this PDF."
+        }
+      ],
+      "output": "application/pdf",
+      "notes": "Embedded PDF bytes plus CAP/medical mappers. Unused form fields are not dependencies. Medical questions 5/6 are suppressed for Male at capture."
+    },
+    {
+      "documentType": "warrant.i200",
+      "title": "Warrant I200",
+      "template": {
+        "id": "assets/pdf/I200_BLANK.pdf",
+        "version": "stage7.1",
+        "sourceFiles": [
+          "functions/warrant-issue.js",
+          "functions/pdf/fill-warrant.js",
+          "functions/pdf/i200-map.js",
+          "assets/pdf/I200_BLANK.pdf"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "input.values.fileNo",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.date",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.determination",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.officerName",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.officerTitle",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.location",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.nameOfAlien",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.dateOfService",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.language",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.interpreter",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.basis.charging",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.basis.pending",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.basis.deferred",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.basis.biometric",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.basis.voluntary",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.mapped.text",
+          "source": "input: PDF fill map",
+          "authority": "draft",
+          "citation": "functions/pdf/i200-map.js#mapI200",
+          "notes": ""
+        },
+        {
+          "field": "input.mapped.checkboxes",
+          "source": "input: PDF fill map",
+          "authority": "draft",
+          "citation": "functions/pdf/i200-map.js#mapI200",
+          "notes": ""
+        },
+        {
+          "field": "person.name.firstName",
+          "source": "input: warrant form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#currentLead/collectValues",
+          "notes": "Captured form edits win; existing issued PDF bytes do not change."
+        },
+        {
+          "field": "person.name.middleName",
+          "source": "input: warrant form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#currentLead/collectValues",
+          "notes": "Captured form edits win; existing issued PDF bytes do not change."
+        },
+        {
+          "field": "person.name.lastName",
+          "source": "input: warrant form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#currentLead/collectValues",
+          "notes": "Captured form edits win; existing issued PDF bytes do not change."
+        },
+        {
+          "field": "person.immigration.alienNumber",
+          "source": "input: warrant form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#currentLead/collectValues",
+          "notes": "Captured form edits win; existing issued PDF bytes do not change."
+        },
+        {
+          "field": "officer.firstName",
+          "source": "input: selected officer form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "officer.middleName",
+          "source": "input: selected officer form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "officer.lastName",
+          "source": "input: selected officer form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "officer.role",
+          "source": "input: selected officer form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        }
+      ],
+      "output": "application/pdf",
+      "notes": "Signature widgets remain blank. I-205 execution and fingerprint widgets remain blank."
+    },
+    {
+      "documentType": "warrant.i205",
+      "title": "Warrant I205",
+      "template": {
+        "id": "assets/pdf/I205_BLANK.pdf",
+        "version": "stage7.1",
+        "sourceFiles": [
+          "functions/warrant-issue.js",
+          "functions/pdf/fill-warrant.js",
+          "functions/pdf/i205-map.js",
+          "assets/pdf/I205_BLANK.pdf"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "input.values.fileNo",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.date",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.fullName",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.entryPlace",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.entryDate",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.inaLaw",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.officerTitle",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.location",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.order.ij",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.order.official",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.order.bia",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.values.order.court",
+          "source": "input: captured warrant form",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "input.mapped.text",
+          "source": "input: PDF fill map",
+          "authority": "draft",
+          "citation": "functions/pdf/i205-map.js#mapI205",
+          "notes": ""
+        },
+        {
+          "field": "input.mapped.checkboxes",
+          "source": "input: PDF fill map",
+          "authority": "draft",
+          "citation": "functions/pdf/i205-map.js#mapI205",
+          "notes": ""
+        },
+        {
+          "field": "person.name.firstName",
+          "source": "input: warrant form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#currentLead/collectValues",
+          "notes": "Captured form edits win; existing issued PDF bytes do not change."
+        },
+        {
+          "field": "person.name.middleName",
+          "source": "input: warrant form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#currentLead/collectValues",
+          "notes": "Captured form edits win; existing issued PDF bytes do not change."
+        },
+        {
+          "field": "person.name.lastName",
+          "source": "input: warrant form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#currentLead/collectValues",
+          "notes": "Captured form edits win; existing issued PDF bytes do not change."
+        },
+        {
+          "field": "person.immigration.alienNumber",
+          "source": "input: warrant form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#currentLead/collectValues",
+          "notes": "Captured form edits win; existing issued PDF bytes do not change."
+        },
+        {
+          "field": "officer.firstName",
+          "source": "input: selected officer form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "officer.middleName",
+          "source": "input: selected officer form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "officer.lastName",
+          "source": "input: selected officer form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        },
+        {
+          "field": "officer.role",
+          "source": "input: selected officer form seed",
+          "authority": "draft",
+          "citation": "functions/warrant-issue.js#collectValues",
+          "notes": ""
+        }
+      ],
+      "output": "application/pdf",
+      "notes": "Signature widgets remain blank. I-205 execution and fingerprint widgets remain blank."
+    },
+    {
+      "documentType": "arrest-report.email",
+      "title": "Daily arrest report email",
+      "template": {
+        "id": "arrest-report.email",
+        "version": "alien-book-in-1.12.0/stage7.1",
+        "sourceFiles": [
+          "functions/arrest-report.js",
+          "functions/arrest-roster.js",
+          "functions/baseball-card-contract.js"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "person.personId",
+          "source": "canonical: Person registry",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "person.name.firstName",
+          "source": "canonical: Person registry",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "person.name.lastName",
+          "source": "canonical: Person registry",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "person.age",
+          "source": "canonical: Person registry",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "person.citizenship",
+          "source": "canonical: Person registry",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "person.immigration.alienNumber",
+          "source": "canonical: Person registry",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "person.immigration.disposition",
+          "source": "canonical: Person registry",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "person.criminal.fbiNumber",
+          "source": "canonical: Person registry",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.arrestId",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.subjectId",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.bookinRecordId",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.bookingId",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.encounterId",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.encounterNumber",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.iceEventNumber",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.arrestDateTime",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.arrestDate",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.arrestTime",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.arrestingOfficer",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.team",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.updatedAt",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "arrest.voidedAt",
+          "source": "canonical: Person.arrests",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#collect",
+          "notes": ""
+        },
+        {
+          "field": "booking.id",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.bookingId",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.bookinRecordId",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.personId",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.leadId",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.subjectId",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.encounterId",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.encounterNumber",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.voidedAt",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.updatedAt",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "booking.inputValues",
+          "source": "canonical: Book-In fallback/provenance",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#bookInForArrest/collect",
+          "notes": "Fallback only after all supplied join identifiers agree."
+        },
+        {
+          "field": "encounter.subjects[].subjectId",
+          "source": "canonical: Encounter subject join",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#validEncounterLink",
+          "notes": ""
+        },
+        {
+          "field": "encounter.subjects[].personId",
+          "source": "canonical: Encounter subject join",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#validEncounterLink",
+          "notes": ""
+        },
+        {
+          "field": "encounter.subjects[].bookingId",
+          "source": "canonical: Encounter subject join",
+          "authority": "canonical",
+          "citation": "functions/arrest-report.js#validEncounterLink",
+          "notes": ""
+        },
+        {
+          "field": "person.immigration.baseballCards[].cardId",
+          "source": "snapshot: selected finalized card",
+          "authority": "snapshot",
+          "citation": "functions/arrest-report.js#finalizedCandidate/chooseDailyCards/cardHtml",
+          "notes": "Globally selected finalized card per arrest date; later draft card edits do not replace it."
+        },
+        {
+          "field": "person.immigration.baseballCards[].subjectId",
+          "source": "snapshot: selected finalized card",
+          "authority": "snapshot",
+          "citation": "functions/arrest-report.js#finalizedCandidate/chooseDailyCards/cardHtml",
+          "notes": "Globally selected finalized card per arrest date; later draft card edits do not replace it."
+        },
+        {
+          "field": "person.immigration.baseballCards[].personId",
+          "source": "snapshot: selected finalized card",
+          "authority": "snapshot",
+          "citation": "functions/arrest-report.js#finalizedCandidate/chooseDailyCards/cardHtml",
+          "notes": "Globally selected finalized card per arrest date; later draft card edits do not replace it."
+        },
+        {
+          "field": "person.immigration.baseballCards[].encounterId",
+          "source": "snapshot: selected finalized card",
+          "authority": "snapshot",
+          "citation": "functions/arrest-report.js#finalizedCandidate/chooseDailyCards/cardHtml",
+          "notes": "Globally selected finalized card per arrest date; later draft card edits do not replace it."
+        },
+        {
+          "field": "person.immigration.baseballCards[].bookinRecordId",
+          "source": "snapshot: selected finalized card",
+          "authority": "snapshot",
+          "citation": "functions/arrest-report.js#finalizedCandidate/chooseDailyCards/cardHtml",
+          "notes": "Globally selected finalized card per arrest date; later draft card edits do not replace it."
+        },
+        {
+          "field": "person.immigration.baseballCards[].arrestOfDay",
+          "source": "snapshot: selected finalized card",
+          "authority": "snapshot",
+          "citation": "functions/arrest-report.js#finalizedCandidate/chooseDailyCards/cardHtml",
+          "notes": "Globally selected finalized card per arrest date; later draft card edits do not replace it."
+        },
+        {
+          "field": "person.immigration.baseballCards[].finalizedSnapshot",
+          "source": "snapshot: selected finalized card",
+          "authority": "snapshot",
+          "citation": "functions/arrest-report.js#finalizedCandidate/chooseDailyCards/cardHtml",
+          "notes": "Globally selected finalized card per arrest date; later draft card edits do not replace it."
+        },
+        {
+          "field": "person.immigration.baseballCards[].voidedAt",
+          "source": "snapshot: selected finalized card",
+          "authority": "snapshot",
+          "citation": "functions/arrest-report.js#finalizedCandidate/chooseDailyCards/cardHtml",
+          "notes": "Globally selected finalized card per arrest date; later draft card edits do not replace it."
+        },
+        {
+          "field": "input.rows",
+          "source": "input: selected report rows and presentation options",
+          "authority": "draft",
+          "citation": "functions/arrest-roster.js#copyReport",
+          "notes": ""
+        },
+        {
+          "field": "input.options.mode",
+          "source": "input: selected report rows and presentation options",
+          "authority": "draft",
+          "citation": "functions/arrest-roster.js#copyReport",
+          "notes": ""
+        },
+        {
+          "field": "input.options.columns",
+          "source": "input: selected report rows and presentation options",
+          "authority": "draft",
+          "citation": "functions/arrest-roster.js#copyReport",
+          "notes": ""
+        }
+      ],
+      "output": "text/html",
+      "notes": "Canonical nonvoid arrest population, exact Encounter joins, selected finalized card and Media photo. Report presentation preserves v1.12.0."
+    },
+    {
+      "documentType": "baseball-card.html",
+      "title": "Baseball Card HTML and clipboard",
+      "template": {
+        "id": "baseball-card.html",
+        "version": "alien-book-in-1.12.0/state2/stage7.1",
+        "sourceFiles": [
+          "functions/baseball-card-contract.js",
+          "functions/baseball-page.js",
+          "functions/baseballcard.js"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "input.state.fields",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.gender",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.criminalHistory",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.content",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.layout",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.photoAdjustments",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.photoDataUrl",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.photoMediaId",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.renderedPhotoDataUrl",
+          "source": "input: Baseball Card presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/baseball-card-contract.js#generateContent/renderEmail/plainText/renderPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.state.fields.baseballLastName",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballFirstName",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballAge",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballCountry",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballAlienNumber",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballArrestDate",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballDisposition",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballFinalOrderDate",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballFirstDeportationDate",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "input.state.fields.baseballLastDeportationDate",
+          "source": "input: Baseball Card presentation fields",
+          "authority": "draft",
+          "citation": "functions/baseball-card-contract.js#generateContent",
+          "notes": "Used when manual content has not overridden generated content."
+        },
+        {
+          "field": "person.name",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.age",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.sex",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.citizenship",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.immigration.alienNumber",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.immigration.disposition",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.immigration.baseballCards",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.immigration.finalOrderDate",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.immigration.firstDeportationDate",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.immigration.lastDeportationDate",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.criminal",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.convictions",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "person.arrests",
+          "source": "input: Baseball Card seed",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#hydrateFromLead",
+          "notes": "Prefill lineage only. Presentation edits and saved/finalized snapshots retain their own authority."
+        },
+        {
+          "field": "input.content",
+          "source": "input: final card delivery",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#generateCardDocument",
+          "notes": ""
+        },
+        {
+          "field": "input.photoDataUrl",
+          "source": "input: final card delivery",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#generateCardDocument",
+          "notes": ""
+        },
+        {
+          "field": "input.plainText",
+          "source": "input: final card delivery",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#generateCardDocument",
+          "notes": ""
+        },
+        {
+          "field": "input.title",
+          "source": "input: final card delivery",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#generateCardDocument",
+          "notes": ""
+        },
+        {
+          "field": "input.legacyHtml",
+          "source": "input: final card delivery",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#generateCardDocument",
+          "notes": ""
+        },
+        {
+          "field": "input.download",
+          "source": "input: final card delivery",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#generateCardDocument",
+          "notes": ""
+        },
+        {
+          "field": "input.placeholder",
+          "source": "input: final card delivery",
+          "authority": "draft",
+          "citation": "functions/baseball-page.js#generateCardDocument",
+          "notes": ""
+        }
+      ],
+      "output": "text/html",
+      "notes": ""
+    },
+    {
+      "documentType": "narrative.text",
+      "title": "Narrative TEXT",
+      "template": {
+        "id": "narrative.text",
+        "version": "narrative-output-v3/stage7.1",
+        "sourceFiles": [
+          "functions/narratives/narrative-page.js",
+          "functions/narratives/narrative-builder-engine.js",
+          "functions/narratives/packet-builder.js",
+          "functions/narratives/source-freshness.js"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "input.output",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.text",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.state",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.sourceSnapshot",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.filename",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.trailingNewline",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "narrative.output.finalPlainText",
+          "source": "snapshot: saved narrative text",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport/downloadOutputText",
+          "notes": ""
+        },
+        {
+          "field": "narrative.output.plainText",
+          "source": "snapshot: saved narrative text",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport/downloadOutputText",
+          "notes": ""
+        },
+        {
+          "field": "narrative.output.generatedResolvedText",
+          "source": "snapshot: saved narrative text",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport/downloadOutputText",
+          "notes": ""
+        },
+        {
+          "field": "encounterSubject.subjectId",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.personId",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.encounterId",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.outcome",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.subjectRole",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.occupantRole",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "person.name",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.dateOfBirth",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.sex",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.citizenship",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.immigration.alienNumber",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.immigration.disposition",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "narrative.sourceSnapshot.schema",
+          "source": "snapshot: narrative source comparison marker",
+          "authority": "snapshot",
+          "citation": "functions/narratives/source-freshness.js#capture",
+          "notes": ""
+        },
+        {
+          "field": "narrative.sourceSnapshot.encounterId",
+          "source": "snapshot: narrative source comparison marker",
+          "authority": "snapshot",
+          "citation": "functions/narratives/source-freshness.js#capture",
+          "notes": ""
+        },
+        {
+          "field": "narrative.sourceSnapshot.focusSubjectId",
+          "source": "snapshot: narrative source comparison marker",
+          "authority": "snapshot",
+          "citation": "functions/narratives/source-freshness.js#capture",
+          "notes": ""
+        },
+        {
+          "field": "narrative.sourceSnapshot.fingerprint",
+          "source": "snapshot: narrative source comparison marker",
+          "authority": "snapshot",
+          "citation": "functions/narratives/source-freshness.js#capture",
+          "notes": ""
+        }
+      ],
+      "output": "text/plain",
+      "notes": "Saved output and explicit user overrides are preserved. A rename can affect future builds without altering existing narrative snapshots."
+    },
+    {
+      "documentType": "narrative.json",
+      "title": "Narrative JSON",
+      "template": {
+        "id": "narrative.json",
+        "version": "narrative-output-v3/stage7.1",
+        "sourceFiles": [
+          "functions/narratives/narrative-page.js",
+          "functions/narratives/narrative-builder-engine.js",
+          "functions/narratives/packet-builder.js",
+          "functions/narratives/source-freshness.js"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "input.output",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.text",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.state",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.sourceSnapshot",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.filename",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "input.trailingNewline",
+          "source": "snapshot: exact narrative output, overrides and source context",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport",
+          "notes": "Stored finalPlainText is authoritative for a saved/read-only narrative, including intentionally empty text. Template/state roots are extensible."
+        },
+        {
+          "field": "narrative.output.finalPlainText",
+          "source": "snapshot: saved narrative text",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport/downloadOutputText",
+          "notes": ""
+        },
+        {
+          "field": "narrative.output.plainText",
+          "source": "snapshot: saved narrative text",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport/downloadOutputText",
+          "notes": ""
+        },
+        {
+          "field": "narrative.output.generatedResolvedText",
+          "source": "snapshot: saved narrative text",
+          "authority": "snapshot",
+          "citation": "functions/narratives/narrative-page.js#outputForExport/downloadOutputText",
+          "notes": ""
+        },
+        {
+          "field": "encounterSubject.subjectId",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.personId",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.encounterId",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.outcome",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.subjectRole",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "encounterSubject.occupantRole",
+          "source": "snapshot: narrative source at draft capture",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream draft-source dependency; historical output is not regenerated automatically."
+        },
+        {
+          "field": "person.name",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.dateOfBirth",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.sex",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.citizenship",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.immigration.alienNumber",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "person.immigration.disposition",
+          "source": "snapshot: narrative identity/immigration source",
+          "authority": "snapshot",
+          "citation": "functions/narratives/packet-builder.js#participantObject",
+          "notes": "Upstream source is captured through identitySnapshot/immigrationSnapshot and template packet."
+        },
+        {
+          "field": "narrative.sourceSnapshot.schema",
+          "source": "snapshot: narrative source comparison marker",
+          "authority": "snapshot",
+          "citation": "functions/narratives/source-freshness.js#capture",
+          "notes": ""
+        },
+        {
+          "field": "narrative.sourceSnapshot.encounterId",
+          "source": "snapshot: narrative source comparison marker",
+          "authority": "snapshot",
+          "citation": "functions/narratives/source-freshness.js#capture",
+          "notes": ""
+        },
+        {
+          "field": "narrative.sourceSnapshot.focusSubjectId",
+          "source": "snapshot: narrative source comparison marker",
+          "authority": "snapshot",
+          "citation": "functions/narratives/source-freshness.js#capture",
+          "notes": ""
+        },
+        {
+          "field": "narrative.sourceSnapshot.fingerprint",
+          "source": "snapshot: narrative source comparison marker",
+          "authority": "snapshot",
+          "citation": "functions/narratives/source-freshness.js#capture",
+          "notes": ""
+        }
+      ],
+      "output": "application/json",
+      "notes": "Saved output and explicit user overrides are preserved. A rename can affect future builds without altering existing narrative snapshots."
+    },
+    {
+      "documentType": "lead.csv",
+      "title": "Filed Case CSV",
+      "template": {
+        "id": "lead.csv",
+        "version": "stage7.1",
+        "sourceFiles": [
+          "functions/leads.js"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "person.name.lastName",
+          "source": "canonical: current Case subject",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "person.name.firstName",
+          "source": "canonical: current Case subject",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "person.name.middleName",
+          "source": "canonical: current Case subject",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "person.sex",
+          "source": "canonical: current Case subject",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "person.dateOfBirth",
+          "source": "canonical: current Case subject",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "person.age",
+          "source": "canonical: current Case subject",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "person.citizenship",
+          "source": "canonical: current Case subject",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "person.immigration.alienNumber",
+          "source": "canonical: current Case subject",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "lead.source.caseNumber",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "lead.source.leadSource",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": ""
+        },
+        {
+          "field": "lead.vehicles[0].licensePlate",
+          "source": "canonical: Case vehicle snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": "Legacy aliases plate and state remain accepted.",
+          "legacyAliases": [
+            "lead.vehicles[0].plate"
+          ]
+        },
+        {
+          "field": "lead.vehicles[0].plateState",
+          "source": "canonical: Case vehicle snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": "Legacy aliases plate and state remain accepted.",
+          "legacyAliases": [
+            "lead.vehicles[0].state"
+          ]
+        },
+        {
+          "field": "vehicle.licensePlate",
+          "source": "canonical: vehicle registry when linked ID resolves",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": "Current vehicle registry fields replace the legacy embedded Case snapshot when available.",
+          "legacyAliases": [
+            "vehicle.plate"
+          ]
+        },
+        {
+          "field": "vehicle.plateState",
+          "source": "canonical: vehicle registry when linked ID resolves",
+          "authority": "canonical",
+          "citation": "functions/leads.js#leadCsvRow",
+          "notes": "Current vehicle registry fields replace the legacy embedded Case snapshot when available.",
+          "legacyAliases": [
+            "vehicle.state"
+          ]
+        }
+      ],
+      "output": "text/csv",
+      "notes": "Single Case and filed Case list share the same columns and CSV escaping contract."
+    },
+    {
+      "documentType": "target-sheet.html",
+      "title": "Target sheet HTML",
+      "template": {
+        "id": "target-sheet.html",
+        "version": "stage7.1",
+        "sourceFiles": [
+          "functions/leads.js",
+          "mobile-target-sheet.html",
+          "style/style.css",
+          "vendor/leaflet/leaflet.css",
+          "vendor/leaflet/leaflet.js",
+          "assets/icons/copdoc-icons.js",
+          "functions/map-popup.js",
+          "functions/location-map.js"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "person.personId",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.name",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.sex",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.dateOfBirth",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.age",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.citizenship",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.immigration",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.criminal",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.aliases",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.convictions",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.warrants",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "person.locations",
+          "source": "canonical: current subject with presentation snapshot",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet/paintTargetWarrants",
+          "notes": ""
+        },
+        {
+          "field": "lead.leadId",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet/collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "lead.source",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet/collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "lead.assignedOfficerId",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet/collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "lead.locations",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet/collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "lead.vehicles",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet/collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "lead.notes",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet/collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "lead.links",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet/collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "lead.meta.updatedAt",
+          "source": "canonical: Case",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet/collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.locationId",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.street",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.street2",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.city",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.state",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.zip",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.latitude",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.longitude",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.association",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.targetPriority",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "location.pinColor",
+          "source": "snapshot: Person/Case embedded location projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#collectSubjectPlaces",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.vehicleId",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.licensePlate",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.plate",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.plateState",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.vehicleMake",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.vehicleModel",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.vehicleYear",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.vehicleColor",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.registeredOwnerName",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "vehicle.locations",
+          "source": "snapshot: Case embedded vehicle projection",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "officer.officerId",
+          "source": "canonical: officer display",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": "",
+          "legacyAliases": [
+            "officer.id"
+          ]
+        },
+        {
+          "field": "officer.firstName",
+          "source": "canonical: officer display",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "officer.middleName",
+          "source": "canonical: officer display",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "officer.lastName",
+          "source": "canonical: officer display",
+          "authority": "canonical",
+          "citation": "functions/leads.js#paintTargetSheet",
+          "notes": ""
+        },
+        {
+          "field": "media.mediaId",
+          "source": "snapshot: embedded target photos and warrant links",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#saveTargetSheetHtml",
+          "notes": ""
+        },
+        {
+          "field": "media.sha256",
+          "source": "snapshot: embedded target photos and warrant links",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#saveTargetSheetHtml",
+          "notes": ""
+        },
+        {
+          "field": "media.roles",
+          "source": "snapshot: embedded target photos and warrant links",
+          "authority": "snapshot",
+          "citation": "functions/leads.js#saveTargetSheetHtml",
+          "notes": ""
+        },
+        {
+          "field": "input.html",
+          "source": "input: prepared self-contained target sheet",
+          "authority": "draft",
+          "citation": "functions/leads.js#saveTargetSheetHtml",
+          "notes": "Map imagery and icon choices are presentation inputs."
+        },
+        {
+          "field": "input.map",
+          "source": "input: prepared self-contained target sheet",
+          "authority": "draft",
+          "citation": "functions/leads.js#saveTargetSheetHtml",
+          "notes": "Map imagery and icon choices are presentation inputs."
+        }
+      ],
+      "output": "text/html",
+      "notes": ""
+    },
+    {
+      "documentType": "operation-brief.html",
+      "title": "Operation brief html",
+      "template": {
+        "id": "operation-brief.html",
+        "version": "stage7.1",
+        "sourceFiles": [
+          "functions/operations.js",
+          "functions/model/operation.js",
+          "operation-brief.html",
+          "style/style.css"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "operation.operationId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.operationNumber",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.name",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.plannedStart",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.plannedEnd",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.order.narrative",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.order.officerBriefs",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].targetId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].leadId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].personId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].freeze.subjectLabel",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].freeze.places",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.teams[].teamId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.teams[].name",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.teams[].members[].officerId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.teams[].members[].assignmentRole",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targetAssignments[].targetId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targetAssignments[].teamId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "lead.person.name",
+          "source": "snapshot: fallback Case subject when target freeze absent",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#targetLabel/placesForTarget",
+          "notes": ""
+        },
+        {
+          "field": "lead.person.locations",
+          "source": "snapshot: fallback Case subject when target freeze absent",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#targetLabel/placesForTarget",
+          "notes": ""
+        },
+        {
+          "field": "lead.vehicles",
+          "source": "snapshot: fallback Case vehicles when target freeze absent",
+          "authority": "snapshot",
+          "citation": "functions/model/operation.js#operationPlacesFromLead",
+          "notes": ""
+        },
+        {
+          "field": "officer.officerId",
+          "source": "canonical: live officer display",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": "",
+          "legacyAliases": [
+            "officer.id"
+          ]
+        },
+        {
+          "field": "officer.firstName",
+          "source": "canonical: live officer display",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "officer.middleName",
+          "source": "canonical: live officer display",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "officer.lastName",
+          "source": "canonical: live officer display",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "media.mediaId",
+          "source": "snapshot: target Person photo",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#fillTargetPhoto",
+          "notes": ""
+        },
+        {
+          "field": "media.sha256",
+          "source": "snapshot: target Person photo",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#fillTargetPhoto",
+          "notes": ""
+        },
+        {
+          "field": "media.primary",
+          "source": "snapshot: target Person photo",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#fillTargetPhoto",
+          "notes": ""
+        },
+        {
+          "field": "media.owner",
+          "source": "snapshot: target Person photo",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#fillTargetPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.html",
+          "source": "input: prepared operation brief",
+          "authority": "draft",
+          "citation": "functions/operations.js#saveOperationBrief/printBrief",
+          "notes": ""
+        }
+      ],
+      "output": "text/html",
+      "notes": "Target labels/places are issued-operation snapshots; officer display and target photos are live at capture. Print tracks prepared content, not printer completion."
+    },
+    {
+      "documentType": "operation-brief.print",
+      "title": "Operation brief print",
+      "template": {
+        "id": "operation-brief.print",
+        "version": "stage7.1",
+        "sourceFiles": [
+          "functions/operations.js",
+          "functions/model/operation.js",
+          "operation-brief.html",
+          "style/style.css"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "operation.operationId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.operationNumber",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.name",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.plannedStart",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.plannedEnd",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.order.narrative",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.order.officerBriefs",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].targetId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].leadId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].personId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].freeze.subjectLabel",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targets[].freeze.places",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.teams[].teamId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.teams[].name",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.teams[].members[].officerId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.teams[].members[].assignmentRole",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targetAssignments[].targetId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "operation.targetAssignments[].teamId",
+          "source": "canonical: issued Operation with frozen targets",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "lead.person.name",
+          "source": "snapshot: fallback Case subject when target freeze absent",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#targetLabel/placesForTarget",
+          "notes": ""
+        },
+        {
+          "field": "lead.person.locations",
+          "source": "snapshot: fallback Case subject when target freeze absent",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#targetLabel/placesForTarget",
+          "notes": ""
+        },
+        {
+          "field": "lead.vehicles",
+          "source": "snapshot: fallback Case vehicles when target freeze absent",
+          "authority": "snapshot",
+          "citation": "functions/model/operation.js#operationPlacesFromLead",
+          "notes": ""
+        },
+        {
+          "field": "officer.officerId",
+          "source": "canonical: live officer display",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": "",
+          "legacyAliases": [
+            "officer.id"
+          ]
+        },
+        {
+          "field": "officer.firstName",
+          "source": "canonical: live officer display",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "officer.middleName",
+          "source": "canonical: live officer display",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "officer.lastName",
+          "source": "canonical: live officer display",
+          "authority": "canonical",
+          "citation": "functions/operations.js#paintBrief",
+          "notes": ""
+        },
+        {
+          "field": "media.mediaId",
+          "source": "snapshot: target Person photo",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#fillTargetPhoto",
+          "notes": ""
+        },
+        {
+          "field": "media.sha256",
+          "source": "snapshot: target Person photo",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#fillTargetPhoto",
+          "notes": ""
+        },
+        {
+          "field": "media.primary",
+          "source": "snapshot: target Person photo",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#fillTargetPhoto",
+          "notes": ""
+        },
+        {
+          "field": "media.owner",
+          "source": "snapshot: target Person photo",
+          "authority": "snapshot",
+          "citation": "functions/operations.js#fillTargetPhoto",
+          "notes": ""
+        },
+        {
+          "field": "input.html",
+          "source": "input: prepared operation brief",
+          "authority": "draft",
+          "citation": "functions/operations.js#saveOperationBrief/printBrief",
+          "notes": ""
+        }
+      ],
+      "output": "text/html",
+      "notes": "Target labels/places are issued-operation snapshots; officer display and target photos are live at capture. Print tracks prepared content, not printer completion."
+    },
+    {
+      "documentType": "map-brief.print",
+      "title": "Map brief print",
+      "template": {
+        "id": "map-brief.print",
+        "version": "stage7.1",
+        "sourceFiles": [
+          "functions/map-markup.js",
+          "functions/map.js",
+          "functions/map-targets.js",
+          "functions/map-popup.js",
+          "assets/icons/copdoc-icons.js",
+          "style/style.css",
+          "vendor/leaflet/leaflet.css",
+          "vendor/leaflet/leaflet.js",
+          "map.html"
+        ]
+      },
+      "dependencies": [
+        {
+          "field": "input.html",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.styles",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.map.center",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.map.zoom",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.map.basemap",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.map.width",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.map.height",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.map.layers",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.map.visualFilters",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.map.iconSize",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.markup.labels",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.markup.arrows",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.tiles[].url",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "input.rows",
+          "source": "snapshot: detached displayed map and visible catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-markup.js#printBrief",
+          "notes": "Captures displayed HTML, markup, view settings and tile URLs. The document hash does not authenticate remote tile image bytes or printed pixels."
+        },
+        {
+          "field": "lead.leadId",
+          "source": "snapshot: map Case projection",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/walkLeadLocations",
+          "notes": ""
+        },
+        {
+          "field": "lead.meta",
+          "source": "snapshot: map Case projection",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/walkLeadLocations",
+          "notes": ""
+        },
+        {
+          "field": "lead.person",
+          "source": "snapshot: map Case projection",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/walkLeadLocations",
+          "notes": ""
+        },
+        {
+          "field": "lead.locations",
+          "source": "snapshot: map Case projection",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/walkLeadLocations",
+          "notes": ""
+        },
+        {
+          "field": "lead.vehicles",
+          "source": "snapshot: map Case projection",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/walkLeadLocations",
+          "notes": ""
+        },
+        {
+          "field": "person.personId",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "person.name",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "person.locations",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "person.immigration.disposition",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "person.immigration.finalOrder",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "person.immigration.finalOrderDate",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "person.criminal.isCriminal",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "person.criminal.hasCriminalRecord",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "person.criminal.hasCriminalWarrants",
+          "source": "snapshot: displayed target identity and flags",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#subjectFor/personFlags",
+          "notes": ""
+        },
+        {
+          "field": "arrest.voidedAt",
+          "source": "snapshot: canonical arrest or legacy Case fallback",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads",
+          "notes": ""
+        },
+        {
+          "field": "arrest.arrestLocation",
+          "source": "snapshot: canonical arrest or legacy Case fallback",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads",
+          "notes": ""
+        },
+        {
+          "field": "arrest.latitude",
+          "source": "snapshot: canonical arrest or legacy Case fallback",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads",
+          "notes": ""
+        },
+        {
+          "field": "arrest.longitude",
+          "source": "snapshot: canonical arrest or legacy Case fallback",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads",
+          "notes": ""
+        },
+        {
+          "field": "arrest.encounterId",
+          "source": "snapshot: canonical arrest or legacy Case fallback",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads",
+          "notes": ""
+        },
+        {
+          "field": "encounter.encounterId",
+          "source": "snapshot: completed Encounter map view",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectEncounters/encounterFlags",
+          "notes": ""
+        },
+        {
+          "field": "encounter.completed",
+          "source": "snapshot: completed Encounter map view",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectEncounters/encounterFlags",
+          "notes": ""
+        },
+        {
+          "field": "encounter.subjects",
+          "source": "snapshot: completed Encounter map view",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectEncounters/encounterFlags",
+          "notes": ""
+        },
+        {
+          "field": "encounter.eventType",
+          "source": "snapshot: completed Encounter map view",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectEncounters/encounterFlags",
+          "notes": ""
+        },
+        {
+          "field": "location.locationId",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.street",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.street2",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.city",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.state",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.zip",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.latitude",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.longitude",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.association",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.locationAssociation",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "location.targetPriority",
+          "source": "snapshot: displayed map location",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectLeads/formatAddress",
+          "notes": ""
+        },
+        {
+          "field": "officer.officerId",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": "",
+          "legacyAliases": [
+            "officer.id"
+          ]
+        },
+        {
+          "field": "officer.id",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": ""
+        },
+        {
+          "field": "officer.firstName",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": ""
+        },
+        {
+          "field": "officer.lastName",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": ""
+        },
+        {
+          "field": "officer.duty",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": ""
+        },
+        {
+          "field": "officer.locations",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": ""
+        },
+        {
+          "field": "officer.address",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": ""
+        },
+        {
+          "field": "officer.junked",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": ""
+        },
+        {
+          "field": "officer.meta",
+          "source": "snapshot: displayed officer catalog",
+          "authority": "snapshot",
+          "citation": "functions/map-targets.js#collectOfficers",
+          "notes": ""
+        }
+      ],
+      "output": "text/html",
+      "notes": "Frozen map view and annotations submitted for printing. Remote imagery remains a referenced presentation dependency; print submission does not prove printer completion."
+    }
+  ]
+}

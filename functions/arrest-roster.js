@@ -16,6 +16,7 @@
     { id: "arrestDateTime", label: "Arrest Date/Time" }, { id: "updatedAt", label: "Last Saved" }
   ];
   var generatedReport = null;
+  var generatedReportContext = null;
 
   function settingsKey() {
     return root.config && root.config.storageKey ? root.config.storageKey("settings") : "copdocx.settings.v1";
@@ -105,62 +106,85 @@
     byId("arrestReportCopy").addEventListener("click", copyReport);
   }
 
-  function copyReport() {
+  async function copyReport() {
     var content = byId("arrestReportContent");
-    if (!content || !generatedReport) { return Promise.resolve(false); }
-    var html = generatedReport.html;
-    var plain = generatedReport.plainText;
-    function result(message, ok) {
-      var status = byId("arrestReportCopyStatus");
-      if (status) { status.textContent = message; }
+    if (!content || !generatedReport) return false;
+    var documents = root.documents;
+    function status(message, ok) {
+      var local = byId("arrestReportCopyStatus");
+      if (local) local.textContent = message;
       setStatus(message, ok);
       return ok;
     }
+    if (!documents || !documents.generate || !documents.recordDelivery || !generatedReportContext) {
+      return status("Document tracking is unavailable. Reload this page before copying the report.", false);
+    }
+    var contextSnapshot = generatedReportContext;
+    var generation;
+    try {
+      generation = await documents.generate({
+        documentType: "arrest-report.email", context: contextSnapshot,
+        render: function (context) {
+          var report = root.arrestReport.build(context.input.rows, context.input.options);
+          return { data: report.html, mimeType: "text/html", filename: "arrest-report.html" };
+        }
+      });
+    } catch (error) { return status("Report could not be recorded: " + error.message, false); }
+    var html = generation.artifact.data;
+    var plain = root.arrestReport.build(contextSnapshot.input.rows, contextSnapshot.input.options).plainText;
+    var copied = false, deliveredData = "", deliveredMime = "", message = "";
     function selectionCopy() {
+      var holder;
       try {
-        var range = document.createRange(); range.selectNodeContents(content);
+        holder = document.createElement("div"); holder.innerHTML = html;
+        holder.setAttribute("style", "position:fixed;left:-10000px;top:0;");
+        document.body.appendChild(holder);
+        var range = document.createRange(); range.selectNodeContents(holder);
         var sel = global.getSelection(); sel.removeAllRanges(); sel.addRange(range);
         var ok = document.execCommand("copy");
-        if (ok) { sel.removeAllRanges(); }
+        if (ok) sel.removeAllRanges();
         return ok;
       } catch (error) { return false; }
-    }
-    function textFallback() {
-      var clipboard = global.navigator && global.navigator.clipboard;
-      if (clipboard && typeof clipboard.writeText === "function") {
-        return Promise.resolve().then(function () { return clipboard.writeText(plain); }).then(function () {
-          return result("Report copied as plain text. Formatting and images are not included.", true);
-        }).catch(textareaFallback);
-      }
-      return Promise.resolve(textareaFallback());
-    }
-    function textareaFallback() {
-      var input;
-      try {
-        input = document.createElement("textarea"); input.value = plain;
-        input.setAttribute("aria-label", "Report text to copy");
-        document.body.appendChild(input); input.select();
-        if (document.execCommand("copy")) {
-          input.remove(); return result("Report copied as plain text. Formatting and images are not included.", true);
-        }
-      } catch (error) { /* Retain the report preview for manual copying. */ }
-      if (input && input.remove) { input.remove(); }
-      return result("Copy failed. Select the report preview and copy it manually.", false);
-    }
-    function fallback() {
-      if (selectionCopy()) { return result("Report copied for email.", true); }
-      return textFallback();
+      finally { if (holder && holder.remove) holder.remove(); }
     }
     var clipboard = global.navigator && global.navigator.clipboard;
     if (global.isSecureContext && clipboard && clipboard.write && global.ClipboardItem) {
-      return Promise.resolve().then(function () {
-        return clipboard.write([new global.ClipboardItem({
+      try {
+        await clipboard.write([new global.ClipboardItem({
           "text/html": new global.Blob([html], { type: "text/html" }),
           "text/plain": new global.Blob([plain], { type: "text/plain" })
         })]);
-      }).then(function () { return result("Report copied for email.", true); }).catch(fallback);
+        copied = true;
+      } catch (error) { /* Try the same generated report through selection. */ }
     }
-    return Promise.resolve(fallback());
+    if (!copied) copied = selectionCopy();
+    if (copied) {
+      deliveredData = html; deliveredMime = "text/html"; message = "Report copied for email.";
+    } else {
+      try {
+        if (clipboard && clipboard.writeText) { await clipboard.writeText(plain); copied = true; }
+      } catch (error) { /* A textarea supports older clipboard implementations. */ }
+      if (!copied) {
+        var input;
+        try {
+          input = document.createElement("textarea"); input.value = plain;
+          input.setAttribute("aria-label", "Report text to copy");
+          document.body.appendChild(input); input.select(); copied = !!document.execCommand("copy");
+        } catch (error) {} finally { if (input && input.remove) input.remove(); }
+      }
+      deliveredData = plain; deliveredMime = "text/plain";
+      message = copied ? "Report copied as plain text. Formatting and images are not included."
+        : "Copy failed. Select the report preview and copy it manually.";
+    }
+    try {
+      await documents.recordDelivery(generation.record.generationId, {
+        method: "clipboard", status: copied ? "SUCCEEDED" : "FAILED",
+        artifact: { data: deliveredData, mimeType: deliveredMime }
+      });
+    } catch (error) {
+      return status((copied ? "Report copied, but its delivery record could not be saved: " : "Copy failed; delivery record could not be saved: ") + error.message, false);
+    }
+    return status(message, copied);
   }
 
   function setStatus(message, ok) {
@@ -503,6 +527,18 @@
           return;
         }
         generatedReport = report;
+        generatedReportContext = root.documents && root.documents.captureContext
+          ? root.documents.captureContext({
+            documentType: "arrest-report.email",
+            input: { rows: hydrated, options: { mode: mode, columns: visibleColumns() } },
+            sources: hydrated.reduce(function (all, row) {
+              [["Person", row.personId], ["Lead", row.leadId], ["Encounter", row.encounterId],
+                ["EncounterSubject", row.subjectId], ["Booking", row.bookinRecordId], ["Arrest", row.arrestId],
+                ["BaseballCard", row.reportCard && row.reportCard.cardId], ["Media", row.reportCard && row.reportCard.photoMediaId]]
+                .forEach(function (pair) { if (pair[1]) all.push({ type: pair[0], id: pair[1], revision: null, authority: "snapshot" }); });
+              return all;
+            }, [])
+          }) : null;
         content.innerHTML = report.html;
         dialog.hidden = false;
         var copyStatus = byId("arrestReportCopyStatus");

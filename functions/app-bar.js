@@ -36,6 +36,11 @@
       href: "integrity.html",
       label: "Data integrity",
       pages: ["integrity"]
+    },
+    {
+      href: "document-history.html",
+      label: "Document history",
+      pages: ["document-history"]
     }
   ];
 

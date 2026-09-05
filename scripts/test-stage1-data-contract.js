@@ -174,7 +174,14 @@ assert.deepStrictEqual(Object.keys(importStorageOverlay.storage), ["importTransa
 Object.keys(importStorageOverlay.storage).forEach((id) => {
   assert.ok(!manifest.storage[id] && !storageOverlay.storage[id], "Stage 6 overlay must be additive: " + id);
 });
-const documentedStorage = Object.assign({}, manifest.storage, storageOverlay.storage, importStorageOverlay.storage);
+const documentStorageOverlay = readJson(path.join(root, "docs", "stage-7-document-storage.json"));
+assert.strictEqual(documentStorageOverlay.schema, "copdocx.storage-contract-overlay.v1");
+assert.strictEqual(documentStorageOverlay.stage, 7);
+assert.deepStrictEqual(Object.keys(documentStorageOverlay.storage), ["documentGenerations"]);
+Object.keys(documentStorageOverlay.storage).forEach((id) => {
+  assert.ok(!manifest.storage[id] && !storageOverlay.storage[id] && !importStorageOverlay.storage[id], "Stage 7 overlay must be additive: " + id);
+});
+const documentedStorage = Object.assign({}, manifest.storage, storageOverlay.storage, importStorageOverlay.storage, documentStorageOverlay.storage);
 const storeIds = Object.keys(documentedStorage);
 assert.strictEqual(storeIds.length, registry.length, "manifest plus additive overlays must cover every registry entry exactly");
 unique(storeIds, "manifest storage IDs");

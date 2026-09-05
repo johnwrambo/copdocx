@@ -1136,21 +1136,16 @@
     return safeCardHtml(editorTextForSave());
   }
 
-  async function preparedEmailCardHtml() {
+  async function preparedEmailCardHtml(input) {
     var api = global.COPDoc && global.COPDoc.baseball;
-    if (!api || typeof global.getBaseballCardState !== "function") return emailCardHtml();
-    var state = global.getBaseballCardState();
-    state.content = getRenderedCardContent();
-    var photo = await api.renderPhoto(state, photoDataUrl);
-    return api.renderEmail(state, photo);
-  }
-
-  function emailPlainText() {
-    var content = getRenderedCardContent();
-    if (typeof global.buildBaseballCardPlainText === "function") {
-      return global.buildBaseballCardPlainText(content);
+    if (!input) {
+      var state = api && typeof global.getBaseballCardState === "function" ? global.getBaseballCardState() : null;
+      if (state) state.content = getRenderedCardContent();
+      input = { state: state, photoDataUrl: photoDataUrl, legacyHtml: state ? "" : emailCardHtml() };
     }
-    return editorTextForSave();
+    if (!input.state) return input.legacyHtml;
+    var photo = await api.renderPhoto(input.state, input.photoDataUrl);
+    return api.renderEmail(input.state, photo);
   }
 
   function clipboardHtml(html) {
@@ -1215,109 +1210,117 @@
     return true;
   }
 
+  async function generateCardDocument(download) {
+    var documents = global.COPDoc && global.COPDoc.documents;
+    if (!documents || !documents.captureContext || !documents.generate || !documents.recordDelivery) {
+      throw new Error("Document tracking is unavailable. Reload this page before exporting the card.");
+    }
+    // Capture every editor input before photo rendering yields to another event.
+    var content = getRenderedCardContent();
+    var api = global.COPDoc && global.COPDoc.baseball;
+    var state = api && typeof global.getBaseballCardState === "function" ? global.getBaseballCardState() : null;
+    if (state) state.content = content;
+    var plain = typeof global.buildBaseballCardPlainText === "function"
+      ? global.buildBaseballCardPlainText(content) : editorTextForSave();
+    if (!plain) throw new Error("Generate or enter the baseball card text before exporting.");
+    var title = [text(byId("lastName") && byId("lastName").value),
+      text(byId("firstName") && byId("firstName").value), "Baseball Card"].filter(Boolean).join(" - ");
+    var sources = [];
+    [["Person", currentPersonId], ["Lead", queryLeadId()], ["Booking", currentBookInRecordId],
+      ["BaseballCard", loadedCardId], ["Media", loadedPhotoMediaId]].forEach(function (pair) {
+      if (pair[1]) sources.push({ type: pair[0], id: pair[1], authority: "draft" });
+    });
+    var context = documents.captureContext({ documentType: "baseball-card.html", sources: sources,
+      input: { state: state, content: content, photoDataUrl: photoDataUrl, plainText: plain, title: title,
+        legacyHtml: state ? "" : emailCardHtml(), download: !!download,
+        placeholder: typeof global.baseballCardPhotoPlaceholder === "function" ? global.baseballCardPhotoPlaceholder() : "" }
+    });
+    var generation = await documents.generate({ documentType: "baseball-card.html", context: context,
+      render: async function (snapshot) {
+        var input = snapshot.input;
+        var html = await preparedEmailCardHtml(input);
+        if (!html || html.indexOf("<table") === -1) throw new Error("Generate or enter the baseball card before exporting.");
+        if (input.download) {
+          html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' +
+            escapeHtml(input.title || "ICE Dallas Arrest Card") +
+            '</title></head><body style="margin:0;padding:16px;background:#fff;">' + html + "</body></html>";
+        }
+        return { data: html, mimeType: "text/html;charset=utf-8",
+          filename: input.title.replace(/[^a-z0-9._ -]+/gi, "").replace(/\s+/g, "_") + ".html" };
+      }
+    });
+    return { generation: generation, context: context, documents: documents };
+  }
+
   async function copyBaseballCard() {
-    if (!validateCard()) {
-      return;
+    if (!validateCard()) return false;
+    var prepared;
+    try { prepared = await generateCardDocument(false); }
+    catch (error) { setStatus(error.message || "The card could not be prepared.", "error"); return false; }
+    var html = prepared.generation.artifact.data;
+    var input = prepared.context.input;
+    var plainText = input.plainText;
+    var copied = false, actual = html, mimeType = "text/html", level = "success";
+    var message = input.photoDataUrl ? "Baseball Card copied with its photo and formatting."
+      : "Baseball Card copied with its formatting and photo placeholder.";
+    try { copied = copyHtmlWithSelection(html); } catch (error) {}
+    if (!copied) {
+      try { copied = await writeHtmlClipboard(html, plainText); if (copied) actual = clipboardHtml(html); }
+      catch (error) {}
     }
-    var html;
-    try { html = await preparedEmailCardHtml(); }
-    catch (error) { setStatus(error.message || "The adjusted photo could not be copied.", "error"); return; }
-    var plainText = emailPlainText();
-    if (!plainText || html.indexOf("<table") === -1) {
-      setStatus("Generate or enter the baseball card text before copying.", "error");
-      return;
-    }
-    if (copyHtmlWithSelection(html)) {
-      setStatus(
-        photoDataUrl
-          ? "Baseball Card copied with its photo and formatting."
-          : "Baseball Card copied with its formatting and photo placeholder.",
-        "success"
-      );
-      return;
-    }
-    try {
-      if (await writeHtmlClipboard(html, plainText)) {
-        setStatus(
-          photoDataUrl
-            ? "Baseball Card copied with its photo and formatting."
-            : "Baseball Card copied with its formatting and photo placeholder.",
-          "success"
-        );
-        return;
-      }
-    } catch (error) {
-      if (global.console && typeof global.console.warn === "function") {
-        global.console.warn(
-          "This browser blocked formatted copying with the photo; retrying without the photo.",
-          error
-        );
-      }
+    if (!copied) {
       try {
-        var lightHtml = emailCardHtml(
-          typeof global.baseballCardPhotoPlaceholder === "function"
-            ? global.baseballCardPhotoPlaceholder()
-            : ""
-        );
-        if (copyHtmlWithSelection(lightHtml) || (await writeHtmlClipboard(lightHtml, plainText))) {
-          setStatus(
-            "Baseball Card copied with formatting. This browser blocked copying its arrest photo; Download HTML keeps the photo.",
-            "warning"
-          );
-          return;
+        var lightHtml = input.state ? global.COPDoc.baseball.renderEmail(input.state, input.placeholder)
+          : global.buildBaseballCardEmailMarkup(input.content, input.placeholder);
+        copied = copyHtmlWithSelection(lightHtml);
+        actual = lightHtml;
+        if (!copied) { copied = await writeHtmlClipboard(lightHtml, plainText); if (copied) actual = clipboardHtml(lightHtml); }
+        if (copied) {
+          message = "Baseball Card copied with formatting. This browser blocked copying its arrest photo; Download HTML keeps the photo.";
+          level = "warning";
         }
-      } catch (lightError) {
-        if (global.console && typeof global.console.warn === "function") {
-          global.console.warn("Formatted Baseball Card copy failed.", lightError);
+      } catch (error) {}
+    }
+    if (!copied) {
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          await navigator.clipboard.writeText(plainText); copied = true; actual = plainText; mimeType = "text/plain";
+          message = "Copied plain text. This browser blocked the formatted card and photo; use Download HTML to keep them.";
+          level = "warning";
         }
-      }
+      } catch (error) {}
     }
     try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-        await navigator.clipboard.writeText(plainText);
-        setStatus("Copied plain text. This browser blocked the formatted card and photo; use Download HTML to keep them.", "warning");
-        return;
-      }
-    } catch (plainError) {}
-    setStatus("Copy was blocked. Use Download HTML and attach that file to the email.", "error");
+      await prepared.documents.recordDelivery(prepared.generation.record.generationId, {
+        method: "clipboard", status: copied ? "SUCCEEDED" : "FAILED", artifact: { data: actual, mimeType: mimeType }
+      });
+    } catch (error) {
+      setStatus((copied ? "Card copied, but its delivery record could not be saved: " : "Copy failed; delivery record could not be saved: ") + error.message, "error");
+      return false;
+    }
+    setStatus(copied ? message : "Copy was blocked. Use Download HTML and attach that file to the email.", copied ? level : "error");
+    return copied;
   }
 
   async function downloadBaseballCardHtml() {
-    if (!validateCard()) {
-      return;
-    }
-    var html;
-    try { html = await preparedEmailCardHtml(); }
-    catch (error) { setStatus(error.message || "The adjusted photo could not be exported.", "error"); return; }
-    var plainText = emailPlainText();
-    if (!plainText) {
-      setStatus("Generate or enter the baseball card text before exporting.", "error");
-      return;
-    }
-    var title = [
-      text(byId("lastName") && byId("lastName").value),
-      text(byId("firstName") && byId("firstName").value),
-      "Baseball Card"
-    ]
-      .filter(Boolean)
-      .join(" - ");
-    var documentHtml =
-      "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>" +
-      escapeHtml(title || "ICE Dallas Arrest Card") +
-      "</title></head><body style=\"margin:0;padding:16px;background:#fff;\">" +
-      html +
-      "</body></html>";
-    var blob = new Blob([documentHtml], { type: "text/html;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement("a");
-    link.href = url;
-    link.download =
-      title.replace(/[^a-z0-9._ -]+/gi, "").replace(/\s+/g, "_") + ".html";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    if (!validateCard()) return false;
+    var prepared;
+    try { prepared = await generateCardDocument(true); }
+    catch (error) { setStatus(error.message || "The card could not be prepared.", "error"); return false; }
+    var artifact = prepared.generation.artifact;
+    var url, link;
+    try {
+      url = URL.createObjectURL(new Blob([artifact.data], { type: artifact.mimeType }));
+      link = document.createElement("a"); link.href = url; link.download = artifact.filename;
+      document.body.appendChild(link); link.click();
+    } catch (error) {
+      try { await prepared.documents.recordDelivery(prepared.generation.record.generationId, {method:"download",status:"FAILED"}); } catch (recordError) {}
+      setStatus("Download could not be started: " + error.message, "error"); return false;
+    } finally { if (link) link.remove(); if (url) URL.revokeObjectURL(url); }
+    try { await prepared.documents.recordDelivery(prepared.generation.record.generationId, {method:"download",status:"SUBMITTED"}); }
+    catch (error) { setStatus("Download started, but its delivery record could not be saved: " + error.message, "error"); return false; }
     setStatus("Downloaded the baseball card as HTML.", "success");
+    return true;
   }
 
   function bindControls() {

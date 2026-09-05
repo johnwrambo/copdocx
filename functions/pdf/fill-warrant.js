@@ -80,14 +80,18 @@
     });
   }
 
-  function fillWarrantPdf(templateUrl, mapped) {
+  function fillWarrantPdf(templateUrl, mapped, templateBytes) {
     return ensurePdfLib().then(function (PDFLib) {
-      return fetch(templateUrl).then(function (res) {
-        if (!res.ok) {
-          throw new Error("Could not load " + templateUrl);
-        }
-        return res.arrayBuffer();
-      }).then(function (bytes) {
+      // A generation receipt and its filled form must use the exact same blank.
+      var templatePromise = templateBytes != null
+        ? Promise.resolve(templateBytes)
+        : fetch(templateUrl).then(function (res) {
+            if (!res.ok) {
+              throw new Error("Could not load " + templateUrl);
+            }
+            return res.arrayBuffer();
+          });
+      return templatePromise.then(function (bytes) {
         return PDFLib.PDFDocument.load(bytes);
       }).then(function (doc) {
         var form = doc.getForm();

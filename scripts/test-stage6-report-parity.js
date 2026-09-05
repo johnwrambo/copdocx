@@ -65,6 +65,7 @@ function setup() {
   const storage = createMemoryStorage({ "copdocx.settings.v1": { retainedPreference: "untouched" } });
   const context = createTab(storage, { document });
   context.COPDoc = {};
+  require("./support/document-ui-test-runtime").installDocumentRuntime(context);
   const messages = [];
   context.COPDoc.setAppBarStatus = message => messages.push(message);
   context.getSelection = () => ({ removeAllRanges() {}, addRange() {} });
@@ -272,4 +273,5 @@ async function rosterEvents() {
   t.context._dispatchWindowEvent("storage", { key: "copdocx.store.v1" });
   assert.strictEqual(table.textContent, detachedText, "unmounted roster subscription is removed");
 }
-main().catch(error => { console.error(error.stack || error); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error.stack || error); process.exitCode = 1; });
+module.exports = { setup, dataFixture, rosterEvents };

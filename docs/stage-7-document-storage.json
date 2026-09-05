@@ -1,0 +1,24 @@
+{
+  "schema": "copdocx.storage-contract-overlay.v1",
+  "stage": 7,
+  "storage": {
+    "documentGenerations": {
+      "key": "copdocx.document-generations.v1",
+      "medium": "localStorage",
+      "owner": "document-generation",
+      "portable": false,
+      "schema": "copdocx.document-generations.v1",
+      "version": 1,
+      "authority": "Generation receipts, SHA-256 input/source/template/output fingerprints and delivery attempts. Source domain stores and stored narrative/card snapshots retain their existing authority. Receipts are historical references, not live ownership links.",
+      "readers": ["functions/document-generation.js", "functions/document-history.js", "functions/integrity.js", "functions/safety-backup.js"],
+      "writers": ["functions/document-generation.js"],
+      "migration": "Absent means empty. Version-1 roots and all receipts are validated before every write; malformed or unsupported history blocks generation and remains untouched.",
+      "backup": "Exact bytes included in full recovery archives. Excluded from normal record transfers, avoiding importing another browser's generation/delivery claims as local events.",
+      "statuses": ["PENDING", "GENERATED", "FAILED"],
+      "locking": "Web Locks serialize ledger writes across cooperating windows. Browser support and Web Crypto are required; there is no unsafe fallback. Locks protect this ledger, not unrelated workspace mutations.",
+      "retention": "No automatic deletion. Up to 5000 receipts and 100 delivery attempts per receipt; quota/limit failures block release. No raw inputs, medical text, filenames or generated document bodies are stored in the ledger.",
+      "limitations": "PENDING records can indicate active or interrupted generation. GENERATED means output bytes and receipt are complete, not that a printer/download/clipboard finished. Browser download/print submission is recorded separately. User-visible documents remain in their existing destinations; this ledger is not an immutable server audit log or a document archive.",
+      "evidence": "VERIFIED"
+    }
+  }
+}

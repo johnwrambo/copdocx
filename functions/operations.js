@@ -8,6 +8,7 @@
   var draftRecord = null;
   var placeMode = { kind: "", teamId: "", officerId: "" };
   var pendingStart = null;
+  var briefDocumentSources = null;
 
   function byId(id) {
     return document.getElementById(id);
@@ -1270,6 +1271,7 @@
     var id = queryId();
     var record = id ? m.store.getOperation(id) : null;
     if (!record || !isCommitted(record)) {
+      briefDocumentSources = null;
       if (missing) {
         missing.hidden = false;
       }
@@ -1279,6 +1281,19 @@
       document.title = "Operation sheet";
       return;
     }
+    var officers = {};
+    (record.teams || []).forEach(function (team) {
+      (team.members || []).forEach(function (member) {
+        var api = rosterApi();
+        if (member.officerId && api && api.get) { officers[member.officerId] = api.get(member.officerId); }
+      });
+    });
+    ((record.order && record.order.officerBriefs) || []).forEach(function (row) {
+      var api = rosterApi();
+      if (row.officerId && api && api.get) { officers[row.officerId] = api.get(row.officerId); }
+    });
+    briefDocumentSources = JSON.parse(JSON.stringify({ operation: record, officers: officers,
+      targets: (record.targets || []).map(function (target) { return { targetId: target.targetId, leadId: target.leadId, personId: target.personId, label: targetLabel(target), places: placesForTarget(target) }; }) }));
     if (missing) {
       missing.hidden = true;
     }
@@ -1412,38 +1427,141 @@
     }
   }
 
+  function briefFailure(error) {
+    setStatus(error && error.message || "Could not generate the operation sheet.");
+    return null;
+  }
+
+  function briefDocumentApi() {
+    var api = window.COPDoc && COPDoc.documents;
+    if (!api || !api.captureContext || !api.generate) {
+      throw new Error("Document generation is unavailable. Reload this page and try again.");
+    }
+    return api;
+  }
+
+  function escapeBriefHtml(text) {
+    return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function renderBriefHtml(context, presentationHtml) {
+    return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">" +
+      "<title>" + escapeBriefHtml(context.input.title) +
+      "</title><link rel=\"stylesheet\" href=\"style/style.css\"></head><body data-page=\"operation-brief\">" +
+      (presentationHtml == null ? context.input.presentationHtml : presentationHtml) + "</body></html>";
+  }
+
+  function captureBrief(documentType) {
+    var sheet = byId("operationBriefSheet");
+    if (!sheet || sheet.hidden || !briefDocumentSources) { throw new Error("Open an issued operation brief first."); }
+    var api = briefDocumentApi();
+    var state = JSON.parse(JSON.stringify(briefDocumentSources));
+    var record = state.operation;
+    var officers = Object.keys(state.officers).map(function (id) { return state.officers[id]; }).filter(Boolean);
+    var sources = [{ type: "operation", id: record.operationId, revision: record.meta && record.meta.updatedAt || "", authority: "snapshot" }];
+    officers.forEach(function (row) { sources.push({ type: "officer", id: row.officerId || row.id, revision: row.meta && row.meta.updatedAt || "", authority: "snapshot" }); });
+    state.targets.forEach(function (row) {
+      if (row.leadId) { sources.push({ type: "lead", id: row.leadId, revision: "", authority: "snapshot" }); }
+      if (row.personId) { sources.push({ type: "person", id: row.personId, revision: "", authority: "snapshot" }); }
+    });
+    var clone = sheet.cloneNode(true);
+    var title = record.name || record.operationNumber || "operation";
+    var context = api.captureContext({ documentType: documentType, officers: officers, sources: sources,
+      input: { operation: record, targets: state.targets, title: title, presentationHtml: clone.outerHTML, baseUrl: new URL(".", window.location.href).href } });
+    return { api: api, context: context, clone: clone };
+  }
+
+  async function inlineBriefImages(clone) {
+    var images = Array.prototype.slice.call(clone.querySelectorAll("img"));
+    await Promise.all(images.map(async function (img) {
+      var src = img.getAttribute("src") || "";
+      if (!src || /^data:/i.test(src)) { return; }
+      var response = await fetch(src);
+      if (!response.ok) { throw new Error("An operation sheet image could not be captured. Reload the brief and try again."); }
+      var blob = await response.blob();
+      var data = await new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () { resolve(String(reader.result || "")); };
+        reader.onerror = function () { reject(new Error("An operation sheet image could not be read.")); };
+        reader.readAsDataURL(blob);
+      });
+      img.setAttribute("src", data);
+    }));
+    return clone.outerHTML;
+  }
+
+  async function recordBriefSubmission(api, generationId, method) {
+    try {
+      await api.recordDelivery(generationId, { method: method, status: "SUBMITTED" });
+      setStatus(method === "print" ? "Operation sheet sent to the print dialog." : "Operation sheet download requested.", true);
+    } catch (error) {
+      setStatus("Operation sheet was submitted for " + method + ", but delivery history could not be saved. " + (error && error.message || ""));
+    }
+  }
+
   function printBrief() {
-    window.print();
+    var capture;
+    try { capture = captureBrief("operation-brief.print"); } catch (error) { return Promise.resolve(briefFailure(error)); }
+    // Reserve the window in the click gesture, then print only the recorded frozen artifact.
+    var printWindow = window.open("", "_blank");
+    if (!printWindow) { return Promise.resolve(briefFailure(new Error("Allow the operation print window, then try again."))); }
+    try { printWindow.opener = null; } catch (error) {}
+    var generatedId = null;
+    return capture.api.generate({ documentType: "operation-brief.print", context: capture.context,
+      templateContent: renderBriefHtml.toString(),
+      render: async function (context) {
+        var html = renderBriefHtml(context, await inlineBriefImages(capture.clone));
+        var base = "<base href=\"" + escapeBriefHtml(context.input.baseUrl) + "\">";
+        return { data: html.replace("<head>", "<head>" + base), mimeType: "text/html", filename: "Operation_print.html" };
+      }
+    }).then(async function (result) {
+      generatedId = result.record.generationId;
+      printWindow.document.open();
+      printWindow.document.write(result.artifact.data);
+      printWindow.document.close();
+      if (printWindow.document.readyState !== "complete") {
+        await new Promise(function (resolve, reject) {
+          var timeout = setTimeout(function () { reject(new Error("The print sheet did not finish loading. Try printing again.")); }, 10000);
+          printWindow.addEventListener("load", function () { clearTimeout(timeout); resolve(); }, { once: true });
+        });
+      }
+      printWindow.focus();
+      printWindow.print();
+      await recordBriefSubmission(capture.api, result.record.generationId, "print");
+      return result;
+    }).catch(async function (error) {
+      if (generatedId) { await capture.api.recordDelivery(generatedId, { method: "print", status: "FAILED" }).catch(function () {}); }
+      try { printWindow.close(); } catch (ignored) {}
+      return briefFailure(error);
+    });
   }
 
   function saveOperationBrief() {
-    var sheet = byId("operationBriefSheet");
-    if (!sheet || sheet.hidden) {
-      setStatus("Open an issued operation brief first.");
-      return;
-    }
-    var title =
-      (byId("briefName") && byId("briefName").textContent) || "operation";
-    var slug = String(title)
-      .replace(/[^a-z0-9]+/gi, "_")
-      .replace(/^_|_$/g, "");
-    var html =
-      "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">" +
-      "<title>" +
-      title +
-      "</title><link rel=\"stylesheet\" href=\"style/style.css\"></head><body data-page=\"operation-brief\">" +
-      sheet.outerHTML +
-      "</body></html>";
-    var blob = new Blob([html], { type: "text/html" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = "Operation_" + slug + ".html";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    setStatus("Downloaded operation sheet.", true);
+    var capture;
+    try { capture = captureBrief("operation-brief.html"); } catch (error) { return Promise.resolve(briefFailure(error)); }
+    var slug = String(capture.context.input.title).replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "");
+    return capture.api.generate({ documentType: "operation-brief.html", context: capture.context,
+      templateContent: renderBriefHtml.toString(),
+      render: async function (context) {
+        return { data: renderBriefHtml(context, await inlineBriefImages(capture.clone)), mimeType: "text/html", filename: "Operation_" + slug + ".html" };
+      }
+    }).then(async function (result) {
+      try {
+        var url = URL.createObjectURL(new Blob([result.artifact.data], { type: result.artifact.mimeType }));
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = result.artifact.filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        await capture.api.recordDelivery(result.record.generationId, { method: "download", status: "FAILED" }).catch(function () {});
+        throw error;
+      }
+      await recordBriefSubmission(capture.api, result.record.generationId, "download");
+      return result;
+    }).catch(briefFailure);
   }
 
   function bind() {
@@ -1695,6 +1813,8 @@
     }
   }
 
+  window.COPDoc = window.COPDoc || {};
+  COPDoc.operationDocuments = { renderHtml: renderBriefHtml, capture: captureBrief };
   window.commitOperation = commitOperation;
   window.generateOperationBrief = generateBrief;
   window.printOperationBrief = printBrief;

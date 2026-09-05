@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Document History — COPDoc</title>
+    <link rel="stylesheet" href="style/style.css" />
+    <script src="functions/workspace-config.js"></script>
+    <script src="functions/document-context.js"></script>
+    <script src="functions/document-registry.js"></script>
+    <script src="functions/document-fingerprints.js"></script>
+    <script src="functions/document-generation.js"></script>
+  </head>
+  <body data-page="document-history" data-admin-page="document-history">
+    <header class="app-bar">
+      <div class="app-bar-info"><span class="app-bar-product">COPDoc</span><span id="appVersion" class="app-version" data-version="0.69.2">Version 0.69.2</span><span id="currentDate" class="app-bar-date"></span></div>
+      <div class="app-bar-navrow" id="appBarNavRow"></div><p id="appBarStatus" class="app-bar-status" hidden></p>
+    </header>
+    <main class="page page-wide">
+      <header class="page-header"><h1>Document History</h1><p class="section-note">Inspect generated documents and the sources used to create them.</p></header>
+      <fieldset class="card-static">
+        <legend>Generation history</legend>
+        <p class="section-note">Generated means the output and its receipt were completed. Download and print entries record browser submission. Pending entries may still be running or may have been interrupted. Earlier documents created before this history was introduced are not backfilled.</p>
+        <div class="record-actions"><button id="documentHistoryRefresh" type="button" class="action-button-secondary">Refresh</button><button id="documentHistoryExport" type="button" class="action-button-secondary">Export receipts</button></div>
+        <p id="documentHistoryStatus" role="status" aria-live="polite"></p>
+        <div class="records-table-wrap"><table class="records-table"><thead><tr><th scope="col">Started</th><th scope="col">Document</th><th scope="col">Generation</th><th scope="col">Delivery</th><th scope="col">Receipt</th></tr></thead><tbody id="documentHistoryBody"></tbody></table></div>
+      </fieldset>
+      <fieldset class="card-static">
+        <legend>Field dependencies</legend>
+        <p class="section-note">Find which document contracts need review when a field changes. Parent fields cover their children; saved narrative and card snapshots retain their original text.</p>
+        <label for="documentDependencyField">Field path</label><input id="documentDependencyField" type="text" placeholder="person.dateOfBirth" autocomplete="off" />
+        <button id="documentDependencySearch" type="button" class="action-button-secondary">Find affected documents</button>
+        <p id="documentDependencyStatus" role="status" aria-live="polite"></p>
+        <div id="documentDependencyResults"></div>
+      </fieldset>
+    </main>
+    <script src="functions/app-bar.js"></script>
+    <script src="functions/date.js"></script>
+    <script src="functions/document-history.js"></script>
+  </body>
+</html>

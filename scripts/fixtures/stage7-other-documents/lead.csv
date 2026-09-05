@@ -1,0 +1,2 @@
+lastName,firstName,middleName,sex,dateOfBirth,age,citizenship,alienNumber,caseNumber,leadSource,licensePlate,plateState
+"Doe, ""Example""",'=formula,Q,F,1990-01-02,36,TEST,000000001,C-1,REFERRAL,NEW,ZZ

@@ -5577,6 +5577,76 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       form.updateFieldAppearances(font);
     }
 
+    function captureBookInDocumentContext(data, currentPacket) {
+      const documents = window.COPDoc && COPDoc.documents;
+      if (!documents || typeof documents.captureContext !== "function" ||
+          typeof documents.generate !== "function" ||
+          typeof documents.recordDelivery !== "function") {
+        throw new Error("Document generation is not available. Reload Book-In and try again.");
+      }
+      const urlEncounterId = currentEncounterId();
+      const urlSubjectId = currentEncounterSubjectId();
+      if (currentPacket && (
+        (urlEncounterId && currentPacket.encounterId && urlEncounterId !== currentPacket.encounterId) ||
+        (urlSubjectId && currentPacket.subjectId && urlSubjectId !== currentPacket.subjectId)
+      )) {
+        throw new Error("This Book-In record is linked to a different Encounter subject. Reopen the correct packet before generating documents.");
+      }
+      const encounterId = urlEncounterId || (currentPacket && currentPacket.encounterId) || "";
+      const subjectId = urlSubjectId || (currentPacket && currentPacket.subjectId) || "";
+      const link = validateEncounterSubjectLink(encounterId, subjectId, currentPacket);
+      if (!link.ok) throw new Error(link.error);
+      const store = window.COPDoc && COPDoc.model && COPDoc.model.store;
+      if (store && typeof store.loadFromDisk === "function") store.loadFromDisk();
+      const encounter = encounterId && store && typeof store.getEncounter === "function"
+        ? store.getEncounter(encounterId) : null;
+      const personId = (link.subject && link.subject.personId) || (currentPacket && currentPacket.personId) || "";
+      const person = personId && store && typeof store.getPerson === "function"
+        ? store.getPerson(personId) : null;
+      const arrestId = (currentPacket && currentPacket.arrestId) || "";
+      const arrest = person && Array.isArray(person.arrests)
+        ? person.arrests.find(row => row && row.arrestId === arrestId) || null : null;
+      const sources = [{
+        type: "BOOKIN_FORM",
+        id: (currentPacket && currentPacket.id) || "unsaved",
+        revision: activeRecordBaseUpdatedAt || "",
+        authority: "draft"
+      }];
+      const addSource = (type, id, record) => {
+        if (id) sources.push({ type, id, revision: (record && (record.updatedAt || record.modifiedAt)) || "", authority: "canonical" });
+      };
+      addSource("BOOKING", currentPacket && currentPacket.id, currentPacket);
+      addSource("PERSON", person && person.personId, person);
+      addSource("ENCOUNTER", encounter && encounter.encounterId, encounter);
+      addSource("ENCOUNTER_SUBJECT", link.subject && link.subject.subjectId, encounter);
+      addSource("ARREST", arrest && arrest.arrestId, arrest);
+      // The visible form remains the output authority, including unsaved medical
+      // answers. Canonical objects explain its identity; they never replace it.
+      return documents.captureContext({
+        documentType: "bookin.combined-pdf", input: data,
+        person, encounter, encounterSubject: link.subject,
+        booking: currentPacket || null, arrest, sources,
+        generatingOfficerId: null
+      });
+    }
+
+    async function renderBookInPacket(context) {
+      const data = context.input;
+      const missingFields = [];
+      // Keep the template's shared AcroForm tree and both editable pages intact.
+      const combinedPdf = await loadPdfFromBase64(COMBINED_PDF_BASE64);
+      await fillMedicalPdf(combinedPdf, data, missingFields);
+      await fillCapPage(combinedPdf, data, missingFields);
+      const bytes = await combinedPdf.save({
+        updateFieldAppearances: false,
+        useObjectStreams: true
+      });
+      return {
+        data: bytes, mimeType: "application/pdf",
+        filename: buildBookInFilename(data), warnings: missingFields
+      };
+    }
+
     async function generateCombinedPacket() {
       const generateButton =
         document.getElementById("generateButton");
@@ -5584,10 +5654,15 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
       generateButton.disabled = true;
 
       try {
-        const currentPacket = activeRecordId && readSavedRecords().find(record => record.id === activeRecordId);
+        const currentPacket = activeRecordId && readSavedRecordsForWrite().find(record => record.id === activeRecordId);
+        if (activeRecordId && !currentPacket) throw new Error("That saved packet no longer exists. Reopen Book-In before generating documents.");
         if (currentPacket && currentPacket.voidedAt) throw new Error("This booking is voided. Previously generated documents remain historical; start a new booking to generate a new packet.");
+        if (currentPacket && activeRecordBaseUpdatedAt !== null && String(currentPacket.updatedAt || "") !== activeRecordBaseUpdatedAt) {
+          throw new Error("That packet changed in another window. Reopen it before generating documents.");
+        }
         const data = collectFormData();
         validateRequiredData(data);
+        const context = captureBookInDocumentContext(data, currentPacket);
 
         const missingFormFields = getMissingGenerateFields(data);
 
@@ -5613,42 +5688,39 @@ JVBERi0xLjUNJeLjz9MNCjYyNiAwIG9iag08PC9GaWx0ZXIvRmxhdGVEZWNvZGUvRmlyc3QgNi9MZW5n
 
         setStatus("Generating the editable two-page packet...");
 
-        const missingFields = [];
-
-        /*
-          Each click loads a fresh copy of the supplied combined
-          template. Keeping both pages in one document preserves its
-          AcroForm field tree and lets every final field remain editable.
-        */
-        const combinedPdf =
-          await loadPdfFromBase64(
-            COMBINED_PDF_BASE64
+        let missingFields = [];
+        const documents = COPDoc.documents;
+        const generated = await documents.generate({
+          documentType: "bookin.combined-pdf", context,
+          templateContent: base64ToBytes(COMBINED_PDF_BASE64),
+          render: async captured => {
+            const artifact = await renderBookInPacket(captured);
+            missingFields = artifact.warnings;
+            return artifact;
+          }
+        });
+        const filename = generated.artifact.filename;
+        try {
+          downloadPdf(generated.artifact.data, filename);
+        } catch (error) {
+          try {
+            await documents.recordDelivery(generated.record.generationId, { method: "download", status: "FAILED" });
+          } catch (receiptError) {
+            throw new Error(`The PDF was generated, but its download failed: ${error.message}. The failed delivery receipt could not be saved.`);
+          }
+          throw error;
+        }
+        // Browser download/open APIs acknowledge submission, not disk delivery.
+        try {
+          await documents.recordDelivery(generated.record.generationId, { method: "download", status: "SUBMITTED" });
+        } catch (receiptError) {
+          setStatus(
+            `The packet was generated and its download was submitted: ${filename}. The delivery receipt could not be saved.` +
+              (missingFields.length ? `\n\nThese PDF fields could not be found:\n${missingFields.join("\n")}` : ""),
+            "warning"
           );
-
-        await fillMedicalPdf(
-          combinedPdf,
-          data,
-          missingFields
-        );
-
-        await fillCapPage(
-          combinedPdf,
-          data,
-          missingFields
-        );
-
-        const combinedPdfBytes =
-          await combinedPdf.save({
-            updateFieldAppearances: false,
-            useObjectStreams: true
-          });
-
-        const filename = buildBookInFilename(data);
-
-        downloadPdf(
-          combinedPdfBytes,
-          filename
-        );
+          return;
+        }
 
         if (missingFields.length > 0) {
           setStatus(

@@ -161,6 +161,7 @@ documentStub.body.getAttribute = function () {
 };
 
 vm.createContext(context);
+require("./support/document-ui-test-runtime").installDocumentRuntime(context);
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, "..", "functions", "baseballcard.js"), "utf8"),
   context
@@ -179,7 +180,7 @@ function check(label, ok, extra) {
   }
 }
 
-context.copyBaseballCard().then(function () {
+function main() { return context.copyBaseballCard().then(function () {
   check(
     "copy writes an arrest-card table, not raw editor text",
     copiedHtml.indexOf("<table") !== -1 &&
@@ -200,7 +201,9 @@ context.copyBaseballCard().then(function () {
     process.exit(1);
   }
   console.log("all passed");
-}).catch(function (error) {
+}); }
+if (require.main === module) main().catch(function (error) {
   console.error(error);
   process.exit(1);
 });
+module.exports = { context, ids, narrative, heading, bullet, holders, getCopiedHtml: function () { return copiedHtml; } };

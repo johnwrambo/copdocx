@@ -36,7 +36,7 @@ function documentDouble() {
         this.listeners[type] = this.listeners[type] || [];
         this.listeners[type].push(handler);
       },
-      click() { if (!this.disabled) (this.listeners.click || []).forEach((fn) => fn({})); },
+      click() { return this.disabled ? Promise.resolve([]) : Promise.all((this.listeners.click || []).map((fn) => fn({}))); },
       querySelector() { return null; },
       querySelectorAll(selector) {
         if (selector !== "input, select, textarea, button, [contenteditable]") return [];
@@ -87,6 +87,7 @@ function documentDouble() {
 }
 
 function editorDouble() {
+  let copyHandler = null;
   let packet = null;
   let state;
   function reset() {
@@ -101,6 +102,8 @@ function editorDouble() {
     return person ? person.fields.full_name + " · " + person.fields.outcome_code : "";
   }
   return {
+    setCopyOutputHandler(handler) { copyHandler = handler; },
+    copyOutput(text) { return copyHandler(text); },
     version: "test", build: 9, schemas: { state: "copdoc.narrative-state.v3" },
     events: { narrativeChange: "opdoc:narrative-change" },
     resetEncounter() { reset(); packet = null; },
@@ -143,6 +146,7 @@ function boot(options = {}) {
     "functions/narratives/build9/index.js", "functions/narratives/packet-builder.js",
     "functions/encounter-narrative.js", "functions/narratives/source-freshness.js"
   ].forEach((file) => loadScript(context, file));
+  require("./support/document-ui-test-runtime").installDocumentRuntime(context);
   const domain = context.COPDoc.narratives.build9;
   const source = context.COPDoc.narrativeSource;
   const encounter = model.createEncounterRecord({
@@ -209,7 +213,7 @@ function boot(options = {}) {
   return {
     storage, context, model, domain, source, document, engine, update, rawEdit, bundle, copied,
     status: () => status,
-    click(id) { const node = document.getElementById(id); assert.ok(node, id); node.click(); },
+    click(id) { const node = document.getElementById(id); assert.ok(node, id); return node.click(); },
     save() { document.getElementById("appBarPrimaryAction").click(); },
     narrative(id = SUBJECT_ID) {
       model.store.loadFromDisk();
@@ -321,7 +325,7 @@ function testRevisionFailureAndSwitch() {
   assert.ok(failing.narrative(), "retry creates the narrative after in-memory rollback");
 }
 
-function testFinalizedAndLocked() {
+async function testFinalizedAndLocked() {
   const app = boot({ existing: true, finalized: true });
   const finalized = clone(app.narrative());
   app.update((row) => { row.subjects[0].outcome = "RELEASED"; return row; });
@@ -335,7 +339,7 @@ function testFinalizedAndLocked() {
   assert.equal(app.document.getElementById("narrativeDraft").getAttribute("contenteditable"), "false");
   assert.equal(app.document.getElementById("copyButton").disabled, false);
   assert.equal(app.document.getElementById("valuesViewButton").disabled, false);
-  app.click("copyNarrativeButton");
+  await app.click("copyNarrativeButton");
   assert.equal(app.copied[0], finalized.output.finalPlainText, "readonly Copy uses saved prose");
   app.save();
   app.context.COPDoc.narratives.flushWorkspace();
@@ -454,12 +458,16 @@ function testEncounterNavigationSavesSnapshots() {
   assert.equal(closed.storage.raw(WORKSPACE_KEY), bytes, "Navigating a closed Encounter is read-only");
 }
 
-testCaptureAndStaleSave();
-testReviewRaceAndLegacy();
-testRevisionFailureAndSwitch();
-testFinalizedAndLocked();
-testNoSurnameFallbackAndSupplementPreservation();
-testNoInventedConductAndFlightBeforeArrest();
-testUnavailableSourceCannotBeReviewed();
-testEncounterNavigationSavesSnapshots();
-console.log("STAGE3_NARRATIVE_PAGE_PASSED source review, races, manual drafts, revisions, finalized and legacy lifecycle.");
+async function main() {
+  testCaptureAndStaleSave();
+  testReviewRaceAndLegacy();
+  testRevisionFailureAndSwitch();
+  await testFinalizedAndLocked();
+  testNoSurnameFallbackAndSupplementPreservation();
+  testNoInventedConductAndFlightBeforeArrest();
+  testUnavailableSourceCannotBeReviewed();
+  testEncounterNavigationSavesSnapshots();
+  console.log("STAGE3_NARRATIVE_PAGE_PASSED source review, races, manual drafts, revisions, finalized and legacy lifecycle.");
+}
+if (require.main === module) main().catch(error => { console.error(error.stack || error); process.exitCode = 1; });
+module.exports = { boot, SUBJECT_ID, OTHER_ID, ENCOUNTER_ID };

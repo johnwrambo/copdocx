@@ -202,6 +202,9 @@
   var sourceStatusByNarrativeId = new Map();
   var latestSourceFixture = fixture;
   var readOnlyControlState = new WeakMap();
+  if (typeof engine.setCopyOutputHandler === "function") {
+    engine.setCopyOutputHandler(function (text) { return deliverNarrativeOutput("clipboard", "narrative.text", text); });
+  }
 
   function copyValue(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -299,22 +302,79 @@
   }
 
   function copyReadOnlyNarrative() {
-    var output = outputForExport();
-    var text = typeof output.finalPlainText === "string"
-      ? output.finalPlainText : output.plainText || output.generatedResolvedText || "";
-    if (!text) return;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { showStatus("Saved narrative copied."); });
-    } else {
-      var field = document.createElement("textarea");
-      field.value = text;
-      field.readOnly = true;
-      document.body.appendChild(field);
-      field.select();
-      document.execCommand("copy");
-      field.remove();
-      showStatus("Saved narrative copied.");
+    return deliverNarrativeOutput("clipboard", "narrative.text");
+  }
+
+  async function deliverNarrativeOutput(method, documentType, explicitText, targetWindow) {
+    if (session !== bootGeneration) return false;
+    var documents = global.COPDoc && global.COPDoc.documents;
+    if (!documents || !documents.captureContext || !documents.generate || !documents.recordDelivery) {
+      showStatus("Document tracking is unavailable. Reload this page before exporting the narrative.", false);
+      return false;
     }
+    var output = outputForExport();
+    var saved = primaryFor(activeParticipantId);
+    var locked = isReadOnlyNarrative(saved);
+    var participant = fixture.participants.find(function (row) { return row.encounterParticipantId === activeParticipantId; }) || {};
+    var text = locked || explicitText === undefined
+      ? (typeof output.finalPlainText === "string" ? output.finalPlainText : output.plainText || output.generatedResolvedText || "")
+      : String(explicitText);
+    if (documentType === "narrative.text" && !text) { showStatus("Build the narrative before exporting text.", false); return false; }
+    var sourceSnapshot = locked && saved ? saved.sourceSnapshot
+      : sourceSnapshotByParticipant.get(activeParticipantId) || loadedSourceByParticipant.get(activeParticipantId);
+    var state = locked && saved ? saved.engine && saved.engine.state : (engine.getState ? engine.getState({ includeData: false }) : null);
+    var template = locked && saved ? (saved.template || state && state.template || {})
+      : (engine.getTemplate ? engine.getTemplate() : state && state.template || {});
+    var sources = [];
+    [["Encounter", liveEncounterId || fixture.encounter && fixture.encounter.encounterId],
+      ["EncounterSubject", activeParticipantId], ["Person", participant.personId],
+      ["Booking", participant.bookingId || participant.bookinRecordId], ["Narrative", saved && saved.narrativeId]]
+      .forEach(function (pair) { if (pair[1]) sources.push({type:pair[0],id:pair[1],authority:locked ? "snapshot" : "draft"}); });
+    var context;
+    var generation;
+    try {
+      context = documents.captureContext({ documentType: documentType, sources: sources,
+        input: { output: output, text: text, state: state || null, sourceSnapshot: sourceSnapshot || null,
+          filename: activeFileStem() + (documentType === "narrative.json" ? ".json" : ".txt"),
+          trailingNewline: method === "download" && documentType === "narrative.text" }
+      });
+      generation = await documents.generate({ documentType: documentType, context: context, templateContent: template,
+        render: function (snapshot) {
+          var input = snapshot.input;
+          return { data: snapshot.documentType === "narrative.json" ? JSON.stringify(input.output, null, 2)
+            : input.text + (input.trailingNewline ? "\n" : ""),
+            mimeType: snapshot.documentType === "narrative.json" ? "application/json" : "text/plain;charset=utf-8", filename: input.filename };
+        }
+      });
+    } catch (error) { showStatus("Narrative could not be recorded: " + error.message, false); return false; }
+    var delivered = false;
+    try {
+      if (method === "download") {
+        downloadFile(generation.artifact.filename, generation.artifact.data, generation.artifact.mimeType);
+        delivered = true;
+      } else {
+        var destination = targetWindow || global;
+        var clipboard = destination.navigator && destination.navigator.clipboard;
+        try { if (clipboard && clipboard.writeText) { await clipboard.writeText(generation.artifact.data); delivered = true; } } catch (error) {}
+        if (!delivered) {
+          var doc = destination.document || document, field;
+          try {
+            field = doc.createElement("textarea"); field.value = generation.artifact.data; field.readOnly = true;
+            doc.body.appendChild(field); field.select(); delivered = !!doc.execCommand("copy");
+          } finally { if (field) field.remove(); }
+        }
+      }
+    } catch (error) { delivered = false; }
+    try {
+      await documents.recordDelivery(generation.record.generationId, {
+        method: method, status: delivered ? (method === "download" ? "SUBMITTED" : "SUCCEEDED") : "FAILED"
+      });
+    } catch (error) {
+      showStatus((delivered ? "Narrative exported, but its delivery record could not be saved: " : "Export failed; delivery record could not be saved: ") + error.message, false);
+      return false;
+    }
+    showStatus(delivered ? (method === "download" ? "Narrative downloaded." : "Narrative copied.") : "Narrative could not be exported.", delivered);
+    return delivered;
   }
 
   function renderSourceStatus() {
@@ -597,9 +657,7 @@
           if (!text) {
             return;
           }
-          if (win.navigator.clipboard && win.navigator.clipboard.writeText) {
-            win.navigator.clipboard.writeText(text);
-          }
+          return deliverNarrativeOutput("clipboard", "narrative.text", text, win);
         };
       }
     }
@@ -1669,21 +1727,11 @@
   }
 
   function downloadOutputJson() {
-    var output = outputForExport();
-    downloadFile(activeFileStem() + ".json", JSON.stringify(output, null, 2), "application/json");
-    showStatus("Narrative JSON downloaded.");
+    return deliverNarrativeOutput("download", "narrative.json");
   }
 
   function downloadOutputText() {
-    var output = outputForExport();
-    var text = typeof output.finalPlainText === "string"
-      ? output.finalPlainText : output.plainText || output.generatedResolvedText || "";
-    if (!text) {
-      showStatus("Build the narrative before downloading text.", false);
-      return;
-    }
-    downloadFile(activeFileStem() + ".txt", text + "\n", "text/plain;charset=utf-8");
-    showStatus("Narrative text downloaded.");
+    return deliverNarrativeOutput("download", "narrative.text");
   }
 
   function saveNarrative() {
@@ -1739,25 +1787,14 @@
     copyAction.addEventListener("click", function () {
       if (session !== bootGeneration) return;
       if (isReadOnlyNarrative(primaryFor(activeParticipantId))) {
-        copyReadOnlyNarrative();
-        return;
+        return copyReadOnlyNarrative();
       }
       var engineCopy = document.getElementById("copyButton");
       if (engineCopy) {
         engineCopy.click();
         return;
       }
-      var output = engine.getOutput();
-      var text = output.plainText || output.generatedResolvedText || "";
-      if (!text) {
-        showStatus("Build the narrative before copying.", false);
-        return;
-      }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () {
-          showStatus("Narrative copied.");
-        });
-      }
+      return deliverNarrativeOutput("clipboard", "narrative.text");
     });
   }
   var downloadJson = byId("downloadNarrativeJsonButton");

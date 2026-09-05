@@ -3,6 +3,7 @@
  */
 (function () {
   var recordFilter = "all";
+  var targetDocumentSources = null;
 
   function model() {
     return window.COPDoc && COPDoc.model;
@@ -3422,10 +3423,6 @@
   }
 
   function csvEscape(value) {
-    var m = model();
-    if (m && typeof m.csvCell === "function") {
-      return m.csvCell(value);
-    }
     var text = String(value == null ? "" : value);
     if (/^[=+\-@\t]/.test(text)) {
       text = "'" + text;
@@ -3436,27 +3433,51 @@
     return text;
   }
 
-  function leadCsvRow(snapshot) {
+  function canonicalLeadSubject(snapshot) {
     var m = model();
-    var person = (m.subjectOf && m.subjectOf(snapshot)) || {};
+    var embedded = (m.subjectOf && m.subjectOf(snapshot)) || {};
+    var id = snapshot.subjectPersonId || embedded.personId;
+    return (id && m.store && m.store.getPerson && m.store.getPerson(id)) || embedded;
+  }
+
+  // UI adapters capture current canonical data once; this renderer has no store/DOM reads.
+  function leadCsvRow(row) {
+    var person = row.person || {};
     var name = person.name || {};
     var immigration = person.immigration || {};
-    var source = snapshot.source || {};
-    var vehicle = (snapshot.vehicles && snapshot.vehicles[0]) || {};
+    var source = row.source || {};
+    var vehicle = row.vehicle || {};
     return [
-      name.lastName,
-      name.firstName,
-      name.middleName,
-      person.sex,
-      person.dateOfBirth,
-      person.age,
-      person.citizenship,
-      immigration.alienNumber,
-      source.caseNumber,
-      source.leadSource,
-      vehicle.licensePlate || vehicle.plate,
-      vehicle.plateState || vehicle.state
+      name.lastName, name.firstName, name.middleName, person.sex,
+      person.dateOfBirth, person.age, person.citizenship, immigration.alienNumber,
+      source.caseNumber, source.leadSource,
+      vehicle.licensePlate || vehicle.plate, vehicle.plateState || vehicle.state
     ].map(csvEscape).join(",");
+  }
+
+  function captureLeadCsvRows(snapshots) {
+    return snapshots.map(function (snapshot) {
+      var vehicle = (snapshot.vehicles && snapshot.vehicles[0]) || {};
+      var id = vehicle.vehicleId || vehicle.id;
+      var m = model();
+      var embedded = (m.subjectOf && m.subjectOf(snapshot)) || {};
+      var personId = snapshot.subjectPersonId || embedded.personId;
+      var canonicalPerson = personId && m.store.getPerson && m.store.getPerson(personId);
+      var canonicalVehicle = id && m.store.getVehicleRecord && m.store.getVehicleRecord(id);
+      return {
+        leadId: snapshot.leadId,
+        person: canonicalPerson || embedded,
+        personAuthority: canonicalPerson ? "canonical" : "snapshot",
+        source: snapshot.source || {},
+        vehicle: canonicalVehicle || vehicle,
+        vehicleAuthority: canonicalVehicle ? "canonical" : "snapshot",
+        revision: snapshot.meta && snapshot.meta.updatedAt || ""
+      };
+    });
+  }
+
+  function renderLeadCsv(context) {
+    return CSV_HEADERS + "\r\n" + context.input.rows.map(leadCsvRow).join("\r\n") + "\r\n";
   }
 
   var CSV_HEADERS = [
@@ -3474,23 +3495,70 @@
     "plateState"
   ].join(",");
 
+  function documentApi() {
+    var api = window.COPDoc && COPDoc.documents;
+    if (!api || typeof api.captureContext !== "function" || typeof api.generate !== "function") {
+      throw new Error("Document generation is unavailable. Reload this page and try again.");
+    }
+    return api;
+  }
+
+  function documentFailure(error) {
+    if (window.COPDoc && COPDoc.setAppBarStatus) {
+      COPDoc.setAppBarStatus((error && error.message) || "Could not generate the document.");
+    }
+    return null;
+  }
+
+  async function recordDocumentSubmission(api, generationId, label) {
+    try {
+      await api.recordDelivery(generationId, { method: "download", status: "SUBMITTED" });
+      if (window.COPDoc && COPDoc.setAppBarStatus) { COPDoc.setAppBarStatus(label + " download requested.", { ok: true }); }
+    } catch (error) {
+      if (window.COPDoc && COPDoc.setAppBarStatus) {
+        COPDoc.setAppBarStatus(label + " was submitted for download, but delivery history could not be saved. " + (error && error.message || ""));
+      }
+    }
+  }
+
+  function sourceRevision(row) {
+    return String(row && (row.revision || row.updatedAt || row.meta && row.meta.updatedAt) || "");
+  }
+
+  function sourceReference(type, row, id, authority) {
+    return { type: type, id: String(id || ""), revision: sourceRevision(row), authority: authority || "canonical" };
+  }
+
+  async function generateLeadCsv(snapshots, filename) {
+    var api = documentApi();
+    var rows = captureLeadCsvRows(snapshots);
+    var sources = [];
+    rows.forEach(function (row) {
+      sources.push(sourceReference("lead", row, row.leadId));
+      if (row.person.personId) { sources.push(sourceReference("person", row.person, row.person.personId, row.personAuthority)); }
+      if (row.vehicle.vehicleId || row.vehicle.id) { sources.push(sourceReference("vehicle", row.vehicle, row.vehicle.vehicleId || row.vehicle.id, row.vehicleAuthority)); }
+    });
+    var context = api.captureContext({ documentType: "lead.csv", input: { rows: rows }, sources: sources });
+    var result = await api.generate({
+      documentType: "lead.csv", context: context, templateContent: CSV_HEADERS + renderLeadCsv.toString() + leadCsvRow.toString() + csvEscape.toString(),
+      render: function (ctx) { return { data: renderLeadCsv(ctx), mimeType: "text/csv;charset=utf-8", filename: filename }; }
+    });
+    try {
+      downloadBlob(result.artifact.filename, result.artifact.mimeType, result.artifact.data);
+    } catch (error) {
+      await api.recordDelivery(result.record.generationId, { method: "download", status: "FAILED" }).catch(function () {});
+      throw error;
+    }
+    await recordDocumentSubmission(api, result.record.generationId, "CSV");
+    return result;
+  }
+
   function exportListCsv() {
     var rows = snapshots().filter(isCommitted);
     if (!rows.length) {
-      if (window.COPDoc && COPDoc.setAppBarStatus) {
-        COPDoc.setAppBarStatus("No filed cases to export.");
-      }
-      return;
+      return Promise.resolve(documentFailure(new Error("No filed cases to export.")));
     }
-    var csv =
-      CSV_HEADERS +
-      "\r\n" +
-      rows.map(leadCsvRow).join("\r\n") +
-      "\r\n";
-    downloadBlob("leads.csv", "text/csv;charset=utf-8", csv);
-    if (window.COPDoc && COPDoc.setAppBarStatus) {
-      COPDoc.setAppBarStatus("Downloaded filed cases CSV.", { ok: true });
-    }
+    return generateLeadCsv(rows, "leads.csv").catch(documentFailure);
   }
 
   function bindCaseListMode() {
@@ -3564,21 +3632,15 @@
 
   function exportOneCsv() {
     var m = model();
+    if (m && m.store && m.store.loadFromDisk) { m.store.loadFromDisk(); }
     var snap = m && m.store && m.store.getLead(queryId());
     if (!snap || !isCommitted(snap)) {
-      if (window.COPDoc && COPDoc.setAppBarStatus) {
-        COPDoc.setAppBarStatus("Commit the lead before exporting.");
-      }
-      return;
+      return Promise.resolve(documentFailure(new Error("Commit the lead before exporting.")));
     }
-    var csv = CSV_HEADERS + "\r\n" + leadCsvRow(snap) + "\r\n";
-    var subject = m.subjectOf ? m.subjectOf(snap) : snap.person;
+    var subject = canonicalLeadSubject(snap);
     var name = (m.formatPersonLabel && m.formatPersonLabel(subject)) || "untitled-lead";
     var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    downloadBlob(slug + ".csv", "text/csv;charset=utf-8", csv);
-    if (window.COPDoc && COPDoc.setAppBarStatus) {
-      COPDoc.setAppBarStatus("Downloaded CSV snapshot.", { ok: true });
-    }
+    return generateLeadCsv([snap], slug + ".csv").catch(documentFailure);
   }
 
   function bindExports() {
@@ -3596,7 +3658,10 @@
     }
     var oneCsv = byId("downloadLeadCsvButton");
     if (oneCsv && (pageKey() === "lead" || pageKey() === "case")) {
-      oneCsv.addEventListener("click", exportOneCsv);
+      if (oneCsv.dataset.csvExportBound !== "true") {
+        oneCsv.dataset.csvExportBound = "true";
+        oneCsv.addEventListener("click", exportOneCsv);
+      }
     }
   }
 
@@ -4389,6 +4454,7 @@
     var id = queryId();
     var snap = id ? m.store.getLead(id) : null;
     if (!snap) {
+      targetDocumentSources = null;
       if (missing) {
         missing.hidden = false;
         var strong = missing.querySelector("strong");
@@ -4415,7 +4481,10 @@
     if (sheet) {
       sheet.hidden = false;
     }
-    var subject = m.subjectOf ? m.subjectOf(snap) : snap.person || {};
+    var subject = canonicalLeadSubject(snap);
+    snap = JSON.parse(JSON.stringify(snap));
+    snap.person = subject;
+    targetDocumentSources = { lead: snap, person: subject, places: collectSubjectPlaces(snap, subject), officer: window.COPDoc && COPDoc.officers && COPDoc.officers.get ? COPDoc.officers.get(snap.assignedOfficerId) : null };
     var immigration = subject.immigration || {};
     var source = snap.source || {};
     var name =
@@ -4861,8 +4930,8 @@
     return next();
   }
 
-  function loadSubjectPhotoPack() {
-    var photos = targetPhotoState.photos || [];
+  function loadSubjectPhotoPack(capturedPhotos) {
+    var photos = capturedPhotos || targetPhotoState.photos || [];
     var api = window.COPDoc && COPDoc.media;
     if (!photos.length || !api) {
       return Promise.resolve([]);
@@ -4897,8 +4966,8 @@
     return next();
   }
 
-  function sheetFileName() {
-    var name = (byId("targetName") && byId("targetName").textContent) || "target";
+  function sheetFileName(capturedName) {
+    var name = capturedName || "target";
     var slug = String(name)
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
@@ -4912,6 +4981,69 @@
     return "Target_" + slug + "_" + stamp + ".html";
   }
 
+  function renderTargetSheetHtml(context, parts) {
+    var title = context.input.title;
+    var mapIconLibraryId = context.input.mapIconLibraryId;
+    var pack = parts.photos || [];
+    var packedPlaces = parts.places || [];
+    var css = parts.css || "";
+    var leafletCss = parts.leafletCss || "";
+    var leafletJs = parts.leafletJs || "";
+    var iconJs = parts.iconJs || "";
+    var popupJs = parts.popupJs || "";
+    var mapJs = parts.mapJs || "";
+    var boot =
+      "window.TARGET_SHEET_PHOTOS = " +
+      JSON.stringify(pack) +
+      ";window.TARGET_SHEET_PLACES = " +
+      JSON.stringify(packedPlaces) +
+      ";window.TARGET_SHEET_ICON_LIBRARY = " +
+      JSON.stringify(mapIconLibraryId) +
+      ";" +
+      targetSheetMapBoot();
+    var headExtra = leafletCss
+      ? "<style>\n" +
+        leafletCss.replace(/<\/style/gi, "<\\/style") +
+        "\n</style>"
+      : "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\"/>";
+    var scripts = "";
+    if (leafletJs) {
+      scripts +=
+        "<script>" + escapeInlineScript(leafletJs) + "<\/script>";
+    } else {
+      scripts +=
+        "<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"><\/script>";
+    }
+    if (iconJs) {
+      scripts += "<script>" + escapeInlineScript(iconJs) + "<\/script>";
+    }
+    if (popupJs) {
+      scripts += "<script>" + escapeInlineScript(popupJs) + "<\/script>";
+    }
+    if (mapJs) {
+      scripts += "<script>" + escapeInlineScript(mapJs) + "<\/script>";
+    }
+    scripts += "<script>" + escapeInlineScript(boot) + "<\/script>";
+    var html =
+      "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"UTF-8\"/>" +
+      "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"/>" +
+      "<title>" +
+      String(title).replace(/</g, "") +
+      " — Target sheet</title>" +
+      headExtra +
+      "<style>\n" +
+      css.replace(/<\/style/gi, "<\\/style") +
+      "\n</style></head><body data-page=\"mobile-target-sheet\">" +
+      "<main class=\"mobile-fow-page\">" +
+      "<nav class=\"mobile-fow-pagebar\"><div class=\"mobile-fow-pagebar-title\">" +
+      "<span>Mobile Target sheet</span><small>Saved copy</small></div></nav>" +
+      parts.presentationHtml +
+      "</main>" +
+      scripts +
+      "</body></html>";
+    return html;
+  }
+
   function saveTargetSheetHtml() {
     var sheet = byId("mobileFowSheet");
     if (!sheet || sheet.hidden) {
@@ -4923,16 +5055,31 @@
     if (window.COPDoc && COPDoc.setAppBarStatus) {
       COPDoc.setAppBarStatus("Preparing offline Target sheet…");
     }
-    var snap = model() && model().store ? model().store.getLead(queryId()) : null;
-    var subject = snap
-      ? model().subjectOf
-        ? model().subjectOf(snap)
-        : snap.person
-      : null;
-    var places = collectSubjectPlaces(snap, subject);
-    Promise.all([
+    var api;
+    try { api = documentApi(); } catch (error) { return Promise.resolve(documentFailure(error)); }
+    if (!targetDocumentSources) { return Promise.resolve(documentFailure(new Error("Reload the Target sheet before saving."))); }
+    var captured = JSON.parse(JSON.stringify(targetDocumentSources));
+    var snap = captured.lead;
+    var subject = captured.person;
+    var places = captured.places;
+    var clone = sheet.cloneNode(true);
+    var title = (byId("targetName") && byId("targetName").textContent) || "Target sheet";
+    var filename = sheetFileName(title);
+    var photos = JSON.parse(JSON.stringify(targetPhotoState.photos || []));
+    var mapIconLibraryId = window.COPDoc && COPDoc.mapIcons && COPDoc.mapIcons.getLibraryId ? COPDoc.mapIcons.getLibraryId() : "standard";
+    var sources = [sourceReference("lead", snap, snap.leadId, "snapshot")];
+    if (subject.personId) { sources.push(sourceReference("person", subject, subject.personId, "snapshot")); }
+    if (captured.officer && (captured.officer.officerId || captured.officer.id)) { sources.push(sourceReference("officer", captured.officer, captured.officer.officerId || captured.officer.id, "snapshot")); }
+    (snap.vehicles || []).forEach(function (row) { if (row.vehicleId || row.id) { sources.push(sourceReference("vehicle", row, row.vehicleId || row.id, "snapshot")); } });
+    locationRows(snap, subject).forEach(function (row) { if (row.locationId || row.id) { sources.push(sourceReference("location", row, row.locationId || row.id, "snapshot")); } });
+    photos.concat(issuedWarrantRows(subject)).forEach(function (row) { if (row.mediaId) { sources.push(sourceReference("media", row, row.mediaId, "snapshot")); } });
+    var context = api.captureContext({ documentType: "target-sheet.html", person: subject, officers: captured.officer ? [captured.officer] : [], locations: snap.locations || [], vehicles: snap.vehicles || [], sources: sources,
+      input: { lead: snap, places: places, photos: photos, title: title, presentationHtml: clone.outerHTML, mapIconLibraryId: mapIconLibraryId } });
+    resetClonedTargetMap(clone);
+    return api.generate({ documentType: "target-sheet.html", context: context, templateContent: renderTargetSheetHtml.toString() + targetSheetMapBoot.toString(),
+      render: function () { return Promise.all([
       collectPageCss(),
-      loadSubjectPhotoPack(),
+      loadSubjectPhotoPack(photos),
       loadWarrantPack(subject),
       loadPlacePhotoPack(places),
       fetchText("vendor/leaflet/leaflet.css"),
@@ -4951,14 +5098,6 @@
         var iconJs = parts[6] || "";
         var popupJs = parts[7] || "";
         var mapJs = parts[8] || "";
-        var mapIconLibraryId =
-          window.COPDoc &&
-          COPDoc.mapIcons &&
-          typeof COPDoc.mapIcons.getLibraryId === "function"
-            ? COPDoc.mapIcons.getLibraryId()
-            : "standard";
-        var clone = sheet.cloneNode(true);
-        resetClonedTargetMap(clone);
         return inlineImages(clone).then(function () {
           clone.querySelectorAll("details").forEach(function (el) {
             el.setAttribute("open", "");
@@ -4980,64 +5119,21 @@
           if (meta && pack[0]) {
             meta.textContent = pack[0].caption || meta.textContent;
           }
-          var title =
-            (byId("targetName") && byId("targetName").textContent) ||
-            "Target sheet";
-          var boot =
-            "window.TARGET_SHEET_PHOTOS = " +
-            JSON.stringify(pack) +
-            ";window.TARGET_SHEET_PLACES = " +
-            JSON.stringify(packedPlaces) +
-            ";window.TARGET_SHEET_ICON_LIBRARY = " +
-            JSON.stringify(mapIconLibraryId) +
-            ";" +
-            targetSheetMapBoot();
-          var headExtra = leafletCss
-            ? "<style>\n" +
-              leafletCss.replace(/<\/style/gi, "<\\/style") +
-              "\n</style>"
-            : "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\"/>";
-          var scripts = "";
-          if (leafletJs) {
-            scripts +=
-              "<script>" + escapeInlineScript(leafletJs) + "<\/script>";
-          } else {
-            scripts +=
-              "<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"><\/script>";
-          }
-          if (iconJs) {
-            scripts += "<script>" + escapeInlineScript(iconJs) + "<\/script>";
-          }
-          if (popupJs) {
-            scripts += "<script>" + escapeInlineScript(popupJs) + "<\/script>";
-          }
-          if (mapJs) {
-            scripts += "<script>" + escapeInlineScript(mapJs) + "<\/script>";
-          }
-          scripts += "<script>" + escapeInlineScript(boot) + "<\/script>";
-          var html =
-            "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"UTF-8\"/>" +
-            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"/>" +
-            "<title>" +
-            String(title).replace(/</g, "") +
-            " — Target sheet</title>" +
-            headExtra +
-            "<style>\n" +
-            css.replace(/<\/style/gi, "<\\/style") +
-            "\n</style></head><body data-page=\"mobile-target-sheet\">" +
-            "<main class=\"mobile-fow-page\">" +
-            "<nav class=\"mobile-fow-pagebar\"><div class=\"mobile-fow-pagebar-title\">" +
-            "<span>Mobile Target sheet</span><small>Saved copy</small></div></nav>" +
-            clone.outerHTML +
-            "</main>" +
-            scripts +
-            "</body></html>";
-          downloadBlob(sheetFileName(), "text/html;charset=utf-8", html);
-          if (window.COPDoc && COPDoc.setAppBarStatus) {
-            COPDoc.setAppBarStatus("Downloaded Target sheet.", { ok: true });
-          }
+          var html = renderTargetSheetHtml(context, { presentationHtml: clone.outerHTML, photos: pack, places: packedPlaces,
+            css: css, leafletCss: leafletCss, leafletJs: leafletJs, iconJs: iconJs, popupJs: popupJs, mapJs: mapJs });
+          return { data: html, mimeType: "text/html;charset=utf-8", filename: filename };
         });
-      })
+      }); }
+    }).then(async function (result) {
+      try {
+        downloadBlob(result.artifact.filename, result.artifact.mimeType, result.artifact.data);
+      } catch (error) {
+        await api.recordDelivery(result.record.generationId, { method: "download", status: "FAILED" }).catch(function () {});
+        throw error;
+      }
+      await recordDocumentSubmission(api, result.record.generationId, "Target sheet");
+      return result;
+    })
       .catch(function (err) {
         if (window.COPDoc && COPDoc.setAppBarStatus) {
           COPDoc.setAppBarStatus(
@@ -5091,6 +5187,8 @@
     }
   }
 
+  window.COPDoc = window.COPDoc || {};
+  COPDoc.leadDocuments = { renderCsv: renderLeadCsv, renderTargetHtml: renderTargetSheetHtml, captureCsvRows: captureLeadCsvRows, exportOneCsv: exportOneCsv, exportListCsv: exportListCsv };
   window.paintCaseView = paintView;
   window.saveTargetSheet = saveTargetSheetHtml;
 
